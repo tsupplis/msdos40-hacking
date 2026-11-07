@@ -1,0 +1,4 @@
+REM Command: DEBUG (dump 16 bytes of AUTOEXEC.BAT, quit)
+ECHO D 100 10F> A:\D.SCR
+ECHO Q>> A:\D.SCR
+DEBUG A:\AUTOEXEC.BAT < A:\D.SCR

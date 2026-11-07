@@ -67,9 +67,5 @@ __pycache__/
 private/
 vm_*
 
-# headless test scratch files (test/run.sh and the *.bat/*.cfg test scripts are kept)
-test/*.img
-test/*.tmp
-test/*.out
-test/*.log
-test/t.cfg
+# headless test scratch files (test/run.sh and test/cases/ are kept)
+test/work/

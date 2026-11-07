@@ -1,0 +1,5 @@
+REM Driver: DISPLAY.SYS with EGA.CPI, code page 437 prepared and selected
+MODE CON CP PREP=((437) A:\EGA.CPI)
+MODE CON CP SEL=437
+MODE CON CP /STATUS
+CHCP

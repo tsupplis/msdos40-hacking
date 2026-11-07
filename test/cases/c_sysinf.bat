@@ -1,0 +1,13 @@
+REM Commands: MEM (3 forms), MODE, GRAFTABL
+ECHO == mem
+MEM
+ECHO == mem /program
+MEM /PROGRAM
+ECHO == mem /debug
+MEM /DEBUG
+ECHO == mode
+MODE
+ECHO == graftabl
+GRAFTABL /STATUS
+GRAFTABL 437
+GRAFTABL /STATUS

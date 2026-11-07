@@ -1,0 +1,4 @@
+REM Driver: PRINTER.SYS with 4201.CPI, code page 437 prepared and selected
+MODE LPT1 CP PREP=((437) A:\4201.CPI)
+MODE LPT1 CP SEL=437
+MODE LPT1 CP /STATUS

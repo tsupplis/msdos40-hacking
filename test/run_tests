@@ -1,0 +1,96 @@
+#!/bin/sh
+# Headless DOS test runner (PCE + mtools). Console output goes through COM1 (CTTY).
+#
+#   test/run.sh --list               list the test cases
+#   test/run.sh <case>               run one case, e.g.  test/run.sh cmd-keyb-layout-switch
+#   test/run.sh --all                run every case in turn
+#   test/run.sh path/to/file.bat     run any batch file
+#
+# A case is test/cases/<name>.bat, optionally with <name>.cfg (extra CONFIG.SYS lines).
+# Header lines in the .bat (they are also valid DOS REM comments):
+#   REM @blank-b       drive B: is an unformatted floppy (default: freshly formatted 1.44M)
+#   REM @seconds N     time allowed before the run is reported as a hang (default 40)
+#
+# Every run uses scratch copies in test/work/ (gitignored); media/ is never modified.
+# The image is media/msdos40_full.img (override with IMG=...).
+# A:\CR.TXT holds empty lines, to be used as input (< A:\CR.TXT) for "press any key" prompts.
+# Limits: only DOS-handle output is captured; BIOS or direct-screen output and key input
+# bypass CTTY, so interactive programs (select, fdisk menus) cannot be driven this way.
+# Needs: pce-ibmpc, mtools, and the root msdos.cfg.
+
+set -e
+cd "$(dirname "$0")/.."
+CASES=test/cases
+WORK=test/work
+
+list_cases() { for f in "$CASES"/*.bat; do basename "$f" .bat; done; }
+
+case "${1:-}" in
+  ""|-h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  --list) list_cases; exit 0 ;;
+  --all)
+    for c in $(list_cases); do
+      echo "##### $c"
+      "$0" "$c" || true
+      echo
+    done
+    exit 0 ;;
+esac
+
+if [ -f "$1" ]; then BAT=$1
+elif [ -f "$CASES/$1.bat" ]; then BAT=$CASES/$1.bat
+else echo "no such test case: $1 (try: test/run.sh --list)" >&2; exit 2
+fi
+CFG=${BAT%.bat}.cfg
+IMG=${IMG:-media/msdos40_full.img}
+
+SECS=${SECS:-$(sed -n 's/^REM @seconds \([0-9][0-9]*\).*/\1/p' "$BAT" | head -1)}
+SECS=${SECS:-40}
+
+mkdir -p "$WORK"
+rm -f "$WORK"/ser1.out "$WORK"/pce.log
+cp "$IMG" "$WORK"/boot.img
+
+# drive B:
+if grep -q '^REM @blank-b' "$BAT"; then
+  dd if=/dev/zero of="$WORK"/b.img bs=1474560 count=1 2>/dev/null
+else
+  rm -f "$WORK"/b.img
+  mformat -C -f 1440 -v TESTB -i "$WORK"/b.img ::
+fi
+
+# AUTOEXEC.BAT = the case wrapped in CTTY COM1 ... CTTY CON
+{ printf '@ECHO OFF\r\nMODE COM1:9600,N,8,1\r\nCTTY COM1\r\n'
+  LC_ALL=C tr -d '\r' < "$BAT" | sed 's/$/\r/'
+  printf 'ECHO ENDTEST\r\nCTTY CON\r\n'; } > "$WORK"/autoexec.tmp
+mcopy -D o -i "$WORK"/boot.img "$WORK"/autoexec.tmp ::AUTOEXEC.BAT
+
+printf '\r\n\r\n\r\n\r\n' > "$WORK"/cr.tmp
+mcopy -D o -i "$WORK"/boot.img "$WORK"/cr.tmp ::CR.TXT
+
+# CONFIG.SYS = the usual three lines + the case's .cfg, if any
+{ printf 'BUFFERS=20\r\nFILES=20\r\nLASTDRIVE=E\r\n'
+  if [ -f "$CFG" ]; then LC_ALL=C tr -d '\r' < "$CFG" | sed 's/$/\r/'; fi; } > "$WORK"/config.tmp
+mcopy -D o -i "$WORK"/boot.img "$WORK"/config.tmp ::CONFIG.SYS
+
+# PCE config: root msdos.cfg with the scratch images and outputs
+sed -e "s#media/msdos40_full.img#$WORK/boot.img#" \
+    -e "s#fd1.img#$WORK/b.img#" \
+    -e "s#ser1\\.out#$WORK/ser1.out#" \
+    -e "s#par1\\.out#$WORK/par1.out#" \
+    -e "s#par2\\.out#$WORK/par2.out#" msdos.cfg > "$WORK"/pce.cfg
+
+pce-ibmpc -c "$WORK"/pce.cfg -t null -g vga -r > "$WORK"/pce.log 2>&1 &
+pid=$!
+i=0
+while [ "$i" -lt "$SECS" ]; do
+  sleep 1; i=$((i+1))
+  grep -q ENDTEST "$WORK"/ser1.out 2>/dev/null && break
+done
+kill $pid 2>/dev/null || true
+sleep 1
+kill -9 $pid 2>/dev/null || true
+wait $pid 2>/dev/null || true
+
+LC_ALL=C tr -d '\r' < "$WORK"/ser1.out
+grep -q ENDTEST "$WORK"/ser1.out || echo "[runner] ENDTEST not seen within ${SECS}s (hang or crash?)"
