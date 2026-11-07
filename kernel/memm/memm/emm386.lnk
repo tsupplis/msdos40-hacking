@@ -38,4 +38,4 @@ initdeb+
 mapdma
 emm386.exe
 emm386.map/m
-..\emm\emmlib.lib
+C:\kernel\memm\emm\emmlib.lib

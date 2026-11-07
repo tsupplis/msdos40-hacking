@@ -1,9 +1,9 @@
 # MS-DOS 4.00 - kernel dispatcher
 #
-# Ported (GNU make): everything except memm (see Sub-task 8, still pending)
+# Ported (GNU make): all drivers
 
 SUBDIRS = bios dos country ansi keyboard display printer driver ramdrive \
-          smartdrv xma2ems vdisk xmaem
+          smartdrv xma2ems vdisk xmaem memm
 
 .PHONY: all clean $(SUBDIRS)
 

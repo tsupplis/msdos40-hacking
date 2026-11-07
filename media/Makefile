@@ -27,7 +27,10 @@ msdos40_base.img: $(BOOTSEC) $(IO_SYS) $(MSDOS) $(COMMAND) $(CMD_FILES)
 	mcopy -i $@ $(MSDOS) ::MSDOS.SYS
 	mattrib -i $@ +s +h +r ::MSDOS.SYS
 	mcopy -i $@ $(COMMAND) ::COMMAND.COM
-	mcopy -i $@ $(CMD_FILES) ::
+	for f in $(CMD_FILES); do \
+	  n=`basename $$f | tr 'a-z' 'A-Z'`; \
+	  mcopy -i $@ $$f ::$$n || exit 1; \
+	done
 	mdir -i $@ -a ::
 
 clean:

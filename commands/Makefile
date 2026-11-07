@@ -4,10 +4,7 @@
 SUBDIRS = command attrib assign chkdsk debug edlin exe2bin fdisk find fc format join more \
           print recover restore sort subst sys share nlsfunc ifsfunc mem filesys backup comp \
           diskcomp diskcopy label mode tree replace xcopy graftabl fastopen append \
-          graphics keyb
-
-# Not yet ported (still old nmake Makefiles, deliberately not dispatched):
-#   select
+          graphics keyb select
 
 .PHONY: all clean $(SUBDIRS)
 
