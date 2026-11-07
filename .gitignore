@@ -2,6 +2,7 @@
 build/
 
 # Compiler and assembler artifacts
+*.out
 *.obj
 *.lst
 *.map
@@ -47,6 +48,7 @@ commands/select/select.hlp
 !sdk/lib/*.lib
 !sdk/lib/*.obj
 !commands/append/sysmac.lib
+!media/config.sys
 
 # System files & editor temps
 .DS_Store
