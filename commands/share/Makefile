@@ -25,8 +25,11 @@ all: share.exe
 $(MSGS): share.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 	$(BUILDMSG) 'C:\messages\$(COUNTRY)' share.skl > /dev/null
 
-%.obj: %.asm $(MSGS)
+$(OBJS): %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
+
+$(COMMON)/%.obj:
+	$(MAKE) -C $(COMMON) $*.obj
 
 share.exe: $(OBJS) share.lnk $(COMMON)/nibdos.obj $(COMMON)/const2.obj $(COMMON)/msdata.obj $(COMMON)/msdosme.obj
 	$(LINK) @share.lnk

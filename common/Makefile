@@ -26,7 +26,10 @@ OBJS     = $(ASM_OBJS) $(C_OBJS)
 
 all: $(OBJS)
 
-%.obj: %.asm
+$(KDOS)/msdos.cl1 $(KDOS)/msdos.cl3:
+	$(MAKE) -C $(KDOS) msdos.cl1
+
+%.obj: %.asm $(KDOS)/msdos.cl1
 	@echo | $(MASM) $(AFLAGS) '$<,$@;'
 
 %.obj: %.c

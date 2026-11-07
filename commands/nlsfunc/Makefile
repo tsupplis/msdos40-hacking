@@ -1,45 +1,34 @@
-#************************** makefile for cmd\... ***************************
+# MS-DOS 4.00 - NLSFUNC Makefile
 
-msg	=..\..\messages
-dos	=..\..\dos
-inc	=..\..\inc
-hinc	=..\..\h
+ROOT     ?= $(CURDIR)/../..
+SDKBIN   ?= $(ROOT)/sdk/bin
+ASMINC   ?= $(ROOT)/asminc
+MSGDIR   ?= $(ROOT)/messages
 
-#
-#######################	dependencies begin here. #########################
-#
+export EMU2_DRIVE_C ?= $(ROOT)
+
+EMU2     = emu2
+MASM     = $(EMU2) $(SDKBIN)/masm.exe
+LINK     = $(EMU2) $(SDKBIN)/link.exe
+BUILDMSG = $(EMU2) $(SDKBIN)/buildmsg.exe
+
+COUNTRY  = usa-ms
+
+OBJS     = nlsfunc.obj nlsparm.obj
+MSGS     = nlsfunc.ctl nlsfunc.cla nlsfunc.cl1 nlsfunc.cl2
+
+.PHONY: all clean
 
 all: nlsfunc.exe
 
-nlsfunc.ctl: nlsfunc.skl	\
-	     $(msg)\$(COUNTRY).msg	\
-	     makefile
+$(MSGS): nlsfunc.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
+	$(BUILDMSG) 'C:\messages\$(COUNTRY)' nlsfunc.skl > /dev/null
 
+$(OBJS): %.obj: %.asm $(MSGS)
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-nlsfunc.obj: nlsfunc.asm	  \
-	     funcdbcs.inc	  \
-	     msg2nls.inc	  \
-	     funcparm.inc	  \
-	     nlsfunc.ctl	  \
-	     nlsfunc.cla	  \
-	     nlsfunc.cl1	  \
-	     nlsfunc.cl2	  \
-	     doesmac.inc       \
-	     $(inc)\mult.inc     \
-	     $(inc)\msgserv.asm   \
-	     $(inc)\doscntry.inc \
-	     $(inc)\devsym.inc   \
-	     $(inc)\struc.inc    \
-	     $(inc)\copyrigh.inc \
-	     makefile
+nlsfunc.exe: $(OBJS)
+	$(LINK) 'nlsfunc.obj+nlsparm.obj,nlsfunc.exe;'
 
-nlsparm.obj:  nlsparm.asm	  \
-	      $(inc)\parse.asm \
-	      $(inc)\psdata.inc \
-	      makefile
-
-
-
-nlsfunc.exe: nlsfunc.obj nlsparm.obj
-	link nlsfunc+nlsparm;
-
+clean:
+	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*
