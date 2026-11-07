@@ -1,59 +1,35 @@
-#*************************** Makefile for Bios ************************
+# MS-DOS 4.00 - KEYBOARD.SYS Makefile
 
-msg	=..\..\msg
-dos	=..\..\dos
-inc	=..\..\inc
+ROOT     ?= $(CURDIR)/../..
+SDKBIN   ?= $(ROOT)/sdk/bin
+MSGDIR   ?= $(ROOT)/messages
 
-#
-###################### Dependencies begin here #########################
-#
+export EMU2_DRIVE_C ?= $(ROOT)
 
-all:           keyboard.sys
+EMU2     = emu2
+MASM     = $(EMU2) $(SDKBIN)/masm.exe
+LINK     = $(EMU2) $(SDKBIN)/link.exe
+EXE2BIN  = $(EMU2) $(SDKBIN)/exe2bin.exe
+BUILDMSG = $(EMU2) $(SDKBIN)/buildmsg.exe
 
-kdfnow.obj:    kdfnow.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
+COUNTRY  = usa-ms
 
-kdffr120.obj:  kdffr120.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
+.PHONY: all clean
 
-kdffr189.obj:  kdffr189.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
+OBJS     = kdfnow.obj kdfsp.obj kdfpo.obj kdffr120.obj kdffr189.obj kdfdk.obj \
+           kdfsg.obj kdfge.obj kdfit141.obj kdfit142.obj kdfuk166.obj kdfuk168.obj \
+           kdfsf.obj kdfbe.obj kdfnl.obj kdfno.obj kdfcf.obj kdfsv.obj kdfla.obj \
+           kdfeof.obj
 
-kdfeof.obj:    kdfeof.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
+all: keyboard.sys
 
-kdfuk166.obj:  kdfuk166.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
+$(OBJS): %.obj: %.asm $(wildcard *.inc)
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-kdfuk168.obj:  kdfuk168.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
+keyboard.sys: $(OBJS) keyboard.lnk
+	$(LINK) @keyboard.lnk
+	$(EXE2BIN) keyboard.exe keyboard.sys
+	rm -f keyboard.exe
 
-kdfit141.obj:  kdfit141.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
-
-kdfit142.obj:  kdfit142.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
-
-kdfge.obj:     kdfge.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
-
-kdfsp.obj:     kdfsp.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
-
-kdfnl.obj:     kdfnl.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
-
-kdfno.obj:     kdfno.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
-
-kdfdk.obj:     kdfdk.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
-
-kdfsg.obj:     kdfsg.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
-
-kdfsf.obj:     kdfsf.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
-
-kdfpo.obj:     kdfpo.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
-
-kdfbe.obj:     kdfbe.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
-
-kdfcf.obj:     kdfcf.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
-
-kdfla.obj:     kdfla.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
-
-kdfsv.obj:     kdfsv.asm keybmac.inc keybshar.inc $(inc)\postequ.inc
-
-keyboard.sys: kdfsp.obj kdfpo.obj kdffr120.obj kdffr189.obj kdfdk.obj \
-	      kdfsg.obj kdfge.obj kdfit141.obj kdfit142.obj kdfuk166.obj \
-	      kdfsf.obj kdfbe.obj kdfnl.obj    kdfno.obj    kdfcf.obj \
-	      kdfla.obj kdfsv.obj kdfeof.obj   kdfnow.obj   kdfuk168.obj
-	      link @keyboard.lnk
-	      exe2bin keyboard.exe keyboard.sys
-	      del keyboard.exe
+clean:
+	rm -f *.obj *.sys *.exe *.map *.lst

@@ -1,53 +1,43 @@
-#************************* Makefile for Display ***************************
+# MS-DOS 4.00 - DISPLAY.SYS Makefile
 
-inc	=..\..\inc
-msg	=..\..\messages
-dos	=..\..\dos
-hinc	=..\..\h
-make	=nmake
+ROOT     ?= $(CURDIR)/../..
+SDKBIN   ?= $(ROOT)/sdk/bin
+MSGDIR   ?= $(ROOT)/messages
 
-#
-######################## Dependencies Begin Here ##########################
+export EMU2_DRIVE_C ?= $(ROOT)
+
+EMU2     = emu2
+MASM     = $(EMU2) $(SDKBIN)/masm.exe
+LINK     = $(EMU2) $(SDKBIN)/link.exe
+EXE2BIN  = $(EMU2) $(SDKBIN)/exe2bin.exe
+BUILDMSG = $(EMU2) $(SDKBIN)/buildmsg.exe
+
+COUNTRY  = usa-ms
+
+.PHONY: all clean
+
+OBJS     = display.obj init.obj parser.obj
+MSGS     = display.ctl
 
 all: display.sys ega.cpi lcd.cpi
 
-display.ctl:    display.skl $(msg)\$(COUNTRY).msg
+$(MSGS): display.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
+	$(BUILDMSG) 'C:\messages\$(COUNTRY)' display.skl > /dev/null
 
-display.obj: display.asm makefile \
-        macros.inc  \
-        def-equ.inc \
-        int2fcom.inc \
-        int10com.inc \
-        cps-func.inc \
-        write.inc    \
-        f-parser.inc
+$(OBJS): %.obj: %.asm $(MSGS) $(wildcard *.inc)
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-init.obj: init.asm makefile \
-          macros.inc \
-          def-equ.inc \
-          $(inc)\sysmsg.inc \
-          $(inc)\versiona.inc \
-          display.ctl \
-          tables.inc
+display.sys: $(OBJS) display.lnk zero.dat
+	$(LINK) @display.lnk
+	$(EXE2BIN) display.exe display.sys < zero.dat
+	rm -f display.exe
 
-parser.obj: parser.asm makefile \
-        def-equ.inc  \
-        $(inc)\struc.inc \
-        $(inc)\parse.asm
+# code-page files are built by their own Makefiles and copied up
+ega.cpi lcd.cpi: %.cpi:
+	$(MAKE) -C $* $@
+	cp $*/$@ $@
 
-display.sys: display.obj init.obj parser.obj display.lnk makefile zero.dat
-        link @display.lnk
-        exe2bin display.exe display.sys < zero.dat
-        del display.exe
-
-ega.cpi:
-	cd ega
-	$(make)
-	cd ..
-
-lcd.cpi:
-	cd lcd
-	$(make)
-	cd ..
-
-
+clean:
+	rm -f *.obj *.sys *.cpi *.exe *.map *.lst *.ctl *.cl*
+	$(MAKE) -C ega clean
+	$(MAKE) -C lcd clean

@@ -1,32 +1,32 @@
-#************************ Makefile for Display\LCD ************************
+# MS-DOS 4.00 - LCD.CPI Makefile
 
-inc	=..\..\..\inc
-msg	=..\..\..\message
-dos	=..\..\..\dos
-hinc	=..\..\..\h
+ROOT     ?= $(CURDIR)/../../..
+SDKBIN   ?= $(ROOT)/sdk/bin
+MSGDIR   ?= $(ROOT)/messages
 
-#
-######################### Dependencies Begin Here #########################
-#
+export EMU2_DRIVE_C ?= $(ROOT)
+
+EMU2     = emu2
+MASM     = $(EMU2) $(SDKBIN)/masm.exe
+LINK     = $(EMU2) $(SDKBIN)/link.exe
+EXE2BIN  = $(EMU2) $(SDKBIN)/exe2bin.exe
+BUILDMSG = $(EMU2) $(SDKBIN)/buildmsg.exe
+
+COUNTRY  = usa-ms
+
+.PHONY: all clean
+
+OBJS     = font-r3.obj 437-cpi.obj 850-cpi.obj 860-cpi.obj 863-cpi.obj 865-cpi.obj copyrigh.obj
 
 all: lcd.cpi
 
-865-cpi.obj:  865-cpi.asm
+$(OBJS): %.obj: %.asm
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-860-cpi.obj:  860-cpi.asm
+lcd.cpi: $(OBJS) lcd.lnk
+	$(LINK) @lcd.lnk
+	$(EXE2BIN) font-r3.exe lcd.cpi
+	rm -f font-r3.exe
 
-437-cpi.obj:  437-cpi.asm
-
-863-cpi.obj:  863-cpi.asm
-
-850-cpi.obj:  850-cpi.asm
-
-copyrigh.obj: copyrigh.asm $(inc)\copyrigh.inc
-
-font-r3.obj:  font-r3.asm
-
-lcd.cpi:  font-r3.obj  437-cpi.obj  850-cpi.obj  860-cpi.obj  \
-	  863-cpi.obj  865-cpi.obj  copyrigh.obj lcd.lnk makefile
-		link @lcd.lnk
-		exe2bin font-r3.exe lcd.cpi
-		del font-r3.exe
+clean:
+	rm -f *.obj *.cpi *.exe *.map *.lst

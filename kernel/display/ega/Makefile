@@ -1,55 +1,32 @@
-#*********************** Makefile for Display\EGA ************************
+# MS-DOS 4.00 - EGA.CPI Makefile
 
-inc	=..\..\..\inc
-dos	=..\..\..\dos
-msg	=..\..\..\messages
-hinc	=..\..\..\h
+ROOT     ?= $(CURDIR)/../../..
+SDKBIN   ?= $(ROOT)/sdk/bin
+MSGDIR   ?= $(ROOT)/messages
 
-#
-######################## Dependencies begin here #########################
-#
+export EMU2_DRIVE_C ?= $(ROOT)
+
+EMU2     = emu2
+MASM     = $(EMU2) $(SDKBIN)/masm.exe
+LINK     = $(EMU2) $(SDKBIN)/link.exe
+EXE2BIN  = $(EMU2) $(SDKBIN)/exe2bin.exe
+BUILDMSG = $(EMU2) $(SDKBIN)/buildmsg.exe
+
+COUNTRY  = usa-ms
+
+.PHONY: all clean
+
+OBJS     = cpi-head.obj 437-cpi.obj 850-cpi.obj 860-cpi.obj 863-cpi.obj 865-cpi.obj copyrigh.obj
 
 all: ega.cpi
 
-cpi-head.obj: cpi-head.asm \
-              makefile
+$(OBJS): %.obj: %.asm $(wildcard *.asm)
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-437-cpi.obj: 437-cpi.asm \
-             437-8x16.asm \
-             437-8x14.asm \
-             makefile      \
-             437-8x8.asm
+ega.cpi: $(OBJS) ega.lnk
+	$(LINK) @ega.lnk
+	$(EXE2BIN) cpi-head.exe ega.cpi
+	rm -f cpi-head.exe
 
-850-cpi.obj: 850-cpi.asm \
-             850-8x16.asm \
-             850-8x14.asm \
-             makefile      \
-             850-8x8.asm
-
-860-cpi.obj: 860-cpi.asm \
-             860-8x16.asm \
-             860-8x14.asm \
-             makefile      \
-             860-8x8.asm
-
-863-cpi.obj: 863-cpi.asm \
-             863-8x16.asm \
-             863-8x14.asm \
-             makefile      \
-             863-8x8.asm
-
-865-cpi.obj: 865-cpi.asm \
-             865-8x16.asm \
-             865-8x14.asm \
-             makefile      \
-             865-8x8.asm
-
-copyrigh.obj: copyrigh.asm  $(inc)\copyrigh.inc \
-              makefile
-
-ega.cpi: cpi-head.obj 437-cpi.obj 850-cpi.obj 860-cpi.obj \
-         863-cpi.obj 865-cpi.obj copyrigh.obj makefile ega.lnk \
-         makefile
-	       link @ega.lnk
-	       exe2bin cpi-head.exe ega.cpi
-	       del   cpi-head.exe
+clean:
+	rm -f *.obj *.cpi *.exe *.map *.lst

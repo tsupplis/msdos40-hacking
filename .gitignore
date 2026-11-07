@@ -24,10 +24,13 @@ build/
 asminc/boot.inc
 boot/boot.inc
 boot/bootsec.bin
+commands/fdisk/fdboot.inc
+commands/fdisk/fdiskm.c
 
 # Built binaries across directories
 *.bin
 *.sys
+*.cpi
 *.exe
 *.com
 *.img

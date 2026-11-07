@@ -1,36 +1,32 @@
-#**     makefile for Ramdrive
+# MS-DOS 4.00 - RAMDRIVE.SYS Makefile
 
-DEST	= ramdrive
-MSG	= messages
+ROOT     ?= $(CURDIR)/../..
+SDKBIN   ?= $(ROOT)/sdk/bin
+MSGDIR   ?= $(ROOT)/messages
 
-#       Definitions for assembler
+export EMU2_DRIVE_C ?= $(ROOT)
 
-ASM	= masm
-AFLAGS	= -Mx -t
-AINC	= -I../../inc
+EMU2     = emu2
+MASM     = $(EMU2) $(SDKBIN)/masm.exe
+LINK     = $(EMU2) $(SDKBIN)/link.exe
+EXE2BIN  = $(EMU2) $(SDKBIN)/exe2bin.exe
+BUILDMSG = $(EMU2) $(SDKBIN)/buildmsg.exe
 
-#       Definitions for C compiler
+COUNTRY  = usa-ms
 
-CC	= cl
-CFLAGS	= -Ox -X -Zlp
-CINC	= -I../../h
+.PHONY: all clean
 
-#	Definitions for linker
-
-LINK	= link
-
-# Dependencies follow
+OBJS     = ramdrive.obj messages.obj
 
 all: ramdrive.sys
 
-ramdrive.obj: ramdrive.asm above.inc loadall.inc emm.inc mi.inc \
-	 dirent.inc syscall.inc devsym.inc
-	masm $(AFLAGS) $(AINC) ramdrive;
+$(OBJS): %.obj: %.asm $(wildcard *.inc)
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-messages.obj:  messages.asm
-	masm $(AFLAGS) $(AINC) messages;
+ramdrive.sys: $(OBJS) ramdrive.lnk
+	$(LINK) @ramdrive.lnk
+	$(EXE2BIN) ramdrive.exe ramdrive.sys
+	rm -f ramdrive.exe
 
-ramdrive.sys: ramdrive.obj messages.obj
-	link @ramdrive.lnk
-	exe2bin ramdrive ramdrive.sys
-	del ramdrive.exe
+clean:
+	rm -f *.obj *.sys *.exe *.map *.lst

@@ -1,24 +1,33 @@
-#************************ makefile for dev\xma2ems************************
+# MS-DOS 4.00 - XMA2EMS.SYS Makefile
 
-msg	=..\..\messages
-dos	=..\..\dos
-inc	=..\..\inc
-hinc	=..\..\h
+ROOT     ?= $(CURDIR)/../..
+SDKBIN   ?= $(ROOT)/sdk/bin
+MSGDIR   ?= $(ROOT)/messages
 
-#
-#######################	dependencies begin here. #########################
-#
+export EMU2_DRIVE_C ?= $(ROOT)
+
+EMU2     = emu2
+MASM     = $(EMU2) $(SDKBIN)/masm.exe
+LINK     = $(EMU2) $(SDKBIN)/link.exe
+EXE2BIN  = $(EMU2) $(SDKBIN)/exe2bin.exe
+NOSRVBLD = $(EMU2) $(SDKBIN)/nosrvbld.exe
+
+COUNTRY  = usa-ms
+
+.PHONY: all clean
 
 all: xma2ems.sys
 
-xma2ems.ctl:	xma2ems.skl $(MSG)\$(country).MSG makefile
+xma2ems.cl1: xma2ems.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
+	$(NOSRVBLD) xma2ems.skl 'C:\messages\$(COUNTRY).msg' > /dev/null
 
-xma2ems.obj:	xma2ems.asm xma1diag.inc xma2ems.cl1 $(inc)\COPYRIGH.INC \
-		parmpars.inc lim40.inc ps2_5060.inc makefile \
-		emsinit.inc genioctl.inc xma2emsp.inc lim40b.inc romscan.inc \
-		$(inc)\psdata.inc
+xma2ems.obj: xma2ems.asm xma2ems.cl1 $(wildcard *.inc)
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-xma2ems.sys: xma2ems.obj makefile
-		link xma2ems;
-		exe2bin xma2ems.exe xma2ems.sys
-		del xma2ems.exe
+xma2ems.sys: xma2ems.obj
+	$(LINK) 'xma2ems;'
+	$(EXE2BIN) xma2ems.exe xma2ems.sys
+	rm -f xma2ems.exe
+
+clean:
+	rm -f *.obj *.sys *.exe *.map *.lst *.cl*

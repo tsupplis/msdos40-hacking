@@ -1,57 +1,35 @@
-#************************ makefile for dev\xmaem************************
+# MS-DOS 4.00 - XMAEM.SYS Makefile
 
-msg	=..\..\messages
-dos	=..\..\dos
-inc	=..\..\inc
-hinc	=..\..\h
+ROOT     ?= $(CURDIR)/../..
+SDKBIN   ?= $(ROOT)/sdk/bin
+MSGDIR   ?= $(ROOT)/messages
 
-#
-#######################	dependencies begin here. #########################
-#
+export EMU2_DRIVE_C ?= $(ROOT)
+
+EMU2     = emu2
+MASM     = $(EMU2) $(SDKBIN)/masm.exe
+LINK     = $(EMU2) $(SDKBIN)/link.exe
+EXE2BIN  = $(EMU2) $(SDKBIN)/exe2bin.exe
+NOSRVBLD = $(EMU2) $(SDKBIN)/nosrvbld.exe
+
+COUNTRY  = usa-ms
+
+.PHONY: all clean
+
+OBJS     = indeini.obj indeexc.obj indeemu.obj indexma.obj indedma.obj indei15.obj \
+           indeidt.obj indegdt.obj indemsg.obj indepat.obj
 
 all: xmaem.sys
 
-xmaem.ctl:     xmaem.skl $(msg)\$(COUNTRY).msg makefile
-		nosrvbld xmaem.skl $(msg)\$(COUNTRY).msg
+xmaem.cl1: xmaem.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
+	$(NOSRVBLD) xmaem.skl 'C:\messages\$(COUNTRY).msg' > /dev/null
 
-INDEINI.obj:   INDEINI.ASM
+$(OBJS): %.obj: %.asm xmaem.cl1 $(wildcard *.inc *.mac)
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-INDEEMU.obj:   INDEEMU.ASM
+# the link writes the finished driver directly (no exe2bin step)
+xmaem.sys: $(OBJS) xmaem.lnk
+	$(LINK) @xmaem.lnk
 
-INDEEXC.obj:   INDEEXC.ASM
-
-INDEXMA.obj:   INDEXMA.ASM
-
-INDEDMA.obj:   INDEDMA.ASM
-
-INDEIDT.obj:   INDEIDT.ASM
-
-INDEGDT.obj:   INDEGDT.ASM
-
-INDEI15.obj:   INDEI15.ASM
-
-INDEmsg.obj:   INDEmsg.ASM xmaem.ctl
-
-INDEpat.obj:   INDEpat.ASM
-
-xmaem.sys:  makefile			\
-	    xmaem.ctl			\
-	    INDEINI.obj 		\
-	    INDEEMU.obj 		\
-	    INDEEXC.obj 		\
-	    INDEXMA.obj 		\
-	    INDEDMA.obj 		\
-	    INDEIDT.obj 		\
-	    INDEGDT.obj 		\
-	    INDEI15.obj 		\
-	    indemaus.obj		\
-	    indemsus.inc		\
-	    indeovp.mac 		\
-	    indeins.mac 		\
-	    indedes.mac 		\
-	    indemsg.obj 		\
-	    indepat.obj 		\
-	    indedat.inc 		\
-	    indeacc.inc 		\
-	    xmaem.lnk
-	link @xmaem.lnk
+clean:
+	rm -f *.obj xmaem.sys *.exe *.map *.lst *.cl*

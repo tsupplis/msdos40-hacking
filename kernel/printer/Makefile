@@ -1,40 +1,42 @@
-#************************* Makefile for Printer ***************************
+# MS-DOS 4.00 - PRINTER.SYS Makefile
 
-inc	=..\..\inc
-msg	=..\..\messages
-dos	=..\..\dos
-hinc	=..\..\h
-make	=nmake
+ROOT     ?= $(CURDIR)/../..
+SDKBIN   ?= $(ROOT)/sdk/bin
+MSGDIR   ?= $(ROOT)/messages
 
-#
-######################## Dependencies Begin Here ##########################
-#
+export EMU2_DRIVE_C ?= $(ROOT)
 
+EMU2     = emu2
+MASM     = $(EMU2) $(SDKBIN)/masm.exe
+LINK     = $(EMU2) $(SDKBIN)/link.exe
+EXE2BIN  = $(EMU2) $(SDKBIN)/exe2bin.exe
+BUILDMSG = $(EMU2) $(SDKBIN)/buildmsg.exe
+
+COUNTRY  = usa-ms
+
+.PHONY: all clean
+
+OBJS     = cpspm10.obj cpsfont3.obj prtint2f.obj cpspi07.obj parser.obj
+MSGS     = printer.ctl
+
+# 4201.cpi and 4208.cpi are prebuilt binaries shipped in the source tree
 all: printer.sys 5202.cpi
 
-printer.ctl:	printer.skl $(msg)\$(COUNTRY).msg
+$(MSGS): printer.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
+	$(BUILDMSG) 'C:\messages\$(COUNTRY)' printer.skl > /dev/null
 
-cpspm10.obj:	cpspm10.asm cpspequ.inc
+$(OBJS): %.obj: %.asm $(MSGS) $(wildcard *.inc)
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-cpsfont3.obj:	cpsfont3.asm cpspequ.inc
-
-prtint2f.obj:	prtint2f.asm cpspequ.inc $(inc)\struc.inc
-
-cpspi07.obj:	cpspi07.asm cpspequ.inc \
-		$(inc)\sysmsg.inc printer.ctl \
-		$(inc)\versiona.inc
-
-parser.obj:	parser.asm cpspequ.inc $(inc)\parse.asm \
-		$(inc)\struc.inc
-
-printer.sys:	cpspm10.obj cpsfont3.obj parser.obj cpspi07.obj prtint2f.obj
-	link	@printer.lnk
-	exe2bin printer.exe printer.sys < zero.dat
-	del	printer.exe
+printer.sys: $(OBJS) printer.lnk zero.dat
+	$(LINK) @printer.lnk
+	$(EXE2BIN) printer.exe printer.sys < zero.dat
+	rm -f printer.exe
 
 5202.cpi:
-	cd 5202
-	$(make)
-	cd ..
+	$(MAKE) -C 5202 $@
+	cp 5202/$@ $@
 
-
+clean:
+	rm -f *.obj *.sys 5202.cpi *.exe *.map *.lst *.ctl *.cl*
+	$(MAKE) -C 5202 clean

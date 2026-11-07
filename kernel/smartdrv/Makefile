@@ -1,19 +1,34 @@
-# rules and dependencies follow
-#
-# use microsoft make to build
-#
-# set up build environment - include and library for c
-#
+# MS-DOS 4.00 - SMARTDRV.SYS Makefile
+
+ROOT     ?= $(CURDIR)/../..
+SDKBIN   ?= $(ROOT)/sdk/bin
+MSGDIR   ?= $(ROOT)/messages
+
+export EMU2_DRIVE_C ?= $(ROOT)
+
+EMU2     = emu2
+MASM     = $(EMU2) $(SDKBIN)/masm.exe
+LINK     = $(EMU2) $(SDKBIN)/link.exe
+EXE2BIN  = $(EMU2) $(SDKBIN)/exe2bin.exe
+NOSRVBLD = $(EMU2) $(SDKBIN)/nosrvbld.exe
+
+COUNTRY  = usa-ms
+
+.PHONY: all clean
+
+# flush13 (flush13.c + fl13/flmes) is a separate utility, not part of the
+# original default target, so it is not built here.
 
 all: smartdrv.sys
 
-smartdrv.obj: smartdrv.asm mi.asm loadall.asm \
-    syscall.asm emm.asm above.asm \
-    devsym.asm
-	masm smartdrv.asm;
+smartdrv.obj: smartdrv.asm $(wildcard *.asm)
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
 smartdrv.exe: smartdrv.obj
-	link smartdrv,,smartdrv/M;
+	$(LINK) 'smartdrv,,smartdrv/M;'
 
 smartdrv.sys: smartdrv.exe
-	exe2bin smartdrv smartdrv.sys
+	$(EXE2BIN) smartdrv.exe smartdrv.sys
+
+clean:
+	rm -f *.obj *.sys *.exe *.map *.lst

@@ -1,33 +1,36 @@
-#*********************** Makefile for ansi.sys ****************************
+# MS-DOS 4.00 - ANSI.SYS Makefile
 
-dos	=..\..\dos
-inc	=..\..\inc
-msg	=..\..\messages
+ROOT     ?= $(CURDIR)/../..
+SDKBIN   ?= $(ROOT)/sdk/bin
+MSGDIR   ?= $(ROOT)/messages
 
-#
-####################### Dependencies Begin Here ##########################
-#
+export EMU2_DRIVE_C ?= $(ROOT)
+
+EMU2     = emu2
+MASM     = $(EMU2) $(SDKBIN)/masm.exe
+LINK     = $(EMU2) $(SDKBIN)/link.exe
+EXE2BIN  = $(EMU2) $(SDKBIN)/exe2bin.exe
+BUILDMSG = $(EMU2) $(SDKBIN)/buildmsg.exe
+
+COUNTRY  = usa-ms
+
+.PHONY: all clean
+
+OBJS     = ansi.obj ioctl.obj ansiinit.obj parser.obj
+MSGS     = ansi.ctl
 
 all: ansi.sys
 
-ansi.ctl:       ansi.skl $(msg)\$(COUNTRY).msg
+$(MSGS): ansi.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
+	$(BUILDMSG) 'C:\messages\$(COUNTRY)' ansi.skl > /dev/null
 
-ansi.obj:       ansi.asm ansi.inc \
-                $(inc)\vector.inc \
-                $(inc)\mult.inc \
-                $(inc)\struc.inc
+$(OBJS): %.obj: %.asm $(MSGS) $(wildcard *.inc)
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-ioctl.obj:      ioctl.asm ansi.inc \
-                $(inc)\struc.inc
+ansi.sys: $(OBJS) ansi.lnk
+	$(LINK) @ansi.lnk
+	$(EXE2BIN) ansi.exe ansi.sys
+	rm -f ansi.exe
 
-ansiinit.obj:   ansiinit.asm ansi.inc ansivid.inc \
-                $(inc)\struc.inc
-
-parser.obj:     parser.asm ansi.inc $(inc)\sysmsg.inc $(inc)\parse.asm \
-                $(inc)\struc.inc ansi.ctl $(inc)\versiona.inc
-
-ansi.sys:       ansi.obj ioctl.obj ansiinit.obj parser.obj ansi.lnk makefile
-			link    @ansi.lnk
-			exe2bin ansi.exe ansi.sys
-			del     ansi.exe
-
+clean:
+	rm -f *.obj *.sys *.exe *.map *.lst *.ctl *.cl*
