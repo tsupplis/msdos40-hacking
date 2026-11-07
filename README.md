@@ -40,7 +40,7 @@ The first column says how much is known: **diff** = stated by the diff itself, *
 | `commands/format/format.asm` | The high word of the sector number is tested as well as the low word, in two places. 4.00 compared only the low word. | diff |
 | `commands/fastopen/fastseek.asm` | The truncate path no longer returns at once with `DI = 0`; it walks the chain of extents (`EH_COUNT`) until the last one. | diff; effect inferred |
 | `kernel/dos/ctrlc.asm` | The call that restores the user's EMS map (`RESTORE_USER_MAP`, under `BUFFERFLAG`) is removed from the Ctrl-C path. | diff |
-| `kernel/bios/msinit.asm` | A new test of the boot record's version string, before the older 3.x tests: on a match the BPB is copied, on a partial match the disk is treated as an unknown 3.x one. Which boot records this targets is **not understood**. | diff |
+| `kernel/bios/msinit.asm` | Disk compatibility only. A disk formatted by another system carries an "OEM name" in its first sector (`MSDOS4.0`, `IBM  3.3`, ...). DOS reads that name to decide whether the disk's geometry table can be trusted. 4.01 adds one more name pattern, `10.` right after the 7-character prefix (such as `OS2 10.1`, apparently an OS/2 1.x-era format), and accepts such disks. No effect on disks made by this build (`MSDOS4.0`). | diff; the OS/2 link is inferred |
 | `commands/select/panels.asm`, `scroll.asm`, `usa.inf` | The panel border characters are restored to the right CP437 bytes. | diff |
 | `setenv.bat` | Build environment of the original tree (paths for the vintage tools). Not used here: the Makefiles replace it, and the file is removed. | diff |
 

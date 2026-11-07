@@ -66,3 +66,10 @@ __pycache__/
 # Private/temporary files
 private/
 vm_*
+
+# headless test scratch files (test/run.sh and the *.bat/*.cfg test scripts are kept)
+test/*.img
+test/*.tmp
+test/*.out
+test/*.log
+test/t.cfg

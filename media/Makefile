@@ -79,13 +79,21 @@ msdos40_base.img: $(BOOTSEC) $(IO_SYS) $(MSDOS) $(COMMAND) $(CMD_FILES)
 	done
 	mdir -i $@ -a ::
 
-# cp keeps the hidden/system attributes and the boot sector of the base image
+# cp keeps the hidden/system attributes and the boot sector of the base image.
+# GRAPHICS.PRO and SELECT.PRT are text files that DOS parses line by line: they are
+# stored with CR/LF (the sources here have LF only; the 4.01 tree has CR/LF).
+# awk is used (not unix2dos) so no extra tool is needed on the build host.
 msdos40_dist.img: msdos40_base.img $(EXTRA_FILES)
 	rm -f $@
 	cp msdos40_base.img $@
 	for f in $(EXTRA_FILES); do \
 	  n=`basename $$f | tr 'a-z' 'A-Z'`; \
-	  mcopy -i $@ $$f ::$$n || exit 1; \
+	  case $$n in \
+	  GRAPHICS.PRO|SELECT.PRT) \
+	    awk '{ sub(/\r$$/, ""); printf "%s\r\n", $$0 }' $$f > crlf.tmp && \
+	    mcopy -i $@ crlf.tmp ::$$n && rm -f crlf.tmp || exit 1;; \
+	  *) mcopy -i $@ $$f ::$$n || exit 1;; \
+	  esac; \
 	done
 	mdir -i $@ -a ::
 
@@ -116,4 +124,4 @@ check: msdos40_full.img
 	exit $$missing
 
 clean:
-	rm -f *.img .listing.tmp
+	rm -f *.img .listing.tmp crlf.tmp
