@@ -1,108 +1,43 @@
-#************************** makefile for cmd\... ***************************
+# MS-DOS 4.00 - RESTORE Makefile
 
-msg	=..\..\messages
-dos	=..\..\dos
-inc	=..\..\inc
-hinc	=..\..\h
+ROOT     ?= $(CURDIR)/../..
+SDKBIN   ?= $(ROOT)/sdk/bin
+MAPPER   ?= $(ROOT)/mapper
+MSGDIR   ?= $(ROOT)/messages
 
-#
-#######################	dependencies begin here. #########################
-#
+export EMU2_DRIVE_C ?= $(ROOT)
 
-map	=..\..\mapper
-here	=..\cmd\restore
+EMU2     = emu2
+MASM     = $(EMU2) $(SDKBIN)/masm.exe
+CL       = $(EMU2) $(SDKBIN)/cl.exe
+LINK     = $(EMU2) $(SDKBIN)/link.exe
+CONVERT  = $(EMU2) $(SDKBIN)/convert.exe
+BUILDMSG = $(EMU2) $(SDKBIN)/buildmsg.exe
 
-all: not_file restore.com
+COUNTRY  = usa-ms
 
-#-------BUILD MAPPER ----------------
-not_file : makefile		 #Always perform these steps!
-	cd $(map)
-	nmake
-	cd $(here)
+C_OBJS   = restore.obj restpars.obj rtt1.obj rtt3.obj rtdo.obj rtdo1.obj rtold.obj \
+           rtold1.obj rtnew.obj rtnew1.obj rtfile.obj rtfile1.obj
+ASM_OBJS = _parse.obj _msgret.obj
+MSGS     = restore.ctl
 
+.PHONY: all clean
 
-_parse.obj :	_parse.asm			\
-		makefile			\
-		$(inc)\parse.asm		\
-		$(inc)\psdata.inc
+all: restore.com
 
-restore.ctl :	restore.skl			\
-		makefile			\
-		$(msg)\$(COUNTRY).msg
+$(MSGS): restore.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
+	$(BUILDMSG) 'C:\messages\$(COUNTRY)' restore.skl > /dev/null
 
+$(ASM_OBJS): %.obj: %.asm $(MSGS)
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-_msgret.obj:	_msgret.asm			\
-		makefile			\
-		restore.ctl			\
-		restore.cl1			\
-		$(inc)\msgserv.asm		\
-		$(inc)\sysmsg.inc
+$(C_OBJS): %.obj: %.c $(wildcard *.h)
+	$(CL) -c -AS -Os -Zp -I. -I'C:\include' -Fo$@ $< -- INCLUDE='C:\sdk\include' PATH='C:\sdk\bin'
 
+restore.com: $(C_OBJS) $(ASM_OBJS) restore.lnk $(MAPPER)/mapper.lib
+	$(LINK) @restore.lnk -- LIB='C:\sdk\lib'
+	$(CONVERT) restore.exe restore.com
+	rm -f restore.exe
 
-restore.obj :	restore.c rt.h rt1.h rt2.h restpars.h makefile \
-		$(hinc)\comsub.h    $(hinc)\doscalls.h	     \
-		$(hinc)\error.h
-
-rtt1.obj :	rtt1.c rt.h rt1.h rt2.h restpars.h makefile \
-		$(hinc)\comsub.h    $(hinc)\doscalls.h	     \
-		$(hinc)\error.h
-
-rtt3.obj :	rtt3.c rt.h rt1.h rt2.h restpars.h makefile \
-		$(hinc)\comsub.h    $(hinc)\doscalls.h	     \
-		$(hinc)\error.h
-
-rtdo.obj :	rtdo.c	rt.h rt1.h rt2.h restpars.h  makefile \
-		$(hinc)\comsub.h    $(hinc)\doscalls.h	     \
-		$(hinc)\error.h
-
-rtdo1.obj :	rtdo1.c rt.h rt1.h rt2.h restpars.h makefile \
-		$(hinc)\comsub.h    $(hinc)\doscalls.h	     \
-		$(hinc)\error.h
-
-rtnew.obj :	rtnew.c rt.h rt1.h rt2.h restpars.h makefile \
-		$(hinc)\comsub.h    $(hinc)\doscalls.h	     \
-		$(hinc)\error.h
-
-rtnew1.obj :	rtnew1.c rt.h rt1.h rt2.h restpars.h makefile \
-		$(hinc)\comsub.h    $(hinc)\doscalls.h	     \
-		$(hinc)\error.h
-
-rtold.obj :	rtold.c rt.h rt1.h rt2.h restpars.h makefile \
-		$(hinc)\comsub.h    $(hinc)\doscalls.h	     \
-		$(hinc)\error.h
-
-rtold1.obj :	rtold1.c rt.h rt1.h rt2.h restpars.h makefile \
-		$(hinc)\comsub.h    $(hinc)\doscalls.h	     \
-		$(hinc)\error.h
-
-rtfile.obj  :	rtfile.c rt.h rt1.h rt2.h restpars.h makefile \
-		$(hinc)\comsub.h    $(hinc)\doscalls.h	     \
-		$(hinc)\error.h
-
-rtfile1.obj :	rtfile1.c rt.h rt1.h rt2.h restpars.h makefile \
-		$(hinc)\comsub.h    $(hinc)\doscalls.h	     \
-		$(hinc)\error.h
-
-restpars.obj :	restpars.c rt.h rt1.h rt2.h restpars.h makefile \
-		$(hinc)\comsub.h    $(hinc)\doscalls.h	     \
-		$(hinc)\error.h
-
-restore.com:	 restore.obj \
-		 restpars.obj \
-		 rtdo.obj    \
-		 rtdo1.obj   \
-		 rtfile.obj  \
-		 rtfile1.obj \
-		 rtnew.obj   \
-		 rtnew1.obj  \
-		 rtold.obj   \
-		 rtold1.obj  \
-		 rtt1.obj    \
-		 rtt3.obj    \
-		 restore.lnk \
-		 _msgret.obj \
-		 _parse.obj  \
-		 $(map)\mapper.lib
-	link @restore.lnk
-	convert restore.exe restore.com
-	erase restore.exe
+clean:
+	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*

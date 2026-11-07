@@ -1,64 +1,34 @@
-#**     makefile for fc
+# MS-DOS 4.00 - FC Makefile
 
-DEST	=fc
-MSG	=messages
+ROOT     ?= $(CURDIR)/../..
+SDKBIN   ?= $(ROOT)/sdk/bin
+COMMON   ?= $(ROOT)/common
 
-#	Path Definitions
+export EMU2_DRIVE_C ?= $(ROOT)
 
-BIOS	=..\..\BIOS
-BOOT	=..\..\BOOT
-dos	=..\..\DOS
-inc	=..\..\INC
-hinc	=..\..\h
-H	=..\..\H
+EMU2     = emu2
+MASM     = $(EMU2) $(SDKBIN)/masm.exe
+CL       = $(EMU2) $(SDKBIN)/cl.exe
+LINK     = $(EMU2) $(SDKBIN)/link.exe
 
-#	List of object files required
+ASM_OBJS = getl.obj itoupper.obj maxmin.obj move.obj string.obj xtab.obj messages.obj
+C_OBJS   = fc.obj error.obj fgetl.obj ntoi.obj update.obj
 
-OBJ	= fc.obj \
-	  error.obj \
-	  fgetl.obj \
-	  getl.obj \
-	  itoupper.obj \
-	  $(inc)\kstring.obj \
-	  maxmin.obj \
-	  move.obj \
-	  ntoi.obj \
-	  string.obj \
-	  update.obj \
-	  xtab.obj \
-	  messages.obj
+.PHONY: all clean
 
-#       Rules and Dependencies follow
+all: fc.exe
 
-all:	$(DEST).exe
+$(ASM_OBJS): %.obj: %.asm
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-$(inc)\printf.obj: $(inc)\printf.asm
+$(C_OBJS): %.obj: %.c $(wildcard *.h)
+	$(CL) -c -AS -Os -Zp -I. -I'C:\include' -Fo$@ $< -- INCLUDE='C:\sdk\include' PATH='C:\sdk\bin'
 
-$(inc)\kstring.obj: $(inc)\kstring.c $(hinc)\internat.h
+$(COMMON)/%.obj:
+	$(MAKE) -C $(COMMON) $*.obj
 
-getl.obj: getl.asm $(inc)\cmacros.inc $(inc)\version.inc
+fc.exe: $(C_OBJS) $(ASM_OBJS) $(COMMON)/kstring.obj fc.lnk
+	$(LINK) @fc.lnk -- LIB='C:\sdk\lib'
 
-itoupper.obj: itoupper.asm  $(inc)\cmacros.inc $(inc)\version.inc
-
-maxmin.obj: maxmin.asm $(inc)\cmacros.inc $(inc)\version.inc
-
-$(MSG).obj: $(MSG).asm
-
-move.obj: move.asm $(inc)\cmacros.inc $(inc)\version.inc
-
-string.obj: string.asm $(inc)\cmacros.inc $(inc)\version.inc
-
-xtab.obj: xtab.asm $(inc)\cmacros.inc $(inc)\version.inc
-
-error.obj: error.c tools.h ttypes.h
-
-$(DEST).obj: $(DEST).c $(DEST).h tools.h ttypes.h
-
-fgetl.obj: fgetl.c tools.h ttypes.h
-
-ntoi.obj: ntoi.c tools.h ttypes.h
-
-update.obj: update.c tools.h ttypes.h
-
-$(DEST).exe: $(OBJ) $(DEST).lnk
-	$(link) @$(DEST).lnk;
+clean:
+	rm -f *.obj *.exe *.map *.lst

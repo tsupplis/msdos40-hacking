@@ -1,47 +1,39 @@
-#************************** makefile for cmd\... ***************************
+# MS-DOS 4.00 - REPLACE Makefile
 
-msg	=..\..\messages
-dos	=..\..\dos
-inc	=..\..\inc
-hinc	=..\..\h
+ROOT     ?= $(CURDIR)/../..
+SDKBIN   ?= $(ROOT)/sdk/bin
+COMMON   ?= $(ROOT)/common
+MAPPER   ?= $(ROOT)/mapper
+MSGDIR   ?= $(ROOT)/messages
 
-#
-#######################	dependencies begin here. #########################
-#
+export EMU2_DRIVE_C ?= $(ROOT)
 
-map	=..\..\mapper
+EMU2     = emu2
+MASM     = $(EMU2) $(SDKBIN)/masm.exe
+CL       = $(EMU2) $(SDKBIN)/cl.exe
+LINK     = $(EMU2) $(SDKBIN)/link.exe
+BUILDMSG = $(EMU2) $(SDKBIN)/buildmsg.exe
+
+COUNTRY  = usa-ms
+
+ASM_OBJS = _replace.obj _parse.obj _msgret.obj
+MSGS     = replace.ctl
+
+.PHONY: all clean
 
 all: replace.exe
 
-replace.ctl: replace.skl \
-  $(msg)\$(COUNTRY).msg  \
-  makefile
+$(MSGS): replace.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
+	$(BUILDMSG) 'C:\messages\$(COUNTRY)' replace.skl > /dev/null
 
-_msgret.obj: _msgret.asm \
-  $(inc)\msgserv.asm    \
-  $(inc)\sysmsg.inc     \
-  replace.ctl           \
-  replace.cla           \
-  replace.cl1           \
-  replace.cl2           \
-  replace.skl
+$(ASM_OBJS): %.obj: %.asm $(MSGS)
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-_parse.obj: _parse.asm  \
-  $(inc)\parse.asm      \
-  $(inc)\psdata.inc
+replace.obj: replace.c replacep.h $(MSGS)
+	$(CL) -c -AS -Os -Zp -I. -I'C:\include' -Fo$@ $< -- INCLUDE='C:\sdk\include' PATH='C:\sdk\bin'
 
-_replace.obj: _replace.asm
+replace.exe: replace.obj $(ASM_OBJS) replace.lnk $(MAPPER)/mapper.lib
+	$(LINK) @replace.lnk -- LIB='C:\sdk\lib'
 
-replace.obj: replace.c  \
-  makefile           \
-  replacep.h            \
-  $(hinc)\comsub.h
-
-replace.exe: replace.obj \
-  _replace.obj          \
-  $(map)\mapper.lib     \
-  $(inc)\comsubs.lib    \
-  _msgret.obj           \
-  _parse.obj            \
-  replace.lnk
-    link @replace.lnk
+clean:
+	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*

@@ -13,5 +13,5 @@ rtfile	   +
 rtfile1    +
 _parse	   +
 _msgret
-restore.exe,,..\..\mapper\mapper + ..\..\inc\comsubs;
+restore.exe,,C:\mapper\mapper + C:\sdk\lib\comsubs;
 

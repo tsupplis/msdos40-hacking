@@ -1,13 +1,13 @@
 # MS-DOS 4.00 - commands dispatcher (original nmake build order)
 #
 # Ported (GNU make):
-SUBDIRS = command assign edlin exe2bin find join more print sort subst sys \
-          share nlsfunc comp diskcomp diskcopy label recover tree xcopy \
-          fastopen append
+SUBDIRS = command attrib assign chkdsk debug edlin exe2bin find fc format join more \
+          print recover sort subst sys share nlsfunc ifsfunc mem filesys backup comp \
+          diskcomp diskcopy label mode tree replace xcopy graftabl fastopen append \
+          graphics keyb
 
 # Not yet ported (still old nmake Makefiles, deliberately not dispatched):
-#   attrib chkdsk debug fc format backup restore replace fdisk mode mem
-#   filesys ifsfunc graftabl graphics keyb select
+#   restore fdisk select
 
 .PHONY: all clean $(SUBDIRS)
 

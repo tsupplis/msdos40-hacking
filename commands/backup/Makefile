@@ -1,45 +1,42 @@
-#************************** makefile for cmd\backup ***************************
+# MS-DOS 4.00 - BACKUP Makefile
 
-cflags	= -AS -Od -Zp $(extcsw)
-msg	=..\..\messages
-dos	=..\..\dos
-inc	=..\..\inc
-hinc	=..\..\h
-map	=..\..\mapper
-here	=..\cmd\backup
+ROOT     ?= $(CURDIR)/../..
+SDKBIN   ?= $(ROOT)/sdk/bin
+MAPPER   ?= $(ROOT)/mapper
+MSGDIR   ?= $(ROOT)/messages
 
-#
-#######################	dependencies begin here. #########################
-#
+export EMU2_DRIVE_C ?= $(ROOT)
+
+EMU2     = emu2
+MASM     = $(EMU2) $(SDKBIN)/masm.exe
+CL       = $(EMU2) $(SDKBIN)/cl.exe
+LINK     = $(EMU2) $(SDKBIN)/link.exe
+CONVERT  = $(EMU2) $(SDKBIN)/convert.exe
+BUILDMSG = $(EMU2) $(SDKBIN)/buildmsg.exe
+
+COUNTRY  = usa-ms
+
+ASM_OBJS = _parse.obj _msgret.obj
+MSGS     = backup.ctl
+
+.PHONY: all clean
 
 all: backup.com
 
-$(map)\mapper.lib:
-	cd $(map)
-	nmake
-	cd $(here)
+$(MSGS): backup.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
+	$(BUILDMSG) 'C:\messages\$(COUNTRY)' backup.skl > /dev/null
 
-_parse.obj:	_parse.asm			\
-		$(inc)\parse.asm		\
-		$(inc)\psdata.inc		\
-		makefile
+$(ASM_OBJS): %.obj: %.asm $(MSGS)
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-backup.ctl:	backup.skl			\
-		$(msg)\$(COUNTRY).MSG		
+# backup is compiled without optimisation (-Od), as in the original build
+backup.obj: backup.c backpars.h backup.h $(MSGS)
+	$(CL) -c -AS -Od -Zp -I. -I'C:\include' -Fo$@ $< -- INCLUDE='C:\sdk\include' PATH='C:\sdk\bin'
 
-_msgret.obj:	_msgret.asm			\
-		backup.ctl			\
-		$(inc)\msgserv.asm		\
-		$(inc)\sysmsg.inc		\
-		$(inc)\versiona.inc		\
-		$(inc)\copyrigh.inc		\
-		makefile
+backup.com: backup.obj $(ASM_OBJS) $(MAPPER)/mapper.lib
+	$(LINK) '/NOE backup+_parse+_msgret,backup,nul,C:\mapper\mapper+C:\sdk\lib\comsubs;' -- LIB='C:\sdk\lib'
+	$(CONVERT) backup.exe backup.com
+	rm -f backup.exe
 
-backup.obj:  backup.c  backpars.h backup.h  makefile	\
-	     $(hinc)\doscalls.h
-
-backup.com: backup.obj _parse.obj _msgret.obj		\
-	    $(map)\mapper.lib $(inc)\comsubs.lib
-	link /NOE backup + _parse + _msgret,,,$(map)\mapper + $(inc)\comsubs;
-	convert backup.exe backup.com
-	del backup.exe
+clean:
+	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*

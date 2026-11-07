@@ -26,6 +26,6 @@
  fdiskm.obj
 fdisk.exe,
 fdisk.map,
-..\..\mapper\MAPPER.lib +
-..\..\inc\comsubs.lib;
+C:\mapper\mapper.lib +
+C:\sdk\lib\comsubs.lib;
 

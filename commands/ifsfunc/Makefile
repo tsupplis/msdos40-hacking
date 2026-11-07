@@ -1,127 +1,46 @@
-#************************** makefile for cmd\... ***************************
+# MS-DOS 4.00 - IFSFUNC Makefile
 
-msg	=..\..\messages
-dos	=..\..\dos
-inc	=..\..\inc
-hinc	=..\..\h
-here	=..\cmd\ifsfunc
-make	=nmake -i
+ROOT     ?= $(CURDIR)/../..
+SDKBIN   ?= $(ROOT)/sdk/bin
+ASMINC   ?= $(ROOT)/asminc
+COMMON   ?= $(ROOT)/common
+KDOS     ?= $(ROOT)/kernel/dos
+MSGDIR   ?= $(ROOT)/messages
 
-#
-#######################	dependencies begin here. #########################
-#
+export EMU2_DRIVE_C ?= $(ROOT)
+
+EMU2     = emu2
+MASM     = $(EMU2) $(SDKBIN)/masm.exe
+LINK     = $(EMU2) $(SDKBIN)/link.exe
+BUILDMSG = $(EMU2) $(SDKBIN)/buildmsg.exe
+
+COUNTRY  = usa-ms
+
+OBJS     = ifssess.obj ifsdir.obj ifsfile.obj ifshand.obj ifsdev.obj ifsutil.obj \
+           ifserror.obj ifsfdos.obj ifsinit.obj ifsflink.obj
+MSGS     = ifsfunc.ctl
+SHARED   = $(COMMON)/nibdos.obj $(COMMON)/const2.obj $(COMMON)/msdata.obj \
+           $(COMMON)/mstable.obj $(COMMON)/msdosme.obj \
+           $(KDOS)/msdisp.obj $(KDOS)/mscode.obj
+
+.PHONY: all clean
 
 all: ifsfunc.exe
 
-msdos.cl1: $(dos)\msdos.skl		\
-	$(msg)\$(COUNTRY).msg		\
-	$(dos)\makefile
-	copy $(dos)\msdos.skl
-	nosrvbld msdos.skl $(msg)\$(COUNTRY).msg
+$(MSGS): ifsfunc.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
+	$(BUILDMSG) 'C:\messages\$(COUNTRY)' ifsfunc.skl > /dev/null
 
-ifsfunc.ctl: ifsfunc.skl  $(msg)\$(COUNTRY).msg makefile
+$(OBJS): %.obj: %.asm $(MSGS) $(wildcard *.inc)
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' -I'C:\kernel\dos' '$<,$@;'
 
-$(inc)\dossym.inc:	 $(inc)\versiona.inc $(inc)\dosmac.inc	      \
-     $(inc)\bpb.inc	 $(inc)\buffer.inc   $(inc)\sysvar.inc	      \
-     $(inc)\vector.inc	 $(inc)\mult.inc     $(inc)\dirent.inc	      \
-     $(inc)\dpb.inc	 $(inc)\curdir.inc   $(inc)\cpmfcb.inc	      \
-     $(inc)\find.inc	 $(inc)\pdb.inc      $(inc)\exe.inc	      \
-     $(inc)\sf.inc	 $(inc)\arena.inc    $(inc)\intnat.inc	      \
-     $(inc)\mi.inc	 $(inc)\filemode.inc $(inc)\error.inc	      \
-     $(inc)\syscall.inc 					      \
-     makefile
-     echo " touch $(inc)\dossym.inc "
+$(COMMON)/%.obj:
+	$(MAKE) -C $(COMMON) $*.obj
 
-ifssess.obj: ifssess.asm $(inc)\ifssym.inc	   ifsfsym.inc	      \
-     $(inc)\dossym.inc	 $(inc)\devsym.inc   $(inc)\dosseg.asm	      \
-     makefile
+$(KDOS)/%.obj:
+	$(MAKE) -C $(KDOS) $*.obj
 
-ifsdir.obj: ifsdir.asm	 $(inc)\ifssym.inc	    ifsfsym.inc       \
-     $(inc)\dossym.inc	 $(inc)\devsym.inc   $(inc)\dosseg.asm	      \
-     makefile
+ifsfunc.exe: $(OBJS) $(SHARED) ifsfunc.lnk
+	$(LINK) @ifsfunc.lnk
 
-ifsfile.obj: ifsfile.asm $(inc)\ifssym.inc	   ifsfsym.inc	      \
-     $(inc)\dossym.inc	 $(inc)\devsym.inc   $(inc)\dosseg.asm	      \
-     makefile	 $(inc)\doscntry.inc
-
-ifshand.obj: ifshand.asm $(inc)\ifssym.inc	   ifsfsym.inc	      \
-     $(inc)\dossym.inc	 $(inc)\devsym.inc   $(inc)\dosseg.asm	      \
-     makefile
-
-ifsdev.obj:  ifsdev.asm  $(inc)\ifssym.inc	    ifsfsym.inc       \
-     $(inc)\dossym.inc	 $(inc)\devsym.inc   $(inc)\dosseg.asm	      \
-     makefile
-
-ifsutil.obj: ifsutil.asm $(inc)\ifssym.inc	    ifsfsym.inc       \
-     $(inc)\dossym.inc	 $(inc)\devsym.inc   $(inc)\dosseg.asm	      \
-     $(inc)\bugtyp.asm						      \
-     makefile
-
-ifserror.obj: ifserror.asm $(inc)\ifssym.inc	     ifsfsym.inc      \
-     $(inc)\dossym.inc	 $(inc)\devsym.inc   $(inc)\dosseg.asm	      \
-     ifsfunc.ctl  ifsfunc.cla  ifsfunc.cl1  ifsfunc.cl2 	      \
-     makefile
-
-ifsfdos.obj:  ifsfdos.asm $(inc)\ifssym.inc	    ifsfsym.inc       \
-     $(inc)\dossym.inc	 $(inc)\devsym.inc   $(inc)\dosseg.asm	      \
-     $(inc)\msdata.asm	 $(inc)\bugtyp.asm   $(inc)\sysmsg.inc	      \
-     $(inc)\psdata.inc	 $(inc)\msgserv.asm	  ifsparse.inc	      \
-     $(inc)\parse.asm						      \
-     makefile
-
-ifsinit.obj:  ifsinit.asm $(inc)\ifssym.inc	    ifsfsym.inc       \
-     $(inc)\dossym.inc	 $(inc)\devsym.inc   $(inc)\dosseg.asm	      \
-     $(inc)\msdata.asm	 $(inc)\bugtyp.asm   $(inc)\sysmsg.inc	      \
-     $(inc)\psdata.inc	 $(inc)\msgserv.asm	  ifsparse.inc	      \
-     $(inc)\parse.asm						      \
-     ifsfunc.ctl  ifsfunc.cla  ifsfunc.cl1  ifsfunc.cl2 	      \
-     makefile
-
-$(inc)\nibdos.obj:
-	cd $(inc)
-	$(make)
-	cd $(here)
-
-$(inc)\const2.obj:
-	cd $(inc)
-	$(make)
-	cd $(here)
-
-$(inc)\msdata.obj:
-	cd $(inc)
-	$(make)
-	cd $(here)	
-
-$(inc)\mstable.obj:
-	cd $(inc)
-	$(make)
-	cd $(here)	                                  	       
-
-$(inc)\msdosme.obj:
-	cd $(inc)
-	$(make)
-	cd $(here)
-
-$(dos)\msdisp.obj:
-	cd $(dos)
-	$(make)
-	cd $(here)
-
-$(dos)\mscode.obj:
-	cd $(dos)
-	$(make)
-	cd $(here)                                     	     
-
-ifsflink.obj: ifsflink.asm					      \
-     $(inc)\dossym.inc						      \
-     makefile
-
-ifsfunc.exe: ifssess.obj ifsdir.obj  ifsfile.obj  ifshand.obj	      \
-	     ifsdev.obj  ifsutil.obj ifserror.obj ifsfdos.obj	      \
-	     ifsinit.obj					      \
-	     $(inc)\nibdos.obj	$(inc)\const2.obj  $(inc)\msdata.obj \
-	     $(inc)\mstable.obj  $(dos)\msdisp.obj		     \
-	     $(dos)\mscode.obj  $(inc)\msdosme.obj		     \
-	     ifsflink.obj  makefile	ifsfunc.lnk
-     link @ifsfunc.lnk
-
+clean:
+	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*

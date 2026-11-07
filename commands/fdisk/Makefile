@@ -1,114 +1,67 @@
-#************************** makefile for cmd\... ***************************
+# MS-DOS 4.00 - FDISK Makefile
 
-msg	=..\..\messages
-dos	=..\..\dos
-inc	=..\..\inc
-hinc	=..\..\h
+ROOT     ?= $(CURDIR)/../..
+SDKBIN   ?= $(ROOT)/sdk/bin
+MAPPER   ?= $(ROOT)/mapper
+MSGDIR   ?= $(ROOT)/messages
 
-#
-#######################	dependencies begin here. #########################
-#
+export EMU2_DRIVE_C ?= $(ROOT)
 
-map	=..\..\mapper
-here	=..\cmd\fdisk
+EMU2     = emu2
+MASM     = $(EMU2) $(SDKBIN)/masm.exe
+CL       = $(EMU2) $(SDKBIN)/cl.exe
+LINK     = $(EMU2) $(SDKBIN)/link.exe
+EXE2BIN  = $(EMU2) $(SDKBIN)/exe2bin.exe
+BUILDMSG = $(EMU2) $(SDKBIN)/buildmsg.exe
+NOSRVBLD = $(EMU2) $(SDKBIN)/nosrvbld.exe
+MENUBLD  = $(EMU2) $(SDKBIN)/menubld.exe
+DBOF     = $(EMU2) $(SDKBIN)/dbof.exe
+
+COUNTRY  = usa-ms
+
+C_OBJS   = main.obj mainmenu.obj d_menus.obj c_menus.obj fdisk.obj display.obj input.obj \
+           tdisplay.obj vdisplay.obj space.obj partinfo.obj video.obj makepart.obj \
+           int13.obj diskout.obj messages.obj fdparse.obj convert.obj global.obj fdiskm.obj
+ASM_OBJS = reboot.obj bootrec.obj fdboot.obj _parse.obj _msgret.obj
+MSGS     = fdisk.ctl
+
+.PHONY: all clean
 
 all: fdisk.exe
 
+# --- generated sources ------------------------------------------------------
+# menubld turns fdisk.msg + the country message file into the C menu tables
+fdiskm.c: fdisk.msg $(MSGDIR)/$(COUNTRY).msg
+	$(MENUBLD) fdisk.msg 'C:\messages\$(COUNTRY).msg'
 
-# Handle the FDISK 'C' source compilations first
+fdisk5.cl1: fdisk5.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
+	$(NOSRVBLD) fdisk5.skl 'C:\messages\$(COUNTRY).msg' > /dev/null
 
-fdiskm.c  : $(msg)\$(COUNTRY).msg fdisk.msg
-        menubld fdisk.msg  $(msg)\$(COUNTRY).MSG
+$(MSGS): fdisk.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
+	$(BUILDMSG) 'C:\messages\$(COUNTRY)' fdisk.skl > /dev/null
 
-fdisk5.cl1 : fdisk5.skl $(msg)\$(COUNTRY).msg
-
-fdisk.ctl : fdisk.skl $(msg)\$(COUNTRY).msg
-
-main.obj : main.c \
-           fdisk.h subtype.h extern.h fdiskmsg.h msgret.h doscall.h 
-
-fdisk.obj : fdisk.c \
-            fdisk.h subtype.h extern.h fdiskmsg.h doscall.h msgret.h
-
-mainmenu.obj : mainmenu.c fdisk.h subtype.h extern.h fdiskmsg.h 
-
-display.obj : display.c \
-              fdisk.h subtype.h extern.h fdiskmsg.h doscall.h
-
-d_menus.obj : d_menus.c fdisk.h subtype.h extern.h fdiskmsg.h 
-
-c_menus.obj : c_menus.c fdisk.h subtype.h extern.h fdiskmsg.h 
-
-input.obj : input.c fdisk.h subtype.h extern.h fdiskmsg.h doscall.h
-
-tdisplay.obj : tdisplay.c fdisk.h subtype.h extern.h fdiskmsg.h 
-
-vdisplay.obj : vdisplay.c fdisk.h subtype.h extern.h fdiskmsg.h 
-
-space.obj : space.c fdisk.h subtype.h extern.h
-
-partinfo.obj : partinfo.c fdisk.h subtype.h extern.h 
-
-makepart.obj : makepart.c fdisk.h subtype.h extern.h 
-
-video.obj : video.c fdisk.h extern.h subtype.h fdiskmsg.h doscall.h
-
-int13.obj : int13.c fdisk.h subtype.h extern.h fdiskmsg.h
-
-diskout.obj : diskout.c fdisk.h subtype.h extern.h
-
-fdparse.obj : fdparse.c fdisk.h subtype.h extern.h parse.h msgret.h 
-
-convert.obj : convert.c fdisk.h subtype.h extern.h 
-
-global.obj : global.c fdisk.h makefile 
-
-fdiskm.obj : fdiskm.c
-
-messages.obj : messages.c msgret.h extern.h subtype.h fdisk.h
-
-
-# Handle the FDISK MASM source
-
-
-fdboot.obj : fdboot.asm fdisk5.cl1
+# --- boot record stub: fdboot.asm -> fdboot.bin -> fdboot.inc (via dbof) -----
+fdboot.obj: fdboot.asm fdisk5.cl1
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
 fdboot.inc: fdboot.obj
-        link fdboot;
-        exe2bin fdboot
-        del fdboot.exe
-        dbof fdboot.bin fdboot.inc 600 200
+	$(LINK) 'fdboot;'
+	$(EXE2BIN) fdboot.exe fdboot.bin
+	rm -f fdboot.exe
+	$(DBOF) fdboot.bin fdboot.inc 600 200
 
-_parse.obj : _parse.asm $(inc)\psdata.inc $(inc)\parse.asm \
-             makefile
+# --- objects ----------------------------------------------------------------
+reboot.obj _parse.obj _msgret.obj: %.obj: %.asm $(MSGS)
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-_msgret.obj : _msgret.asm $(inc)\psdata.inc \
-             fdisk.ctl fdisk.cla fdisk.clb fdisk.cl1 fdisk.cl2 \
-             makefile
+bootrec.obj: bootrec.asm fdboot.inc
+	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-bootrec.obj : bootrec.asm fdboot.inc \
-              makefile
+$(C_OBJS): %.obj: %.c $(wildcard *.h) fdiskm.c
+	$(CL) -c -AS -Os -Zp -I. -I'C:\include' -Fo$@ $< -- INCLUDE='C:\sdk\include' PATH='C:\sdk\bin'
 
-reboot.obj : reboot.asm \
-             makefile
+fdisk.exe: $(C_OBJS) $(ASM_OBJS) fdisk.lnk $(MAPPER)/mapper.lib
+	$(LINK) @fdisk.lnk -- LIB='C:\sdk\lib'
 
-$(map)\mapper.lib:
-	cd $(map)
-	nmake
-	cd $(here)
-
-# Do the link of FDISK
-
-fdisk.exe : fdisk.obj reboot.obj bootrec.obj fdboot.obj \
-            display.obj input.obj tdisplay.obj vdisplay.obj \
-            space.obj partinfo.obj video.obj makepart.obj \
-            int13.obj diskout.obj messages.obj fdparse.obj \
-            convert.obj global.obj fdiskm.obj main.obj \
-            c_menus.obj d_menus.obj mainmenu.obj _msgret.obj  \
-	    $(map)\mapper.lib makefile fdisk.lnk fdisk.ctl _parse.obj \
-            $(inc)\comsubs.lib
-	cd $(inc)
-	nmake
-	cd $(here)
-        link @fdisk.lnk
-
+clean:
+	rm -f *.obj *.exe *.bin *.map *.lst *.ctl *.cl* fdboot.inc fdiskm.c

@@ -4,6 +4,5 @@ _MSGRET.OBJ+
 _PARSE.OBJ
 REPLACE
 NUL
-..\..\mapper\mapper.lib+
-..\..\inc\comsubs.lib /STACK:31620;
-
+C:\mapper\mapper.lib+
+C:\sdk\lib\comsubs.lib /STACK:31620;

@@ -42,7 +42,7 @@ boot/bootsec.bin
 
 # System files & editor temps
 .DS_Store
-.D*
+.idxtmp/
 .*.swp
 *~
 
