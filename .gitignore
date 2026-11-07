@@ -1,0 +1,58 @@
+# Build directories
+build/
+
+# Compiler and assembler artifacts
+*.obj
+*.lst
+*.map
+*.crf
+*.hex
+*.prn
+*.tsv
+*.log
+*.bak
+*.lbr
+
+# Generated message artifacts
+*.ctl
+*.cl[0-9]
+*.cl[a-z]
+*.clr
+*.idx
+
+# Generated include files
+asminc/boot.inc
+boot/boot.inc
+boot/bootsec.bin
+
+# Built binaries across directories
+*.bin
+*.sys
+*.exe
+*.com
+*.img
+*.lib
+
+# Exceptions: vendor SDK tools, libraries, and source macro files
+!sdk/bin/*.exe
+!sdk/bin/*.com
+!sdk/lib/*.lib
+!sdk/lib/*.obj
+!commands/append/sysmac.lib
+
+# System files & editor temps
+.DS_Store
+.D*
+.*.swp
+*~
+
+# Python cache
+__pycache__/
+
+# PCE ROM symlink / user binaries
+/rom
+/media/rom/
+
+# Private/temporary files
+private/
+vm_*
