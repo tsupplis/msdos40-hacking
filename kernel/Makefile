@@ -1,31 +1,23 @@
-#************************** DEV root level Makefile ***********************
+# MS-DOS 4.00 - kernel dispatcher
+#
+# Ported (GNU make): bios dos
+# Not yet ported (still old nmake Makefiles, deliberately not dispatched):
+#   country ansi keyboard display printer driver ramdrive smartdrv xma2ems vdisk xmaem memm
 
-make	=nmake
+SUBDIRS = bios dos
 
-all:
-	cd country
-	$(make)
-	cd ..\ansi
-	$(make)
-	cd ..\keyboard
-	$(make)
-	cd ..\display
-	$(make)
-	cd ..\printer
-	$(make)
-	cd ..\driver
-	$(make)
-	cd ..\ramdrive
-	$(make)
-	cd ..\smartdrv
-	$(make)
-	cd ..\xma2ems
-	$(make)
-        cd ..\vdisk
-        $(make)
-        cd ..\xmaem
-        $(make)
-	cd ..
+.PHONY: all clean $(SUBDIRS)
 
+all: $(SUBDIRS)
 
+$(SUBDIRS):
+	$(MAKE) -C $@
 
+CLEAN_SUBDIRS = $(addprefix clean-,$(SUBDIRS))
+
+.PHONY: $(CLEAN_SUBDIRS)
+
+clean: $(CLEAN_SUBDIRS)
+
+$(CLEAN_SUBDIRS): clean-%:
+	$(MAKE) -C $* clean

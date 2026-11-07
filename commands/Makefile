@@ -1,83 +1,29 @@
-#************************** CMD Root level Makefile ***********************
+# MS-DOS 4.00 - commands dispatcher (original nmake build order)
+#
+# Ported (GNU make):
+SUBDIRS = command assign edlin exe2bin find join more print sort subst sys \
+          share nlsfunc comp diskcomp diskcopy label recover tree xcopy \
+          fastopen append
 
-make	=nmake
+# Not yet ported (still old nmake Makefiles, deliberately not dispatched):
+#   attrib chkdsk debug fc format backup restore replace fdisk mode mem
+#   filesys ifsfunc graftabl graphics keyb select
 
-all:
-	cd command
-	$(make)
-	cd ..\attrib
-	$(make)
-	cd ..\assign
-	$(make)
-	cd ..\chkdsk
-	$(make)
-	cd ..\debug
-	$(make)
-	cd ..\edlin
-	$(make)
-	cd ..\exe2bin
-	$(make)
-	cd ..\find
-	$(make)
-	cd ..\fc
-	$(make)
-	cd ..\format
-	$(make)
-	cd ..\join
-	$(make)
-	cd ..\more
-	$(make)
-	cd ..\print
-	$(make)
-	cd ..\recover
-	$(make)
-	cd ..\sort
-	$(make)
-	cd ..\subst
-	$(make)
-	cd ..\sys
-	$(make)
-	cd ..\share
-	$(make)
-	cd ..\nlsfunc
-	$(make)
-	cd ..\ifsfunc
-	$(make)
-	cd ..\mem
-	$(make)
-	cd ..\filesys
-	$(make)
-	cd ..\backup
-	$(make)
-	cd ..\comp
-	$(make)
-	cd ..\diskcomp
-	$(make)
-	cd ..\diskcopy
-	$(make)
-	cd ..\fdisk
-	$(make)
-	cd ..\label
-	$(make)
-	cd ..\mode
-	$(make)
-	cd ..\restore
-	$(make)
-	cd ..\tree
-	$(make)
-	cd ..\replace
-	$(make)
-	cd ..\xcopy
-	$(make)
-	cd ..\graftabl
-	$(make)
-	cd ..\fastopen
-	$(make)
-	cd ..\append
-	$(make)
-	cd ..\graphics
-	$(make)
-	cd ..\keyb
-	$(make)
-	cd ..
+.PHONY: all clean $(SUBDIRS)
 
+all: $(SUBDIRS)
+
+$(SUBDIRS):
+	$(MAKE) -C $@
+
+CLEAN_SUBDIRS = $(addprefix clean-,$(SUBDIRS))
+
+.PHONY: $(CLEAN_SUBDIRS)
+
+clean: $(CLEAN_SUBDIRS)
+
+$(CLEAN_SUBDIRS): clean-%:
+	$(MAKE) -C $* clean
+
+# cl.exe (C 5.1) under emu2 shares temp files: concurrent compiles fail with C1042
+.NOTPARALLEL:

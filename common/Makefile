@@ -53,3 +53,6 @@ printf.obj: printf.asm
 
 clean:
 	rm -f *.obj *.lst *.map
+
+# cl.exe (C 5.1) under emu2 shares temp files: concurrent compiles fail with C1042
+.NOTPARALLEL:

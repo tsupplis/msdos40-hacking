@@ -2,13 +2,14 @@
 
 ROOT     ?= $(CURDIR)/..
 SDKBIN   ?= $(ROOT)/sdk/bin
-ASMINC   ?= $(ROOT)/asminc
 
-EMU2     ?= emu2
-MASM     ?= $(EMU2) $(SDKBIN)/masm.exe
-LIB      ?= $(EMU2) $(SDKBIN)/lib.exe
+export EMU2_DRIVE_C ?= $(ROOT)
 
-AFLAGS   = -Mx -t -I$(ROOT)/mapper -I$(ASMINC)
+EMU2     = emu2
+MASM     = $(EMU2) $(SDKBIN)/masm.exe
+LIB      = $(EMU2) $(SDKBIN)/lib.exe
+
+AFLAGS   = -Mx -t -I. -I'C:\asminc'
 
 OBJS = chdir.obj getver.obj f_first.obj set_tod.obj \
        write.obj beep.obj mkdir.obj exit.obj delete.obj getcntry.obj \
@@ -27,42 +28,27 @@ OBJS = chdir.obj getver.obj f_first.obj set_tod.obj \
 all: mapper.lib
 
 %.obj: %.asm macros.inc
-	$(MASM) $(AFLAGS) '$<,$@;'
+	@echo | $(MASM) $(AFLAGS) '$<,$@;'
 
-f_first.obj: f_first.asm macros.inc find.inc
-	$(MASM) $(AFLAGS) '$<,$@;'
-
-f_close.obj: f_close.asm macros.inc find.inc
-	$(MASM) $(AFLAGS) '$<,$@;'
-
-f_next.obj: f_next.asm macros.inc find.inc
-	$(MASM) $(AFLAGS) '$<,$@;'
-
-charin.obj: charin.asm macros.inc kbd.inc
-	$(MASM) $(AFLAGS) '$<,$@;'
-
-qfsinfo.obj: qfsinfo.asm macros.inc error.inc
-	$(MASM) $(AFLAGS) '$<,$@;'
-
-sighand.obj: sighand.asm macros.inc msc.inc
-	$(MASM) $(AFLAGS) '$<,$@;'
-
-getmsg.obj: getmsg.asm macros.inc messages.inc
-	$(MASM) $(AFLAGS) '$<,$@;'
+f_first.obj f_close.obj f_next.obj: find.inc
+charin.obj: kbd.inc
+qfsinfo.obj: error.inc
+sighand.obj: msc.inc
+getmsg.obj: messages.inc
 
 mapper.lib: $(OBJS)
-	rm -f mapper.lib mapper.bak mapper.lst mapper_build.lbr
-	@printf "mapper.lib\r\ny\r\n" > mapper_build.lbr
+	rm -f mapper.lib mapper.bak mapper.lst mapper.lbr
+	@printf "mapper.lib\r\ny\r\n" > mapper.lbr
 	@for obj in $(OBJS); do \
 		if [ "$$obj" = "gmachmod.obj" ]; then \
-			printf "+$$obj\r\n" >> mapper_build.lbr; \
+			printf "+$$obj\r\n" >> mapper.lbr; \
 		else \
-			printf "+$$obj&\r\n" >> mapper_build.lbr; \
+			printf "+$$obj &\r\n" >> mapper.lbr; \
 		fi \
 	done
-	@printf "mapper.lst;\r\n" >> mapper_build.lbr
-	$(LIB) @mapper_build.lbr
-	rm -f mapper_build.lbr
+	@printf "mapper.lst;\r\n" >> mapper.lbr
+	$(LIB) @mapper.lbr
+	rm -f mapper.lbr
 
 clean:
-	rm -f *.obj *.lib *.bak *.lst *.map mapper_build.lbr
+	rm -f *.obj *.lib *.bak *.lst *.map mapper.lbr
