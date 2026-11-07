@@ -1,0 +1,15 @@
+msbio1.obj+
+mscon.obj+
+msaux.obj+
+mslpt.obj+
+msclock.obj+
+msdisk.obj+
+msbio2.obj+
+mshard.obj+
+msinit.obj+
+sysinit1.obj+
+sysconf.obj+
+sysinit2.obj+
+sysimes.obj
+msbio.exe
+msbio.map /M;

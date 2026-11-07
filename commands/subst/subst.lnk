@@ -1,0 +1,12 @@
+SUBST.OBJ+
+C:\common\errtst.obj+
+C:\common\sysvar.obj+
+C:\common\cds.obj+
+C:\common\dpb.obj+
+_msgret.obj+
+_parse.obj
+SUBST
+NUL
+C:\sdk\lib\comsubs.lib+
+C:\mapper\mapper.lib;
+
