@@ -49,7 +49,7 @@ The 4.00 copies had CP437 box-drawing bytes replaced by U+FFFD, which stops `sel
 The 4.01 files carry the correct bytes.
 
 `asminc/versiona.inc` still defines `minor_version equ 00`: the 4.01 diff does not touch it.
-The "4.01" shown by the banner and by `VER` comes from the message file and the `VER` change above; whether the kernel's own Get Version call (INT 21h, AH=30h) reports 4.00 or 4.01 has **not been checked**.
+The "4.01" shown by the banner and by `VER` comes from the message file and the `VER` change above; 
 
 ## 3. Changes after 4.01
 
@@ -59,41 +59,17 @@ Each change is a source edit marked `PD0255` in a comment, so `grep -rn PD0255` 
 
 ### 3.1 Microsoft PD0255 "MS-DOS 4.0X patch disk" (revision 8/92)
 
-Source of the patches: `private/pd0255/` (not in git; the files are Microsoft's).
-Its README says the disk fixes `MSDOS.SYS`, `FASTOPEN.EXE`, `FORMAT.COM` and `GRAPHICS.COM` for MS-DOS 4.0, 4.01 and 4.01a.
-`PATCH32M.EXE` carries a complete replacement `MSDOS.SYS` (37,376 bytes, the same size as ours) and writes it to the target disk.
+| Patch | Component | Fix | Source |
+|---|---|---|---|
+| PD0255 | `MSDOS.SYS` | Directory zeroing carries into the high sector word (`INC DX` became `ADD DX,1` / `ADC [HIGH_SECTOR],0`): directory table on a 32 MB boundary. | `kernel/dos/mknode.asm` |
+| PD0255 | `MSDOS.SYS` | `DISKWRITE` saves `HIGH_SECTOR` before the zero-base decrement and rounds the sector count up in `DI`: append to a file near 32 MB. | `kernel/dos/disk3.asm` |
+| PD0255 | `GRAPHICS.COM` | Multiplex number `15H` (MSCDEX's) changed to `0ACH`. | `commands/graphics/grint2fh.asm` |
+| PD0255 | `FASTOPEN.EXE`, `FORMAT.COM` | Nothing to apply: `FASTOPEN` is byte-identical to ours; `FORMAT` has identical code (2 non-functional bytes differ). | none |
 
-How each file was compared with our build:
+The rebuilt `msdos.sys` and `graphics.com` are byte-identical to the PD0255 files. Not run-tested.
 
-| PD0255 file | Result | Action |
-|---|---|---|
-| `MSDOS.SYS` (inside `PATCH32M.EXE`) | 3 code differences in 2 routines (below). | Applied. |
-| `GRAPHICS.COM` | 2 bytes differ, both the INT 2Fh multiplex number (`15H` became `0ACH`). | Applied. |
-| `FASTOPEN.EXE` | Byte-identical to our build. | None needed. |
-| `FORMAT.COM` | Code identical. 2 bytes differ, both non-functional (below). | None needed. |
+### 3.2 IBM PC DOS 4.00 CSD UR31300 fixes
 
-#### Applied
-
-| Source | Change | Why |
-|---|---|---|
-| `kernel/dos/mknode.asm`, loop `ZERODIR` | `INC DX` became `ADD DX,1` / `ADC [HIGH_SECTOR],0`. | `INC` does not set carry, so zeroing a new directory that crosses a 64K-sector boundary never advanced the high word. The README describes this as "creating a subdirectory causing the directory table to fall on a 32 MB sector boundary". |
-| `kernel/dos/disk3.asm`, `DISKWRITE` | `PUSH [HIGH_SECTOR]` moved to before the zero-base `SUB AX,1` / `SBB [HIGH_SECTOR],0`. | The value restored by the later `POP` is now the one from before the decrement. |
-| `kernel/dos/disk3.asm`, `DISKWRITE` | The round-up of the file's sector count is done in `DI` instead of `ADC [HIGH_SECTOR_TEMP],0`. | The old code added the carry into the stored high word, which is also used afterwards. With the change above, this is the "append to a file that is 32 MB in size" bug. |
-| `commands/graphics/grint2fh.asm` line 108 | `PRT_SCR_2FH_NUMBER` `15H` became `0ACH`. | `15H` is MSCDEX's multiplex number; GRAPHICS answered it and caused "MSCDEX not installed". |
-
-Check: after rebuilding, `kernel/dos/msdos.sys` is **byte-identical** to the `MSDOS.SYS` inside `PATCH32M.EXE`, and `commands/graphics/graphics.com` is byte-identical to the PD0255 `GRAPHICS.COM`.
-Before the edits, the `MSDOS.SYS` comparison (jump targets and immediates masked) showed 28 differing hunks.
-
-#### Nothing to apply
-
-- `FORMAT.COM`: the 32 MB bad-track code is identical to ours. The only differences are the physical-drive byte in the embedded boot-sector template (`0x80` in PD0255, `0x00` ours, at file offset `0x143F`) and the checksum word in the header that depends on it.
-  The difference is non-functional: `FORMAT` overwrites that byte before writing a boot sector (`msfor.asm:303` and `:310`; `SYS` does the same).
-  Why PD0255 has `0x80` in the template is unknown.
-  Our template comes from `boot/msboot.asm`, shared with `SYS` and `select`, so it is left alone.
-- The third problem in the PD0255 README, data corruption with secondary-cache BUFFERS on drives over 32 MB, has no separate code difference in `MSDOS.SYS`.
-  It may be the same defect as the changes above. This has **not been tested**.
-
-#### Not tested
-
-Nothing was run on a disk over 32 MB under PCE. For `MSDOS.SYS` and `GRAPHICS.COM` the evidence is byte identity with Microsoft's own build, which is taken as sufficient.
-`FORMAT.COM` is equivalent: identical code, with only the non-functional differences described above.
+| APAR | Component | Fix | Source |
+|---|---|---|---|
+| IR80263 | `ANSI.SYS` | Select the BIOS alternate print screen (INT 10h `AH=12h BL=20h`) when more than 25 rows are set, not at load, so Shift-PrtSc works. | `kernel/ansi/ioctl.asm`, `ansiinit.asm` |
