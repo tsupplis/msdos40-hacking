@@ -1,10 +1,10 @@
 #!/bin/sh
 # Headless DOS test runner (PCE + mtools). Console output goes through COM1 (CTTY).
 #
-#   test/run.sh --list               list the test cases
-#   test/run.sh <case>               run one case, e.g.  test/run.sh cmd-keyb-layout-switch
-#   test/run.sh --all                run every case in turn
-#   test/run.sh path/to/file.bat     run any batch file
+#   test/run_tests --list               list the test cases
+#   test/run_tests <case>               run one case, e.g.  test/run_tests c_keyb
+#   test/run_tests --all                run every case in turn
+#   test/run_tests path/to/file.bat     run any batch file
 #
 # A case is test/cases/<name>.bat, optionally with <name>.cfg (extra CONFIG.SYS lines).
 # Header lines in the .bat (they are also valid DOS REM comments):
@@ -39,7 +39,7 @@ esac
 
 if [ -f "$1" ]; then BAT=$1
 elif [ -f "$CASES/$1.bat" ]; then BAT=$CASES/$1.bat
-else echo "no such test case: $1 (try: test/run.sh --list)" >&2; exit 2
+else echo "no such test case: $1 (try: test/run_tests --list)" >&2; exit 2
 fi
 CFG=${BAT%.bat}.cfg
 IMG=${IMG:-media/msdos40_full.img}
