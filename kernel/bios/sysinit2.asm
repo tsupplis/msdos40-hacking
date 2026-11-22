@@ -506,6 +506,8 @@ Org3:
 	je	Org_file		;AN000;
 	cmp	Cmd_Indicator, 'J'      ;AN000; IFS= command?
 	je	Org_file		;AN000;
+	cmp	Cmd_Indicator, 'T'
+	je	Org_file
 	cmp	Cmd_Indicator, 'S'      ;AN000; Shell= is a special one!!!
 	je	Org_file		;AN000;
 	cmp	Cmd_Indicator, '1'      ;AN013; SWITCHES= command?
@@ -1515,6 +1517,7 @@ COMTAB	LABEL	BYTE
 	DB	6,"STACKS",   'K'       ; BAS for DOS 3.2
 		ENDIF
 	DB	7,"COUNTRY",  'Q'
+	DB	9,"SHELLHIGH",'T'
 	DB	5,"SHELL",    'S'
 	db	7,"INSTALL",  'I'       ;AN000;
 	db	3,"IFS",      'J'       ;AN000;

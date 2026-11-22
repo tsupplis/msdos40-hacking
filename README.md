@@ -66,6 +66,7 @@ Applies to `command.com` and DOS buffered console input. Cooked handle reads sup
 |---|---|---:|
 | `dos=umb` | Enable upper memory blocks (UMBs) from an XMS provider. | — |
 | `devicehigh=driver [arguments]` | Try upper memory first, then conventional memory if the image cannot fit. | 4,544 with `ansi.sys` |
+| `shellhigh=interpreter [arguments]` | Start the shell in upper memory when it fits, otherwise in conventional memory. | 5,808 with `command.com /p` |
 | `buffers=` | Place the primary buffer pool in one UMB when it fits. | 10,640 with `buffers=20` |
 | `files=` | Place the file table extension in one UMB when it fits. The first five entries stay in the kernel. | 912 with `files=20` |
 
@@ -75,9 +76,10 @@ PCE example for `config.sys`
 dos=umb
 device=pcehimem.sys
 devicehigh=ansi.sys
+shellhigh=command.com /p
 ```
 
-¹ PCE XT with 512-byte floppy sectors. With all three settings above, `mem` reports 583 Kbytes for the largest executable.
+¹ PCE XT with 512-byte floppy sectors. With 88 Kbytes of UMB, `buffers=20`, `files=20` and the example above, `mem` reports 589 Kbytes for the largest executable.
 
 Programs can link UMBs with `int 21h/5803h` and select upper-only or upper-first allocation with `5801h`.
 

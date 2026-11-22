@@ -205,7 +205,7 @@ ASSUME	CS:SYSINITSEG,DS:NOTHING,ES:NOTHING,SS:NOTHING
 	public ConfigMsgFlag			;AN014;
 	public Do_Install_Exec			;AN019;
 	PUBLIC	FindUmbProvider,GetDriverUmb,StageUmb
-	PUBLIC	UMB_REQUESTED
+	PUBLIC	SHELL_HIGH,UMB_REQUESTED
 	public Multi_Pass_Id			;AN024;
 
 
@@ -279,6 +279,7 @@ NUM_CDS 		DB	5	; 5 net drives
 CONFBOT 		DW	?
 ALLOCLIM		DW	?
 FOOSTRNG		DB	"A:\",0
+SHELL_HIGH		DB	0	; Last shell directive
 UMB_REQUESTED		DB	0	; DOS=UMB requested during CONFIG.SYS processing
 XMS_ENTRY		DD	0	; XMS driver entry point during initialization
 UMB_GRANTS		DW	0	; Head of grants awaiting arena construction
@@ -304,7 +305,9 @@ BUF_PREV_OFF		dw	0	;AN020;
 EMS_Buf_First		dw	0	;AN020;
 
 	IF	NOT NOEXEC
-COMEXE	EXEC0 <0,COMMAND_LINE,DEFAULT_DRIVE,ZERO>
+SHELL_STRATEGY	DW	0
+SHELL_LINK	DW	0
+COMEXE	EXEC1 <0,COMMAND_LINE,DEFAULT_DRIVE,ZERO>
 	ENDIF
 
 ;------------------------------------------------------------------
@@ -845,6 +848,10 @@ OKLD:
 	MOV	WORD PTR [BX.EXEC0_COM_LINE+2],CS	; Set segments
 	MOV	WORD PTR [BX.EXEC0_5C_FCB+2],CS
 	MOV	WORD PTR [BX.EXEC0_6C_FCB+2],CS
+	CMP	[SHELL_HIGH],'T'
+	JNE	LoadShellLow
+	CALL	LoadShellHigh
+LoadShellLow:
 	XOR	AX,AX			;Load and go
 	MOV	AH,EXEC
 	STC				;IN CASE OF INT 24
@@ -1775,6 +1782,57 @@ SetFilesLink:
 SetFilesDone:
 	RET
 SetFiles ENDP
+
+IF NOT NOEXEC
+; Load without executing so the previous allocation policy can be
+; restored before the interpreter runs. EXEC returns AX on its new stack.
+LoadShellHigh PROC NEAR
+	PUSH	DX
+	MOV	AX,5802h
+	INT	21h
+	JC	ShellFallback
+	XOR	AH,AH
+	MOV	[SHELL_LINK],AX
+	MOV	AX,5800h
+	INT	21h
+	MOV	[SHELL_STRATEGY],AX
+	MOV	AX,5803h
+	MOV	BX,1
+	INT	21h
+	JC	ShellFallback
+	MOV	AX,5801h
+	MOV	BX,40h
+	INT	21h
+	JC	ShellReset
+	MOV	BX,OFFSET COMEXE
+	MOV	AX,4B01h
+	INT	21h
+ShellReset:
+	PUSHF
+	MOV	BX,CS:[SHELL_STRATEGY]
+	MOV	AX,5801h
+	INT	21h
+	MOV	BX,CS:[SHELL_LINK]
+	MOV	AX,5803h
+	INT	21h
+	POPF
+	JC	ShellFallback
+	MOV	AH,51h
+	INT	21h
+	MOV	DS,BX
+	MOV	ES,BX
+	CLI
+	MOV	SS,CS:[COMEXE.Exec1_SS]
+	MOV	SP,CS:[COMEXE.Exec1_SP]
+	STI
+	POP	AX
+	JMP	DWORD PTR CS:[COMEXE.Exec1_IP]
+ShellFallback:
+	POP	DX
+	MOV	BX,OFFSET COMEXE
+	RET
+LoadShellHigh ENDP
+ENDIF
 
 ; Cache the XMS entry after device initialization for DOS=UMB.
 FindUmbProvider PROC NEAR

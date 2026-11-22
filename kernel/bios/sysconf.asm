@@ -157,7 +157,7 @@ ASSUME	CS:SYSINITSEG,DS:NOTHING,ES:NOTHING,SS:NOTHING
 	EXTRN	PARAROUND:NEAR,TEMPCDS:NEAR
 	EXTRN	Set_Country_Path:NEAR,Move_ASCIIZ:NEAR,DELIM:NEAR
 	EXTRN	BADFIL:NEAR,ROUND:NEAR
-	EXTRN	UMB_REQUESTED:BYTE
+	EXTRN	SHELL_HIGH:BYTE,UMB_REQUESTED:BYTE
 	EXTRN	FindUmbProvider:NEAR,GetDriverUmb:NEAR,StageUmb:NEAR
 	extrn	Do_Install_Exec:NEAR		;AN018;
 	extrn	SetDevMark:NEAR 		;AN030;
@@ -2377,8 +2377,12 @@ $$SR76:
 ; shell command
 ;------------------------------------------------------------------------------
 TRYS:
+	CMP	AH,'T'
+	JE	SetShell
 	CMP	AH,'S'
 	JNZ	TRYX
+SetShell:
+	MOV	[SHELL_HIGH],AH
 	MOV	[COMMAND_LINE+1],0
 	MOV	DI,OFFSET COMMND + 1
 	MOV	[DI-1],AL
