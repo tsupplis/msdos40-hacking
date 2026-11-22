@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""Check an interactive COMMAND prompt and a direct 0Ah caller on a scratch floppy."""
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+import time
+
+root = Path(__file__).resolve().parents[1]
+work = root / "test/work"
+work.mkdir(exist_ok=True)
+with tempfile.TemporaryDirectory(dir=work) as tmp:
+    folder = Path(tmp)
+    def run(*args, **kwargs):
+        subprocess.run(args, cwd=folder, check=True, **kwargs)
+
+    image = folder / "boot.img"
+    shutil.copyfile(root / "media/msdos40_full.img", image)
+    shutil.copyfile(root / "test/editbuf.asm", folder / "editbuf.asm")
+    env = dict(os.environ, EMU2_DRIVE_C=tmp)
+    for tool, args in (("masm", "editbuf.asm,editbuf.obj;"),
+                       ("link", "editbuf.obj,editbuf.exe,nul;")):
+        run("emu2", root / f"sdk/bin/{tool}.exe", args, env=env)
+    run("mcopy", "-i", image, "editbuf.exe", "::EDITBUF.EXE")
+    (folder / "auto.bat").write_bytes(b"@echo off\r\nprompt Q$G\r\neditbuf\r\necho on\r\n")
+    run("mcopy", "-o", "-i", image, "auto.bat", "::AUTOEXEC.BAT")
+    cfg = (root / "msdos.cfg").read_text().replace('"rom"', f'"{root}/rom"')
+    cfg = cfg.replace("media/msdos40_full.img", "boot.img")
+    (folder / "test.cfg").write_text(cfg)
+    with (folder / "pce.log").open("wb") as log:
+        proc = subprocess.Popen(["pce-ibmpc", "-c", "test.cfg", "-t", "null", "-g", "vga"],
+                                cwd=folder, stdin=subprocess.PIPE, stdout=log, stderr=log)
+        def send(command):
+            proc.stdin.write((command + "\n").encode())
+            proc.stdin.flush()
+
+        def key(name):
+            send(f"key {name}\nc 20000")
+
+        def type_text(value):
+            for ch in value:
+                key("Space" if ch == " " else ch)
+
+        def expect(suffix, anywhere=False):
+            deadline = time.monotonic() + 30
+            dump = folder / "screen.bin"
+            screen = ""
+            while time.monotonic() < deadline:
+                dump.unlink(missing_ok=True)
+                send('c 200000\nsave "screen.bin" bin b800:0 fa0')
+                while not dump.exists() or dump.stat().st_size != 4000:
+                    if proc.poll() is not None or time.monotonic() >= deadline:
+                        raise RuntimeError(f"PCE screen capture timed out, last screen\n{screen}")
+                    time.sleep(.01)
+                data = dump.read_bytes()[::2].decode("cp437")
+                screen = "\n".join(data[i:i+80].rstrip() for i in range(0, 2000, 80)).rstrip()
+                if screen.endswith(suffix) or (anywhere and suffix in screen):
+                    return
+                if "EDIT FAIL" in screen:
+                    break
+            raise AssertionError(f"Expected {suffix!r}, screen was\n{screen}")
+
+        try:
+            # The probe prints the next case letter after the last passing case.
+            expect("EDIT PASS M", anywhere=True)
+            expect("Q>")
+            print("PASS direct 0Ah buffer cases A-L", flush=True)
+            type_text("echo ac")
+            key("Left")
+            type_text("b")
+            key("Down")
+            expect("Q>echo abc")
+            key("Return")
+            expect("abc\n\nQ>")
+            key("Up")
+            expect("Q>echo abc")
+            key("Home")
+            key("Delete")
+            type_text("e")
+            key("End")
+            key("Backspace")
+            key("Return")
+            expect("ab\n\nQ>")
+            print("PASS COMMAND editing and caller-owned recall", flush=True)
+            type_text("echo")
+            key("Tab")
+            type_text("xz")
+            key("Left")
+            key("+Ctrl h -Ctrl")
+            expect("Q>echo  z")
+            key("Home")
+            type_text("x")
+            expect("Q>xecho z")
+            key("Escape")
+            key("Return")
+            expect("Q>")
+            print("PASS tab repaint and Ctrl-H", flush=True)
+            # Fill the screen, then wrap and scroll while editing the last row.
+            for _ in range(25):
+                key("Return")
+            type_text("echo " + "a"*75)
+            expect("Q>echo " + "a"*73 + "\naa")
+            key("Home")
+            for _ in range(5):
+                key("Right")
+            type_text("b")
+            expect("Q>echo b" + "a"*72 + "\naaa")
+            key("Return")
+            expect("b" + "a"*75 + "\n\nQ>")
+            print("PASS wrapped redraw, scrolling and Enter in mid-line", flush=True)
+        finally:
+            if proc.poll() is None:
+                send("quit")
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()

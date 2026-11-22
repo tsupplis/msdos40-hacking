@@ -231,6 +231,7 @@ EndProc $STD_CON_STRING_OUTPUT
 IF  DBCS				;AN000;
 include kstrin.asm			;AN000;
 ELSE					;AN000;
+include editsw.inc
 include strin.asm
 ENDIF					;AN000;
 

@@ -37,6 +37,8 @@ $(COMMON)/%.obj:
 msdos.cl1 msdos.cl3: msdos.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 	$(NOSRVBLD) msdos.skl 'C:\messages\$(COUNTRY).msg' > /dev/null
 
+cpmio.obj: strin.asm lineedit.asm editsw.inc
+
 %.obj: %.asm msdos.cl1
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' -I'C:\common' '$<,$@;'
 

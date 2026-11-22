@@ -47,7 +47,7 @@ nibdos.obj: nibdos.asm $(KDOS)/mssw.asm $(KDOS)/msconst.asm $(ASMINC)/dossym.inc
 const2.obj: const2.asm $(ASMINC)/dossym.inc $(ASMINC)/devsym.inc $(ASMINC)/dosseg.asm
 msdata.obj: msdata.asm $(KDOS)/mssw.asm $(ASMINC)/dosseg.asm $(ASMINC)/dosmac.inc $(KDOS)/msinit.asm $(ASMINC)/devsym.inc $(ASMINC)/vector.inc $(ASMINC)/buffer.inc $(ASMINC)/dirent.inc $(ASMINC)/dpb.inc $(ASMINC)/curdir.inc $(ASMINC)/find.inc $(ASMINC)/pdb.inc $(ASMINC)/sf.inc $(ASMINC)/arena.inc $(ASMINC)/mi.inc
 msdata2.obj: msdata2.asm $(ASMINC)/dosseg.asm
-msdosme.obj: msdosme.asm $(KDOS)/mssw.asm $(ASMINC)/dosseg.asm $(KDOS)/dosmes.asm $(ASMINC)/dosmac.inc $(ASMINC)/intnat.inc $(ASMINC)/divmes.asm
+msdosme.obj: $(KDOS)/editsw.inc msdosme.asm $(KDOS)/mssw.asm $(ASMINC)/dosseg.asm $(KDOS)/dosmes.asm $(ASMINC)/dosmac.inc $(ASMINC)/intnat.inc $(ASMINC)/divmes.asm
 mstable.obj: mstable.asm $(KDOS)/mssw.asm $(KDOS)/ms_table.asm $(ASMINC)/dossym.inc $(ASMINC)/dosseg.asm $(KDOS)/misc2.asm
 printf.obj: printf.asm
 

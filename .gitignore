@@ -69,3 +69,5 @@ vm_*
 
 # headless test scratch files (test/run_tests and test/cases/ are kept)
 test/work/
+
+/media/disks.zip

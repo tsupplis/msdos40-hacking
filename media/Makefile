@@ -61,6 +61,10 @@ EXPECTED = IO.SYS MSDOS.SYS COMMAND.COM CONFIG.SYS AUTOEXEC.BAT \
 
 all: $(IMAGES)
 
+disks.zip: $(IMAGES) Makefile
+	zip -q - $(IMAGES) > $@.tmp
+	mv $@.tmp $@
+
 # FAT names are upper case: mcopy keeps the host name, so upper-case it explicitly.
 msdos40_base.img: $(BOOTSEC) $(IO_SYS) $(MSDOS) $(COMMAND) $(CMD_FILES)
 	rm -f $@
@@ -124,4 +128,4 @@ check: msdos40_full.img
 	exit $$missing
 
 clean:
-	rm -f *.img .listing.tmp crlf.tmp
+	rm -f *.img disks.zip disks.zip.tmp .listing.tmp crlf.tmp

@@ -11,6 +11,9 @@ Break
         procedure   $STD_CON_STRING_INPUT,NEAR   ;System call 10
 ASSUME  DS:NOTHING,ES:NOTHING
 
+IF LINEEDIT
+        call    EditConsole
+ENDIF
         MOV     AX,SS
         MOV     ES,AX
         MOV     SI,DX
@@ -50,6 +53,10 @@ NEWLIN:
         PUSH    SI
         MOV     DI,OFFSET DOSGROUP:INBUF        ;Build the new line here
         MOV     [INSMODE],CH    ;Insert mode off
+IF LINEEDIT
+        mov     al,cs:EditActive
+        mov     [INSMODE],al
+ENDIF
         MOV     BH,CH           ;No chars from template yet
         MOV     DH,CH           ;No chars to new line yet
         invoke  $STD_CON_INPUT_NO_ECHO          ;Get first char
@@ -115,16 +122,30 @@ GOTCH:
 ; ^X (or ESC) deletes the line and starts over
 ;
         CMP     AL,[CANCHAR]
+IF LINEEDIT
+        jne     SAVCH
+        jmp     KILNEW
+ELSE
         JZ      KILNEW
+ENDIF
 ;
 ; Otherwise, we save the input character.
 ;
 SAVCH:
+IF LINEEDIT
+        cmp     cs:EditActive,0
+        je      OldSave
+        call    EditPut
+        jc      BUFFUL
+        jmp     short SavedChar
+OldSave:
+ENDIF
         CMP     DH,DL
         JAE     BUFFUL                  ; buffer is full.
         STOSB
         INC     DH                      ; increment count in buffer.
         invoke  BUFOUT                  ;Print control chars nicely
+SavedChar:
         CMP     BYTE PTR [INSMODE],0
         JNZ     GETCH                   ; insertmode => don't advance template
         CMP     BH,BL
@@ -141,9 +162,19 @@ BUFFUL:
         JMP     SHORT GETCH
 
 ESCape:                         ;change reserved keyword DBM 5-7-87
+IF LINEEDIT
+        cmp     cs:EditActive,0
+        je      OldEscape
+        jmp     EditKey
+OldEscape:
+ENDIF
         transfer    OEMFunctionKey      ; let the OEM's handle the key dispatch
 
 ENDLIN:
+IF LINEEDIT
+        call    EditFinish
+        mov     al,c_CR
+ENDIF
         STOSB                           ; Put the CR in the buffer
         invoke  OUTT                    ; Echo it
         POP     DI                      ; Get start of user buffer
@@ -160,6 +191,9 @@ COPYNEW:
 ; Output a CRLF to the user screen and do NOT store it into the buffer
 ;
 PHYCRLF:
+IF LINEEDIT
+        call    EditFinish
+ENDIF
         invoke  CRLF
         JMP     GETCH
 
@@ -168,7 +202,11 @@ PHYCRLF:
 ;
 LineDel:
         OR      DH,DH
+IF LINEEDIT
+        jz      GetChJ
+ELSE
         JZ      GetCh
+ENDIF
         Call    BackSpace
         JMP     LineDel
 
@@ -212,6 +250,12 @@ PUTNEW:
 ; Destructively back up one character position
 ;
 entry   BackSp
+IF LINEEDIT
+        cmp     cs:EditActive,0
+        je      OldBack
+        jmp     EditBack
+OldBack:
+ENDIF
         Call    BackSpace
         JMP     GetCh
 
@@ -303,6 +347,22 @@ BACKMES:
         MOV     CL,1
 ;Copy CX chars from template to line
 COPYEACH:
+IF LINEEDIT
+        cmp     cs:EditActive,0
+        je      OldCopy
+        mov     byte ptr [INSMODE],0
+EditCopy:
+        cmp     bh,bl
+        jae     GETCH2
+        mov     al,[si]
+        call    EditPut
+        jc      GETCH2
+        inc     si
+        inc     bh
+        loop    EditCopy
+        jmp     short GETCH2
+OldCopy:
+ENDIF
         MOV     BYTE PTR [INSMODE],0    ;All copies turn off insert mode
         CMP     DH,DL
         JZ      GETCH2                  ;At end of line, can't do anything
@@ -399,5 +459,8 @@ entry   REEDIT
         MOV     AL,c_LF
         JMP     OUTT
 
+IF LINEEDIT
+include lineedit.asm
+ENDIF
 EndProc $STD_CON_STRING_INPUT
 

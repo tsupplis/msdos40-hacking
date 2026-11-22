@@ -364,6 +364,7 @@ extrn	intCNE0:near			;AN000; 2/17/KK
  ELSE					;AN000;
 	invoke	$std_con_input_no_echo	; Get the second byte of the sequence
  ENDIF					;AN000;
+        entry   OEMKeyCode
 	IF NOT Rainbow
 	MOV	CL,ESCTABLEN		; length of table for scan
 	PUSH	DI			; save DI (cannot change it!)
@@ -436,6 +437,44 @@ EatPQRS:
 	ENDIF
 
 EndProc OEMFunctionKey
+
+include editsw.inc
+IF LINEEDIT
+; Back up CX visible cells on the active BIOS text page, including across
+; wrapped rows. Preserve the DOS editor registers.
+procedure OEMBackCells,NEAR
+        push    ax
+        push    bx
+        push    cx
+        push    dx
+        push    bp
+        mov     bp,cx
+        mov     ah,0fh
+        int     10h
+        mov     bl,ah                   ; columns; BH is the active page
+        mov     ah,03h
+        int     10h
+        mov     al,dh
+        mul     bl
+        xor     dh,dh
+        add     ax,dx
+        sub     ax,bp
+        jnc     BackOnScreen
+        xor     ax,ax
+BackOnScreen:
+        div     bl
+        mov     dh,al
+        mov     dl,ah
+        mov     ah,02h
+        int     10h
+        pop     bp
+        pop     dx
+        pop     cx
+        pop     bx
+        pop     ax
+        ret
+EndProc OEMBackCells
+ENDIF
 
 CODE		ENDS
 

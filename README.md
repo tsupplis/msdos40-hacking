@@ -55,7 +55,7 @@ The "4.01" shown by the banner and by `VER` comes from the message file and the 
 
 Everything in this section is a change made to this tree after the 4.01 reconstruction, with the evidence for it.
 Section 2 is what 4.01 changed; this section is what we changed afterwards.
-Each change is a source edit marked `PD0255` in a comment, so `grep -rn PD0255` lists them.
+The Microsoft patch changes are marked `PD0255` in a comment, so `grep -rn PD0255` lists them.
 
 ### 3.1 Microsoft PD0255 "MS-DOS 4.0X patch disk" (revision 8/92)
 
@@ -66,13 +66,21 @@ Each change is a source edit marked `PD0255` in a comment, so `grep -rn PD0255` 
 | PD0255 | `GRAPHICS.COM` | Multiplex number `15H` (MSCDEX's) changed to `0ACH`. | `commands/graphics/grint2fh.asm` |
 | PD0255 | `FASTOPEN.EXE`, `FORMAT.COM` | Nothing to apply: `FASTOPEN` is byte-identical to ours; `FORMAT` has identical code (2 non-functional bytes differ). | none |
 
-The rebuilt `msdos.sys` and `graphics.com` are byte-identical to the PD0255 files. Not run-tested.
+With historical line editing selected, the rebuilt `msdos.sys` and `graphics.com` are byte-identical to the PD0255 files. Not run-tested.
 
 ### 3.2 IBM PC DOS 4.00 CSD UR31300 fixes
 
 | APAR | Component | Fix | Source |
 |---|---|---|---|
 | IR80263 | `ANSI.SYS` | Select the BIOS alternate print screen (INT 10h `AH=12h BL=20h`) when more than 25 rows are set, not at load, so Shift-PrtSc works. | `kernel/ansi/ioctl.asm`, `ansiinit.asm` |
+
+### 3.3 Command-line editing
+
+At the DOS prompt, Left and Right move one character, Home and End move to either end, and Ins toggles between insert (the default) and overwrite. Del removes the character under the cursor. Backspace or Ctrl-H removes the character to its left. Enter submits the whole line from any cursor position. Esc discards the current edit.
+
+On an empty line, Up recalls the previous line supplied by the caller. Down is ignored. COMMAND.COM and programs using buffered console input (`INT 21h/AH=0Ah`, including `AH=0Ch/AL=0Ah`) share this editor. Cooked console handle reads also support cursor editing, with Up disabled because their buffer belongs to DOS. Raw input, redirected streams, and programs with their own editors retain their existing behaviour.
+
+Set `LINEEDIT EQU 0` in `kernel/dos/editsw.inc` and run `make dist` for the historical build. The default IBM single-byte build reuses the DOS input buffer and adds 640 bytes to the linked kernel. Run `test/check_edit` after building to exercise the editor in PCE. The distribution archive `media/disks.zip` contains the base, dist and full floppy images.
 
 ---
 
