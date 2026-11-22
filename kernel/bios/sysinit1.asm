@@ -1379,10 +1379,6 @@ BUF1:
 	CALL	SetFiles
 FilesReady:
 	INVOKE	ROUND
-	push	ax				;AN005;
-	mov	ax, DEVMARK_CDS 		;AN005;='L'
-	call	SetDevMark			;AN005;
-	pop	ax				;AN005;
 	LES	DI,[DOSINFO]
 	MOV	CL,BYTE PTR ES:[DI.SYSI_NUMIO]
 	CMP	CL,[NUM_CDS]
@@ -1391,17 +1387,30 @@ FilesReady:
 GOTNCDS:
 	XOR	CH,CH
 	MOV	ES:[DI.SYSI_NCDS],CL
-	MOV	AX,[MEMHI]
-	MOV	WORD PTR ES:[DI.SYSI_CDS + 2],AX
-	MOV	AX,[MEMLO]
-	MOV	WORD PTR ES:[DI.SYSI_CDS],AX
 	MOV	AL,CL
 	MOV	AH,SIZE curdir_list
 	MUL	AH
 	call	ParaRound
+	CMP	WORD PTR CS:XMS_ENTRY+2,0
+	JE	SetCdsLow
+	PUSH	AX			; save paragraphs for conventional fallback
+	MOV	DX,AX
+	CALL	ClaimDataUmb
+	OR	AX,AX
+	POP	AX
+	JNZ	SetCdsPtr		; BX = upper segment
+SetCdsLow:
+	PUSH	AX
+	MOV	AL,DEVMARK_CDS
+	CALL	SetDevMark
+	POP	AX
+	MOV	BX,[MEMHI]
 	ADD	[MEMHI],AX
 	or	[SetDevMarkFlag], FOR_DEVMARK	;AN005;
 	INVOKE	ROUND				; Check for mem error before initializing
+SetCdsPtr:
+	MOV	WORD PTR ES:[DI.SYSI_CDS],0
+	MOV	WORD PTR ES:[DI.SYSI_CDS+2],BX
 	LDS	SI,ES:[DI.SYSI_DPB]
 ASSUME	DS:NOTHING
 	LES	DI,ES:[DI.SYSI_CDS]

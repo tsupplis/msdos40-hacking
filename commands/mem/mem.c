@@ -325,10 +325,10 @@ char     *argv[];                                                               
         if (DataLevel > 0)                                                                                                       /* ;an000; */
               {                                                                                                                  /* ;an000; */
                 DisplayBaseDetail();                                                                                             /* ;an000; */
+                Sub0_Message(NewLineMsg,STDOUT,Utility_Msg_Class);                                                                       /* ;an000; */
                 }                                                                                                                /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
-        Sub0_Message(NewLineMsg,STDOUT,Utility_Msg_Class);                                                                       /* ;an000; */
         DisplayBaseSummary();           /* display low memory totals */                                                          /* ;an000; */
                                                                                                                                  /* ;an000; */
         if (EMSInstalled() && (DataLevel > 1))                                                                                   /* ;an000; */

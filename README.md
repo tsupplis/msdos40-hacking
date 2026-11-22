@@ -68,6 +68,7 @@ Applies to `command.com` and DOS buffered console input. Cooked handle reads sup
 | `devicehigh=driver [arguments]` | Try upper memory first, then conventional memory if the image cannot fit. | 4,544 with `ansi.sys` |
 | `shellhigh=interpreter [arguments]` | Start the shell in upper memory when it fits, otherwise in conventional memory. | 5,808 with `command.com /p` |
 | `buffers=` | Place the primary buffer pool in one UMB when it fits. | 10,640 with `buffers=20` |
+| `lastdrive=` | Place the permanent current-directory table in one UMB when it fits. | 464 with `lastdrive=e`, 2,304 with `lastdrive=z` |
 | `files=` | Place the file table extension in one UMB when it fits. The first five entries stay in the kernel. | 912 with `files=20` |
 
 PCE example for `config.sys`
