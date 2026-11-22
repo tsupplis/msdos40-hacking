@@ -205,7 +205,8 @@ ASSUME	CS:SYSINITSEG,DS:NOTHING,ES:NOTHING,SS:NOTHING
 	public ConfigMsgFlag			;AN014;
 	public Do_Install_Exec			;AN019;
 	PUBLIC	FindUmbProvider,GetDriverUmb,StageUmb
-	PUBLIC	SHELL_HIGH,UMB_REQUESTED
+	PUBLIC	SHELL_HIGH,UMB_REQUESTED,HMA_REQUESTED
+        EXTRN   InitFcbCode:NEAR,PlaceFcbCode:NEAR
 	public Multi_Pass_Id			;AN024;
 
 
@@ -280,6 +281,7 @@ CONFBOT 		DW	?
 ALLOCLIM		DW	?
 FOOSTRNG		DB	"A:\",0
 SHELL_HIGH		DB	0	; Last shell directive
+HMA_REQUESTED DB 0
 UMB_REQUESTED		DB	0	; DOS=UMB requested during CONFIG.SYS processing
 XMS_ENTRY		DD	0	; XMS driver entry point during initialization
 UMB_GRANTS		DW	0	; Head of grants awaiting arena construction
@@ -503,6 +505,7 @@ SYSIN:
 	MOV	CX,DOSSIZE/2
 	REP	MOVSW
 
+        CALL    InitFcbCode
 	LDS	SI,[DEVICE_LIST]	; Set for call to DOSINIT
 	MOV	DX,[MEMORY_SIZE]	; Set for call to DOSINIT
 
@@ -995,6 +998,7 @@ MulTrk_Flag_Done:			    ;AN002;
 	PUSH	CS
 	POP	DS
 	INVOKE	ROUND
+	CALL    PlaceFcbCode
 	CMP	WORD PTR CS:XMS_ENTRY+2,0
 	JNE	TryBuffers
 	CALL	SetFiles
@@ -1887,6 +1891,22 @@ UmbGetEntry:
 	RET
 FindUmbProvider ENDP
 
+; Count new XMS grants once, before SYSINIT splits or stages them.
+RequestUmb PROC NEAR
+	MOV	AH,10h
+	CALL	CS:XMS_ENTRY
+	OR	AX,AX
+	JZ	RequestUmbDone
+	PUSH	ES
+	PUSH	DI
+	LES	DI,CS:DosInfo
+	ADD	ES:[DI.SYSI_UMB_TOTAL],DX
+	POP	DI
+	POP	ES
+RequestUmbDone:
+	RET
+RequestUmb ENDP
+
 ; Claim XMS regions at boot. Stage grants in segment order, using their
 ; first paragraph for a temporary next pointer. Each hole is protected
 ; by a system MCB in the final paragraph of the preceding region.
@@ -1919,8 +1939,7 @@ UmbRequest:
 	JNE	UmbBuild
 	CMP	DX,2
 	JB	UmbBuild
-	MOV	AH,10h
-	CALL	CS:XMS_ENTRY
+	CALL	RequestUmb
 	OR	AX,AX
 	JZ	UmbBuild
 	CALL	StageUmb
@@ -2044,8 +2063,7 @@ GetDriverUmb PROC NEAR
 	JNE	GetDriverMiss
 	CMP	DX,AX
 	JB	GetDriverMiss
-	MOV	AH,10h
-	CALL	CS:XMS_ENTRY
+	CALL	RequestUmb
 	OR	AX,AX
 	JNZ	GetDriverDone
 GetDriverMiss:
@@ -2062,8 +2080,7 @@ ClaimDataUmb PROC NEAR
 	POP	AX
 	JNC	ClaimDataSplit
 	PUSH	AX			; XMS may grant more than requested
-	MOV	AH,10h
-	CALL	CS:XMS_ENTRY
+	CALL	RequestUmb
 	OR	AX,AX
 	JNZ	ClaimDataGranted
 	POP	DX

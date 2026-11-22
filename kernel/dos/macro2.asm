@@ -154,7 +154,12 @@ MACRO001E:
 	LEA	DI,FCBTmp		; point to FCB temp area
 	MOV	[ExtFCB],0		; no extended FCB found
 	MOV	[Sattrib],0		; default search attributes
-	invoke	GetExtended		; get FCB, extended or not
+	MOV     SI,DX
+        CMP     BYTE PTR [SI],-1
+        JNE     TransPlainFCB
+        ADD     SI,7
+TransPlainFCB:
+        CMP     SI,DX	; Equivalent extended-FCB result		; get FCB, extended or not
 	JZ	GetDrive		; not an extended FCB, get drive
 	MOV	AL,[SI-1]		; get attributes
 	MOV	[SAttrib],AL		; store search attributes

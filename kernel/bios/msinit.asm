@@ -226,7 +226,7 @@ ENDK09	LABEL	BYTE
 ;********************************************************
 
 ;SYSIZE=200H		       ;NUMBER OF PARAGRAPHS IN SYSINIT MODULE
-sysize=500h    ;AC000;
+EXTRN SYSSIZE:BYTE
 
 ; DRVFAT MUST BE THE FIRST LOCATION OF FREEABLE SPACE!
 	EVENB
@@ -708,7 +708,14 @@ NO_DIDDLE:				;			  ARR 2.41
 	SHR	AX, 1
 	SHR	AX, 1
 	SHR	AX, 1
-	ADD	AX, SYSIZE
+	PUSH    DX
+        MOV     DX,OFFSET SYSINITSEG:SYSSIZE+15
+        SHR     DX,1
+        SHR     DX,1
+        SHR     DX,1
+        SHR     DX,1
+        ADD     AX,DX
+        POP     DX
 	ADD	AX, CODE
 	MOV	CURRENT_DOS_LOCATION, AX
 ; BAS DEBUG
@@ -1384,7 +1391,14 @@ LOADIT:
 	SHR	AX, 1
 	SHR	AX, 1
 	SHR	AX, 1
-	ADD	AX, SYSIZE
+	PUSH    DX
+        MOV     DX,OFFSET SYSINITSEG:SYSSIZE+15
+        SHR     DX,1
+        SHR     DX,1
+        SHR     DX,1
+        SHR     DX,1
+        ADD     AX,DX
+        POP     DX
 
 	ADD	AX,CODE
 

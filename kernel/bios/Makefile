@@ -16,7 +16,7 @@ NOSRVBLD = $(EMU2) $(SDKBIN)/nosrvbld.exe
 COUNTRY  = usa-ms
 
 OBJS     = msbio1.obj mscon.obj msaux.obj mslpt.obj msclock.obj msdisk.obj \
-           msbio2.obj mshard.obj msinit.obj sysinit1.obj sysconf.obj sysinit2.obj sysimes.obj
+           msbio2.obj mshard.obj msinit.obj sysinit1.obj sysconf.obj sysinit2.obj fcbpack.obj fcbload.obj sysimes.obj
 
 .PHONY: all clean
 
@@ -43,4 +43,13 @@ io.sys: $(OBJS) msload.com locscr msbio.lnk
 	rm -f msbio.exe msbio.bin
 
 clean:
-	rm -f *.obj *.sys *.com *.bin *.exe *.map *.lst *.cl*
+	rm -f *.obj *.sys *.com *.bin *.exe *.map *.lst *.cl* fcbpack.asm fcbsizes.inc fcbtable.inc
+
+# The DOS link supplies the final offsets used by SYSINIT.
+$(ROOT)/kernel/dos/msdos.sys:
+	$(MAKE) -C $(ROOT)/kernel/dos
+
+fcbpack.asm fcbsizes.inc fcbtable.inc: $(ROOT)/kernel/dos/msdos.sys fcbpack.py
+	python3 fcbpack.py $@
+
+fcbload.obj: fcbsizes.inc fcbtable.inc

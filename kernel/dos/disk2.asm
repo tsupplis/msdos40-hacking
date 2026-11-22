@@ -231,6 +231,10 @@ DO_ERR:
 
 EndProc HARDERRRW
 
+CODE	ENDS
+
+; SETUP can discard its near return to DOS_READ or DOS_WRITE.
+LAST	SEGMENT PARA PUBLIC 'LAST'
 Break	<SETUP -- SETUP A DISK READ OR WRITE FROM USER>
 
 ; Inputs:
@@ -330,7 +334,7 @@ NoDec:
 	MOV	CX,AX		; Can do this much
 	JCXZ	NOROOM		; Silly user gave Xaddr of FFFF in segment
 OK:
-	return
+	RET
 
 EOFERR:
 	POP	ES		; ES:DI point to SFT
@@ -341,8 +345,12 @@ EOFERR:
 NOROOM:
 	POP	BX		; Kill return address
 	CLC
-	return			; RETURN TO CALLER OF CALLER
+	RET			; RETURN TO CALLER OF CALLER
 EndProc SETUP
+LAST	ENDS
+
+CODE	SEGMENT BYTE PUBLIC  'CODE'
+
 
 Break	<BREAKDOWN -- CUT A USER READ OR WRITE INTO PIECES>
 
@@ -434,6 +442,21 @@ EndProc READ_LOCK_VIOLATION
 EndProc WRITE_LOCK_VIOLATION
 
 
+	entry	SET_ACC_ERR_DS
+ASSUME	DS:NOTHING,ES:NOTHING
+	Context DS
+
+	entry	SET_ACC_ERR
+	DOSAssume   CS,<DS>,"SET_ACC_ERR"
+
+	XOR	CX,CX
+	MOV	AX,error_access_denied
+	STC
+	return
+
+CODE	ENDS
+
+LAST	SEGMENT PARA PUBLIC 'LAST'
 Break	<DISKREAD -- PERFORM USER DISK READ>
 
 ; Inputs:
@@ -472,7 +495,7 @@ Break	<DISKREAD -- PERFORM USER DISK READ>
 ENUF:
 	invoke	CHECK_READ_LOCK 	;IFS. check read lock			 ;AN000;
 	JNC	Read_Ok 		; There are no locks
-	return
+	RET
 
 READ_OK:
 	LES	BP,[THISDPB]
@@ -485,7 +508,7 @@ READ_OK:
 	invoke	FNDCLUS
 ;------------------------------------------------------------------------
 IF	NOT IBMCOPYRIGHT
-	JC	SET_ACC_ERR_DS		; fix to take care of I24 fail
+	JC	ReadAccessError		; fix to take care of I24 fail
 					; migrated from 330a - HKN
 ENDIF
 ;------------------------------------------------------------------------
@@ -503,17 +526,8 @@ CANOT_READ:
 	POP	CX
 	POP	BX
 
-	entry	SET_ACC_ERR_DS
-ASSUME	DS:NOTHING,ES:NOTHING
-	Context DS
-
-	entry	SET_ACC_ERR
-	DOSAssume   CS,<DS>,"SET_ACC_ERR"
-
-	XOR	CX,CX
-	MOV	AX,error_access_denied
-	STC
-	return
+ReadAccessError:
+	JMP	SET_ACC_ERR_DS
 
 SKIPERR:
 	MOV	[LASTPOS],DX
@@ -521,7 +535,7 @@ SKIPERR:
 	CMP	[BYTCNT1],0
 	JZ	RDMID
 	invoke	BUFRD
-	JC	SET_ACC_ERR_DS
+	JC	ReadAccessError
 RDMID:
 	CMP	[SECCNT],0
 	JZ	RDLASTJ
@@ -534,7 +548,7 @@ ONSEC:
 	MOV	BX,[CLUSNUM]
 RDLP:
 	invoke	OPTIMIZE
-	JC	SET_ACC_ERR_DS
+	JC	ReadAccessError
 	PUSH	DI
 	PUSH	AX
 	PUSH	BX
@@ -776,9 +790,9 @@ RDLAST:
 	ADD	WORD PTR ES:[DI.sf_position],CX  ; Update current position
 	ADC	WORD PTR ES:[DI.sf_position+2],0
 RET28:	CLC
-	return
+	RET
 EndProc DISKREAD
 
-CODE	ENDS
+LAST	ENDS
     END
 

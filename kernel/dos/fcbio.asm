@@ -40,7 +40,7 @@ NAME	FCBIO
 ;
 include dosseg.asm
 
-CODE	SEGMENT BYTE PUBLIC  'CODE'
+LAST SEGMENT PARA PUBLIC 'LAST'
 	ASSUME	SS:DOSGROUP,CS:DOSGROUP
 
 .xcref
@@ -536,7 +536,7 @@ Break	<ResetLRU - reset overflowed lru counts>
 ;   Registers modified: none
 
 Procedure   ResetLRU,NEAR
-	ASSUME CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:NOTHING
+	ASSUME CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	Assert	ISSFT,<ES,DI>,"ResetLRU"
 	MOV	AX,8000h
 	SaveReg <ES,DI>
@@ -570,7 +570,7 @@ Break	<SetOpenAge - update the open age of a SFT>
 ;
 
 Procedure   SetOpenAge,NEAR
-	ASSUME CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:NOTHING
+	ASSUME CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	Assert	ISSFT,<ES,DI>,"SetOpenAge"
 	MOV	AX,OpenLRU
 	INC	AX
@@ -599,7 +599,7 @@ Break	<LRUFCB - perform LRU on FCB sfts>
 ;
 
 Procedure   LRUFCB,NEAR
-	ASSUME CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:NOTHING
+	ASSUME CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	Invoke	Save_World
 ;
 ; Find nth oldest NET/SHARE FCB.  We want to find its age for the second scan
@@ -825,7 +825,7 @@ Procedure   FCBRegen,NEAR
 	invoke	CheckShare		; test for sharer
 	JNZ	RegenFail		; yep, fail this.
 	MOV	AX,multNet SHL 8	; install check on multnet
-	INT	2FH
+	invoke	HMA_MULTIPLEX
 	OR	AL,AL			; is it there?
 	JZ	RegenDead		; no, just fail the operation
 RegenFail:
@@ -1181,5 +1181,7 @@ Procedure   FCBHardErr,NEAR
 	return
 EndProc FCBHardErr
 
-CODE ENDS
+        PUBLIC  FcbFirstEnd
+FcbFirstEnd LABEL BYTE
+LAST ENDS
 END

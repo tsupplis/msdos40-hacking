@@ -54,5 +54,7 @@
 :def 53 "%1 Kbytes in largest available UMB",CR,LF
 :def 54 "%1 Kbytes free XMS memory",CR,LF
 :def 55 "%1 Kbytes in largest available XMS block",CR,LF
+:def 56 "%1 Kbytes total UMB memory",CR,LF
+:def 57 "%1 Kbytes total XMS memory",CR,LF
 
 :end

@@ -121,6 +121,29 @@ EndProc SWAPBACK
 	return
 EndProc SWAPCON
 
+        EXTRN   FCB_SELECTED:NEAR
+        PUBLIC  READ_VECTOR,WRITE_VECTOR
+READ_VECTOR  DW OFFSET DOSGROUP:ReadFar
+WRITE_VECTOR DW OFFSET DOSGROUP:WriteFar
+
+        procedure DOS_READ,NEAR
+        JMP     WORD PTR CS:[READ_VECTOR]
+ReadFar:
+        PUSH    AX
+        MOV     AH,41
+        JMP     FCB_SELECTED
+EndProc DOS_READ
+
+        procedure DOS_WRITE,NEAR
+        JMP     WORD PTR CS:[WRITE_VECTOR]
+WriteFar:
+        PUSH    AX
+        MOV     AH,42
+        JMP     FCB_SELECTED
+EndProc DOS_WRITE
+CODE    ENDS
+
+LAST    SEGMENT PARA PUBLIC 'LAST'
 Break	<DOS_READ -- MAIN READ ROUTINE AND DEVICE IN ROUTINES>
 
 ;
@@ -141,7 +164,7 @@ Break	<DOS_READ -- MAIN READ ROUTINE AND DEVICE IN ROUTINES>
 ;	ES:DI point to SFT
 ; DS preserved, all other registers destroyed
 
-	procedure   DOS_READ,NEAR
+	procedure   HMA_READ,NEAR
 	DOSAssume   CS,<DS>,"DOS_Read"
 	ASSUME	ES:NOTHING
 
@@ -188,7 +211,7 @@ IF NOT Installed
 	transfer NET_READ
 ELSE
 	MOV	AX,(multNET SHL 8) OR 8
-	INT	2FH
+	invoke	HMA_MULTIPLEX
 	return
 ENDIF
 
@@ -211,7 +234,7 @@ LOCAL_READ:
 FS_no:
 	invoke	DISKREAD
 	PUSHF				      ; save flag
-	AND	CS:[FastSeekflg],FS_end       ; reset fastseek mode
+	AND	SS:[FastSeekflg],FS_end       ; reset fastseek mode
 	POPF				      ; retore flag
 critexit:
 	LeaveCrit   critDisk
@@ -415,7 +438,7 @@ GETBUF:
 	XOR	SI,SI
 	JMP	ENDRDCON
 
-EndProc DOS_READ
+EndProc HMA_READ
 
 Break	<DOS_WRITE -- MAIN WRITE ROUTINE AND DEVICE OUT ROUTINES>
 
@@ -439,7 +462,7 @@ Break	<DOS_WRITE -- MAIN WRITE ROUTINE AND DEVICE OUT ROUTINES>
 ;	ES:DI point to SFT
 ; DS preserved, all other registers destroyed
 
-	procedure   DOS_WRITE,NEAR
+	procedure   HMA_WRITE,NEAR
 	DOSAssume   CS,<DS>,"DOS_Write"
 	ASSUME	ES:NOTHING
 
@@ -499,7 +522,7 @@ IF NOT Installed
 	transfer NET_WRITE
 ELSE
 	MOV	AX,(multNET SHL 8) OR 9
-	INT	2FH
+	invoke	HMA_MULTIPLEX
 ;	JC	nomore		       ;AN000;;IFS. error
 ;	invoke	OWN_SHARE	       ;AN000;;IFS. IFS owns share ?
 ;	JZ	nomore		       ;AN000;;IFS. yes
@@ -523,7 +546,7 @@ LOCAL_WRITE:
 FS_no2: 				       ;AN000;
 	invoke	DISKWRITE
 	PUSHF				       ;AN000;FO. save flag
-	AND	CS:[FastSeekflg],FS_end        ;AN000;FO. reset fastseek mode
+	AND	SS:[FastSeekflg],FS_end        ;AN000;FO. reset fastseek mode
 	POPF				       ;AN000;FO. restore flag
 ;; Extended Open
 	JC	nocommit		       ;AN000;EO.
@@ -611,7 +634,7 @@ TEST_DEV_CON:
 	invoke	SETWRITE
 	POP	CX
 	LDS	SI,[THISSFT]
-	OR	CS:[DOS34_FLAG],X25_Special;AN000;;PTM. bad x25 driver
+	OR	SS:[DOS34_FLAG],X25_Special;AN000;;PTM. bad x25 driver
 	MOV	AH,3			;AN000;;PTM. prompt critical error ASAP
 	invoke	IOFUNC			;AN000;;PTM.
 	Assert	ISSFT,<DS,SI>,"DosWrite/TestDevCon"
@@ -674,7 +697,11 @@ CONEOF:
 	DOSAssume   CS,<DS>,"DISK/ConEOF"
 	CALL	SWAPBACK
 	JMP	ENDWRDEV
-EndProc DOS_WRITE
+EndProc HMA_WRITE
+LAST    ENDS
+
+CODE    SEGMENT BYTE PUBLIC 'CODE'
+
 
 ;   Convert JFN number in BX to sf_entry in DS:SI We get the normal SFT if
 ;   CONSWAP is FALSE or if the handle desired is 2 or more.  Otherwise, we

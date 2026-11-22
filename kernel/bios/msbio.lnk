@@ -10,6 +10,8 @@ msinit.obj+
 sysinit1.obj+
 sysconf.obj+
 sysinit2.obj+
+fcbpack.obj+
+fcbload.obj+
 sysimes.obj
 msbio.exe
 msbio.map /M;

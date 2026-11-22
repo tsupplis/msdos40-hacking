@@ -54,6 +54,8 @@
 #define UmbLargestMsg 53
 #define XmsFreeMsg 54
 #define XmsLargestMsg 55
+#define UmbTotalMsg 56
+#define XmsTotalMsg 57
 
 #define ParseError1Msg			01
 #define ParseError10Msg 		10

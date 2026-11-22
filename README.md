@@ -5,7 +5,7 @@ MS-DOS 4.01 rebuilt on Unix with GNU make and the original tools under `emu2`. T
 | Goal | Details |
 |---|---|
 | **Stability** | Apply the documented Microsoft and IBM fixes and regression-test the rebuilt system. |
-| **Memory** | Surpass DOS 3.3 and approach DOS 5.0, targeting 610 Kbytes free. UMB allocation and XMS reporting are available. Moving the kernel into the HMA remains a goal. |
+| **Memory** | Surpass DOS 3.3 and approach DOS 5.0, targeting 610 Kbytes free. UMB allocation and XMS reporting are available. Selected kernel services can run in the HMA. |
 | **Usability** | Command-line editing and recall, clearer memory diagnostics, BASIC (`mbasic.com`) and a screen editor (`vi.exe`) on the full floppy. |
 
 ![MS-DOS 4.01 running in PCE with upper memory enabled](images/msdos40.png)
@@ -58,7 +58,7 @@ Applies to `command.com` and DOS buffered console input. Cooked handle reads sup
 
 | Command | Enhancement |
 |---|---|
-| `mem` | Report memory in whole Kbytes, including free space and the largest block for each nonempty UMB or XMS pool. |
+| `mem` | Report memory in whole Kbytes, including total, free and largest free blocks for UMB and XMS pools. |
 | `more [filename]` | Page a file or, with no filename, standard input. |
 | `loadhigh` (`lh`) | Run an external program in upper memory when it fits. |
 | `vi.exe` | Screen editor on the full floppy. |
@@ -69,6 +69,7 @@ Applies to `command.com` and DOS buffered console input. Cooked handle reads sup
 
 | Directive | Enhancement | Conventional bytes saved on PCE¹ |
 |---|---|---:|
+| `dos=high` | Place FCB I/O and the handle and disk read/write routines in the HMA when available. Combine with `dos=high,umb` for UMBs. | 3,984 with the PCE configuration below |
 | `dos=umb` | Enable upper memory blocks (UMBs) from an XMS provider. | — |
 | `devicehigh=driver [arguments]` | Try upper memory first, then conventional memory if the image cannot fit. | 4,544 with `ansi.sys` |
 | `shellhigh=interpreter [arguments]` | Try upper memory for the shell and, for permanent `command.com`, its `/e:bytes` environment. Each falls back independently. | 6,096 with `command.com /p /e:160` |
@@ -81,13 +82,17 @@ Applies to `command.com` and DOS buffered console input. Cooked handle reads sup
 PCE example for `config.sys`
 
 ```dos
-dos=umb
+dos=high,umb
+files=20
+buffers=20
+fcbs=4,1
+lastdrive=e
 device=pcehimem.sys
 devicehigh=ansi.sys
-shellhigh=command.com /p
+shellhigh=command.com /p /e:160
 ```
 
-¹ PCE XT with 512-byte floppy sectors. With 88 Kbytes of UMB, `buffers=20`, `files=20` and the example above, `mem` reports 593 Kbytes for the largest executable.
+¹ PCE XT with 512-byte floppy sectors. With 88 Kbytes of UMB and the HMA enabled, the example above gives a 597 Kbyte largest executable.
 
 For a machine with unused RAM mapped from segment `ca00` up to `e000` (exclusive), use `umbs.sys` as the provider.
 

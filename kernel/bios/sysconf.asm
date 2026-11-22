@@ -157,7 +157,7 @@ ASSUME	CS:SYSINITSEG,DS:NOTHING,ES:NOTHING,SS:NOTHING
 	EXTRN	PARAROUND:NEAR,TEMPCDS:NEAR
 	EXTRN	Set_Country_Path:NEAR,Move_ASCIIZ:NEAR,DELIM:NEAR
 	EXTRN	BADFIL:NEAR,ROUND:NEAR
-	EXTRN	SHELL_HIGH:BYTE,UMB_REQUESTED:BYTE
+	EXTRN	SHELL_HIGH:BYTE,UMB_REQUESTED:BYTE,HMA_REQUESTED:BYTE
 	EXTRN	FindUmbProvider:NEAR,GetDriverUmb:NEAR,StageUmb:NEAR
 	extrn	Do_Install_Exec:NEAR		;AN018;
 	extrn	SetDevMark:NEAR 		;AN030;
@@ -814,34 +814,57 @@ COFF_P:
 ;------------------------------------------------------------------------------
 TRYI:
 	cmp	Multi_Pass_Id, 0		;AN029; the initial pass for XMAEM.SYS
-	je	Multi_Try_XMAEM 		;AN029;     and BUFFERS= ... /X pre scan.
+	jne     DosPass1
+        jmp     Multi_Try_XMAEM
+DosPass1: 		;AN029;     and BUFFERS= ... /X pre scan.
 	cmp	Multi_Pass_Id, 2		;AN026; the second pass for IFS= ?
-	je	Multi_Try_J			;AN026;
+	jne     DosPass2
+        jmp     Multi_Try_J
+DosPass2:			;AN026;
 	cmp	Multi_Pass_Id, 3		;AN026; the third pass for INSTALL= ?
-	je	Multi_Try_I			;AN026;
+	jne     DosPass3
+        jmp     Multi_Try_I
+DosPass3:			;AN026;
 	CMP	AH,'U'
 	JNE	CheckInstall
-	CMP	WORD PTR ES:[SI],'MU'  ; organized input is upper case
-	JNE	BadDosOption
-	CMP	BYTE PTR ES:[SI+2],'B'
-	JNE	BadDosOption
-	LEA	DI,[SI+3]
+	XOR     BX,BX
+DosOption:
+        CMP     WORD PTR ES:[SI],'IH'
+        JNE     DosUmb
+        CMP     WORD PTR ES:[SI+2],'HG'
+        JNE     BadDosOption
+        MOV     BH,1
+        ADD     SI,4
+        JMP     SHORT DosOptionEnd
+DosUmb:
+        CMP     WORD PTR ES:[SI],'MU'
+        JNE     BadDosOption
+        CMP     BYTE PTR ES:[SI+2],'B'
+        JNE     BadDosOption
+        MOV     BL,1
+        ADD     SI,3
 DosOptionEnd:
-	CMP	BYTE PTR ES:[DI],' '
-	JE	DosOptionSpace
-	CMP	BYTE PTR ES:[DI],9
-	JNE	DosOptionCheck
+        CMP     BYTE PTR ES:[SI],' '
+        JE      DosOptionSpace
+        CMP     BYTE PTR ES:[SI],9
+        JNE     DosOptionCheck
 DosOptionSpace:
-	INC	DI
-	JMP	DosOptionEnd
+        INC     SI
+        JMP     SHORT DosOptionEnd
 DosOptionCheck:
-	CMP	BYTE PTR ES:[DI],13
-	JE	EnableUmb
-	CMP	BYTE PTR ES:[DI],10
-	JNE	BadDosOption
-EnableUmb:
-	MOV	CS:UMB_REQUESTED,1
-	JMP	coff
+        CMP     BYTE PTR ES:[SI],','
+        JNE     DosOptionEol
+        INC     SI
+        JMP     SHORT DosOption
+DosOptionEol:
+        CMP     BYTE PTR ES:[SI],13
+        JE      SetDosOption
+        CMP     BYTE PTR ES:[SI],10
+        JNE     BadDosOption
+SetDosOption:
+        OR      CS:UMB_REQUESTED,BL
+        OR      CS:HMA_REQUESTED,BH
+        JMP     coff
 BadDosOption:
 	JMP	BADOP
 CheckInstall:

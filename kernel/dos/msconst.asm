@@ -94,6 +94,8 @@ SYSINITVAR  LABEL   WORD		; [SYSTEM]
 	I_am	UMB_HEAD,WORD,<0>	; [SYSTEM] Segment of first upper memory arena
 	I_am	UMB_BRIDGE,WORD,<0>	; [SYSTEM] Segment of conventional-to-UMB gap header
 
+	I_am	UMB_TOTAL,WORD,<0>	; [SYSTEM] Total UMB paragraphs granted
+
 	PUBLIC	HASHINITVAR		; [SYSTEM]				;AN000;
 HASHINITVAR  LABEL   WORD		; [SYSTEM]				;AN000;
 	I_am	BUF_HASH_PTR,DWORD	; [SYSTEM] buffer Hash table addr	;AN000;

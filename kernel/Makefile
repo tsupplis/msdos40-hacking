@@ -9,6 +9,9 @@ SUBDIRS = bios dos country ansi keyboard display printer driver ramdrive \
 
 all: $(SUBDIRS)
 
+# SYSINIT uses relocation records from the linked DOS image.
+bios: dos
+
 $(SUBDIRS):
 	$(MAKE) -C $@
 

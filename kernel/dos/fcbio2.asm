@@ -40,7 +40,7 @@ NAME	FCBIO2
 ;
 include dosseg.asm
 
-CODE	SEGMENT BYTE PUBLIC  'CODE'
+LAST SEGMENT PARA PUBLIC 'LAST'
 	ASSUME	SS:DOSGROUP,CS:DOSGROUP
 
 .xcref
@@ -326,17 +326,17 @@ IF	BUFFERFLAG
 	push	ax
 	push	bx
 
-	cmp	cs:[BUF_EMS_MODE], -1
+	cmp	ss:[BUF_EMS_MODE], -1
 	jz	dos_fcb_call_done
 	call	restore_user_map
-	mov	ax, word ptr cs:[BUF_EMS_LAST_PAGE]
-	cmp	cs:[BUF_EMS_PFRAME], ax
+	mov	ax, word ptr ss:[BUF_EMS_LAST_PAGE]
+	cmp	ss:[BUF_EMS_PFRAME], ax
 	je	dos_fcb_call_done
-	mov	word ptr cs:[LASTBUFFER], -1
-	mov	cs:[BUF_EMS_PFRAME], ax
-	mov	ax, word ptr cs:[BUF_EMS_LAST_PAGE+2]
-	mov	cs:[BUF_EMS_PAGE_FRAME], ax
-	mov	cs:[BUF_EMS_SAFE_FLAG], 1
+	mov	word ptr ss:[LASTBUFFER], -1
+	mov	ss:[BUF_EMS_PFRAME], ax
+	mov	ax, word ptr ss:[BUF_EMS_LAST_PAGE+2]
+	mov	ss:[BUF_EMS_PAGE_FRAME], ax
+	mov	ss:[BUF_EMS_SAFE_FLAG], 1
 	call	Setup_EMS_Buffers
 
 dos_fcb_call_done:
@@ -716,7 +716,9 @@ Procedure $FCB_Random_Write,NEAR
 	jmp	FCBIO
 EndProc $FCB_RANDOM_WRITE
 
-CODE ENDS
+        PUBLIC  FcbGroupEnd
+FcbGroupEnd LABEL BYTE
+LAST ENDS
 END
 
 

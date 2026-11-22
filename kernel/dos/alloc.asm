@@ -46,6 +46,7 @@ PAGE
 	i_need  FirstArena,WORD         ; first free block found
 	i_need  BestArena,WORD          ; best free block found
 	i_need  LastArena,WORD          ; last free block found
+	i_need	UMB_TOTAL,WORD
 	i_need	UMB_HEAD,WORD
 	i_need	UMB_BRIDGE,WORD
 	i_need	UMB_LINKED,BYTE
@@ -418,6 +419,11 @@ PAGE
 ;
 	procedure   $AllocOper,NEAR
 	ASSUME  DS:NOTHING,ES:NOTHING
+	CMP     AL,0FFh		; DOS UMB pool size in paragraphs
+	JNE     CheckAllocOp
+	MOV     AX,[UMB_TOTAL]
+	transfer SYS_RET_OK
+CheckAllocOp:
 	CMP     AL,1
 	JB      AllocOperGet
 	JZ      AllocOperSet

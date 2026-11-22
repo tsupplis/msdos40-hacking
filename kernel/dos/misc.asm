@@ -248,6 +248,23 @@ FreeDone:
 	return
 EndProc $DISK_RESET
 
+        PUBLIC  FCB_GATE,FCB_ENTRY,FcbReturn
+FCB_GATE DD     0
+        PUBLIC  FCB_SELECTED
+FCB_ENTRY:
+        PUSH    AX
+FCB_SELECTED:
+        JMP     CS:[FCB_GATE]
+
+FcbReturn:
+        RETF
+
+; Redirectors may call user code while handling the multiplex interrupt.
+        procedure HMA_MULTIPLEX,NEAR
+        INT     2Fh
+        return
+EndProc HMA_MULTIPLEX
+
 BREAK <$SetDPB - Create a valid DPB from a user-specified BPB>
 ;----+----+----+----+----+----+----+----+----+----+----+----+----+----+----;
 ;	     C	A  V  E  A  T	  P  R	O  G  R  A  M  M  E  R		   ;

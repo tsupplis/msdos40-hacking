@@ -219,7 +219,7 @@ void     DisplayEMSSummary(void);                                               
 void     DisplayEMSDetail(void);                                                                                                 /* ;an000; */
                                                                                                                                  /* ;an000; */
 void     DisplayBaseSummary(void);                                                                                               /* ;an000; */
-unsigned XmsFree(unsigned *);
+void XmsPool(unsigned long *);
 void     DisplayPoolSummary(void);
 void     DisplayExtendedSummary(void);                                                                                           /* ;an000; */
 void     DisplayExpandedSummary(void);                                                                                           /* ;an000; */
@@ -338,7 +338,6 @@ char     *argv[];                                                               
           DisplayEMSSummary();          /* display EMS memory totals */                                                          /* ;an000; */
                                                                                                                                  /* ;an000; */
         DisplayPoolSummary();
-        DisplayExtendedSummary();       /* display extended memory summary */                                                    /* ;an000; */
                                                                                                                                  /* ;an000; */
         return;                         /* end of MEM main routine */                                                            /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -781,10 +780,15 @@ void DisplayPoolSummary(void)
 {
     struct ARENA far *arena;
     unsigned far *head;
-    unsigned segment, next, largest = 0;
+    unsigned segment, next;
+    unsigned long xms[3];
+    unsigned long umbTotal = 0;
     unsigned long bytes, block, freeBytes = 0, largestBytes = 0;
     unsigned linked;
 
+    InRegs.x.ax = 0x58ff;            /* paragraphs granted by the UMB provider */
+    intdos(&InRegs,&OutRegs);
+    if (!OutRegs.x.cflag) umbTotal = OutRegs.x.ax * 16UL;
     InRegs.x.ax = 0x5802;
     intdos(&InRegs,&OutRegs);
     if (!OutRegs.x.cflag) {
@@ -816,17 +820,24 @@ void DisplayPoolSummary(void)
             intdos(&InRegs,&OutRegs);
         }
     }
-    if (freeBytes) {
+    if (umbTotal || freeBytes) {
         Sub0_Message(NewLineMsg,STDOUT,Utility_Msg_Class);
+        if (umbTotal) PrintKbytes(UmbTotalMsg,STDOUT,Utility_Msg_Class,&umbTotal);
         PrintKbytes(UmbFreeMsg,STDOUT,Utility_Msg_Class,&freeBytes);
         PrintKbytes(UmbLargestMsg,STDOUT,Utility_Msg_Class,&largestBytes);
     }
-    bytes = XmsFree(&largest) * 1024UL;
-    if (bytes) {
-        largestBytes = largest * 1024UL;
+    xms[0] = xms[1] = xms[2] = 0;
+    XmsPool(xms);                    /* total, free and largest in Kbytes */
+    if (xms[0]) {
         Sub0_Message(NewLineMsg,STDOUT,Utility_Msg_Class);
+        bytes = xms[0] * 1024UL;
+        PrintKbytes(XmsTotalMsg,STDOUT,Utility_Msg_Class,&bytes);
+        bytes = xms[1] * 1024UL;
         PrintKbytes(XmsFreeMsg,STDOUT,Utility_Msg_Class,&bytes);
-        PrintKbytes(XmsLargestMsg,STDOUT,Utility_Msg_Class,&largestBytes);
+        bytes = xms[2] * 1024UL;
+        PrintKbytes(XmsLargestMsg,STDOUT,Utility_Msg_Class,&bytes);
+    } else {
+        DisplayExtendedSummary();
     }
 }
 

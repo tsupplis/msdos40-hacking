@@ -74,3 +74,7 @@ test/work/
 /disks.zip.tmp
 
 !/extra/*
+
+/kernel/bios/fcbpack.asm
+/kernel/bios/fcbsizes.inc
+/kernel/bios/fcbtable.inc
