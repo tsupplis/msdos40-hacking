@@ -1455,38 +1455,44 @@ DoInstallStack:
 ;J.K. 10/21/86 Dynamic Relocation of Stack code.
 	call	Round				;[memhi] = Seg. for stack code
 						;[memlo] = 0
-;J.K. Set DEVMARK block into memory for MEM command
-;J.K. DEVMARK_ID = 'S' for stack
-	mov	al, DEVMARK_STK 		;AN005;='S'
-	call	SetDevMark
-
-	mov	ax, [memhi]
-	mov	es, ax				;ES -> Seg. the stack code is going to move.
-	assume	es:nothing
-	push	cs
-	pop	ds
-	xor	si,si				;!!We know that Stack code is at the beginning of SYSINIT.
-	xor	di,di
-	mov	cx, offset Endstackcode
-	mov	[memlo],cx
-	call	Round				;Have enough space for relocation?
-	rep	movsb
-
-	mov	ax, [memlo]
-	mov	word ptr [stack_addr],ax	;set for stack area initialization
-	mov	ax, [memhi]			;This will be used by Stack_Init routine.
-	mov	word ptr [stack_addr+2],ax
-
-;	Space for Internal Stack area = STACK_COUNT(ENTRYSIZE + STACK_SIZE)
-	MOV	AX, EntrySize
-	ADD	AX, [STACK_SIZE]
-	MOV	CX, [STACK_COUNT]
-	MUL	CX
-	call	ParaRound			; Convert size to pargraphs
-	ADD	[MEMHI], AX
-	or	[SetDevMarkFlag], FOR_DEVMARK	;AN005;To set the DEVMARK_SIZE for Stack by ROUND routine.
-	INVOKE	ROUND				; Check for memory error before
-						; continuing
+; Reserve the handlers and the stack area together, each paragraph aligned.
+	MOV	AX,OFFSET Endstackcode
+	CALL	ParaRound
+	PUSH	AX			; paragraphs before the stack area
+	MOV	AX,[STACK_SIZE]
+	ADD	AX,EntrySize
+	MUL	[STACK_COUNT]
+	CALL	ParaRound
+	POP	DX
+	PUSH	DX
+	ADD	AX,DX
+	CMP	WORD PTR CS:XMS_ENTRY+2,0
+	JE	SetStackLow
+	PUSH	AX
+	MOV	DX,AX
+	CALL	ClaimDataUmb
+	OR	AX,AX
+	POP	AX
+	JNZ	SetStackAddr		; BX = granted segment
+SetStackLow:
+	PUSH	AX
+	MOV	AL,DEVMARK_STK
+	CALL	SetDevMark
+	POP	AX
+	MOV	BX,[MEMHI]
+	ADD	[MEMHI],AX
+	OR	[SetDevMarkFlag],FOR_DEVMARK
+	CALL	ROUND
+SetStackAddr:
+	MOV	ES,BX
+	POP	AX
+	ADD	AX,BX
+	MOV	WORD PTR [STACK_ADDR+2],AX
+	MOV	WORD PTR [STACK_ADDR],0
+	XOR	SI,SI			; handlers begin at SYSINIT:0
+	XOR	DI,DI
+	MOV	CX,OFFSET Endstackcode
+	REP	MOVSB
 	CALL	StackInit			; Initialize hardware stack. CS=DS=sysinitseg, ES=Relocated stack code & data
 
 SkipStack:
