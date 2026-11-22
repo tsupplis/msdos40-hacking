@@ -987,37 +987,9 @@ MulTrk_Flag_Done:			    ;AN002;
 	PUSH	CS
 	POP	DS
 	INVOKE	ROUND
-	MOV	AL,[FILES]
-	SUB	AL,5
-	JBE	DOFCBS
-	push	ax			;AN005;
-	mov	al, DEVMARK_FILES	;AN005;
-	call	SetDevMark		;AN005; Set DEVMARK for SFTS (FILES)
-	pop	ax			;AN005;
-	XOR	AH,AH			; DO NOT USE CBW INSTRUCTION!!!!!
-					;  IT DOES SIGN EXTEND.
-	MOV	BX,[MEMLO]
-	MOV	DX,[MEMHI]
-	LDS	DI,[DOSINFO]		;GET POINTER TO DOS DATA
-	LDS	DI,[DI+SYSI_SFT]	;DS:BP POINTS TO SFT
-	MOV	WORD PTR [DI+SFLINK],BX
-	MOV	WORD PTR [DI+SFLINK+2],DX   ;SET POINTER TO NEW SFT
-	PUSH	CS
-	POP	DS
-	LES	DI,DWORD PTR [MEMLO]	;POINT TO NEW SFT
-	MOV	WORD PTR ES:[DI+SFLINK],-1
-	MOV	ES:[DI+SFCOUNT],AX
-	MOV	BL,SIZE SF_ENTRY
-	MUL	BL			;AX = NUMBER OF BYTES TO CLEAR
-	MOV	CX,AX
-	ADD	[MEMLO],AX		;ALLOCATE MEMORY
-	MOV	AX,6
-	ADD	[MEMLO],AX		;REMEMBER THE HEADER TOO
-	or	[SetDevMarkFlag], FOR_DEVMARK ;AN005;
-	INVOKE	ROUND			; Check for mem error before the STOSB
-	ADD	DI,AX
-	XOR	AX,AX
-	REP	STOSB			;CLEAN OUT THE STUFF
+	CMP	WORD PTR CS:XMS_ENTRY+2,0
+	JNE	DOFCBS			; Give the primary buffers first claim on UMB
+	CALL	SetFiles
 
 ;------------------------------------------------------------------------------
 ; Allocate FCBs
@@ -1394,6 +1366,10 @@ $$IF16:
 ; Allocate CDSs
 ;------------------------------------------------------------------------------
 BUF1:
+	CMP	WORD PTR CS:XMS_ENTRY+2,0
+	JE	FilesReady
+	CALL	SetFiles
+FilesReady:
 	INVOKE	ROUND
 	push	ax				;AN005;
 	mov	ax, DEVMARK_CDS 		;AN005;='L'
@@ -1751,6 +1727,54 @@ Set_Sysinit_Base:
 ENDFILE_Ret:
 	return
 
+
+; Extend the resident five-entry SFT. A successful XMS grant belongs
+; to DOS for the life of the system. Otherwise use the boot arena.
+SetFiles PROC NEAR
+	ASSUME	DS:NOTHING,ES:NOTHING
+	MOV	AL,CS:[FILES]
+	SUB	AL,5
+	JBE	SetFilesDone
+	XOR	AH,AH
+	PUSH	AX			; entry count
+	MOV	BL,SIZE SF_ENTRY
+	MUL	BL
+	ADD	AX,SFTable		; include the link and count
+	PUSH	AX			; table size in bytes
+	CMP	WORD PTR CS:XMS_ENTRY+2,0
+	JE	SetFilesLow
+	CALL	ParaRound
+	MOV	DX,AX
+	MOV	AH,10h
+	CALL	CS:XMS_ENTRY
+	OR	AX,AX
+	JNZ	SetFilesLink		; BX = granted segment
+SetFilesLow:
+	CALL	ROUND
+	MOV	AL,DEVMARK_FILES
+	CALL	SetDevMark
+	MOV	BX,CS:[MEMHI]
+	POP	AX
+	PUSH	AX
+	MOV	CS:[MEMLO],AX
+	OR	CS:[SetDevMarkFlag],FOR_DEVMARK
+	CALL	ROUND
+SetFilesLink:
+	LES	DI,CS:[DOSINFO]
+	LES	DI,ES:[DI+SYSI_SFT]
+	MOV	WORD PTR ES:[DI+SFLINK],0
+	MOV	WORD PTR ES:[DI+SFLINK+2],BX
+	MOV	ES,BX
+	XOR	DI,DI
+	POP	CX
+	XOR	AX,AX
+	REP	STOSB
+	POP	AX
+	MOV	WORD PTR ES:[SFLINK],-1
+	MOV	ES:[SFCOUNT],AX
+SetFilesDone:
+	RET
+SetFiles ENDP
 
 ; Cache the XMS entry after device initialization for DOS=UMB.
 FindUmbProvider PROC NEAR

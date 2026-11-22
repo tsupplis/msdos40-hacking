@@ -100,6 +100,8 @@ device=pcehimem.sys
 
 With `dos=umb`, DOS places the primary disk buffers in upper memory if one block fits the whole pool. Otherwise it keeps the pool in conventional memory. On the PCE floppy configuration with 512-byte sectors, `buffers=20` freed 10,640 bytes of conventional memory.
 
+After buffers, DOS places the `files=` extension in upper memory if one block can hold it. Otherwise the extension stays in conventional memory. The first five file entries stay in the kernel. On the same configuration, `files=20` freed another 912 bytes of conventional memory.
+
 DOS claims the remaining available XMS upper memory blocks during boot. Programs can query or change the UMB link state with `INT 21h/AX=5802h` and `5803h`. While linked, allocation strategies `40h–42h` select upper memory only and `80h–82h` try upper memory first. Programs should restore both settings after use.
 
 ---
