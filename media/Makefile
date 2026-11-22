@@ -61,7 +61,7 @@ EXPECTED = IO.SYS MSDOS.SYS COMMAND.COM CONFIG.SYS AUTOEXEC.BAT \
 
 all: $(IMAGES)
 
-disks.zip: $(IMAGES) Makefile
+../disks.zip: $(IMAGES) Makefile
 	zip -q - $(IMAGES) > $@.tmp
 	mv $@.tmp $@
 
@@ -128,4 +128,4 @@ check: msdos40_full.img
 	exit $$missing
 
 clean:
-	rm -f *.img disks.zip disks.zip.tmp .listing.tmp crlf.tmp
+	rm -f *.img ../disks.zip ../disks.zip.tmp .listing.tmp crlf.tmp

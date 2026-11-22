@@ -80,7 +80,7 @@ At the DOS prompt, Left and Right move one character, Home and End move to eithe
 
 On an empty line, Up recalls the previous line supplied by the caller. Down is ignored. COMMAND.COM and programs using buffered console input (`INT 21h/AH=0Ah`, including `AH=0Ch/AL=0Ah`) share this editor. Cooked console handle reads also support cursor editing, with Up disabled because their buffer belongs to DOS. Raw input, redirected streams, and programs with their own editors retain their existing behaviour.
 
-Set `LINEEDIT EQU 0` in `kernel/dos/editsw.inc` and run `make dist` for the historical build. The default IBM single-byte build reuses the DOS input buffer and adds 640 bytes to the linked kernel. Run `test/check_edit` after building to exercise the editor in PCE. The distribution archive `media/disks.zip` contains the base, dist and full floppy images.
+Set `LINEEDIT EQU 0` in `kernel/dos/editsw.inc` and run `make dist` for the historical build. The default IBM single-byte build reuses the DOS input buffer and adds 640 bytes to the linked kernel. Run `test/check_edit` after building to exercise the editor in PCE. The distribution archive `disks.zip` at the repository root contains the base, dist and full floppy images.
 
 ---
 

@@ -37,7 +37,7 @@ $(CLEAN_SUBDIRS): clean-%:
 
 # media/ builds all three images; dist is the readable name for that
 dist: all
-	$(MAKE) -C media disks.zip
+	$(MAKE) -C media ../disks.zip
 
 check: all
 	$(MAKE) -C media check
