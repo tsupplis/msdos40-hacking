@@ -158,6 +158,7 @@ ASSUME	CS:SYSINITSEG,DS:NOTHING,ES:NOTHING,SS:NOTHING
 	EXTRN	Set_Country_Path:NEAR,Move_ASCIIZ:NEAR,DELIM:NEAR
 	EXTRN	BADFIL:NEAR,ROUND:NEAR
 	EXTRN	UMB_REQUESTED:BYTE
+	EXTRN	FindUmbProvider:NEAR,GetDriverUmb:NEAR,StageUmb:NEAR
 	extrn	Do_Install_Exec:NEAR		;AN018;
 	extrn	SetDevMark:NEAR 		;AN030;
 
@@ -188,6 +189,9 @@ ASSUME	CS:SYSINITSEG,DS:NOTHING,ES:NOTHING,SS:NOTHING
 	public Multi_Pass		;AN018;AN026;
 
 	public	MultDeviceFlag
+HIGH_DEVICE	DB	0	; DEVICEHIGH requested on this line
+LOW_MARK	DW	0	; saved conventional cursor during upper INIT
+LOW_LIMIT	DW	0	; conventional allocation limit during upper INIT
 MultDeviceFlag	db	0		;AN001;
 	public	DevMark_Addr
 DevMark_Addr	dw	?		;AN004;Segment address for DEVMARK.
@@ -771,6 +775,7 @@ ENDIF
 
 	inc	LineCount		;AN000; Increase LineCount.
 	mov	Buffer_Pre_Scan, 0	;AN030; Reset Buffer_Pre_Scan.
+	mov	HIGH_DEVICE,0
 	mov	MultDeviceFlag,0	;AN001; Reset MultDeviceFlag.
 	mov	SetDevMarkFlag,0	;AN004; Reset SetDevMarkFlag.
 	cmp	al, LF			;AN000; LineFeed?
@@ -782,7 +787,10 @@ ENDIF
 	jae	Endconv 		;AN026;Do not show Badop again for multi_pass.
 	JMP	BADOP
 
-COFF:	PUSH	CS
+COFF:	CMP	CS:LOW_MARK,0
+	JE	CoffNext
+	CALL	FinishDriverUmb
+CoffNext:	PUSH	CS
 	POP	DS
 	invoke	NEWLINE
 	JMP	CONFLP
@@ -1300,6 +1308,12 @@ $$SR40:
 ;------------------------------------------------------------------------------
 TRYDJ:
 	and	cs:IFS_Flag, NOT_IFS	;AN000; Reset the flag
+	CMP	AH,'H'
+	JNE	TryDevice
+	MOV	CS:HIGH_DEVICE,1
+	CALL	FindUmbProvider
+	JMP	SHORT GOTDJ
+TryDevice:
 	CMP	AH,'D'
 	JZ	GOTDJ
 	CMP	AH,'J'
@@ -1366,7 +1380,9 @@ ASSUME	DS:NOTHING
 	MOV	AX,OPEN SHL 8		;OPEN THE FILE
 	STC				;IN CASE OF INT 24
 	INT	21H
-	JC	BADLDRESET
+	JNC	DeviceOpened
+	JMP	BADLDRESET
+DeviceOpened:
 	MOV	BX,AX			;Handle in BX
 ;AN016; UNDO THE EXTENDED ATTRIBUTE HANDLING
 ;	 call	 Get_Ext_Attribute	 ;AN009;
@@ -1408,6 +1424,13 @@ GO_AHEAD_LOAD:
 	SHL	DX,CL			; Low nibble of DX to high nibble
 	OR	AX,DX			; AX is now # of para for file
 
+	CMP	CS:HIGH_DEVICE,0
+	JE	CheckDeviceLow
+	PUSH	BX			; open file handle
+	CALL	StartDriverUmb
+	POP	BX
+	JNC	OKLDX
+CheckDeviceLow:
 	MOV	CX,ES			; CX:0 is xaddr
 	ADD	CX,AX			; New device will take up to here
 	JC	MEM_ERRJY		; WOW!!!!
@@ -1484,6 +1507,9 @@ Got:	MOV	BYTE PTR ES:[SI],' '	;   *p = ' ';
 	call	CallIFS 		;AN000;
 	jmp	short End_Init_Call
 Got_Device_Com:
+	MOV	AX,CS:[ALLOCLIM]
+	MOV	WORD PTR CS:[BREAK_ADDR+2],AX
+	MOV	WORD PTR CS:[BREAK_ADDR],0
 	push	ds			;AN017;
 	push	si			;AN017;
 	lds	si, cs:[ENTRY_POINT]	;AN017; Peeks the header attribute
@@ -1558,8 +1584,26 @@ No_Error_Line_Msg:			;AN015;
 
 Was_Device_Com: 			;AN000;
 	MOV	AX,WORD PTR [BREAK_ADDR+2]
+	CMP	CS:LOW_MARK,0
+	JE	CheckDeviceBreakLow
+	MOV	AX,WORD PTR [BREAK_ADDR]
+	CALL	ParaRound
+	ADD	AX,WORD PTR [BREAK_ADDR+2]
+	JC	BadDeviceBreak
+	CMP	AX,WORD PTR [ENTRY_POINT+2]
+	JBE	BadDeviceBreak
+	CMP	AX,[ALLOCLIM]
+	JAE	BadDeviceBreak
+	CMP	AX,[MEMHI]		; a later header may share resident data
+	JAE	BREAKOK
+	MOV	AX,[MEMHI]
+	MOV	WORD PTR [BREAK_ADDR+2],AX
+	MOV	WORD PTR [BREAK_ADDR],0
+	JMP	SHORT BREAKOK
+CheckDeviceBreakLow:
 	CMP	AX,[MEMORY_SIZE]
 	JB	BREAKOK
+BadDeviceBreak:
 	POP	SI
 	POP	ES
 	JMP	BADBRK
@@ -1574,7 +1618,9 @@ BREAKOK:
 	JZ	ISBLOCK
 	or	cs:[SetDevMarkFlag],FOR_DEVMARK ;AN004;
 	invoke	Set_Break		; Go ahead and alloc mem for device
-	jc	Erase_Dev_do		;device driver's Init routien failed.
+	JNC	DeviceCharReady
+	JMP	Erase_Dev_do
+DeviceCharReady:
 	TEST	AX,ISCIN		;IS IT A CONSOLE IN?
 	JZ	TRYCLK
 	MOV	WORD PTR ES:[DI.SYSI_CON],DX
@@ -1589,7 +1635,8 @@ GOLINK: JMP	LINKIT
 ISBLOCK:
 	MOV	AL,CS:[UNITCOUNT]	;IF NO UNITS FOUND, erase the device
 	OR	AL,AL
-	jz	Erase_Dev_do
+	JNZ	PERDRV
+	JMP	Erase_Dev_do
 ;	 JNZ	 PERDRV
 ;	 MOV	 AX, -1
 ;	 JMP	 ENDDEV
@@ -1660,7 +1707,16 @@ FOUNDPB:
 	LOOP	PERUNIT
 	PUSH	CS
 	POP	DS
-	CALL	TEMPCDS 		; Set CDS for new drives
+	CMP	CS:LOW_MARK,0
+	JE	DeviceTempCDS
+	PUSH	CS:[ALLOCLIM]
+	CALL	TEMPCDS			; recomputes the conventional limit
+	MOV	AX,CS:[ALLOCLIM]
+	MOV	CS:LOW_LIMIT,AX
+	POP	CS:[ALLOCLIM]
+	JMP	SHORT LINKIT
+DeviceTempCDS:
+	CALL	TEMPCDS			; Set CDS for new drives
 
 LINKIT:
 	LES	DI,CS:[DOSINFO] 	;ES:DI = DOS TABLE
@@ -2674,6 +2730,65 @@ CallIFS proc	near			;AN000;
 	ret					;AN000;
 CallIFS endp					;AN000;
 
+
+; AX = file size in paragraphs. On success move the provisional device
+; mark to the grant and use the normal overlay loader and break handling.
+StartDriverUmb PROC NEAR
+	PUSH	AX
+	MOV	DX,AX
+	ADD	DX,2			; device mark and ROUND limit
+	JC	StartDriverMiss
+	CALL	GetDriverUmb
+	JC	StartDriverMiss
+	MOV	AX,CS:[DevMark_Addr]
+	MOV	CS:LOW_MARK,AX
+	PUSH	DS
+	PUSH	ES
+	PUSH	SI
+	PUSH	DI
+	MOV	DS,AX
+	MOV	ES,BX
+	XOR	SI,SI
+	XOR	DI,DI
+	MOV	CX,8
+	REP	MOVSW
+	MOV	CS:[DevMark_Addr],BX
+	ADD	DX,BX
+	JNC	DriverLimitReady
+	MOV	DX,0FFFFh		; top paragraph at the 1 MB boundary
+DriverLimitReady:
+	INC	BX
+	MOV	ES:[DEVMARK_SEG],BX
+	POP	DI
+	POP	SI
+	POP	ES
+	POP	DS
+	MOV	AX,CS:[ALLOCLIM]
+	MOV	CS:LOW_LIMIT,AX
+	MOV	CS:[ALLOCLIM],DX
+	MOV	CS:[MEMHI],BX
+	MOV	CS:[LDOFF],BX
+	MOV	WORD PTR CS:[ENTRY_POINT+2],BX
+	CLC
+StartDriverMiss:
+	POP	AX
+	RET
+StartDriverUmb ENDP
+
+; All command exits converge at COFF. The break covers only resident
+; paragraphs. Failed loads undo the provisional mark before this call.
+FinishDriverUmb PROC NEAR
+	MOV	BX,CS:[MEMHI]
+	MOV	DX,CS:[ALLOCLIM]
+	SUB	DX,BX
+	CALL	StageUmb
+	MOV	AX,CS:LOW_MARK
+	MOV	CS:[MEMHI],AX
+	MOV	AX,CS:LOW_LIMIT
+	MOV	CS:[ALLOCLIM],AX
+	MOV	CS:LOW_MARK,0
+	RET
+FinishDriverUmb ENDP
 
 Set_DevMark	proc	near			;AN004;
 ;*******************************************************************************

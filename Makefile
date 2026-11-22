@@ -36,8 +36,8 @@ $(CLEAN_SUBDIRS): clean-%:
 	$(MAKE) -C $* clean
 
 # media/ builds all three images; dist is the readable name for that
-dist: all
-	$(MAKE) -C media ../disks.zip
+dist: boot kernel commands
+	$(MAKE) -C media dist
 
 check: all
 	$(MAKE) -C media check

@@ -500,6 +500,8 @@ Org3:
 	je	Get_Cmt_Token		;AN000;
 	cmp	Cmd_Indicator, 'I'      ;AN000; Install= command?
 	je	Org_file		;AN000;
+	cmp	Cmd_Indicator, 'H'
+	je	Org_file
 	cmp	Cmd_Indicator, 'D'      ;AN000; Device= command?
 	je	Org_file		;AN000;
 	cmp	Cmd_Indicator, 'J'      ;AN000; IFS= command?
@@ -1502,6 +1504,7 @@ COMTAB	LABEL	BYTE
 ;;;;	   DB	   8,"AVAILDEV",'A'     ; NO LONGER SUPPORTED
 	DB	7,"BUFFERS",  'B'
 	DB	5,"BREAK",    'C'
+	DB	10,"DEVICEHIGH",'H'
 	DB	6,"DEVICE",   'D'
 	DB	5,"FILES",    'F'
 	DB	4,"FCBS",     'X'

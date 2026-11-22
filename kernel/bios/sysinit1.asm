@@ -204,6 +204,7 @@ ASSUME	CS:SYSINITSEG,DS:NOTHING,ES:NOTHING,SS:NOTHING
 	public Buffer_Slash_X			;AN023;
 	public ConfigMsgFlag			;AN014;
 	public Do_Install_Exec			;AN019;
+	PUBLIC	FindUmbProvider,GetDriverUmb,StageUmb
 	PUBLIC	UMB_REQUESTED
 	public Multi_Pass_Id			;AN024;
 
@@ -1745,8 +1746,7 @@ SetFiles PROC NEAR
 	JE	SetFilesLow
 	CALL	ParaRound
 	MOV	DX,AX
-	MOV	AH,10h
-	CALL	CS:XMS_ENTRY
+	CALL	ClaimDataUmb
 	OR	AX,AX
 	JNZ	SetFilesLink		; BX = granted segment
 SetFilesLow:
@@ -1835,29 +1835,7 @@ UmbRequest:
 	CALL	CS:XMS_ENTRY
 	OR	AX,AX
 	JZ	UmbBuild
-	MOV	ES,BX
-	MOV	ES:[arena_size],DX
-	MOV	AX,CS:UMB_GRANTS
-	CMP	BX,AX
-	JB	UmbFirst
-	OR	AX,AX
-	JZ	UmbFirst
-UmbSort:
-	MOV	DS,AX
-	MOV	AX,DS:[arena_owner]
-	OR	AX,AX
-	JZ	UmbInsert
-	CMP	AX,BX
-	JB	UmbSort
-UmbInsert:
-	MOV	DS:[arena_owner],BX
-	JMP	SHORT UmbNext
-UmbFirst:
-	MOV	CS:UMB_GRANTS,BX
-UmbNext:
-	MOV	ES:[arena_owner],AX
-	PUSH	CS
-	POP	DS
+	CALL	StageUmb
 	JMP	UmbRequest
 UmbReturn:
 	RET
@@ -1893,6 +1871,120 @@ UmbGap:
 	DEC	ES:[arena_size]         ; reserve the gap header
 	JMP	UmbGap
 InitUmb endp
+
+; Stage BX:0, DX paragraphs for boot allocations and the final UMB arena.
+; One paragraph cannot hold both a free MCB and a bridge.
+StageUmb PROC NEAR
+	CMP	DX,2
+	JB	StageUmbDone
+	PUSH	DS
+	PUSH	ES
+	MOV	ES,BX
+	MOV	ES:[arena_size],DX
+	MOV	AX,CS:UMB_GRANTS
+	CMP	BX,AX
+	JB	UmbFirst
+	OR	AX,AX
+	JZ	UmbFirst
+UmbSort:
+	MOV	DS,AX
+	MOV	AX,DS:[arena_owner]
+	OR	AX,AX
+	JZ	UmbInsert
+	CMP	AX,BX
+	JB	UmbSort
+UmbInsert:
+	MOV	DS:[arena_owner],BX
+	JMP	SHORT UmbNext
+UmbFirst:
+	MOV	CS:UMB_GRANTS,BX
+UmbNext:
+	MOV	ES:[arena_owner],AX
+	POP	ES
+	POP	DS
+StageUmbDone:
+	RET
+StageUmb ENDP
+
+; Remove a staged region of at least DX paragraphs. Return BX:0 and
+; its full size in DX. Carry set leaves DX unchanged.
+FindBootUmb PROC NEAR
+	PUSH	DS
+	PUSH	DI
+	PUSH	ES
+	PUSH	CS
+	POP	DS
+	MOV	DI,OFFSET UMB_GRANTS
+FindBootNext:
+	MOV	BX,[DI]
+	OR	BX,BX
+	JZ	FindBootMiss
+	MOV	ES,BX
+	CMP	ES:[arena_size],DX
+	JAE	FindBootTake
+	MOV	DS,BX
+	MOV	DI,arena_owner
+	JMP	SHORT FindBootNext
+FindBootTake:
+	MOV	AX,ES:[arena_owner]
+	MOV	[DI],AX
+	MOV	DX,ES:[arena_size]
+	CLC
+	JMP	SHORT FindBootDone
+FindBootMiss:
+	STC
+FindBootDone:
+	POP	ES
+	POP	DI
+	POP	DS
+	RET
+FindBootUmb ENDP
+
+; Drivers may need more space during INIT than their file occupies.
+; Give INIT the whole region, then stage the unused tail on return.
+GetDriverUmb PROC NEAR
+	CMP	WORD PTR CS:XMS_ENTRY+2,0
+	JE	GetDriverMiss
+	CALL	FindBootUmb
+	JNC	GetDriverDone
+	PUSH	DX
+	MOV	DX,0FFFFh
+	MOV	AH,10h
+	CALL	CS:XMS_ENTRY
+	POP	AX
+	CMP	BL,0B0h
+	JNE	GetDriverMiss
+	CMP	DX,AX
+	JB	GetDriverMiss
+	MOV	AH,10h
+	CALL	CS:XMS_ENTRY
+	OR	AX,AX
+	JNZ	GetDriverDone
+GetDriverMiss:
+	STC
+GetDriverDone:
+	RET
+GetDriverUmb ENDP
+
+; Buffers and files need an exact, permanent slice of DX paragraphs.
+; Return the same AX/BX success result as XMS request UMB.
+ClaimDataUmb PROC NEAR
+	PUSH	DX
+	CALL	FindBootUmb
+	POP	AX
+	JNC	ClaimDataSplit
+	MOV	AH,10h
+	CALL	CS:XMS_ENTRY
+	RET
+ClaimDataSplit:
+	PUSH	BX
+	SUB	DX,AX
+	ADD	BX,AX
+	CALL	StageUmb
+	POP	BX
+	MOV	AX,1
+	RET
+ClaimDataUmb ENDP
 
 Do_Install_Exec proc near			;AN000; Now, handles INSTALL= command.
 
@@ -2322,8 +2414,7 @@ ClaimBufferGroup:
 	DEC	SI
 	JNZ	ClaimBufferSize
 	MOV	DX,BX
-	MOV	AH,10h
-	CALL	CS:XMS_ENTRY
+	CALL	ClaimDataUmb
 	OR	AX,AX
 	JZ	ClaimBufferExit
 	MOV	[UMB_BUF_SEG],BX

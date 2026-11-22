@@ -57,9 +57,16 @@ IMAGES = msdos40_base.img msdos40_dist.img msdos40_full.img
 EXPECTED = IO.SYS MSDOS.SYS COMMAND.COM CONFIG.SYS AUTOEXEC.BAT \
            $(shell echo $(notdir $(CMD_FILES) $(EXTRA_FILES)) | tr 'a-z' 'A-Z')
 
-.PHONY: all clean check
+.PHONY: all clean check dist force-images
 
 all: $(IMAGES)
+
+dist: ../disks.zip
+
+# A mounted floppy may have been written since the build. Package fresh media.
+ifneq ($(filter dist,$(MAKECMDGOALS)),)
+$(IMAGES) ../disks.zip: force-images
+endif
 
 ../disks.zip: $(IMAGES) Makefile
 	zip -q - $(IMAGES) > $@.tmp
