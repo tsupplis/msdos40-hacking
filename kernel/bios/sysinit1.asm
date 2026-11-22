@@ -2046,9 +2046,15 @@ ClaimDataUmb PROC NEAR
 	CALL	FindBootUmb
 	POP	AX
 	JNC	ClaimDataSplit
+	PUSH	AX			; XMS may grant more than requested
 	MOV	AH,10h
 	CALL	CS:XMS_ENTRY
+	OR	AX,AX
+	JNZ	ClaimDataGranted
+	POP	DX
 	RET
+ClaimDataGranted:
+	POP	AX
 ClaimDataSplit:
 	PUSH	BX
 	SUB	DX,AX

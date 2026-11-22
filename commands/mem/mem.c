@@ -176,7 +176,6 @@ struct p_value_blk p_noval;                                                     
 #define TAB      '\x09'                                                                                                          /* ;an000; */
 #define BLANK   ' '                                                                                                              /* ;an000; */
                                                                                                                                  /* ;an000; */
-extern  unsigned DOS_TopOfMemory;         /* PSP Top of memory from 'C' init code  */                                            /* ;an005; */
 
 /*컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�*/                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -643,18 +642,14 @@ int      DeviceDriverType;                                                      
 void DisplayBaseSummary()                                                                                                        /* ;an000; */
         {                                                                                                                        /* ;an000; */
                                                                                                                                  /* ;an000; */
-        struct  PSP_STRUC                                                                                                        /* ;an000; */
-                {                                                                                                                /* ;an000; */
-                unsigned int    int_20;                                                                                          /* ;an000; */
-                unsigned int    top_of_memory;                                                                                   /* ;an000; */
-                };                                                                                                               /* ;an000; */
-                                                                                                                                 /* ;an000; */
+        struct ARENA far *arena;
+        unsigned far *head;
+        unsigned psp, segment, next, first, limit;
         char     far *CarvedPtr;                                                                                                 /* ;an000; */
                                                                                                                                  /* ;an000; */
         unsigned long int total_mem;              /* total memory in system */                                                   /* ;an000; */
         unsigned long int avail_mem;              /* avail memory in system */                                                   /* ;an000; */
         unsigned long int free_mem;               /* free memory */                                                              /* ;an000; */
-        struct   PSP_STRUC far *PSPptr;                                                                                            /* ;an000; */
                                                                                                                                  /* ;an000; */
 /* skip a line */                                                                                                                /* ;an000; */
         Sub0_Message(NewLineMsg,STDOUT,Utility_Msg_Class);                                                                       /* ;an000; */
@@ -663,8 +658,7 @@ void DisplayBaseSummary()                                                       
         InRegs.h.ah = GET_PSP;                  /* get PSP function call */                                                      /* ;an000; */
         intdos(&InRegs,&OutRegs);                                                                                                /* ;an000; */
                                                                                                                                  /* ;an000; */
-        FP_SEG(PSPptr) = OutRegs.x.bx;          /* PSP segment */                                                                /* ;an000; */
-        FP_OFF(PSPptr) = 0;                     /* offset 0 */                                                                   /* ;an000; */
+        psp = OutRegs.x.bx;
 
 /* Get total memory in system */                                                                                                 /* ;an000; */
         int86(MEMORY_DET,&InRegs,&OutRegs);                                                                                      /* ;an000; */
@@ -686,9 +680,27 @@ void DisplayBaseSummary()                                                       
                                                                                                                                  /* ;an000; */
         PrintKbytes(AvailableMemoryMsg,STDOUT,Utility_Msg_Class,&avail_mem);                                                    /* ;an000; */
                                                                                                                                  /* ;an000; */
-/* Calculate the total memory used.   PSP segment * 16. Subtract from total to get free_mem */                                   /* ;an000; */
-        free_mem = (DOS_TopOfMemory * 16l) - (FP_SEG(PSPptr)*16l);                                                               /* ;an000;ac005; */
-                                                                                                                                 /* ;an000; */
+/* Adjacent free blocks and this process's blocks coalesce when MEM exits. */
+        limit = (unsigned)(avail_mem / 16UL);
+        InRegs.x.ax = 0x5200;
+        intdosx(&InRegs,&OutRegs,&SegRegs);
+        FP_SEG(head) = SegRegs.es;
+        FP_OFF(head) = OutRegs.x.bx - 2;
+        FP_OFF(arena) = 0;
+        first = 0;
+        free_mem = 0;
+        for (segment = *head; segment < limit; segment = next) {
+            FP_SEG(arena) = segment;
+            if (arena->Signature != 'M' && arena->Signature != 'Z') break;
+            next = segment + arena->Paragraphs + 1;
+            if (next <= segment || next > limit) break;
+            if (arena->Owner == 0 || arena->Owner == psp) {
+                if (!first) first = segment;
+                if ((next - first - 1) * 16UL > free_mem)
+                    free_mem = (next - first - 1) * 16UL;
+            } else first = 0;
+            if (arena->Signature == 'Z') break;
+        }
         PrintKbytes(FreeMemoryMsg,STDOUT,Utility_Msg_Class,&free_mem);                                                          /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
