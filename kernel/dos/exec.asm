@@ -357,9 +357,8 @@ exec_bomb:
 exec_allocate:
 	DOSAssume   CS,<DS>,"EXEC/exec_allocate"
 	PUSH	AX
-	MOV	BX,0FFFFh		; see how much room in arena
 	PUSH	DS
-	invoke	$ALLOC			; should have carry set and BX has max
+	invoke	ExecLargest			; should have carry set and BX has max
 	POP	DS
 	POP	AX
 	ADD	AX,10h			; room for header
@@ -559,10 +558,9 @@ exec_com_file:
 ; CS=DS=ES=SS=PDB pointer, IP=100, SP=max size of block.
 ;
 exec_alloc_com_file:
-	MOV	BX,0FFFFh
-	invoke	$ALLOC			; largest piece available as error
-	OR	BX,BX
-	JZ	exec_no_memj
+	invoke	ExecLargest
+	CMP	BX,11h			; PSP plus space for code and stack
+	JB	exec_no_memj
 	MOV	exec_size,BX		; save size of allocation block
 	PUSH	BX
 	invoke	$ALLOC			; largest piece available as error

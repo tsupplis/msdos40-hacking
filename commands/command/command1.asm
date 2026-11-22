@@ -329,6 +329,7 @@ CODERES 	SEGMENT PUBLIC BYTE	;AC000;
 CODERES ENDS
 
 DATARES SEGMENT PUBLIC BYTE
+	EXTRN	EXEC_BLOCK:BYTE
 	EXTRN	BATCH:WORD
 	EXTRN	ECHOFLAG:BYTE
 	EXTRN	disp_class:byte 	;AN055;
@@ -452,11 +453,70 @@ ASSUME	ES:RESGROUP				;AN000;
 ; cleanliness, we issue the EXEC here in the resident so that we may be able
 ; to recover cleanly upon success.
 ;
+; Keep the saved UMB settings on the resident stack across the child.
+; EXEC receives the ordinary DS:DX path and ES:BX parameter block.
+HighExec:
+	PUSH	BX
+	MOV	AX,5802h
+	INT	int_command
+	JC	HighUnavailable
+	XOR	AH,AH
+	PUSH	AX
+	MOV	AX,5800h
+	INT	int_command
+	PUSH	AX
+	MOV	AX,5803h
+	MOV	BX,1
+	INT	int_command
+	JC	HighNoLink
+	MOV	AX,5801h
+	MOV	BX,80h			; child allocations may fall back to low memory
+	INT	int_command
+	JC	HighSetFailed
+	MOV	BX,OFFSET RESGROUP:EXEC_BLOCK
+	MOV	AX,EXEC SHL 8
+	PUSH	DX
+	INT	int_command
+	POP	DX
+	JMP	SHORT HighRestore
+HighSetFailed:
+	MOV	AX,error_not_enough_memory
+	STC
+HighRestore:
+	PUSHF
+	POP	CX
+	MOV	SI,AX
+	POP	BX
+	MOV	AX,5801h
+	INT	int_command
+	POP	BX
+	MOV	AX,5803h
+	INT	int_command
+	POP	BX
+	MOV	AX,SI
+	PUSH	CX
+	POPF
+	JNC	EXEC_WAIT
+	CMP	AX,error_not_enough_memory
+	JE	NormalExec
+	JMP	EXEC_ERR
+HighNoLink:
+	POP	AX
+	POP	AX
+HighUnavailable:
+	POP	BX
+	JMP	SHORT NormalExec
+
 EXT_EXEC:
+	OR	AL,AL
+	JNZ	HighExec
+NormalExec:
+	MOV	AX,EXEC SHL 8
 	push	dx				;AN000; save the command name offset
 	INT	int_command			; Do the EXEC
 	pop	dx				;AN000; restore the command name offset
-	JC	EXEC_ERR			; EXEC failed
+	JNC	EXEC_WAIT
+	JMP	EXEC_ERR			; EXEC failed
 ;
 ; The exec has completed.  Retrieve the exit code.
 ;

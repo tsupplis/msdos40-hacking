@@ -204,6 +204,7 @@ ASSUME	CS:SYSINITSEG,DS:NOTHING,ES:NOTHING,SS:NOTHING
 	public Buffer_Slash_X			;AN023;
 	public ConfigMsgFlag			;AN014;
 	public Do_Install_Exec			;AN019;
+	PUBLIC	UMB_REQUESTED
 	public Multi_Pass_Id			;AN024;
 
 
@@ -276,6 +277,9 @@ NUM_CDS 		DB	5	; 5 net drives
 CONFBOT 		DW	?
 ALLOCLIM		DW	?
 FOOSTRNG		DB	"A:\",0
+UMB_REQUESTED		DB	0	; DOS=UMB requested during CONFIG.SYS processing
+XMS_ENTRY		DD	0	; XMS driver entry point during initialization
+UMB_GRANTS		DW	0	; Head of grants awaiting arena construction
 COMMAND_LINE		DB	2,0,"P" ;Default Command.com Args
 			DB	29 DUP (0)
 ZERO			DB	0
@@ -685,7 +689,9 @@ DoLast:
 	MOV	ES:[arena_owner],8	       ;Set impossible owner
 	pop	bx			       ;AN013;
 	pop	es			       ;AN013;
-Skip_Free_SYSINITBASE:			       ;AN013;
+Skip_Free_SYSINITBASE:
+	CALL	InitUmb
+			       ;AN013;
 	IF	NOEXEC
 	MOV	BP,DS			       ;SAVE COMMAND.COM SEGMENT
 	PUSH	DS
@@ -1742,6 +1748,110 @@ Set_Sysinit_Base:
 ENDFILE_Ret:
 	return
 
+
+; Claim XMS regions at boot. Stage grants in segment order, using their
+; first paragraph for a temporary next pointer. Each hole is protected
+; by a system MCB in the final paragraph of the preceding region.
+InitUmb proc near
+	CMP	CS:UMB_REQUESTED,0
+	JNE	UmbDetect
+	RET
+UmbDetect:
+	MOV	AX,4300h
+	INT	2fh
+	CMP	AL,80h
+	JE	UmbGetEntry
+	RET
+UmbGetEntry:
+	MOV	AX,4310h
+	INT	2fh
+	MOV	WORD PTR CS:XMS_ENTRY,BX
+	MOV	WORD PTR CS:XMS_ENTRY+2,ES
+	LES	DI,CS:DosInfo
+	MOV	AX,ES:[DI-2]            ; conventional arena head
+UmbLowWalk:
+	MOV	ES,AX
+	CMP	ES:[arena_signature],arena_signature_end
+	JE	UmbLowEnd
+	ADD	AX,ES:[arena_size]
+	INC	AX
+	JMP	UmbLowWalk
+UmbLowEnd:
+	CMP	ES:[arena_owner],0
+	JNE	UmbReturn
+	CMP	ES:[arena_size],0
+	JE	UmbReturn
+	PUSH	ES
+UmbRequest:
+	MOV	DX,0ffffh
+	MOV	AH,10h
+	CALL	CS:XMS_ENTRY
+	CMP	BL,0b0h                 ; largest available returned in DX
+	JNE	UmbBuild
+	CMP	DX,2
+	JB	UmbBuild
+	MOV	AH,10h
+	CALL	CS:XMS_ENTRY
+	OR	AX,AX
+	JZ	UmbBuild
+	MOV	ES,BX
+	MOV	ES:[arena_size],DX
+	MOV	AX,CS:UMB_GRANTS
+	CMP	BX,AX
+	JB	UmbFirst
+	OR	AX,AX
+	JZ	UmbFirst
+UmbSort:
+	MOV	DS,AX
+	MOV	AX,DS:[arena_owner]
+	OR	AX,AX
+	JZ	UmbInsert
+	CMP	AX,BX
+	JB	UmbSort
+UmbInsert:
+	MOV	DS:[arena_owner],BX
+	JMP	SHORT UmbNext
+UmbFirst:
+	MOV	CS:UMB_GRANTS,BX
+UmbNext:
+	MOV	ES:[arena_owner],AX
+	PUSH	CS
+	POP	DS
+	JMP	UmbRequest
+UmbReturn:
+	RET
+UmbBuild:
+	POP	ES
+	MOV	BX,CS:UMB_GRANTS
+	OR	BX,BX
+	JZ	UmbReturn
+	MOV	AX,ES
+	ADD	AX,ES:[arena_size]
+	DEC	ES:[arena_size]
+	LES	DI,CS:DosInfo
+	MOV	ES:[DI.SYSI_UMB_HEAD],BX
+	MOV	ES:[DI.SYSI_UMB_BRIDGE],AX
+UmbGap:
+	MOV	ES,AX
+	MOV	ES:[arena_signature],arena_signature_normal
+	MOV	ES:[arena_owner],8
+	MOV	DX,BX
+	SUB	DX,AX
+	DEC	DX
+	MOV	ES:[arena_size],DX
+	MOV	ES,BX
+	MOV	BX,ES:[arena_owner]
+	MOV	ES:[arena_owner],0
+	DEC	ES:[arena_size]         ; exclude the free MCB itself
+	MOV	ES:[arena_signature],arena_signature_end
+	OR	BX,BX
+	JZ	UmbReturn
+	MOV	ES:[arena_signature],arena_signature_normal
+	MOV	AX,ES
+	ADD	AX,ES:[arena_size]
+	DEC	ES:[arena_size]         ; reserve the gap header
+	JMP	UmbGap
+InitUmb endp
 
 Do_Install_Exec proc near			;AN000; Now, handles INSTALL= command.
 

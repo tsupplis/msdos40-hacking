@@ -157,6 +157,7 @@ ASSUME	CS:SYSINITSEG,DS:NOTHING,ES:NOTHING,SS:NOTHING
 	EXTRN	PARAROUND:NEAR,TEMPCDS:NEAR
 	EXTRN	Set_Country_Path:NEAR,Move_ASCIIZ:NEAR,DELIM:NEAR
 	EXTRN	BADFIL:NEAR,ROUND:NEAR
+	EXTRN	UMB_REQUESTED:BYTE
 	extrn	Do_Install_Exec:NEAR		;AN018;
 	extrn	SetDevMark:NEAR 		;AN030;
 
@@ -810,6 +811,32 @@ TRYI:
 	je	Multi_Try_J			;AN026;
 	cmp	Multi_Pass_Id, 3		;AN026; the third pass for INSTALL= ?
 	je	Multi_Try_I			;AN026;
+	CMP	AH,'U'
+	JNE	CheckInstall
+	CMP	WORD PTR ES:[SI],'MU'  ; organized input is upper case
+	JNE	BadDosOption
+	CMP	BYTE PTR ES:[SI+2],'B'
+	JNE	BadDosOption
+	LEA	DI,[SI+3]
+DosOptionEnd:
+	CMP	BYTE PTR ES:[DI],' '
+	JE	DosOptionSpace
+	CMP	BYTE PTR ES:[DI],9
+	JNE	DosOptionCheck
+DosOptionSpace:
+	INC	DI
+	JMP	DosOptionEnd
+DosOptionCheck:
+	CMP	BYTE PTR ES:[DI],13
+	JE	EnableUmb
+	CMP	BYTE PTR ES:[DI],10
+	JNE	BadDosOption
+EnableUmb:
+	MOV	CS:UMB_REQUESTED,1
+	JMP	coff
+BadDosOption:
+	JMP	BADOP
+CheckInstall:
 	cmp	ah, 'I' 			;AN018; INSTALL= command?
 	jne	TryB				;AN018; the first pass is for normal operation.
 	or	Install_Flag, HAVE_INSTALL_CMD	;AN018; Set the flag

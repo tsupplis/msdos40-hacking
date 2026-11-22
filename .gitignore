@@ -72,3 +72,5 @@ test/work/
 
 /disks.zip
 /disks.zip.tmp
+
+!/extra/*

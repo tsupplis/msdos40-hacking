@@ -212,6 +212,9 @@ USERDIR1	DB	DIRSTRLEN+3 DUP(?)	; Storage for users current directory
 EXECPATH	DB	COMBUFLEN+3 DUP(?)	; Path for external command
 RE_INSTR	DB	DIRSTRLEN+3+13 DUP (?)	; path for input to redirection
 
+	PUBLIC	LOADHIGH_FLAG
+LOADHIGH_FLAG	DB	?		; Request upper memory for this external command
+
 ; Variables passed up from resident
 HEADCALL	LABEL	DWORD
 		DW	?

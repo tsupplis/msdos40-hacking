@@ -91,6 +91,8 @@ SYSINITVAR  LABEL   WORD		; [SYSTEM]
 	I_am	BOOTDRIVE,BYTE		; [SYSTEM] the boot drive		;AN000;
 	I_am	DDMOVE,BYTE,<0> 	; [SYSTEM] 1 if we need DWORD move	;AN000;
 	I_am	EXT_MEM_SIZE,WORD,<0>	; [SYSTEM] extended memory size 	;AN000;
+	I_am	UMB_HEAD,WORD,<0>	; [SYSTEM] Segment of first upper memory arena
+	I_am	UMB_BRIDGE,WORD,<0>	; [SYSTEM] Segment of conventional-to-UMB gap header
 
 	PUBLIC	HASHINITVAR		; [SYSTEM]				;AN000;
 HASHINITVAR  LABEL   WORD		; [SYSTEM]				;AN000;

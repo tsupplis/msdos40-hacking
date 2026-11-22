@@ -48,6 +48,7 @@ TRANSPACE	SEGMENT PUBLIC BYTE	;AC000;
 	EXTRN	COMBUF:BYTE
 	EXTRN	EXECPATH:BYTE
 	EXTRN	EXEC_ADDR:DWORD
+	EXTRN	LOADHIGH_FLAG:BYTE
 	EXTRN	FILTYP:BYTE
 	EXTRN	IDLEN:BYTE
 	EXTRN	KPARSE:BYTE		;AC000;
@@ -75,6 +76,7 @@ ASSUME	CS:TRANGROUP,DS:NOTHING,ES:NOTHING,SS:NOTHING
 
 	EXTRN	APPEND_PARSE:NEAR	;AN010;
 	EXTRN	BATCOM:NEAR
+	EXTRN	LoadHigh:NEAR
 	EXTRN	DOCOM1:NEAR
 	EXTRN	PIPEERRSYN:NEAR
 	EXTRN	TCOMMAND:NEAR
@@ -196,6 +198,11 @@ abcd:
     sahf					; remember those flags?
     jnz     findcom				; well, if all the cmps worked...
 ;
+; LOADHIGH reparses its operand before the external command sets up I/O.
+	CMP	BX,OFFSET TRANGROUP:LoadHigh
+	JNE	SetCommandIO
+	JMP	LoadHigh
+SetCommandIO:
 ; All messages get redirected.
 ;
     cmp     append_exec,0			;AN041; APPEND just executed?
@@ -309,6 +316,8 @@ RESEARCH:
 	jl	rsrch_br1			; fuckin' sixteen-bit machine ought
 	jmp	execute 			; to be able to handle a SIXTEEN-BIT
 rsrch_br1:					; DISPLACEMENT!!
+	CMP	[LOADHIGH_FLAG],0
+	JNE	BADCOMJ45
 	jmp	batcom				; 02H is .bat
 BADCOMJ45:
 	JMP	BADCOM
@@ -341,6 +350,7 @@ IF IBM
 	JMP	ROM_EXEC
 OK_EXEC:
 ENDIF
+	MOV	AL,[LOADHIGH_FLAG]		; resident dispatch flag, cleared before EXEC
 ;
 ; we are now running in free space.  anything we do from here on may get
 ; trashed.  Move the stack (also in free space) to allocated space because

@@ -1498,6 +1498,7 @@ LShare	db	"SHARE.EXE",0,"/NC",0Dh,0Ah ;AN014;AN015;To be used by Load/exec.
 					;/NC parm will disable file sharing check.
 
 COMTAB	LABEL	BYTE
+	DB	3,"DOS",'U'
 ;;;;	   DB	   8,"AVAILDEV",'A'     ; NO LONGER SUPPORTED
 	DB	7,"BUFFERS",  'B'
 	DB	5,"BREAK",    'C'

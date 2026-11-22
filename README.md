@@ -8,7 +8,7 @@ It builds with GNU make, using the original vintage tools under `emu2`, and the 
 The sources come from <https://github.com/lotharsm/MS-DOS/tree/dos-4.01-reconstructed>, a fork of [microsoft/MS-DOS](https://github.com/microsoft/MS-DOS).
 The reconstruction of 4.01 on top of the released 4.00 sources is by **hharte**.
 
-- The upstream repository holds the MS-DOS 1.25, 2.0 and 4.0 sources (4.0 was developed jointly by IBM and Microsoft), released under the MIT License (see `LICENSE.md`).
+- The upstream repository holds the MS-DOS 1.25, 2.0 and 4.0 sources (4.0 was developed jointly by IBM and Microsoft), released under the MIT License (see [license.md](LICENSE.md)).
 - The 4.00 tree contains the kernel, the command interpreter, the external commands, the device drivers and the `select` installer.
 - The 4.01 reconstruction changes 29 files of that tree.
   17 of them differ only in character encoding; the other 12 are real changes (section 2).
@@ -18,9 +18,9 @@ Layout of this repository:
 | Directory | Content |
 |---|---|
 | `boot/` | boot sector |
-| `kernel/bios/`, `kernel/dos/` | `IO.SYS`, `MSDOS.SYS` |
+| `kernel/bios/`, `kernel/dos/` | `io.sys`, `msdos.sys` |
 | `kernel/<driver>/` | device drivers and code pages (`ansi`, `country`, `display`, `keyboard`, `printer`, `driver`, `ramdrive`, `smartdrv`, `vdisk`, `xma2ems`, `xmaem`, `memm`) |
-| `commands/` | `COMMAND.COM`, 37 external commands, `select` |
+| `commands/` | `command.com`, 37 external commands, `select` |
 | `common/`, `mapper/`, `messages/` | shared objects, `mapper.lib`, message files |
 | `asminc/`, `include/` | assembler includes, C headers |
 | `sdk/` | the vintage build tools (`bin/`), C runtime headers and libraries |
@@ -33,9 +33,9 @@ The first column says how much is known: **diff** = stated by the diff itself, *
 
 | File | Change | |
 |---|---|---|
-| `messages/usa-ms.msg` | The start-up banner and the `VER` text say 4.01 instead of 4.00. | diff |
-| `commands/command/tcmd2a.asm` | `VER` adds one to the minor version it got from DOS before printing it. | diff |
-| `commands/command/tranmsg.asm` | The minor-version field of the `VER` message gets the `Right_Align` flag (2 wide, `0` padded). | diff; effect inferred |
+| `messages/usa-ms.msg` | The start-up banner and the `ver` text say 4.01 instead of 4.00. | diff |
+| `commands/command/tcmd2a.asm` | `ver` adds one to the minor version it got from DOS before printing it. | diff |
+| `commands/command/tranmsg.asm` | The minor-version field of the `ver` message gets the `Right_Align` flag (2 wide, `0` padded). | diff; effect inferred |
 | `kernel/dos/dev.asm` | The high word of the saved current sector is read from `HIGH_SECTOR` instead of from the word after `CALLSSEC`. | diff; effect (sector numbers above 16 bits) inferred |
 | `commands/format/format.asm` | The high word of the sector number is tested as well as the low word, in two places. 4.00 compared only the low word. | diff |
 | `commands/fastopen/fastseek.asm` | The truncate path no longer returns at once with `DI = 0`; it walks the chain of extents (`EH_COUNT`) until the last one. | diff; effect inferred |
@@ -49,7 +49,7 @@ The 4.00 copies had CP437 box-drawing bytes replaced by U+FFFD, which stops `sel
 The 4.01 files carry the correct bytes.
 
 `asminc/versiona.inc` still defines `minor_version equ 00`: the 4.01 diff does not touch it.
-The "4.01" shown by the banner and by `VER` comes from the message file and the `VER` change above; 
+The "4.01" shown by the banner and by `ver` comes from the message file and the `ver` change above.
 
 ## 3. Changes after 4.01
 
@@ -61,32 +61,44 @@ The Microsoft patch changes are marked `PD0255` in a comment, so `grep -rn PD025
 
 | Patch | Component | Fix | Source |
 |---|---|---|---|
-| PD0255 | `MSDOS.SYS` | Directory zeroing carries into the high sector word (`INC DX` became `ADD DX,1` / `ADC [HIGH_SECTOR],0`): directory table on a 32 MB boundary. | `kernel/dos/mknode.asm` |
-| PD0255 | `MSDOS.SYS` | `DISKWRITE` saves `HIGH_SECTOR` before the zero-base decrement and rounds the sector count up in `DI`: append to a file near 32 MB. | `kernel/dos/disk3.asm` |
-| PD0255 | `GRAPHICS.COM` | Multiplex number `15H` (MSCDEX's) changed to `0ACH`. | `commands/graphics/grint2fh.asm` |
-| PD0255 | `FASTOPEN.EXE`, `FORMAT.COM` | Nothing to apply: `FASTOPEN` is byte-identical to ours; `FORMAT` has identical code (2 non-functional bytes differ). | none |
+| PD0255 | `msdos.sys` | Directory zeroing carries into the high sector word (`INC DX` became `ADD DX,1` / `ADC [HIGH_SECTOR],0`): directory table on a 32 MB boundary. | `kernel/dos/mknode.asm` |
+| PD0255 | `msdos.sys` | `DISKWRITE` saves `HIGH_SECTOR` before the zero-base decrement and rounds the sector count up in `DI`: append to a file near 32 MB. | `kernel/dos/disk3.asm` |
+| PD0255 | `graphics.com` | Multiplex number `15H` (mscdex's) changed to `0ACH`. | `commands/graphics/grint2fh.asm` |
+| PD0255 | `fastopen.exe`, `format.com` | Nothing to apply: `fastopen` is byte-identical to ours; `format` has identical code (2 non-functional bytes differ). | none |
 
-With historical line editing selected, the rebuilt `msdos.sys` and `graphics.com` are byte-identical to the PD0255 files. Not run-tested.
+Before UMB support was added, with historical line editing selected, the rebuilt `msdos.sys` and `graphics.com` are byte-identical to the PD0255 files. Not run-tested.
 
 ### 3.2 IBM PC DOS 4.00 CSD UR31300 fixes
 
 | APAR | Component | Fix | Source |
 |---|---|---|---|
-| IR80263 | `ANSI.SYS` | Select the BIOS alternate print screen (INT 10h `AH=12h BL=20h`) when more than 25 rows are set, not at load, so Shift-PrtSc works. | `kernel/ansi/ioctl.asm`, `ansiinit.asm` |
+| IR80263 | `ansi.sys` | Select the BIOS alternate print screen (INT 10h `AH=12h BL=20h`) when more than 25 rows are set, not at load, so Shift-PrtSc works. | `kernel/ansi/ioctl.asm`, `ansiinit.asm` |
 
 ### 3.3 Command-line editing
 
 At the DOS prompt, Left and Right move one character, Home and End move to either end, and Ins toggles between insert (the default) and overwrite. Del removes the character under the cursor. Backspace or Ctrl-H removes the character to its left. Enter submits the whole line from any cursor position. Esc discards the current edit.
 
-On an empty line, Up recalls the previous line supplied by the caller. Down is ignored. COMMAND.COM and programs using buffered console input (`INT 21h/AH=0Ah`, including `AH=0Ch/AL=0Ah`) share this editor. Cooked console handle reads also support cursor editing, with Up disabled because their buffer belongs to DOS. Raw input, redirected streams, and programs with their own editors retain their existing behaviour.
+On an empty line, Up recalls the previous line supplied by the caller. Down is ignored. command.com and programs using buffered console input (`INT 21h/AH=0Ah`, including `AH=0Ch/AL=0Ah`) share this editor. Cooked console handle reads also support cursor editing, with Up disabled because their buffer belongs to DOS. Raw input, redirected streams, and programs with their own editors retain their existing behaviour.
 
-Set `LINEEDIT EQU 0` in `kernel/dos/editsw.inc` and run `make dist` for the historical build. The default IBM single-byte build reuses the DOS input buffer and adds 640 bytes to the linked kernel. Run `test/check_edit` after building to exercise the editor in PCE. The distribution archive `disks.zip` at the repository root contains the base, dist and full floppy images.
+Set `LINEEDIT EQU 0` in `kernel/dos/editsw.inc` and run `make dist` for historical line editing. The default IBM single-byte build reuses the DOS input buffer and adds 640 bytes to the linked kernel. Run `test/check_edit` after building to exercise the editor in PCE. The distribution archive `disks.zip` at the repository root contains the base, dist and full floppy images.
 
 ### 3.4 Command enhancements
 
 | Command | Enhancement |
 |---|---|
 | `more` | `more filename` pages a file directly. With no filename, `more` reads standard input. |
+| `loadhigh`, `lh` | Loads an external program into upper memory when it fits. |
+
+### 3.5 Upper memory blocks
+
+On PCE, place the provider on the boot disk and add these lines to `config.sys`:
+
+```dos
+dos=umb
+device=pcehimem.sys
+```
+
+DOS claims the available XMS upper memory blocks during boot. Programs can query or change the UMB link state with `INT 21h/AX=5802h` and `5803h`. While linked, allocation strategies `40h–42h` select upper memory only and `80h–82h` try upper memory first. Programs should restore both settings after use.
 
 ---
 

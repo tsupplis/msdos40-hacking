@@ -67,6 +67,7 @@ sftabl	LABEL	DWORD			; [SYSTEM] file table
 	I_am	VERFLG,BYTE		; [SYSTEM] Initialize with verify off
 	I_am	CharCo,BYTE,<00000011B> ; [SYSTEM] Allows statchks every 4 chars...
 	I_am	chSwitch,BYTE,<'/'>     ; [SYSTEM] current switch character
+	I_am	UMB_LINKED,BYTE,<0>	; [SYSTEM] Nonzero when UMBs are linked
 	I_am	AllocMethod,BYTE	; [SYSTEM] how to alloc first(best)last
 	I_am	fShare,BYTE,<0> 	; [SYSTEM] TRUE => sharing installed
 	I_am	DIFFNAM,BYTE,<1>	; [SYSTEM] Indicates when MYNAME has

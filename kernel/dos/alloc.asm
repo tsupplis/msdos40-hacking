@@ -46,6 +46,12 @@ PAGE
 	i_need  FirstArena,WORD         ; first free block found
 	i_need  BestArena,WORD          ; best free block found
 	i_need  LastArena,WORD          ; last free block found
+	i_need	UMB_HEAD,WORD
+	i_need	UMB_BRIDGE,WORD
+	i_need	UMB_LINKED,BYTE
+
+ALLOC_HIGH_ONLY  EQU 40h
+ALLOC_HIGH_FIRST EQU 80h
 	i_need  AllocMethod,BYTE        ; how to alloc first(best)last
 	I_need  EXTERR_LOCUS,BYTE       ; Extended Error Locus
 
@@ -71,7 +77,16 @@ arena_free_process_loop:
 arena_free_next:
 	CMP     BYTE PTR DS:[DI],arena_signature_end
 					; end of road, Jack?
-	retz                            ; never come back no more
+	JNE     FreeFollowing
+	MOV     AX,DS
+	CMP     AX,[UMB_HEAD]
+	JAE     FreeComplete
+	MOV     AX,[UMB_HEAD]            ; reclaim even after the child unlinked
+	CALL    Check_signature
+	JMP     arena_free_process_loop
+FreeComplete:
+	RET
+FreeFollowing:
 	CALL    arena_next              ; next item in ES/AX carry set if trash
 	JMP     arena_free_process_loop
 
@@ -170,6 +185,12 @@ PAGE
 
 	PUSH    AX                      ; alloc_max <- 0
 	MOV     AX,[arena_head]         ; AX <- beginning of arena
+	TEST    [AllocMethod],ALLOC_HIGH_FIRST OR ALLOC_HIGH_ONLY
+	JZ      ScanStart
+	CMP     [UMB_LINKED],0
+	JE      ScanStart
+	MOV     AX,[UMB_HEAD]
+ScanStart:
 	CALL    Check_signature         ; ES <- AX, carry set if error
 	JC      alloc_err               ; IF error THEN GOTO err
 
@@ -180,6 +201,13 @@ alloc_scan:
 	JZ      alloc_free              ; IF current block is free THEN examine
 
 alloc_next:
+        ; A high-first fallback need only scan conventional memory.
+	TEST    [AllocMethod],ALLOC_HIGH_FIRST
+	JZ      ScanFollowing
+	MOV     AX,DS
+	CMP     AX,[UMB_BRIDGE]
+	JE      alloc_end
+ScanFollowing:
 	CMP     BYTE PTR DS:[DI],arena_signature_end
 					; IF current block is last THEN
 	JZ      alloc_end               ;   GOTO end
@@ -195,8 +223,21 @@ alloc_trashed:
 
 alloc_end:
 	CMP     [FirstArena],0
-	JNZ     alloc_do_split
+	JZ      NoFitThisArena
+	JMP     alloc_do_split
+NoFitThisArena:
 
+	TEST    [AllocMethod],ALLOC_HIGH_FIRST
+	JZ      alloc_fail
+	TEST    [AllocMethod],ALLOC_HIGH_ONLY
+	JNZ     alloc_fail
+	MOV     AX,DS
+	CMP     AX,[UMB_HEAD]
+	JB      alloc_fail
+	CMP     [UMB_LINKED],0
+	JE      alloc_fail
+	MOV     AX,[arena_head]
+	JMP     ScanStart
 alloc_fail:
 	invoke  get_user_stack
 	POP     BX
@@ -257,7 +298,9 @@ alloc_do_split_high:
 ; last must be split high
 ;
 alloc_do_split:
-	CMP     BYTE PTR [AllocMethod], 1
+	MOV     AL,[AllocMethod]
+	AND     AL,3
+	CMP     AL,1
 	JA      alloc_do_split_high
 	MOV     DS,[FirstArena]
 	JB      alloc_get_size
@@ -291,6 +334,7 @@ alloc_set_owner:
 	transfer    SYS_RET_OK
 
 EndProc $alloc
+
 
 SUBTTL $SETBLOCK - change size of an allocated block (if possible)
 PAGE
@@ -377,6 +421,44 @@ PAGE
 	CMP     AL,1
 	JB      AllocOperGet
 	JZ      AllocOperSet
+	CMP     AL,2
+	JE      GetUmbLink
+	CMP     AL,3
+	JNE     InvalidAllocOp
+	CMP     BX,1
+	JA      InvalidAllocOp
+	CMP     [UMB_HEAD],0
+	JE      InvalidAllocOp
+	CMP     BL,[UMB_LINKED]
+	JE      AllocOpDone
+	MOV     AX,[arena_head]
+	XOR     DI,DI
+LinkWalk:
+	CALL    Check_signature
+	JC      InvalidAllocOp
+	MOV     DS,AX
+	ADD     AX,DS:[arena_size]
+	INC     AX
+	CMP     AX,[UMB_BRIDGE]
+	JE      LinkFound
+	JA      InvalidAllocOp
+	JMP     LinkWalk
+LinkFound:
+	MOV     AL,arena_signature_end
+	OR      BL,BL
+	JZ      StoreLink
+	MOV     AL,arena_signature_normal
+StoreLink:
+	MOV     DS:[DI],AL
+	MOV     [UMB_LINKED],BL
+AllocOpDone:
+	MOV     AX,5803h
+	transfer	SYS_RET_OK
+GetUmbLink:
+	XOR     AX,AX
+	MOV     AL,[UMB_LINKED]
+	transfer	SYS_RET_OK
+InvalidAllocOp:
 	MOV     EXTERR_LOCUS,errLoc_mem ; Extended Error Locus
 	error   error_invalid_function
 AllocOperGet:
@@ -384,9 +466,35 @@ AllocOperGet:
 	XOR     AH,AH
 	transfer    SYS_RET_OK
 AllocOperSet:
+	MOV     AX,BX
+	AND     AX,NOT (ALLOC_HIGH_ONLY OR ALLOC_HIGH_FIRST)
+	CMP     AX,2
+	JA      InvalidAllocOp
+	MOV     AX,5801h
 	MOV     [AllocMethod],BL
 	transfer    SYS_RET_OK
 EndProc $AllocOper
+
+; EXEC sizes its image from the largest block before allocating it. With
+; high-first selected, size against upper memory before conventional memory.
+procedure ExecLargest,NEAR
+	TEST	[AllocMethod],ALLOC_HIGH_FIRST
+	JZ	ExecLargestAny
+	CMP	[UMB_LINKED],0
+	JE	ExecLargestAny
+	MOV	AL,[AllocMethod]
+	PUSH	AX
+	OR	[AllocMethod],ALLOC_HIGH_ONLY
+	MOV	BX,0FFFFh
+	invoke	$ALLOC
+	POP	AX
+	MOV	[AllocMethod],AL
+	OR	BX,BX
+	retnz
+ExecLargestAny:
+	MOV	BX,0FFFFh
+	transfer $ALLOC
+EndProc ExecLargest
 
 CODE    ENDS
     END
