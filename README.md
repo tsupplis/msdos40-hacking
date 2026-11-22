@@ -67,6 +67,8 @@ Applies to `command.com` and DOS buffered console input. Cooked handle reads sup
 | `mem` | Report memory in whole Kbytes, including free space and the largest block for each nonempty UMB or XMS pool. |
 | `more [filename]` | Page a file or, with no filename, standard input. |
 | `loadhigh` (`lh`) | Run an external program in upper memory when it fits. |
+| `vi.exe` | Screen editor on the full floppy. |
+| `mbasic.com` | BASIC interpreter on the full floppy. |
 | `device=umbs.sys start-end [start-end ...]` | Supply unused, mapped RAM as UMBs. Use four-digit hex segments with an exclusive end. Each range is granted whole. |
 
 ## Configuration enhancements
