@@ -59,6 +59,7 @@ Applies to `command.com` and DOS buffered console input. Cooked handle reads sup
 | `mem` | Report memory in whole Kbytes, including free space and the largest block for each nonempty UMB or XMS pool. |
 | `more [filename]` | Page a file or, with no filename, standard input. |
 | `loadhigh` (`lh`) | Run an external program in upper memory when it fits. |
+| `device=umbs.sys start-end [start-end ...]` | Supply unused, mapped RAM as UMBs. Use four-digit hex segments with an exclusive end. Each range is granted whole. |
 
 ## Configuration enhancements
 
@@ -82,6 +83,15 @@ shellhigh=command.com /p
 ```
 
 ¹ PCE XT with 512-byte floppy sectors. With 88 Kbytes of UMB, `buffers=20`, `files=20` and the example above, `mem` reports 592 Kbytes for the largest executable.
+
+For a machine with unused RAM mapped from segment `ca00` up to `e000` (exclusive), use `umbs.sys` as the provider. The last range supplies a contiguous 64 Kbyte block.
+
+```dos
+dos=umb
+device=umbs.sys ca00-cc99 cc99-cd00 cd00-ce00 ce00-d000 d000-e000
+devicehigh=ansi.sys
+shellhigh=command.com /p
+```
 
 Programs can link UMBs with `int 21h/5803h` and select upper-only or upper-first allocation with `5801h`.
 

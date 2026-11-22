@@ -49,13 +49,16 @@ EXTRA_FILES  = $(ROOT)/commands/graphics/graphics.pro $(SELECT_FILES) \
                $(ROOT)/kernel/xma2ems/xma2ems.sys \
                $(ROOT)/kernel/xmaem/xmaem.sys \
                $(ROOT)/kernel/vdisk/vdisk.sys \
-               $(ROOT)/kernel/memm/memm/emm386.sys
+               $(ROOT)/kernel/memm/memm/emm386.sys \
+               $(ROOT)/umbs/umbs.sys
+
+FULL_FILES = $(ROOT)/extra/mbasic.com $(ROOT)/extra/vi.exe
 
 IMAGES = msdos40_base.img msdos40_dist.img msdos40_full.img
 
 # Names expected on the finished full image (used by "make check")
 EXPECTED = IO.SYS MSDOS.SYS COMMAND.COM CONFIG.SYS AUTOEXEC.BAT \
-           $(shell echo $(notdir $(CMD_FILES) $(EXTRA_FILES)) | tr 'a-z' 'A-Z')
+           $(shell echo $(notdir $(CMD_FILES) $(EXTRA_FILES) $(FULL_FILES)) | tr 'a-z' 'A-Z')
 
 .PHONY: all clean check dist force-images
 
@@ -111,9 +114,13 @@ msdos40_dist.img: msdos40_base.img $(EXTRA_FILES)
 # The text files are stripped of any CR first, then mcopy -t writes CR/LF, so the
 # result is right whether the sources are checked out with LF or CRLF.
 # -D o overwrites without asking (the dist image may already hold such a file).
-msdos40_full.img: msdos40_dist.img config.sys autoexec.bat
+msdos40_full.img: msdos40_dist.img config.sys autoexec.bat $(FULL_FILES)
 	rm -f $@ config.tmp autoexec.tmp
 	cp msdos40_dist.img $@
+	for f in $(FULL_FILES); do \
+	  n=`basename $$f | tr 'a-z' 'A-Z'`; \
+	  mcopy -i $@ $$f ::$$n || exit 1; \
+	done
 	tr -d '\r' < config.sys > config.tmp
 	tr -d '\r' < autoexec.bat > autoexec.tmp
 	mcopy -D o -t -i $@ config.tmp ::CONFIG.SYS
