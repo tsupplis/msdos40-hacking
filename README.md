@@ -10,12 +10,6 @@ MS-DOS 4.01 rebuilt on Unix with GNU make and the original tools under `emu2`. T
 
 ![MS-DOS 4.01 running in PCE with upper memory enabled](images/msdos40.png)
 
-| Command | Result |
-|---|---|
-| `make dist` | Build the base, distribution and full floppy images in `media/` and package them in `disks.zip` at the repository root. |
-| `make check` | Verify the full image contents. |
-| `make run` | Boot the full image in PCE. |
-
 ## Sources
 
 Based on hharte’s [4.01 reconstruction](https://github.com/lotharsm/MS-DOS/tree/dos-4.01-reconstructed) of the [released MS-DOS sources](https://github.com/microsoft/MS-DOS).
