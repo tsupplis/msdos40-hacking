@@ -996,56 +996,10 @@ MulTrk_Flag_Done:			    ;AN002;
 	POP	DS
 	INVOKE	ROUND
 	CMP	WORD PTR CS:XMS_ENTRY+2,0
-	JNE	DOFCBS			; Give the primary buffers first claim on UMB
+	JNE	TryBuffers
 	CALL	SetFiles
-
-;------------------------------------------------------------------------------
-; Allocate FCBs
-;------------------------------------------------------------------------------
-DOFCBS:
-	PUSH	CS
-	POP	DS
-	INVOKE	ROUND
-	mov	al, DEVMARK_FCBS	;AN005;='X'
-	call	SetDevMark		;AN005;
-	MOV	AL,[FCBS]
-	XOR	AH,AH			; DO NOT USE CBW INSTRUCTION!!!!!
-					;  IT DOES SIGN EXTEND.
-	MOV	BX,[MEMLO]
-	MOV	DX,[MEMHI]
-	LDS	DI,[DOSINFO]		;GET POINTER TO DOS DATA
-	ASSUME	DS:NOTHING
-	MOV	WORD PTR [DI+SYSI_FCB],BX
-	MOV	WORD PTR [DI+SYSI_FCB+2],DX ;SET POINTER TO NEW Table
-	MOV	BL,CS:Keep
-	XOR	BH,BH
-	MOV	[DI+SYSI_keep],BX
-	PUSH	CS
-	POP	DS
-	ASSUME	DS:SYSINITSEG
-	LES	DI,DWORD PTR [MEMLO]	;POINT TO NEW Table
-	MOV	WORD PTR ES:[DI+SFLINK],-1
-	MOV	ES:[DI+SFCOUNT],AX
-	MOV	BL,SIZE SF_ENTRY
-	MOV	CX,AX
-	MUL	BL			;AX = NUMBER OF BYTES TO CLEAR
-	ADD	[MEMLO],AX		;ALLOCATE MEMORY
-	MOV	AX,size sf-2
-	ADD	[MEMLO],AX		;REMEMBER THE HEADER TOO
-	or	[SetDevMarkFlag], FOR_DEVMARK ;AN005;
-	INVOKE	ROUND			; Check for mem error before the STOSB
-	ADD	DI,AX			;Skip over header
-	MOV	AL,"A"
-FillLoop:
-	PUSH	CX			; save count
-	MOV	CX,SIZE sf_entry	; number of bytes to fill
-	cld
-	REP	STOSB			; filled
-	MOV	WORD PTR ES:[DI-(SIZE sf_entry)+sf_ref_count],0
-	MOV	WORD PTR ES:[DI-(SIZE sf_entry)+sf_position],0
-	MOV	WORD PTR ES:[DI-(SIZE sf_entry)+sf_position+2],0
-	POP	CX
-	LOOP	FillLoop
+	CALL	SetFcbs
+TryBuffers:
 
 ;------------------------------------------------------------------------------
 ; Allocate Buffers
@@ -1502,6 +1456,10 @@ SkipStack:
 	POP	DS
 	ASSUME	DS:SYSINITSEG
 
+	CMP	WORD PTR CS:XMS_ENTRY+2,0
+	JE	FcbsReady
+	CALL	SetFcbs
+FcbsReady:
 	MOV	AL,[FILES]
 	XOR	AH,AH				; DO NOT USE CBW INSTRUCTION!!!!!
 						;  IT DOES SIGN EXTEND.
@@ -1750,6 +1708,63 @@ Set_Sysinit_Base:
 ENDFILE_Ret:
 	return
 
+
+; Allocate the FCB table as one block, after other boot UMB requests.
+SetFcbs PROC NEAR
+	XOR	AX,AX
+	MOV	AL,CS:[FCBS]
+	PUSH	AX
+	MOV	BL,SIZE SF_ENTRY
+	MUL	BL
+	ADD	AX,SFTable
+	CMP	WORD PTR CS:XMS_ENTRY+2,0
+	JE	SetFcbsLow
+	PUSH	AX
+	CALL	ParaRound
+	MOV	DX,AX
+	CALL	ClaimDataUmb
+	OR	AX,AX
+	POP	AX
+	JNZ	SetFcbsLink
+SetFcbsLow:
+	CALL	ROUND
+	PUSH	AX
+	MOV	AL,DEVMARK_FCBS
+	CALL	SetDevMark
+	POP	CS:[MEMLO]
+	MOV	BX,CS:[MEMHI]
+	OR	CS:[SetDevMarkFlag],FOR_DEVMARK
+	CALL	ROUND
+SetFcbsLink:
+	LES	DI,CS:[DOSINFO]
+	MOV	WORD PTR ES:[DI+SYSI_FCB],0
+	MOV	WORD PTR ES:[DI+SYSI_FCB+2],BX
+	MOV	ES,BX
+	POP	CX
+	XOR	DI,DI
+	MOV	WORD PTR ES:[DI+SFLINK],-1
+	MOV	ES:[DI+SFCOUNT],CX
+	MOV	DI,SFTable
+	MOV	AL,'A'
+	JCXZ	SetFcbsDone
+FillLoop:
+	PUSH	CX			; save count
+	MOV	CX,SIZE sf_entry	; number of bytes to fill
+	cld
+	REP	STOSB			; filled
+	MOV	WORD PTR ES:[DI-(SIZE sf_entry)+sf_ref_count],0
+	MOV	WORD PTR ES:[DI-(SIZE sf_entry)+sf_position],0
+	MOV	WORD PTR ES:[DI-(SIZE sf_entry)+sf_position+2],0
+	POP	CX
+	LOOP	FillLoop
+
+SetFcbsDone:
+	LES	DI,CS:[DOSINFO]
+	XOR	BX,BX
+	MOV	BL,CS:Keep
+	MOV	ES:[DI+SYSI_keep],BX
+	RET
+SetFcbs ENDP
 
 ; Extend the resident five-entry SFT. A successful XMS grant belongs
 ; to DOS for the life of the system. Otherwise use the boot arena.

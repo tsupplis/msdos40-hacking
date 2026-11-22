@@ -71,9 +71,10 @@ Applies to `command.com` and DOS buffered console input. Cooked handle reads sup
 |---|---|---:|
 | `dos=umb` | Enable upper memory blocks (UMBs) from an XMS provider. | — |
 | `devicehigh=driver [arguments]` | Try upper memory first, then conventional memory if the image cannot fit. | 4,544 with `ansi.sys` |
-| `shellhigh=interpreter [arguments]` | Start the shell in upper memory when it fits, otherwise in conventional memory. | 5,808 with `command.com /p` |
+| `shellhigh=interpreter [arguments]` | Try upper memory for the shell and, for permanent `command.com`, its `/e:bytes` environment. Each falls back independently. | 6,096 with `command.com /p /e:160` |
 | `buffers=` | Place the primary buffer pool in one UMB when it fits. | 10,640 with `buffers=20` |
 | `stacks=` | Place interrupt handlers and stacks together in one UMB when they fit. | 3,296 with `stacks=9,128` |
+| `fcbs=n,m` | Place the FCB table in one UMB when it fits. | 272 with `fcbs=4,1` |
 | `lastdrive=` | Place the permanent current-directory table in one UMB when it fits. | 464 with `lastdrive=e`, 2,304 with `lastdrive=z` |
 | `files=` | Place the file table extension in one UMB when it fits. The first five entries stay in the kernel. | 912 with `files=20` |
 
@@ -86,7 +87,7 @@ devicehigh=ansi.sys
 shellhigh=command.com /p
 ```
 
-¹ PCE XT with 512-byte floppy sectors. With 88 Kbytes of UMB, `buffers=20`, `files=20` and the example above, `mem` reports 592 Kbytes for the largest executable.
+¹ PCE XT with 512-byte floppy sectors. With 88 Kbytes of UMB, `buffers=20`, `files=20` and the example above, `mem` reports 593 Kbytes for the largest executable.
 
 For a machine with unused RAM mapped from segment `ca00` up to `e000` (exclusive), use `umbs.sys` as the provider.
 

@@ -590,6 +590,54 @@ ENDINIT:
 	pop	es			;eg
 
 noreset:
+; A permanent shell loaded in upper memory keeps its final environment
+; there when space permits. Its conventional copy is valid until then.
+	MOV	AX,CS
+	CMP	AX,0A000h
+	JB	EnvReady
+	CMP	CS:[PERMCOM],0
+	JE	EnvReady
+	MOV	AX,5802h
+	INT	int_command
+	JC	EnvReady
+	XOR	AH,AH
+	PUSH	AX
+	MOV	AX,5800h
+	INT	int_command
+	PUSH	AX
+	MOV	AX,5803h
+	MOV	BX,1
+	INT	int_command
+	JC	EnvRestore
+	MOV	AX,5801h
+	MOV	BX,40h
+	INT	int_command
+	JC	EnvRestore
+	MOV	BX,CS:[envsiz]
+	MOV	AH,ALLOC
+	INT	int_command
+	JC	EnvRestore
+	MOV	DS,CS:[envirseg]
+	MOV	ES,AX
+	MOV	CX,CS:[usedenv]
+	INC	CX			; include the trailing NUL
+	XOR	SI,SI
+	XOR	DI,DI
+	REP	MOVSB
+	MOV	CS:[envirseg],AX
+	MOV	WORD PTR CS:[PDB_environ],AX
+	PUSH	DS
+	POP	ES
+	MOV	AH,DEALLOC
+	INT	int_command
+EnvRestore:
+	POP	BX
+	MOV	AX,5801h
+	INT	int_command
+	POP	BX
+	MOV	AX,5803h
+	INT	int_command
+EnvReady:
 	mov	InitFlag,FALSE		;AC042; Turn off init flag
 	pop	es			;g
 	pop	ds			;g
