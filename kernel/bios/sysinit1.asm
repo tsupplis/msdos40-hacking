@@ -254,6 +254,7 @@ DEFAULT_DRIVE		DB	00	;initialized by IBMINIT.
 BUFFERS 		DW	-1	; initialized during buffer allocation
 H_Buffers		dw	0	;AN000; # of the Heuristic buffers. Initially 0.
 Buffer_Pages		dw	0	;AN000; # of extended memory pages for the buffer.
+UMB_BUF_SEG		DW	0	; Next upper buffer bucket, zero for conventional
 BufferBuckets		dw	0	;AN000;
 Buffer_odds		dw	0	;AN000;
 SingleBufferSize	dw	?	;AN000; Maximum sector size + buffer header
@@ -655,6 +656,7 @@ NODRVSET:
 	call	Multi_Pass		;AN027;
 	inc	cs:Multi_Pass_Id	;AN024;
 	call	Multi_Pass		;AN024;
+	CALL	FindUmbProvider		; CONFIG.SYS device drivers are installed
 	call	EndFile
 	test	Install_Flag, HAVE_INSTALL_CMD		;AN019;
 	jz	DoLast					;AN019;
@@ -1338,6 +1340,7 @@ $$EN1:
 ;	$ELSE					;AN000;
 	JMP SHORT $$EN13
 $$IF13:
+	    CALL   ClaimBufferUmb
 	    call   Set_Buffer			;AN000;
 ;	$ENDIF					;AN000;
 $$EN13:
@@ -1749,10 +1752,8 @@ ENDFILE_Ret:
 	return
 
 
-; Claim XMS regions at boot. Stage grants in segment order, using their
-; first paragraph for a temporary next pointer. Each hole is protected
-; by a system MCB in the final paragraph of the preceding region.
-InitUmb proc near
+; Cache the XMS entry after device initialization for DOS=UMB.
+FindUmbProvider PROC NEAR
 	CMP	CS:UMB_REQUESTED,0
 	JNE	UmbDetect
 	RET
@@ -1763,10 +1764,26 @@ UmbDetect:
 	JE	UmbGetEntry
 	RET
 UmbGetEntry:
+	PUSH	ES
+	PUSH	BX
 	MOV	AX,4310h
 	INT	2fh
 	MOV	WORD PTR CS:XMS_ENTRY,BX
 	MOV	WORD PTR CS:XMS_ENTRY+2,ES
+	POP	BX
+	POP	ES
+	RET
+FindUmbProvider ENDP
+
+; Claim XMS regions at boot. Stage grants in segment order, using their
+; first paragraph for a temporary next pointer. Each hole is protected
+; by a system MCB in the final paragraph of the preceding region.
+InitUmb PROC NEAR
+	CALL	FindUmbProvider		; INSTALL may have provided XMS since ENDFILE
+	CMP	WORD PTR CS:XMS_ENTRY+2,0
+	JNE	UmbFindArena
+	RET
+UmbFindArena:
 	LES	DI,CS:DosInfo
 	MOV	AX,ES:[DI-2]            ; conventional arena head
 UmbLowWalk:
@@ -2250,6 +2267,48 @@ $$EN18:
 DoEMS	endp
 
 ;
+; Reserve the primary buckets as one permanent XMS grant. The hash table
+; stays low. Round each bucket separately because its links are offsets
+; relative to its own segment. A failed request leaves UMB_BUF_SEG zero.
+; DS:BX points to BuffInfo and must survive the call.
+ClaimBufferUmb PROC NEAR
+	CMP	WORD PTR CS:XMS_ENTRY+2,0
+	JE	ClaimBufferDone
+	PUSH	BX
+	XOR	BX,BX			; total paragraphs
+	MOV	SI,[BufferBuckets]
+ClaimBufferSize:
+	XOR	AX,AX
+	MOV	AL,[MaxNumBuf1]
+	MOV	CL,[NthBuck]
+	XOR	CH,CH
+	CMP	SI,CX
+	JBE	ClaimBufferGroup
+	MOV	AL,[MaxNumBuf2]
+ClaimBufferGroup:
+	MUL	[SingleBufferSize]
+	OR	DX,DX
+	JNZ	ClaimBufferExit
+	ADD	AX,15
+	JC	ClaimBufferExit
+	MOV	CL,4
+	SHR	AX,CL
+	ADD	BX,AX
+	JC	ClaimBufferExit
+	DEC	SI
+	JNZ	ClaimBufferSize
+	MOV	DX,BX
+	MOV	AH,10h
+	CALL	CS:XMS_ENTRY
+	OR	AX,AX
+	JZ	ClaimBufferExit
+	MOV	[UMB_BUF_SEG],BX
+ClaimBufferExit:
+	POP	BX
+ClaimBufferDone:
+	RET
+ClaimBufferUmb ENDP
+
 Set_Buffer	proc	near
 ;*******************************************************************************
 ;Function: Set buffers in the real memory.				       *
@@ -2294,7 +2353,11 @@ Set_Buffer	proc	near
 $$DO21:
 	    inc  dl				      ;AN026; Current bucket number
 	    mov  word ptr ds:[bx.BUFFER_BUCKET],0     ;AN000;Memlo is 0 after ROUND.
+	    MOV  DI, [UMB_BUF_SEG]
+	    OR   DI,DI
+	    JNZ  BufferSegmentReady
 	    mov  di, [MemHi]			      ;AN000;
+BufferSegmentReady:
 	    mov  word ptr ds:[bx.BUFFER_BUCKET+2], di ;AN000;Hash entry set.
 	    mov word ptr ds:[bx.DIRTY_COUNT], 0       ;AN020;set DIRTY_COUNT, BUFFER_RESERVED to 0.
 	    mov  es, di 			;AN000;
@@ -2325,9 +2388,18 @@ $$IF26:
 		mov  di, ax			;AN000;adjust next buffer position
 ;	    $ENDDO   E				;AN000;flag set already for testing last buffer.
 	    JNE $$DO22
+	    CMP  [UMB_BUF_SEG],0
+	    JE   BufferAdvanceLow
+	    ADD  AX,15
+	    MOV  CL,4
+	    SHR  AX,CL
+	    ADD  [UMB_BUF_SEG],AX
+	    JMP  SHORT BufferBucketDone
+BufferAdvanceLow:
 	    add  [Memlo], ax			;AN000;AX is the size of this bucket.
 	    or	 [SetDevMarkFlag], FOR_DEVMARK	;AN005;Update DEVMARK_SIZE
 	    call Round				;AN000;memhi:memlo adjusted for the next bucket.
+BufferBucketDone:
 	    add  bx, size BUFFER_HASH_ENTRY	;AN000;ds:bx -> next hash entry.
 	    dec  [BufferBuckets]		;AN000;
 ;	$ENDDO	 Z				;AN000;
