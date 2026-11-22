@@ -82,6 +82,12 @@ On an empty line, Up recalls the previous line supplied by the caller. Down is i
 
 Set `LINEEDIT EQU 0` in `kernel/dos/editsw.inc` and run `make dist` for the historical build. The default IBM single-byte build reuses the DOS input buffer and adds 640 bytes to the linked kernel. Run `test/check_edit` after building to exercise the editor in PCE. The distribution archive `disks.zip` at the repository root contains the base, dist and full floppy images.
 
+### 3.4 Command enhancements
+
+| Command | Enhancement |
+|---|---|
+| `more` | `more filename` pages a file directly. With no filename, `more` reads standard input. |
+
 ---
 
 ## Companion projects
