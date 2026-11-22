@@ -1,4 +1,4 @@
-0085
+0087
 COMMON   0006 0038
 0001 U 0000 "Incorrect DOS version",CR,LF
 0002 U 0000 "%1 already installed",CR,LF
@@ -917,7 +917,7 @@ KEYB     994d 0016
 0016 U 0001 "Keyboard ID specified is inconsistent with the selected keyboard layout",CR,LF
 0017 U 0000 "Unable to create KEYB table in resident memory",CR,LF
 REDIRSYS 9d28 0000
-MEM      9d3c 0042
+MEM      9d3c 0046
 0010 U 0000  CR,LF
 0011 U 0000  "  Address     Name          Size       Type ",CR,LF
 0012 U 0000  "  컴컴컴�     컴컴컴컴     컴컴컴     컴컴컴",CR,LF
@@ -926,12 +926,12 @@ MEM      9d3c 0042
 0015 U 0000  "  %1      %2     %3     %4",CR,LF
 0016 U 0000  "                %1   %2      %3 ",CR,LF
 0017 U 0000  "                  %1              %2 ",CR,LF
-0018 U 0000  "%1 bytes total memory",CR,LF
-0019 U 0000  "%1 bytes available",CR,LF
-0020 U 0000  "%1 largest executable program size",CR,LF
-0021 U 0000  "%1 bytes total EMS memory",CR,LF
-0022 U 0000  "%1 bytes free EMS memory",CR,LF
-0023 U 0000  "%1 bytes total extended memory",CR,LF
+0018 U 0000  "%1 Kbytes total memory",CR,LF
+0019 U 0000  "%1 Kbytes available",CR,LF
+0020 U 0000  "%1 Kbytes largest executable program size",CR,LF
+0021 U 0000  "%1 Kbytes total EMS memory",CR,LF
+0022 U 0000  "%1 Kbytes free EMS memory",CR,LF
+0023 U 0000  "%1 Kbytes total extended memory",CR,LF
 0024 U 0000  "Interrupt Vector",0
 0025 U 0000  "ROM Communication Area",0
 0026 U 0000  "DOS Communication Area",0
@@ -954,13 +954,17 @@ MEM      9d3c 0042
 0043 U 0000  " ",0
 0044 U 0000  "     %1      %2     %3",CR,LF
 0045 U 0001  "INSTALL=",0
-0046 U 0001  "%1 bytes available extended memory",CR,LF
+0046 U 0001  "%1 Kbytes available extended memory",CR,LF
 0047 U 0000  "System Stacks",0
 0048 U 0000  "-- Free --",0
 0049 U 0000  "Program",0
 0050 U 0000  "Environment",0
 0051 U 0000  "Data",0
-REDIR    a37a 0029
+0052 U 0000  "%1 Kbytes free UMB memory",CR,LF
+0053 U 0000  "%1 Kbytes in largest available UMB",CR,LF
+0054 U 0000  "%1 Kbytes free XMS memory",CR,LF
+0055 U 0000  "%1 Kbytes in largest available XMS block",CR,LF
+REDIR    a45f 0029
 0004 U 0000 "Network has not been started",CR,LF
 0050 U 0000 "NET809: Network request not supported",CR,LF,0
 0051 U 0000 "NET801: Remote computer not listening",CR,LF,0
@@ -990,7 +994,7 @@ REDIR    a37a 0029
 0084 U 0004 "NET819: Network name limit exceeded",CR,LF,0
 0085 U 0004 "NET802: Duplicate name on network",CR,LF,0
 0088 U 0000 "NET825: Network data fault",CR,LF,0
-XMA2EMS  a9f8 0030
+XMA2EMS  aadd 0030
 0001 U 0000 CR,LF,"$"
 0002 U 0000 "XMA2EMS: Expanded Memory Manager",CR,LF
 	"(c)Copyright Microsoft Corporation 1988                     All rights reserved",CR,LF,"$"
@@ -1022,7 +1026,7 @@ XMA2EMS  a9f8 0030
 0028 U 0000 "    "," KB OK","$"
 0029 U 0000 "     ",CR,LF,"$"
 0030 U 0000 "$"
-FILESYS  b03f 0007
+FILESYS  b124 0007
 0010 U 0003  "  PAUSED  %1   %2   %3",CR,LF
 0011 U 0001  "          %1   %2   %3",CR,LF
 0012 U 0001  "          Local   IFS",CR,LF
@@ -1030,7 +1034,7 @@ FILESYS  b03f 0007
 0014 U 0001  "  ______  ______  _________   ___________________",CR,LF,CR,LF
 0015 U 0003  "No entries found",CR,LF
 0016 U 0003  "  ERROR   %1   %2   %3",CR,LF
-FDISK    b1ba 0122
+FDISK    b29f 0122
 0004 U 0000 "Cannot FDISK with network loaded",CR,LF
 0005 U 0000 "No fixed disks present",CR,LF
 0006 U 0000 "Error reading fixed disk",CR,LF
@@ -1153,7 +1157,7 @@ FDISK    b1ba 0122
 1114 U 0001 "Invalid partition table",0
 1115 U 0001 "Error loading operating system",0
 1116 U 0001 "Missing operating system",0
-XMAEM    cdb9 0006
+XMAEM    ce9e 0006
 0001 U 0000 "80386 XMA Emulator Version 1.10",CR,LF
 	"         (C) Copyright IBM Corporation 1987, 1988  All rights reserved",CR,LF,CR,LF,"$"
 0002 U 0000 "80386 XMA Emulator installed",CR,LF,"$"
@@ -1165,7 +1169,7 @@ XMAEM    cdb9 0006
 	"     Parameter value must specify 64 pages or greater",CR,LF,"$"
 0006 U 0000 "80386 XMA Emulator not installed",CR,LF
 	"     Insufficient memory for requested parameter value",CR,LF,"$"
-UPDATE   d072 0013
+UPDATE   d157 0013
 0100 U 0000 CR,LF,"- Enter your keyboard code: "
 0110 U 0000 "US"                    ;DEFAULT KEYBOARD CODE
 0120 U 0000 CR,LF,"- Enter the drive which contains files to be",CR,LF

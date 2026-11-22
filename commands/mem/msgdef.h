@@ -50,6 +50,11 @@
 #define DataMsg 			51
 
 
+#define UmbFreeMsg 52
+#define UmbLargestMsg 53
+#define XmsFreeMsg 54
+#define XmsLargestMsg 55
+
 #define ParseError1Msg			01
 #define ParseError10Msg 		10
 

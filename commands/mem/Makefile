@@ -14,7 +14,7 @@ BUILDMSG = $(EMU2) $(SDKBIN)/buildmsg.exe
 
 COUNTRY  = usa-ms
 
-ASM_OBJS = _parse.obj _msgret.obj
+ASM_OBJS = _parse.obj _msgret.obj xms.obj
 MSGS     = mem.ctl
 
 .PHONY: all clean
@@ -31,7 +31,7 @@ mem.obj: mem.c msgdef.h $(MSGS)
 	$(CL) -c -AS -Os -Zp -I. -I'C:\include' -Fo$@ $< -- INCLUDE='C:\sdk\include' PATH='C:\sdk\bin'
 
 mem.exe: mem.obj $(ASM_OBJS)
-	$(LINK) 'mem+_msgret+_parse,mem,nul,C:\sdk\lib\mem;' -- LIB='C:\sdk\lib'
+	$(LINK) 'mem+_msgret+_parse+xms,mem,nul,C:\sdk\lib\mem;' -- LIB='C:\sdk\lib'
 
 clean:
 	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*

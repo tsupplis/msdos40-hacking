@@ -13,12 +13,12 @@
 :def 15 "  %1      %2     %3     %4",CR,LF
 :def 16 "                %1   %2      %3 ",CR,LF
 :def 17 "                  %1              %2 ",CR,LF       ;fix in usa
-:def 18 "%1 bytes total memory",CR,LF
-:def 19 "%1 bytes available",CR,LF
-:def 20 "%1 largest executable program size",CR,LF
-:def 21 "%1 bytes total EMS memory",CR,LF
-:def 22 "%1 bytes free EMS memory",CR,LF
-:def 23 "%1 bytes total extended memory",CR,LF
+:def 18 "%1 Kbytes total memory",CR,LF
+:def 19 "%1 Kbytes available",CR,LF
+:def 20 "%1 Kbytes largest executable program size",CR,LF
+:def 21 "%1 Kbytes total EMS memory",CR,LF
+:def 22 "%1 Kbytes free EMS memory",CR,LF
+:def 23 "%1 Kbytes total extended memory",CR,LF
 :def 24 "Interrupt Vector",0
 :def 25 "ROM Communication Area",0
 :def 26 "DOS Communication Area",0
@@ -43,11 +43,16 @@
 :def 42 "----------",0
 :def 43 " ",0
 :def 44 "     %1      %2     %3",CR,LF
-:def 46 "%1 bytes available extended memory",CR,LF
+:def 46 "%1 Kbytes available extended memory",CR,LF
 :def 47 "System Stacks",0
 :def 48 "-- Free --",0
 :def 49 "Program",0
 :def 50 "Environment",0
 :def 51 "Data",0
+
+:def 52 "%1 Kbytes free UMB memory",CR,LF
+:def 53 "%1 Kbytes in largest available UMB",CR,LF
+:def 54 "%1 Kbytes free XMS memory",CR,LF
+:def 55 "%1 Kbytes in largest available XMS block",CR,LF
 
 :end

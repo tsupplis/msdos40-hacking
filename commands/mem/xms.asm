@@ -1,0 +1,38 @@
+_TEXT	SEGMENT BYTE PUBLIC 'CODE'
+	ASSUME	CS:_TEXT
+	PUBLIC	_XmsFree
+
+; Return total free KB in AX and the largest block in *largest.
+_XmsFree PROC NEAR
+	PUSH	BP
+	MOV	BP,SP
+	PUSH	DI
+	PUSH	SI
+	MOV	AX,4300h
+	INT	2Fh
+	CMP	AL,80h
+	JNE	XmsNone
+	MOV	AX,4310h
+	INT	2Fh
+	PUSH	ES
+	PUSH	BX
+	MOV	SI,SP
+	MOV	AH,08h
+	CALL	DWORD PTR SS:[SI]
+	ADD	SP,4
+	OR	AX,AX
+	JZ	XmsNone
+	MOV	DI,[BP+4]
+	MOV	[DI],AX
+	MOV	AX,DX
+	JMP	SHORT XmsDone
+XmsNone:
+	XOR	AX,AX
+XmsDone:
+	POP	SI
+	POP	DI
+	POP	BP
+	RET
+_XmsFree ENDP
+_TEXT	ENDS
+	END

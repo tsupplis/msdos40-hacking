@@ -220,6 +220,8 @@ void     DisplayEMSSummary(void);                                               
 void     DisplayEMSDetail(void);                                                                                                 /* ;an000; */
                                                                                                                                  /* ;an000; */
 void     DisplayBaseSummary(void);                                                                                               /* ;an000; */
+unsigned XmsFree(unsigned *);
+void     DisplayPoolSummary(void);
 void     DisplayExtendedSummary(void);                                                                                           /* ;an000; */
 void     DisplayExpandedSummary(void);                                                                                           /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -233,7 +235,7 @@ void     parse_init(void);                                                      
                                                                                                                                  /* ;an000; */
 void     Parse_Message(int,int,unsigned char);                                                                                    /* ;an000; */
 void     Sub0_Message(int,int,unsigned char);                                                                                    /* ;an000; */
-void     Sub1_Message(int,int,unsigned char,unsigned long int *);                                                                /* ;an000; */
+void     PrintKbytes(int,int,unsigned char,unsigned long int *);                                                                /* ;an000; */
 void     Sub2_Message(int,int,unsigned char,char *,int);                                                                         /* ;an000; */
 void     Sub3_Message(int,int,unsigned char,                                                                                     /* ;an000; */
                       char *,                                                                                                    /* ;an000; */
@@ -336,6 +338,7 @@ char     *argv[];                                                               
         if (EMSInstalled())                                                                                                      /* ;an000; */
           DisplayEMSSummary();          /* display EMS memory totals */                                                          /* ;an000; */
                                                                                                                                  /* ;an000; */
+        DisplayPoolSummary();
         DisplayExtendedSummary();       /* display extended memory summary */                                                    /* ;an000; */
                                                                                                                                  /* ;an000; */
         return;                         /* end of MEM main routine */                                                            /* ;an000; */
@@ -679,14 +682,14 @@ void DisplayBaseSummary()                                                       
                 total_mem = total_mem + ( (unsigned long int) (*CarvedPtr) * 1024l) ;   /* ;an002; dms;adjust total for */
                 }                                                                       /*             RAM carve value  */
                                                                                                                                  /* ;an000; */
-        Sub1_Message(TotalMemoryMsg,STDOUT,Utility_Msg_Class,&total_mem);                                                        /* ;an000; */
+        PrintKbytes(TotalMemoryMsg,STDOUT,Utility_Msg_Class,&total_mem);                                                        /* ;an000; */
                                                                                                                                  /* ;an000; */
-        Sub1_Message(AvailableMemoryMsg,STDOUT,Utility_Msg_Class,&avail_mem);                                                    /* ;an000; */
+        PrintKbytes(AvailableMemoryMsg,STDOUT,Utility_Msg_Class,&avail_mem);                                                    /* ;an000; */
                                                                                                                                  /* ;an000; */
 /* Calculate the total memory used.   PSP segment * 16. Subtract from total to get free_mem */                                   /* ;an000; */
         free_mem = (DOS_TopOfMemory * 16l) - (FP_SEG(PSPptr)*16l);                                                               /* ;an000;ac005; */
                                                                                                                                  /* ;an000; */
-        Sub1_Message(FreeMemoryMsg,STDOUT,Utility_Msg_Class,&free_mem);                                                          /* ;an000; */
+        PrintKbytes(FreeMemoryMsg,STDOUT,Utility_Msg_Class,&free_mem);                                                          /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -762,6 +765,59 @@ void DisplayEMSDetail()                                                         
                                                                                                                                 /* ;an000; */
 /*컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�*/                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
+void DisplayPoolSummary(void)
+{
+    struct ARENA far *arena;
+    unsigned far *head;
+    unsigned segment, next, largest = 0;
+    unsigned long bytes, block, freeBytes = 0, largestBytes = 0;
+    unsigned linked;
+
+    InRegs.x.ax = 0x5802;
+    intdos(&InRegs,&OutRegs);
+    if (!OutRegs.x.cflag) {
+        linked = OutRegs.h.al;
+        InRegs.x.ax = 0x5803;
+        InRegs.x.bx = 1;
+        intdos(&InRegs,&OutRegs);
+        if (!OutRegs.x.cflag) {
+            InRegs.x.ax = 0x5200;
+            intdosx(&InRegs,&OutRegs,&SegRegs);
+            FP_SEG(head) = SegRegs.es;
+            FP_OFF(head) = OutRegs.x.bx - 2;
+            segment = *head;
+            FP_OFF(arena) = 0;
+            for (;;) {
+                FP_SEG(arena) = segment;
+                if (arena->Signature != 'M' && arena->Signature != 'Z') break;
+                if (segment >= 0xa000 && !arena->Owner) {
+                    block = arena->Paragraphs * 16UL;
+                    freeBytes += block;
+                    if (block > largestBytes) largestBytes = block;
+                }
+                next = segment + arena->Paragraphs + 1;
+                if (arena->Signature == 'Z' || next <= segment) break;
+                segment = next;
+            }
+            InRegs.x.ax = 0x5803;
+            InRegs.x.bx = linked;
+            intdos(&InRegs,&OutRegs);
+        }
+    }
+    if (freeBytes) {
+        Sub0_Message(NewLineMsg,STDOUT,Utility_Msg_Class);
+        PrintKbytes(UmbFreeMsg,STDOUT,Utility_Msg_Class,&freeBytes);
+        PrintKbytes(UmbLargestMsg,STDOUT,Utility_Msg_Class,&largestBytes);
+    }
+    bytes = XmsFree(&largest) * 1024UL;
+    if (bytes) {
+        largestBytes = largest * 1024UL;
+        Sub0_Message(NewLineMsg,STDOUT,Utility_Msg_Class);
+        PrintKbytes(XmsFreeMsg,STDOUT,Utility_Msg_Class,&bytes);
+        PrintKbytes(XmsLargestMsg,STDOUT,Utility_Msg_Class,&largestBytes);
+    }
+}
+
 void DisplayExtendedSummary()                                                                                                    /* ;an000; */
   {                                                                                                                              /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -777,7 +833,7 @@ void DisplayExtendedSummary()                                                   
       EXTMemoryTot = (long) (SysVarsPtr) -> ExtendedMemory;                     /* get total EM size    ;an001; dms;*/
       EXTMemoryTot *= (long) 1024l;                                             /*  at boot time        ;an001; dms;*/
       Sub0_Message(NewLineMsg,STDOUT,Utility_Msg_Class);                        /* print blank line     ;an001; dms;*/
-      Sub1_Message(EXTMemoryMsg,STDOUT,Utility_Msg_Class,&EXTMemoryTot);        /* print total EM mem   ;an001; dms;*/
+      PrintKbytes(EXTMemoryMsg,STDOUT,Utility_Msg_Class,&EXTMemoryTot);        /* print total EM mem   ;an001; dms;*/
                                                                                                                                  /* ;an000; */
       OutRegs.x.cflag = 0;                                                      /* clear carry flag     ;an001; dms;*/
       InRegs.x.ax = GetExtended;                                                /* get extended mem     ;an001; dms;*/
@@ -787,7 +843,7 @@ void DisplayExtendedSummary()                                                   
       EXTMemoryTot = (long) OutRegs.x.ax;                                       /* returns 1K mem blocks;an001; dms;*/
       EXTMemoryTot *= (long) 1024l;                                             /* convert to bytes     ;an001; dms;*/
 
-      Sub1_Message(EXTMemAvlMsg,STDOUT,Utility_Msg_Class,&EXTMemoryTot);        /* display available    ;an001; dms;*/
+      PrintKbytes(EXTMemAvlMsg,STDOUT,Utility_Msg_Class,&EXTMemoryTot);        /* display available    ;an001; dms;*/
   }
 
                                                                                                                                  /* ;an000; */
@@ -818,8 +874,8 @@ void DisplayEMSSummary()                                                        
   EMSAvailMemoryTot = OutRegs.x.dx;         /* total pages */                                                                    /* ;an000; */
   EMSAvailMemoryTot *= (long) (16l*1024l);                                                                                       /* ;an000; */
                                                                                                                                  /* ;an000; */
-  Sub1_Message(EMSTotalMemoryMsg,STDOUT,Utility_Msg_Class,&EMSAvailMemoryTot);                                                   /* ;an000; */
-  Sub1_Message(EMSFreeMemoryMsg,STDOUT,Utility_Msg_Class,&EMSFreeMemoryTot);                                                     /* ;an000; */
+  PrintKbytes(EMSTotalMemoryMsg,STDOUT,Utility_Msg_Class,&EMSAvailMemoryTot);                                                   /* ;an000; */
+  PrintKbytes(EMSFreeMemoryMsg,STDOUT,Utility_Msg_Class,&EMSFreeMemoryTot);                                                     /* ;an000; */
                                                                                                                                  /* ;an000; */
   return;                                                                                                                        /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -1090,7 +1146,7 @@ unsigned char   Message_Type;                                                   
 /*                                                                      */                                                       /* ;an000; */
 /************************************************************************/                                                       /* ;an000; */
                                                                                                                                  /* ;an000; */
-void Sub1_Message(Msg_Num,Handle,Message_Type,Replace_Parm)                                                                      /* ;an000; */
+void PrintKbytes(Msg_Num,Handle,Message_Type,Replace_Parm)                                                                      /* ;an000; */
                                                                                                                                  /* ;an000; */
 int             Msg_Num;                                                                                                         /* ;an000; */
 int             Handle;                                                                                                          /* ;an000; */
@@ -1103,7 +1159,8 @@ unsigned long int    *Replace_Parm;                                             
                                                                                                                                  /* ;an000; */
         {                                                                                                                        /* ;an000; */
                                                                                                                                  /* ;an000; */
-        sublist[1].value     = (unsigned far *)Replace_Parm;                                                                     /* ;an000; */
+        unsigned long kbytes = *Replace_Parm / 1024UL;
+        sublist[1].value     = (unsigned far *)&kbytes;                                                                     /* ;an000; */
         sublist[1].size      = Sublist_Length;                                                                                   /* ;an000; */
         sublist[1].reserved  = Reserved;                                                                                         /* ;an000; */
         sublist[1].id        = 1;                                                                                                /* ;an000; */

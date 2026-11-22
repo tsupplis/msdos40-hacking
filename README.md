@@ -56,6 +56,7 @@ Applies to `command.com` and DOS buffered console input. Cooked handle reads sup
 
 | Command | Enhancement |
 |---|---|
+| `mem` | Report memory in whole Kbytes, including free space and the largest block for each nonempty UMB or XMS pool. |
 | `more [filename]` | Page a file or, with no filename, standard input. |
 | `loadhigh` (`lh`) | Run an external program in upper memory when it fits. |
 
@@ -76,7 +77,7 @@ device=pcehimem.sys
 devicehigh=ansi.sys
 ```
 
-¹ PCE XT with 512-byte floppy sectors. With all three settings above, `mem` reports a 597,408-byte largest executable.
+¹ PCE XT with 512-byte floppy sectors. With all three settings above, `mem` reports 583 Kbytes for the largest executable.
 
 Programs can link UMBs with `int 21h/5803h` and select upper-only or upper-first allocation with `5801h`.
 
