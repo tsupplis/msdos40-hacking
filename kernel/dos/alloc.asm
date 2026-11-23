@@ -47,6 +47,7 @@ PAGE
 	i_need  BestArena,WORD          ; best free block found
 	i_need  LastArena,WORD          ; last free block found
 	i_need	UMB_TOTAL,WORD
+	i_need  HMA_ACTIVE,BYTE
 	i_need	UMB_HEAD,WORD
 	i_need	UMB_BRIDGE,WORD
 	i_need	UMB_LINKED,BYTE
@@ -419,6 +420,12 @@ PAGE
 ;
 	procedure   $AllocOper,NEAR
 	ASSUME  DS:NOTHING,ES:NOTHING
+	CMP     AL,0FEh         ; private DOS HMA residency query
+	JNE     CheckUmbSize
+	XOR     AX,AX
+	MOV     AL,[HMA_ACTIVE]
+	transfer SYS_RET_OK
+CheckUmbSize:
 	CMP     AL,0FFh		; DOS UMB pool size in paragraphs
 	JNE     CheckAllocOp
 	MOV     AX,[UMB_TOTAL]

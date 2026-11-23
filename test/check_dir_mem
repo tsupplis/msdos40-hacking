@@ -22,10 +22,10 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
                          ("HIMEM.SYS", "extra/pcehimem.sys")]:
         disk("mcopy", "-o", root / source, "::" + name)
     disk("mmd", "::DTEST")
-    for name, size in [("ZZ.TXT", 3), ("BB.BIN", 2), ("AA.TXT", 1)]:
+    for name, size in [("ZZ.TXT", 12345), ("BB.BIN", 2), ("AA.TXT", 1)]:
         src = folder / name
         src.write_bytes(b"x" * size)
-        os.utime(src, (946684800 + size * 86400,) * 2)
+        os.utime(src, (946684800 + min(size, 3) * 86400,) * 2)
         disk("mcopy", "-m", src, "::DTEST/" + name)
     disk("mmd", "::DTEST/MIDDLE")
     disk("mattrib", "+h", "::DTEST/BB.BIN")
@@ -44,15 +44,16 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
     batch = folder / "report.bat"
     batch.write_text("b:\n" + "".join(
         f"echo CASE{i}\ndir {options} a:\\dtest /b\n" for i, (options, _) in enumerate(cases)) +
-        "echo REPORT\na:\\mem /c/p <a:\\cr.txt\na:\\mem /p /debug <a:\\cr.txt\n"
+        "echo REPORT\ndir a:\\dtest\\zz.txt >b:\\sizes.txt\na:\\chkdsk a: >b:\\disk.txt\n"
+        "a:\\mem /c/p <a:\\cr.txt\na:\\mem /p /debug <a:\\cr.txt\n"
         "dir a:\\ /b /p /on >b:\\list.txt\na:\\mem /debug/p >b:\\debug.txt\n"
         "dir a:\\ /b /p >prn <a:\\cr.txt\na:\\mem /debug/p >prn <a:\\cr.txt\n"
         "a:\\mem /classify >b:\\class.txt\na:\\mem /c >b:\\shortc.txt\n"
         "a:\\mem /d/p >b:\\shortd.txt\na:\\mem /p >b:\\progp.txt\n"
         "a:\\mem /clas >b:\\midc.txt\na:\\mem /deb >b:\\midd.txt\na:\\mem >b:\\summary.txt\n")
-    for high in (False, True):
-        batch.with_suffix(".cfg").write_text(
-            "DOS=HIGH,UMB\nDEVICE=HIMEM.SYS\n" if high else "")
+    for config, high in [("", False), ("DOS=HIGH\n", False),
+                         ("DOS=HIGH,UMB\nDEVICE=HIMEM.SYS\n", True)]:
+        batch.with_suffix(".cfg").write_text(config)
         (work / "par1.out").write_bytes(b"")
         output = subprocess.check_output([root / "test/run_tests", batch], text=True,
                                         encoding="cp437", env=dict(os.environ, IMG=str(boot)))
@@ -83,6 +84,14 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
         assert [m.end() for m in re.finditer(r"[\d,]+K", low)] == [
             title.index(label) + len(label) for label in ("Total", "Used", "Free")], (title, low)
         assert "Largest executable program size" in summary
+        status = "DOS is " + ("" if high else "not ") + "using the High Memory Area."
+        assert status in summary.splitlines() and status in class_lines, summary
+        sizes = read("sizes.txt")
+        assert re.search(r"ZZ\s+TXT\s+12,345\s", sizes), sizes
+        assert re.search(r"1 File\(s\)\s+12,345 bytes\s+[\d,]+ bytes free", sizes), sizes
+        disk_report = read("disk.txt")
+        assert re.search(r"\b1,\d{3},\d{3} bytes total disk space", disk_report), disk_report
+        assert re.search(r"\b\d{1,3}(?:,\d{3})+ bytes available on disk", disk_report), disk_report
         upper = re.search(r"^Upper\s+([\d,]+)K", summary, re.M)
         assert upper and (int(upper[1].replace(",", "")) > 0) == high, summary
-        print("PASS DIR and MEM", "high" if high else "low")
+        print("PASS DIR, CHKDSK and MEM", config.splitlines() or ["default"])

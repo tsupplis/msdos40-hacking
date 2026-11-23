@@ -96,6 +96,8 @@ SYSINITVAR  LABEL   WORD		; [SYSTEM]
 
 	I_am	UMB_TOTAL,WORD,<0>	; [SYSTEM] Total UMB paragraphs granted
 
+	I_am    HMA_ACTIVE,BYTE,<0>
+
 	PUBLIC	HASHINITVAR		; [SYSTEM]				;AN000;
 HASHINITVAR  LABEL   WORD		; [SYSTEM]				;AN000;
 	I_am	BUF_HASH_PTR,DWORD	; [SYSTEM] buffer Hash table addr	;AN000;

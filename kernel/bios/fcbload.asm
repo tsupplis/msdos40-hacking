@@ -114,6 +114,7 @@ PlaceSlot:
         MOV     ES:[DI],AX
         JMP     PlaceSlot
 PlaceDone:
+        CLC                             ; conventional placement
         RET
 PlaceFarLow:
         MOV     AX,[MEMHI]
@@ -150,7 +151,10 @@ PlaceCopy:
         MOV     AH,6
         CALL    DWORD PTR [GateXms]
         CMP     AX,1
-        JE      PlaceDone
+        JNE     PlaceA20Error
+        STC                             ; successful HMA placement
+        RET
+PlaceA20Error:
         MOV     SI,OFFSET GateMsg       ; DS is the unnormalized SYSINIT segment
         JMP     GateDisplay
 PlaceFcbCode ENDP

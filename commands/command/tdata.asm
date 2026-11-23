@@ -57,7 +57,7 @@ TRANSPACE	SEGMENT PUBLIC BYTE	;AC000;
 	EXTRN	cpyflag:BYTE
 	EXTRN	DATE_OUTPUT:BYTE	;AC000;
 	extrn tree_count_arg:word
-	EXTRN	Dir_Num:WORD
+
 	EXTRN	DRIVE_OUTPUT:BYTE	;AC000;
 	EXTRN	file_size_high:WORD
 	EXTRN	file_size_low:WORD
@@ -173,7 +173,7 @@ TRANDATA	SEGMENT PUBLIC BYTE
 	PUBLIC	dirdat_mo_day		;AN000;
 	PUBLIC	dirdat_yr		;AN000;
 	PUBLIC	dirhead_ptr		;AN000;
-	PUBLIC	dirmes_ptr		;AN000;
+
 	PUBLIC	dirtim_hr_min		;AN000;
 	PUBLIC	dirtim_sec_hn		;AN000;
 	public	dir_l_syn,dir_b_syn,del_q_syn

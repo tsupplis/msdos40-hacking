@@ -82,5 +82,7 @@
 :def 80 "Insufficient memory for classification",0
 :def 81 "SYSTEM",0
 :def 82 "bytes",0
+:def 83 "DOS is using the High Memory Area.",0
+:def 84 "DOS is not using the High Memory Area.",0
 
 :end

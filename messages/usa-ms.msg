@@ -1,4 +1,4 @@
-0096
+0097
 COMMON   0006 0038
 0001 U 0000 "Incorrect DOS version",CR,LF
 0002 U 0000 "%1 already installed",CR,LF
@@ -947,7 +947,7 @@ KEYB     a150 0016
 0016 U 0001 "Keyboard ID specified is inconsistent with the selected keyboard layout",CR,LF
 0017 U 0000 "Unable to create KEYB table in resident memory",CR,LF
 REDIRSYS a52b 0000
-MEM      a53f 0073
+MEM      a53f 0075
 0010 U 0000  CR,LF
 0011 U 0000  "  Address     Name          Size       Type ",CR,LF
 0012 U 0000  "  컴컴컴�     컴컴컴컴     컴컴컴     컴컴컴",CR,LF
@@ -1021,7 +1021,9 @@ MEM      a53f 0073
 0080 U 0000 "Insufficient memory for classification",0
 0081 U 0000 "SYSTEM",0
 0082 U 0000 "bytes",0
-REDIR    b007 0029
+0083 U 0000 "DOS is using the High Memory Area.",0
+0084 U 0000 "DOS is not using the High Memory Area.",0
+REDIR    b073 0029
 0004 U 0000 "Network has not been started",CR,LF
 0050 U 0000 "NET809: Network request not supported",CR,LF,0
 0051 U 0000 "NET801: Remote computer not listening",CR,LF,0
@@ -1051,7 +1053,7 @@ REDIR    b007 0029
 0084 U 0004 "NET819: Network name limit exceeded",CR,LF,0
 0085 U 0004 "NET802: Duplicate name on network",CR,LF,0
 0088 U 0000 "NET825: Network data fault",CR,LF,0
-XMA2EMS  b685 0030
+XMA2EMS  b6f1 0030
 0001 U 0000 CR,LF,"$"
 0002 U 0000 "XMA2EMS: Expanded Memory Manager",CR,LF
 	"(c)Copyright Microsoft Corporation 1988                     All rights reserved",CR,LF,"$"
@@ -1083,7 +1085,7 @@ XMA2EMS  b685 0030
 0028 U 0000 "    "," KB OK","$"
 0029 U 0000 "     ",CR,LF,"$"
 0030 U 0000 "$"
-FDISK    bccc 0123
+FDISK    bd38 0123
 0004 U 0000 "Cannot FDISK with network loaded",CR,LF
 0005 U 0000 "No fixed disks present",CR,LF
 0006 U 0000 "Error reading fixed disk",CR,LF
@@ -1207,7 +1209,7 @@ FDISK    bccc 0123
 1114 U 0001 "Invalid partition table",0
 1115 U 0001 "Error loading operating system",0
 1116 U 0001 "Missing operating system",0
-XMAEM    d925 0006
+XMAEM    d991 0006
 0001 U 0000 "80386 XMA Emulator Version 1.10",CR,LF
 	"         (C) Copyright IBM Corporation 1987, 1988  All rights reserved",CR,LF,CR,LF,"$"
 0002 U 0000 "80386 XMA Emulator installed",CR,LF,"$"
@@ -1219,7 +1221,7 @@ XMAEM    d925 0006
 	"     Parameter value must specify 64 pages or greater",CR,LF,"$"
 0006 U 0000 "80386 XMA Emulator not installed",CR,LF
 	"     Insufficient memory for requested parameter value",CR,LF,"$"
-UPDATE   dbde 0013
+UPDATE   dc4a 0013
 0100 U 0000 CR,LF,"- Enter your keyboard code: "
 0110 U 0000 "US"                    ;DEFAULT KEYBOARD CODE
 0120 U 0000 CR,LF,"- Enter the drive which contains files to be",CR,LF
@@ -1238,12 +1240,12 @@ UPDATE   dbde 0013
 	"  Prepare system to be restarted",CR,LF
 	"  Press any key to restart system . . ."
 0220 U 0000 CR,LF,"Invalid keyboard code specified",CR,LF
-LOADFIX  e00e 0004
+LOADFIX  e07a 0004
 0001 U 0000 "LOADFIX program [arguments]",CR,LF,"$"
 0002 U 0000 "Program not found",CR,LF,"$"
 0003 U 0000 "Insufficient memory",CR,LF,"$"
 0004 U 0000 "Cannot load program",CR,LF,"$"
-MOVE     e0dc 0008
+MOVE     e148 0008
 0001 U 0000 "MOVE [/Y | /-Y] source[,source...] destination",CR,LF
 0002 U 0000 "Invalid parameter or path",CR,LF
 0003 U 0000 "Cannot move %1",CR,LF
@@ -1252,13 +1254,13 @@ MOVE     e0dc 0008
 0006 U 0000 "Original destination saved as %1",CR,LF
 0007 U 0000 "%1 -> %2",CR,LF
 0008 U 0000 "Both %1 and %2 would move to the same name",CR,LF
-DELTREE  e26a 0005
+DELTREE  e2d6 0005
 0001 U 0000 "DELTREE [/Y] path [path...]",CR,LF
 0002 U 0000 "Invalid parameter or path",CR,LF
 0003 U 0000 "Cannot delete %1",CR,LF
 0004 U 0000 "Delete %1 and all its contents (Y/N)? "
 0006 U 0000 "Deleting %1",CR,LF
-HELP     e35b 0006
+HELP     e3c7 0006
 0001 U 0000 "Usage: HELP [topic]",CR,LF,0
 0002 U 0000 "Unknown help topic. Type HELP for the topic list.",CR,LF,0
 0003 U 0000 "DOSHELP.HLP is missing or cannot be opened.",CR,LF,0

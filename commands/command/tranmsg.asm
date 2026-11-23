@@ -105,34 +105,22 @@ tree_stats_ptr dw 1080
         db parm_block_size,0
         dw offset trangroup:tree_count_arg,0
         db 1,Right_Align+Unsgn_Bin_DWord,10,9,blank
-        db parm_block_size,0
+        db parm_block_size,1
         dw offset trangroup:File_size_low,0
-        db 2,Right_Align+Unsgn_Bin_DWord,10,10,blank
-
-DirMes_Ptr	dw	1019				;AN000;message number
-		db	1				;AN000;number of subst
-		db	parm_block_size 		;AN000;size of sublist
-		db	0				;AN000;reserved
-		dw	OFFSET	TranGroup:Dir_num	;AN000;offset of arg
-		dw	0				;AN000;segment of arg
-		db	1				;AN000;first subst
-		db	Right_Align+Unsgn_Bin_Word	;AN000;binary to decimal
-		db	9				;AN000;maximum width
-		db	9				;AN000;minimum width
-		db	blank				;AN000;pad character
+        db 2,Right_Align+Unsgn_Bin_DWord,13,13,blank
 
 ;  "%1 bytes free",13,10
 ;
 BytMes_Ptr	dw	1020				;AN000;message number
 		db	1				;AN000;number of subst
 		db	parm_block_size 		;AN000;size of sublist
-		db	0				;AN000;reserved
+		db	1				; group decimal digits
 		dw	OFFSET	TranGroup:Bytes_Free	;AN000;offset of arg
 		dw	0				;AN000;segment of arg
 		db	1				;AN000;first subst
 		db	Right_Align+Unsgn_Bin_DWord	;AN000;long binary to decimal
-		db	10				;AN000;maximum width
-		db	10				;AN000;minimum width
+		db	31				;AN000;maximum width
+		db	31				;AN000;minimum width
 		db	blank				;AN000;pad character
 
 ;  "Invalid drive specification",13,10
@@ -545,12 +533,12 @@ File_Name_Ptr	dw	1064				;AN000;message number
 Disp_File_Size_Ptr dw	1065				;AN000;message number
 		db	1				;AN000;number of subst
 		db	parm_block_size 		;AN000;size of sublist
-		db	0				;AN000;reserved
+		db	1				; group decimal digits
 		dw	OFFSET	TranGroup:File_size_low ;AN000;offset of arg
 		dw	0				;AN000;segment of arg
 		db	1				;AN000;first subst
 		db	Right_Align+Unsgn_Bin_DWord	;AN000;long binary to decimal
-		db	10				;AN000;maximum width
+		db	13				;AN000;maximum width
 		db	10				;AN000;minimum width
 		db	blank				;AN000;pad character
 

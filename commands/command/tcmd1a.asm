@@ -38,7 +38,7 @@ DirNoPause equ 0400h
 	EXTRN	dirhead_ptr:word,dirhead_path:word
 	EXTRN	dirtim_hr_min:word	;AC000;
 	extrn tree_stats_ptr:word,tree_total_ptr:word
-	EXTRN	Dirmes_ptr:word
+
 	EXTRN	disp_file_size_ptr:word
 	EXTRN	Dmes_ptr:word
 	EXTRN	Extend_buf_ptr:word	;AN000;
@@ -72,7 +72,7 @@ total_size dw 2 dup (?)
 	EXTRN	COM:byte
 	EXTRN	Destisdir:byte
 	EXTRN	Desttail:word
-	EXTRN	dir_num:word
+
 	EXTRN	Dirbuf:byte
 	EXTRN	dirflag:byte		;AN015;
 	EXTRN	display_ioctl:word	;AC000;
@@ -272,6 +272,8 @@ dir_path_setup:
 dir_volume:
 	invoke	okvolarg
 dir_volume_done:			;AC000;
+	mov     tree_size,0
+        mov     tree_size+2,0
 	mov	[filecnt],0			;AC000; Keep track of how many files found
 	cmp	comsw,0 			;AC000; did an error occur?
 	jnz	doheader			;AC000; yes - don't bother to fix path
@@ -478,8 +480,6 @@ tree_has_entry:
         jnz tree_check_header
         mov ax,[dirbuf+8].dir_size_l
         mov dx,[dirbuf+8].dir_size_h
-        add tree_size,ax
-        adc tree_size+2,dx
         add total_size,ax
         adc total_size+2,dx
 tree_check_header:
@@ -504,6 +504,13 @@ tree_heading_end:
         pop di
         mov byte ptr [di],5ch
 entry_ready:
+        test [dirbuf+8].dir_attr,attr_directory
+        jnz counted_size
+        mov ax,[dirbuf+8].dir_size_l
+        mov dx,[dirbuf+8].dir_size_h
+        add tree_size,ax
+        adc tree_size+2,dx
+counted_size:
 	inc	[filecnt]			; Keep track of how many we find
 	mov	si,offset trangroup:dirbuf+8	; SI -> information returned by sys call
 	test	bits,DirBare
@@ -703,19 +710,16 @@ Trailer:
 	endif06:				;AN066;   displays
 
 mmessage:
-        test bits,DirTree
-        jz single_summary
         mov ax,filecnt
         mov tree_count_arg,ax
         mov tree_count_arg+2,0
         mov ax,tree_size
         mov dx,tree_size+2
+        test bits,DirTree
+        jz single_stats
         jmp tree_stats
-single_summary:
-	mov	dx,offset trangroup:Dirmes_ptr
-	mov	si,[filecnt]
-	mov	dir_num,si
-	call	std_printf
+single_stats:
+        call tree_stats
 dir_free_space:
 	mov	ah,Get_Drive_Freespace
 	mov	dl,byte ptr DS:[FCB]

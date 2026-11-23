@@ -74,7 +74,7 @@ TRANSPACE	SEGMENT PUBLIC BYTE
 	PUBLIC	DIRBUF
 	PUBLIC	DIRCHAR
 	PUBLIC	dirflag 		;AN015;
-	PUBLIC	Dir_Num
+
 	PUBLIC	display_ioctl		;AN000;
 	PUBLIC	display_mode		;AN000;
 	PUBLIC	display_width		;AN000;
@@ -306,7 +306,7 @@ string_ptr_2	dw	?
 ;AD061;string_ptr_2_sb dw      ?
 copy_Num	dw	?
 cpyflag 	db	?
-Dir_Num 	DW	?
+
 bytes_free	dw	?
 		dw	?
 major_ver_num	dw	?

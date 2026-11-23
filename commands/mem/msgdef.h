@@ -82,6 +82,8 @@
 #define ClassMemoryErrorMsg 80
 #define SystemLabelMsg 81
 #define BytesUnitMsg 82
+#define HmaActiveMsg 83
+#define HmaInactiveMsg 84
 
 #define ParseError1Msg			01
 #define ParseError10Msg 		10

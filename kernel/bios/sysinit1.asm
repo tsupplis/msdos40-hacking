@@ -986,6 +986,10 @@ MulTrk_Flag_Done:			    ;AN002;
 	POP	DS
 	INVOKE	ROUND
 	CALL    PlaceFcbCode
+	JNC     FcbPlacementDone
+	LES     DI,[DOSINFO]
+	MOV     ES:[DI.SYSI_HMA_ACTIVE],1
+FcbPlacementDone:
 	CMP	WORD PTR CS:XMS_ENTRY+2,0
 	JNE	TryBuffers
 	CALL	SetFiles

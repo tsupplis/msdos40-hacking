@@ -926,6 +926,10 @@ static void DisplaySummary(int exact)
     ReportLine("");
     SizeLine(UtilityText(LargestProgramMsg), conventional.largest);
     SizeLine(UtilityText(LargestUpperMsg), upper.largest);
+    InRegs.x.ax = 0x58fe;
+    intdos(&InRegs,&OutRegs);
+    if (!OutRegs.x.cflag)
+        ReportLine(UtilityText(OutRegs.x.ax ? HmaActiveMsg : HmaInactiveMsg));
 }
 
 /* Classify MCBs by resident module. Charge the paragraph containing each

@@ -110,21 +110,21 @@ Sublist_msg_DirMes      label dword             ;                               
 Sublist_msg_FileMes     label dword             ;                               ;an000;bgb
                                                                                 ;an000;bgb
         db              Sublist_Length          ;0bh                            ;an000;bgb;an049;bgb
-        db              Reserved                ;00h                            ;an000;bgb;an049;bgb
+        db              1                       ;group decimal digits                            ;an000;bgb;an049;bgb
         dw              rarg1                   ;offset of value                ;an000;bgb;an049;bgb
         dw              dg                      ;segment of value               ;an000;bgb;an049;bgb
         db              1                       ;the first parm                 ;an000;bgb;an049;bgb
         db              Right_Align+Unsgn_Bin_DWord ;type of data               ;an000;bgb;an049;bgb
-        db              10                      ;max length of data             ;an000;bgb;an049;bgb
-        db              10                      ;min length of data             ;an000;bgb;an049;bgb
+        db              13                      ;max length of data             ;an000;bgb;an049;bgb
+        db              13                      ;min length of data             ;an000;bgb;an049;bgb
         db              Blank                   ;pad character                  ;an000;bgb;an049;bgb
         db              Sublist_Length          ;0bh                            ;an000;bgb;an049;bgb
-        db              Reserved                ;00h                            ;an000;bgb;an049;bgb
+        db              1                       ;group decimal digits                            ;an000;bgb;an049;bgb
         dw              rarg3                   ;offset of value                ;an000;bgb;an049;bgb
         dw              dg                      ;segment of value               ;an000;bgb;an049;bgb
         db              2                       ;the second parm                ;an000;bgb;an049;bgb
         db              Left_Align+Unsgn_Bin_DWord;type of data                 ;an000;bgb;an049;bgb
-        db              10                      ;max length of data             ;an000;bgb;an049;bgb
+        db              13                      ;max length of data             ;an000;bgb;an049;bgb
         db              1                       ;min length of data             ;an000;bgb;an049;bgb
         db              Blank                   ;pad character                  ;an000;bgb;an049;bgb
 ;---------------------------                    ;                               ;an000;bgb;an049;bgb
@@ -137,13 +137,13 @@ Sublist_msg_Freebymes   label dword             ;                               
 Sublist_msg_alloc       label dword             ;                               ;an000;bgb;an049;bgb
                                                                                 ;an000;bgb;an049;bgb
         db              Sublist_Length          ;0bh                            ;an000;bgb;an049;bgb
-        db              Reserved                ;00h                            ;an000;bgb;an049;bgb
+        db              1                       ;group decimal digits                            ;an000;bgb;an049;bgb
         dw              dg:rarg1                ;offset  of data                ;an000;bgb;an049;bgb
         dw              dg                      ;segment of data                ;an000;bgb;an049;bgb
         db              1                       ;1st parm                       ;an000;bgb;an049;bgb
         db              Right_Align+Unsgn_Bin_DWord ;type of data               ;an000;bgb;an049;bgb
-        db              10                      ;max length of data             ;an000;bgb;an049;bgb
-        db              10                      ;min length of data             ;an000;bgb;an049;bgb
+        db              13                      ;max length of data             ;an000;bgb;an049;bgb
+        db              13                      ;min length of data             ;an000;bgb;an049;bgb
         db              Blank                   ;pad character                  ;an000;bgb;an049;bgb
 ;---------------------------                    ;                               ;an000;bgb;an049;bgb
 Sublist_msg_Extents     label   dword           ;                               ;an000;bgb

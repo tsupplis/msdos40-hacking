@@ -1675,48 +1675,24 @@ $MEN146:
 ;	$LEAVE	Z					     ;;AN000;; No,
 	JZ $MEN145
 $MLL149:
-IF	  NOT	  COMR
-	  CMP	  CX,$M_FIRST_THOU			     ;;AN000;; Are we at the first thousands mark
-;	  $IF	  E					     ;;AN000;; Yes,
-	  JNE $MIF150
-	    CMP     $M_SL.$M_S_PAD,$M_COMMA		     ;;AN000;; Is the pad character a comma?
-;	    $IF     E					     ;;AN000;; Yes,
-	    JNE $MIF151
-	      PUSH    WORD PTR $M_RT.$M_THOU_SEPARA	     ;;AN000;; Insert a thousand separator
-	      INC     CX				     ;;AN000;;
-;	    $ENDIF					     ;;AN000;;
-$MIF151:
-;	  $ELSE 					     ;;AN000;; No,
-	  JMP SHORT $MEN150
-$MIF150:
-	    CMP     CX,$M_SECOND_THOU			     ;;AN000;;	 Are we at the first thousands mark
-;	    $IF     E					     ;;AN000;;	      Yes,
-	    JNE $MIF154
-	      CMP     $M_SL.$M_S_PAD,$M_COMMA		     ;;AN000;; Is the pad character a comma?
-;	      $IF     E 				     ;;AN000;; Yes,
-	      JNE $MIF155
-		PUSH	WORD PTR $M_RT.$M_THOU_SEPARA	     ;;AN000;; Insert a thousand separator
-		INC	CX				     ;;AN000;;
-;	      $ENDIF					     ;;AN000;;
-$MIF155:
-;	    $ELSE					     ;;AN000;;	      No,
-	    JMP SHORT $MEN154
-$MIF154:
-	      CMP     CX,$M_THIRD_THOU			     ;;AN000;;	 Are we at the first thousands mark
-;	      $IF     E 				     ;;AN000;;		Yes,
-	      JNE $MIF158
-		CMP	$M_SL.$M_S_PAD,$M_COMMA 	     ;;AN000;; Is the pad character a comma?
-;		$IF	E				     ;;AN000;; Yes,
-		JNE $MIF159
-		  PUSH	  WORD PTR $M_RT.$M_THOU_SEPARA      ;;AN000;; Insert a thousand separator
-		  INC	  CX				     ;;AN000;;
-;		$ENDIF					     ;;AN000;;
-$MIF159:
-;	      $ENDIF					     ;;AN000;;
-$MIF158:
-;	    $ENDIF					     ;;AN000;;
-$MEN154:
-;	  $ENDIF					     ;;AN000;;
+IF NOT COMR
+          ; CX includes separators already pushed between digit groups.
+          CMP     CX,3
+          JE      $M_PUSH_COMMA
+          CMP     CX,7
+          JE      $M_PUSH_COMMA
+          CMP     CX,11
+          JNE     $MEN150
+$M_PUSH_COMMA:
+          CMP     $M_SL.$M_S_RESV,1     ; grouped decimal with normal field padding
+          MOV     DL,$M_COMMA
+          JE      $M_GROUP_DIGITS
+          CMP     $M_SL.$M_S_PAD,$M_COMMA
+          JNE     $MEN150
+          MOV     DL,$M_RT.$M_THOU_SEPARA
+$M_GROUP_DIGITS:
+          PUSH    DX
+          INC     CX
 $MEN150:
 ENDIF
 	  XCHG	  AX,BX 				     ;;AN000;;	 Setup to divide the reduced High Word

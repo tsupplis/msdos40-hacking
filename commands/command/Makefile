@@ -31,6 +31,8 @@ all: command.com
 $(MSGS): command.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 	$(BUILDMSG) 'C:\messages\$(COUNTRY)' command.skl > /dev/null
 
+tprintf.obj: $(ASMINC)/msgserv.asm
+
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 

@@ -26,6 +26,8 @@ all: chkdsk.com
 $(MSGS): chkdsk.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 	$(BUILDMSG) 'C:\messages\$(COUNTRY)' chkdsk.skl > /dev/null
 
+chkdisp.obj: $(ASMINC)/msgserv.asm
+
 %.obj: %.asm $(MSGS) $(wildcard *.inc)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
