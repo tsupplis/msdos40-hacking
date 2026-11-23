@@ -22,6 +22,7 @@ OBJS     = msbio1.obj mscon.obj msaux.obj mslpt.obj msclock.obj msdisk.obj \
 
 all: io.sys
 
+# NOSRVBLD emits all classes together, including the A20 gate in msbio.cl6.
 msbio.cl1: msbio.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 	$(NOSRVBLD) msbio.skl 'C:\messages\$(COUNTRY).msg' > /dev/null
 

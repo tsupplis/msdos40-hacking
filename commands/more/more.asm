@@ -151,7 +151,7 @@ ALOOP:
 	MOV	AH,READ
 	INT	21H
 	JNC	ReadOK
-	MOV	SI,OFFSET ReadMsg
+	MOV	AX,ReadErrorMsg
 	JMP	InputError
 ReadOK:
 	OR	AX,AX
@@ -313,24 +313,23 @@ CheckPath:
 	; If stdin was closed, preserve the newly opened handle 0 before reuse.
 	JMP	SHORT FilterInput
 OpenFailed:
-	MOV	SI,OFFSET OpenMsg
+	MOV	AX,OpenErrorMsg
 	JMP	SHORT InputError
 FilterInput:
 	XOR	BX,BX
 	MOV	AH,XDUP
 	INT	21H
 	JNC	InputReady
-	MOV	SI,OFFSET ReadMsg
+	MOV	AX,ReadErrorMsg
 	JMP	SHORT InputError
 BadUsage:
-	MOV	SI,OFFSET UsageMsg
+	MOV	AX,UsageErrorMsg
 InputError:
 	MOV	BX,STDERR
 	XOR	CX,CX
-	MOV	CL,[SI]
-	LEA	DX,[SI+1]
-	MOV	AH,WRITE
-	INT	21H
+	MOV	DH,UTILITY_MSG_CLASS
+	MOV	DL,NO_INPUT
+	CALL	SYSDISPMSG
 	MOV	AX,(EXIT SHL 8) OR 1
 	INT	21H
 InputReady:
@@ -349,9 +348,9 @@ NextSpace:
 SpacesDone:
 	RET
 
-UsageMsg DB OpenMsg-UsageMsg-1,"Usage: MORE [filename]",13,10
-OpenMsg DB ReadMsg-OpenMsg-1,"MORE: Cannot open input file",13,10
-ReadMsg DB MAXROW-ReadMsg-1,"MORE: Cannot read input",13,10
+UsageErrorMsg EQU 3
+OpenErrorMsg EQU 4
+ReadErrorMsg EQU 5
 
 MAXROW	DB	25
 MAXCOL	DB	80

@@ -12,4 +12,8 @@
 :use 1 COMMON1			     ; 'Incorrect DOS version'      ;AN000;
 :def 2 "-- More --"                                                 ;AN000;
 
+:def 3 "Usage: MORE [filename]",CR,LF
+:def 4 "MORE: Cannot open input file",CR,LF
+:def 5 "MORE: Cannot read input",CR,LF
+
 :end								    ;AN000;

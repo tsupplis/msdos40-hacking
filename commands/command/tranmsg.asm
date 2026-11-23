@@ -493,6 +493,12 @@ DevWMes_Ptr	dw	1061				;AN000;message number
 Inval_Path_Ptr	dw	1062				;AN000;message number
 		db	no_subst			;AN000;number of subst
 
+public replace_prompt
+replace_prompt dw 1079
+ db 1,parm_block_size,0
+ dw offset trangroup:string_ptr_2,0
+ db 1,Char_field_ASCIIZ,128,0,blank
+
 ;  unformatted string output
 ;
 arg_Buf_Ptr	dw	1063				;AN000;message number

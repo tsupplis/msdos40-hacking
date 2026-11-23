@@ -344,17 +344,7 @@ MATCH:
 IFEXISTS:
 ifexist_attr	    EQU     attr_hidden+attr_system
 
-moredelim:
-	lodsb					; move command line pointer over
-	invoke	delim				; pathname -- have to do it ourselves
-	jnz	moredelim			; 'cause parse_file_descriptor is dumb
-	mov	DX, OFFSET TRANGROUP:dirbuf
-	trap	set_dma
-	mov	BX, 2				; if(0) [|not](|1) exist[1|2] file(2|3)
-	add	BX, [if_not_count]
-	mov	AX, OFFSET TRANGROUP:arg.argv
-	invoke	argv_calc			; convert arg index to pointer
-	mov	DX, [BX].argpointer		; get pointer to supposed filename
+	call	if_path_operand
 	mov	CX, ifexist_attr		; filetypes to search for
 	trap	Find_First			; request first match, if any
 	jc	if_ex_c 			; carry is how to determine error
@@ -434,6 +424,91 @@ ASSUME	DS:TRANGROUP
 	DEC	AL
 	JMP	SHORT IFRET
 
+
+PUBLIC IFDIREXISTS
+IFDIREXISTS:
+	call	if_path_operand
+	push	si				; keep start of conditional command
+	mov	si,dx
+	; DOS rejects a final separator on a named directory. Strip it only
+	; after a component, preserving roots and DBCS trail bytes. The
+	; argument vector is scratch; IFTRUE uses the original command tail.
+	mov	bx,si
+dir_path_char:
+	lodsb
+	or	al,al
+	jz	dir_path_ready
+	invoke	testkanj
+	jz	dir_single_byte
+	inc	si
+	jmp	short dir_path_char
+dir_single_byte:
+	cmp	al,'\'
+	jne	dir_path_char
+	cmp	byte ptr [si],0
+	jne	dir_path_char
+	lea	di,[si-1]
+	cmp	di,bx
+	je	dir_path_ready
+	cmp	byte ptr [di-1],':'
+	je	dir_path_ready
+	mov	byte ptr [di],0
+dir_path_ready:
+	mov	si,bx
+	mov	di,offset trangroup:combuf
+	trap	xNameTrans			; resolve relative paths, dot and drive roots
+	pop	si
+	jc	dir_absent
+	mov	dx,offset trangroup:combuf
+	mov	bx,dx
+	cmp	word ptr [bx+1],'\:'
+	jne	dir_search
+	cmp	byte ptr [bx+3],0
+	jne	dir_search
+	; A volume root has no directory entry. Verify the drive is accessible.
+	mov	dl,[bx]
+	sub	dl,'A'-1
+	trap	Get_Drive_Freespace
+	cmp	ax,-1
+	je	dir_absent
+	jmp	short dir_present
+
+dir_search:
+	mov	cx,attr_directory+attr_hidden+attr_system
+	trap	Find_First
+dir_match:
+	jc	dir_absent
+	test	byte ptr [dirbuf+find_buf_attr],attr_directory
+	jnz	dir_present
+	trap	Find_Next
+	jmp	short dir_match
+dir_absent:
+	mov	al,-1
+	jmp	ifret
+dir_present:
+	xor	al,al
+	jmp	ifret
+
+; Return DS:DX pointing to the pathname and SI past its delimiter.
+if_path_operand proc near
+moredelim:
+	lodsb					; move command line pointer over
+	cmp	al,0dh
+	je	if_path_error
+	invoke	delim				; pathname -- have to do it ourselves
+	jnz	moredelim			; 'cause parse_file_descriptor is dumb
+	mov	DX, OFFSET TRANGROUP:dirbuf
+	trap	set_dma
+	mov	BX, 2				; if(0) [|not](|1) exist[1|2] file(2|3)
+	add	BX, [if_not_count]
+	mov	AX, OFFSET TRANGROUP:arg.argv
+	invoke	argv_calc			; convert arg index to pointer
+	mov	DX, [BX].argpointer		; get pointer to supposed filename
+	ret
+if_path_error:
+	pop	ax				; discard return address before syntax error
+	jmp	iferror
+if_path_operand endp
 
 	break	<Shift - advance arguments>
 assume	ds:trangroup,es:trangroup

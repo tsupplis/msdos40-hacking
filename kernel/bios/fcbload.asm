@@ -297,7 +297,7 @@ GateStop:
         STI
         HLT
         JMP     GateStop
-GateMsg DB      13,10,'DOS: A20 error. Restart required.',13,10,0
+        INCLUDE msbio.cl6
 GateXms DD      0
 GateBody DW     0
 GateTable LABEL WORD

@@ -23,8 +23,7 @@ TRANDATA	SEGMENT PUBLIC BYTE	;AC000;
 	EXTRN	LOSTERR_ptr:word
 	EXTRN	NOSPACE_ptr:word
 	EXTRN	OVERWR_ptr:word
-replace_prompt db 'Overwrite ', '$'
-replace_choice db ' (Y/N)? $'
+	extrn replace_prompt:word
 TRANDATA ENDS
 
 TRANSPACE	SEGMENT PUBLIC BYTE	;AC000;
@@ -69,16 +68,10 @@ confirm_replace proc near
 	push	dx
 	push	si
 	push	di
-	mov	dx,offset trangroup:replace_prompt
-	mov	ah,9
-	int	int_command
 	mov	string_ptr_2,si
-	mov	dx,offset trangroup:string_buf_ptr
-	invoke	std_printf
 ask_replace:
-	mov	dx,offset trangroup:replace_choice
-	mov	ah,9
-	int	int_command
+	mov	dx,offset trangroup:replace_prompt
+	invoke	std_printf
 	xor	di,di
 read_response:
 	xor	bx,bx
@@ -96,15 +89,18 @@ read_response:
 	je	response_done
 	or	di,di
 	jnz	read_response
-	or	al,20h
 	xor	ah,ah
 	mov	di,ax
 	jmp	read_response
 response_done:
 	invoke	crlf2
-	cmp	di,'y'
+	mov	dx,di
+	mov	ax,6523h		; DOS national yes/no response
+	int	int_command
+	jc	decline_replace
+	cmp	ax,1
 	je	allow_replace
-	cmp	di,'n'
+	or	ax,ax
 	jne	ask_replace
 decline_replace:
  stc

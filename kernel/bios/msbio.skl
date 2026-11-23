@@ -135,4 +135,7 @@
 			DB	"Internal stack overflow",0DH,0AH
 			DB	"System halted",0DH,0AH,"$"
 ;
+:class 6
+:def 24 GateMsg DB 13,10,"DOS: A20 error. Restart required.",13,10,0
+
 :END

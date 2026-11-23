@@ -773,6 +773,19 @@ void DisplayEMSDetail()                                                         
                                                                                                                                  /* ;an000; */
 /* One line is reserved for the prompt. DOS messages used by the reports
  * each occupy one line; errors and redirected reports are never paged. */
+static char far *UtilityText(unsigned number)
+{
+    union REGS in, out;
+    struct SREGS segments;
+    char far *text;
+    in.x.ax = number;
+    in.h.dh = Utility_Msg_Class;
+    sysgetmsg(&in, &segments, &out);
+    FP_SEG(text) = segments.ds;
+    FP_OFF(text) = out.x.si;
+    return text;
+}
+
 static void StartPager(void)
 {
     union REGS r;
@@ -793,7 +806,7 @@ static void NextReportLine(void)
     char key;
     if (!Paging) return;
     if (PageLines == PageHeight) {
-        printf("Press any key to continue...");
+        printf("%Fs", UtilityText(PagerMsg));
         fflush(stdout);
         r.x.ax = 0x4400;
         r.x.bx = 0;
@@ -822,10 +835,10 @@ static void ReportMessage(void)
     sysdispmsg(&InRegs,&OutRegs);
 }
 
-static void ReportLine(char *line)
+static void ReportLine(char far *line)
 {
     NextReportLine();
-    printf("%s\n", line);
+    printf("%Fs\n", line);
 }
 
 /* Emit numeric fields ourselves so both summary modes fit an 80-column screen. */
@@ -846,18 +859,16 @@ static char *Number(char *field, unsigned long bytes, int exact)
 }
 
 /* The title, rules and numeric cells share the same column boundaries. */
-static void SummaryLine(char *name, char *total, char *used, char *avail)
+static void SummaryLine(char far *name, char far *total, char far *used, char far *avail)
 {
-    char line[80];
-    sprintf(line, "%-18s %13s %13s %13s", name, total, used, avail);
-    ReportLine(line);
+    NextReportLine();
+    printf("%-18Fs %13Fs %13Fs %13Fs\n", name, total, used, avail);
 }
 
-static void ModuleLine(char *name, char *total, char *low, char *high)
+static void ModuleLine(char far *name, char far *total, char far *low, char far *high)
 {
-    char line[80];
-    sprintf(line, "%-8s   %17s   %17s   %17s", name, total, low, high);
-    ReportLine(line);
+    NextReportLine();
+    printf("%-8Fs   %17Fs   %17Fs   %17Fs\n", name, total, low, high);
 }
 
 static char *ModuleSize(char *field, unsigned long bytes)
@@ -867,19 +878,19 @@ static char *ModuleSize(char *field, unsigned long bytes)
     return field;
 }
 
-static void PoolRow(char *name, unsigned long total, unsigned long avail, int exact)
+static void PoolRow(char far *name, unsigned long total, unsigned long avail, int exact)
 {
     char a[16], b[16], c[16];
     SummaryLine(name, Number(a,total,exact), Number(b,total-avail,exact),
                 Number(c,avail,exact));
 }
 
-static void SizeLine(char *name, unsigned long bytes)
+static void SizeLine(char far *name, unsigned long bytes)
 {
-    char line[80], k[16], b[16];
-    sprintf(line, "%-34s %10s (%s bytes)", name, Number(k,bytes,0),
-            Number(b,bytes,1));
-    ReportLine(line);
+    char k[16], b[16];
+    NextReportLine();
+    printf("%-34Fs %10s (%s %Fs)\n", name, Number(k,bytes,0),
+            Number(b,bytes,1), UtilityText(BytesUnitMsg));
 }
 
 static void DisplaySummary(int exact)
@@ -889,36 +900,39 @@ static void DisplaySummary(int exact)
     unsigned long reserved = 1048576UL - below;
     char *rule = "-------------";
     ReportLine("");
-    SummaryLine("Memory Type", "Total", "Used", "Free");
+    SummaryLine(UtilityText(MemoryTypeMsg), UtilityText(TotalMsg), UtilityText(UsedMsg), UtilityText(FreeLabelMsg));
     SummaryLine("------------------", rule, rule, rule);
-    PoolRow("Conventional", conventional.total, conventional.available, exact);
-    PoolRow("Upper", upper.total, upper.available, exact);
-    PoolRow("Reserved", reserved, 0UL, exact);
-    PoolRow(hasXms ? "Extended (XMS)" : "Extended", extended.total,
+    PoolRow(UtilityText(ConventionalMsg), conventional.total, conventional.available, exact);
+    PoolRow(UtilityText(UpperMsg), upper.total, upper.available, exact);
+    PoolRow(UtilityText(ReservedMsg), reserved, 0UL, exact);
+    PoolRow(hasXms ? UtilityText(ExtendedXmsMsg) : UtilityText(ExtendedMsg), extended.total,
             extended.available, exact);
     SummaryLine("------------------", rule, rule, rule);
-    PoolRow("Total memory", 1048576UL + extended.total,
+    PoolRow(UtilityText(TotalMemoryLabelMsg), 1048576UL + extended.total,
             freeBelow + extended.available, exact);
     ReportLine("");
-    PoolRow("Total under 1 MB", below, freeBelow, exact);
+    PoolRow(UtilityText(Below1MBMsg), below, freeBelow, exact);
     if (expanded.total) {
         ReportLine("");
-        SizeLine("Total Expanded (EMS)", expanded.total);
-        SizeLine("Free Expanded (EMS)", expanded.available);
+        SizeLine(UtilityText(TotalEmsMsg), expanded.total);
+        SizeLine(UtilityText(FreeEmsMsg), expanded.available);
     }
     if (hasXms) {
         ReportLine("");
-        SizeLine("Total Extended (XMS)", extended.total);
-        SizeLine("Free Extended (XMS)", extended.available);
-        SizeLine("Largest free XMS block", extended.largest);
+        SizeLine(UtilityText(TotalXmsMsg), extended.total);
+        SizeLine(UtilityText(FreeXmsMsg), extended.available);
+        SizeLine(UtilityText(LargestXmsMsg), extended.largest);
     }
     ReportLine("");
-    SizeLine("Largest executable program size", conventional.largest);
-    SizeLine("Largest free upper memory block", upper.largest);
+    SizeLine(UtilityText(LargestProgramMsg), conventional.largest);
+    SizeLine(UtilityText(LargestUpperMsg), upper.largest);
 }
 
 /* Classify MCBs by resident module. Charge the paragraph containing each
  * header to its block. MEM's own allocations become free when it exits. */
+/* ModuleName accepts printable names, so these two keys cannot collide. */
+#define SYSTEM_ROW_KEY "\001"
+#define FREE_ROW_KEY   "\002"
 struct module_usage {
     struct module_usage *next;
     char name[9];
@@ -972,7 +986,7 @@ static int ClassifySystem(struct module_usage **rows, unsigned segment,
             }
         }
     }
-    return AddUsage(rows, "SYSTEM", bytes, 0);
+    return AddUsage(rows, SYSTEM_ROW_KEY, bytes, 0);
 }
 
 static void DisplayClassification(void)
@@ -1006,7 +1020,7 @@ static void DisplayClassification(void)
     FP_SEG(head) = SegRegs.es;
     FP_OFF(head) = OutRegs.x.bx - 2;
     segment = *head;
-    ok = AddUsage(&rows, "SYSTEM", segment * 16UL, 0);
+    ok = AddUsage(&rows, SYSTEM_ROW_KEY, segment * 16UL, 0);
     FP_OFF(arena) = FP_OFF(owner) = 0;
     while (ok) {
         FP_SEG(arena) = segment;
@@ -1017,11 +1031,11 @@ static void DisplayClassification(void)
         if (arena->Owner == 8 && next > limit) {
             /* SYSINIT links disjoint UMBs with inaccessible gap MCBs. */
             if (segment < limit)
-                ok = AddUsage(&rows, "SYSTEM", (limit - segment) * 16UL, 0);
+                ok = AddUsage(&rows, SYSTEM_ROW_KEY, (limit - segment) * 16UL, 0);
         } else if (arena->Owner == 8) {
             ok = ClassifySystem(&rows, segment, next, bytes);
         } else {
-            if (!arena->Owner || arena->Owner == psp) strcpy(name, "Free");
+            if (!arena->Owner || arena->Owner == psp) strcpy(name, FREE_ROW_KEY);
             else {
                 FP_SEG(owner) = arena->Owner - 1;
                 ModuleName(name, owner);
@@ -1040,19 +1054,23 @@ static void DisplayClassification(void)
     }
     /* Boot-time upper allocations are removed from the allocatable chain. */
     if (ok && upperTotal > accounted)
-        ok = AddUsage(&rows, "SYSTEM", upperTotal - accounted, 1);
+        ok = AddUsage(&rows, SYSTEM_ROW_KEY, upperTotal - accounted, 1);
     if (ok) {
-        ReportLine("Modules using memory below 1 MB");
+        ReportLine(UtilityText(ModuleTitleMsg));
         ReportLine("");
-        ModuleLine("Name", "Total", "Conventional", "Upper Memory");
+        ModuleLine(UtilityText(NameMsg), UtilityText(TotalMsg),
+                   UtilityText(ConventionalMsg), UtilityText(UpperMemoryMsg));
         ModuleLine("--------", "-----------------", "-----------------", "-----------------");
-    } else ReportLine("Insufficient memory for classification");
+    } else ReportLine(UtilityText(ClassMemoryErrorMsg));
     while (rows) {
         char all[24], low[24], high[24];
         row = rows;
         if (ok) {
             unsigned long total = row->conventional + row->upper;
-            ModuleLine(row->name, ModuleSize(all,total), ModuleSize(low,row->conventional),
+            char far *label = row->name;
+            if (row->name[0] == 1 /* SYSTEM_ROW_KEY */) label = UtilityText(SystemLabelMsg);
+            if (row->name[0] == 2 /* FREE_ROW_KEY */) label = UtilityText(FreeLabelMsg);
+            ModuleLine(label, ModuleSize(all,total), ModuleSize(low,row->conventional),
                        ModuleSize(high,row->upper));
         }
         rows = row->next;
@@ -1371,13 +1389,7 @@ struct ARENA far *Header;                                                       
 
                 }
 
-        InRegs.x.ax = Message_Number;                                /* ;an000; */
-        InRegs.h.dh = Utility_Msg_Class;                             /* ;an000; */
-        sysgetmsg(&InRegs,&SegRegs,&OutRegs);                        /* ;an000; */
-
-        FP_OFF(Message_Buf)    = OutRegs.x.si;                                                      /* ;an000; */
-        FP_SEG(Message_Buf)    = SegRegs.ds;                                                        /* ;an000; */
-
+        Message_Buf = UtilityText(Message_Number);
         i = 0;
         while ( *Message_Buf != (char) '\x0' )
                 TypeText[i++] = *Message_Buf++;

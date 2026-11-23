@@ -34,6 +34,8 @@ $(MSGS): command.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
+tdata.obj: tranmsg.asm
+
 command.com: $(OBJS) command.lnk
 	$(LINK) @command.lnk
 	$(EXE2BIN) command.exe command.com

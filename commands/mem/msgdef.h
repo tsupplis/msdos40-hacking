@@ -57,6 +57,32 @@
 #define UmbTotalMsg 56
 #define XmsTotalMsg 57
 
+#define PagerMsg 58
+#define MemoryTypeMsg 59
+#define TotalMsg 60
+#define UsedMsg 61
+#define FreeLabelMsg 62
+#define ConventionalMsg 63
+#define UpperMsg 64
+#define ReservedMsg 65
+#define ExtendedXmsMsg 66
+#define ExtendedMsg 67
+#define TotalMemoryLabelMsg 68
+#define Below1MBMsg 69
+#define TotalEmsMsg 70
+#define FreeEmsMsg 71
+#define TotalXmsMsg 72
+#define FreeXmsMsg 73
+#define LargestXmsMsg 74
+#define LargestProgramMsg 75
+#define LargestUpperMsg 76
+#define ModuleTitleMsg 77
+#define NameMsg 78
+#define UpperMemoryMsg 79
+#define ClassMemoryErrorMsg 80
+#define SystemLabelMsg 81
+#define BytesUnitMsg 82
+
 #define ParseError1Msg			01
 #define ParseError10Msg 		10
 

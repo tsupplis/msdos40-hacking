@@ -57,4 +57,30 @@
 :def 56 "%1 Kbytes total UMB memory",CR,LF
 :def 57 "%1 Kbytes total XMS memory",CR,LF
 
+:def 58 "Press any key to continue...",0
+:def 59 "Memory Type",0
+:def 60 "Total",0
+:def 61 "Used",0
+:def 62 "Free",0
+:def 63 "Conventional",0
+:def 64 "Upper",0
+:def 65 "Reserved",0
+:def 66 "Extended (XMS)",0
+:def 67 "Extended",0
+:def 68 "Total memory",0
+:def 69 "Total under 1 MB",0
+:def 70 "Total Expanded (EMS)",0
+:def 71 "Free Expanded (EMS)",0
+:def 72 "Total Extended (XMS)",0
+:def 73 "Free Extended (XMS)",0
+:def 74 "Largest free XMS block",0
+:def 75 "Largest executable program size",0
+:def 76 "Largest free upper memory block",0
+:def 77 "Modules using memory below 1 MB",0
+:def 78 "Name",0
+:def 79 "Upper Memory",0
+:def 80 "Insufficient memory for classification",0
+:def 81 "SYSTEM",0
+:def 82 "bytes",0
+
 :end

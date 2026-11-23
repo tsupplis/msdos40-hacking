@@ -56,20 +56,81 @@ Applies to `command.com` and DOS buffered console input. Cooked handle reads sup
 
 ## Command enhancements
 
-| Command | Enhancement | Missing MS-DOS 5.0 features |
-|---|---|---|
-| `dir` | `/B` prints bare names, one per line. `/L` displays ASCII letters in filenames in lowercase. `/A[:]` filters by D, R, H, S, or A. `/O[:]` orders by N (name), E (extension), S (size), D (date), or G (directories first). Prefix a letter with `-` to exclude an attribute or reverse a key. `/P` pages console output. `DIRCMD` presets switches, and `/-` disables a preset switch on the command line. | `/S` recursion. |
-| `copy` | `/Y` allows overwriting. `/-Y` prompts before overwriting. `COPYCMD` presets either switch. The last explicit overwrite switch wins. | |
-| `xcopy` | `XCOPYCMD` presets XCOPY switches. Explicit switches take precedence. For example, `SET XCOPYCMD=/S /E` includes empty subdirectories and `XCOPY source dest /-S /-E` copies only the top level. | |
-| `del` (`erase`) | `/Q` skips the bulk-delete confirmation. An explicit `/P` still prompts for each file. | |
-| `comp` | `/D` reports decimal bytes, `/A` shows characters, `/L` reports line numbers, `/N=n` limits comparison to the first *n* lines, and `/C` ignores ASCII letter case. | |
-| `ver` | Displays the project version as `4.01N`. | |
-| `mem` | Show total, used, and free memory by pool and the largest usable blocks. `/C` (`/CLASSIFY`) groups modules by memory usage. Combine `/P` with `/C` or `/D` (`/DEBUG`) to page console output. Alone, `/P` pages the summary. | |
-| `more [filename]` | Page a file by name. | |
-| `loadhigh` (`lh`) | Run an external program in upper memory when it fits. | |
-| `vi.exe` | Screen editor on the full floppy. | |
-| `mbasic.com` | BASIC interpreter on the full floppy. | |
-| `device=umbs.sys start-end [start-end ...]` | Supply unused, mapped RAM as UMBs. Use four-digit hex segments with an exclusive end. Each range is granted whole. | |
+| Command | MS-DOS 5.0 comparison | Enhancement | Missing MS-DOS 5.0 features |
+|---|---|---|---|
+| `append` | No known gaps |  |  |
+| `assign` | No known gaps |  |  |
+| `attrib` | Gaps identified |  | `+H` / `-H` set or clear hidden, and `+S` / `-S` set or clear system. File selection must include files that already have these attributes. |
+| `backup` | Pending |  |  |
+| `break` | Pending |  |  |
+| `call` | Pending |  |  |
+| `cd` (`chdir`) | Pending |  |  |
+| `chcp` | Pending |  |  |
+| `chkdsk` | Pending |  |  |
+| `cls` | Pending |  |  |
+| `command.com` | Pending |  |  |
+| `comp` | No known gaps | `/D` reports decimal bytes, `/A` shows characters, `/L` reports line numbers, `/N=n` limits comparison to the first *n* lines, and `/C` ignores ASCII letter case. |  |
+| `copy` | No known gaps | `/Y` allows overwriting. `/-Y` prompts before overwriting. `COPYCMD` presets either switch. The last explicit overwrite switch wins. |  |
+| `ctty` | Pending |  |  |
+| `date` | Pending |  |  |
+| `debug` | Pending |  |  |
+| `del` (`erase`) | No known gaps | `/Q` skips the bulk-delete confirmation. An explicit `/P` still prompts for each file. |  |
+| `dir` | Gaps identified | `/B` prints bare names, one per line. `/L` displays ASCII letters in filenames in lowercase. `/A[:]` filters by D, R, H, S, or A. `/O[:]` orders by N (name), E (extension), S (size), D (date), or G (directories first). Prefix a letter with `-` to exclude an attribute or reverse a key. `/P` pages console output. `DIRCMD` presets switches, and `/-` disables a preset switch on the command line. | `/S` recursion. |
+| `diskcomp` | No known gaps |  |  |
+| `diskcopy` | Gaps identified |  | `/V` verifies the destination copy. |
+| `echo` | Pending |  |  |
+| `edlin` | No known gaps |  |  |
+| `exe2bin` | No known gaps |  |  |
+| `exit` | Pending |  |  |
+| `fastopen` | No known gaps |  |  |
+| `fc` | No known gaps |  |  |
+| `fdisk` | Gaps identified |  | `/STATUS` displays a partition summary. The undocumented `/MBR` rewrites master boot code while retaining an existing valid partition table. |
+| `filesys` | Pending |  |  |
+| `find` | Pending |  |  |
+| `for` | Pending |  |  |
+| `format` | Gaps identified |  | `/Q` quick format, recoverable formatting and its `/U` unconditional option, and the 2.88 MB size for `/F`. |
+| `goto` | Pending |  |  |
+| `graftabl` | Pending |  |  |
+| `graphics` | Pending |  |  |
+| `if` | No known gaps | `IF [NOT] DIREXIST path command` tests for a directory. Wildcards match directories only. |  |
+| `ifsfunc` | Pending |  |  |
+| `join` | No known gaps |  |  |
+| `keyb` | Pending |  |  |
+| `label` | No known gaps |  |  |
+| `loadhigh` (`lh`) | No known gaps | Run an external program in upper memory when it fits. |  |
+| `mbasic.com` | Project extra | BASIC interpreter on the full floppy. |  |
+| `md` (`mkdir`) | Pending |  |  |
+| `mem` | Gaps identified | Show total, used, and free memory by pool and the largest usable blocks. `/C` (`/CLASSIFY`) groups modules by memory usage. Combine `/P` with `/C` or `/D` (`/DEBUG`) to page console output. Alone, `/P` pages the summary. | `/PROGRAM` lists loaded programs. |
+| `mode` | Pending |  |  |
+| `more [filename]` | No known gaps | Page a file by name. |  |
+| `nlsfunc` | Pending |  |  |
+| `path` | Pending |  |  |
+| `pause` | Pending |  |  |
+| `print` | Pending |  |  |
+| `prompt` | Pending |  |  |
+| `rd` (`rmdir`) | Pending |  |  |
+| `recover` | Pending |  |  |
+| `rem` | Pending |  |  |
+| `ren` (`rename`) | Pending |  |  |
+| `replace` | No known gaps |  |  |
+| `restore` | Pending |  |  |
+| `select` | Pending |  |  |
+| `set` | Pending |  |  |
+| `share` | Pending |  |  |
+| `shift` | Pending |  |  |
+| `sort` | No known gaps |  |  |
+| `subst` | No known gaps |  |  |
+| `sys` | Gaps identified |  | Transfer `COMMAND.COM`, recognize both IBM and Microsoft system-file names when replacing an installation, and allow the first three contiguous sectors of `IO.SYS` to reside later in the data area. The placement change also requires boot-loader support. |
+| `time` | Pending |  |  |
+| `tree` | No known gaps |  |  |
+| `truename` | Pending |  |  |
+| `type` | Pending |  |  |
+| `ver` | No known gaps | Displays the project version as `4.01N`. |  |
+| `verify` | Pending |  |  |
+| `vi.exe` | Project extra | Screen editor on the full floppy. |  |
+| `vol` | Pending |  |  |
+| `xcopy` | No known gaps | `XCOPYCMD` presets XCOPY switches. Explicit switches take precedence. For example, `SET XCOPYCMD=/S /E` includes empty subdirectories and `XCOPY source dest /-S /-E` copies only the top level. |  |
+| `device=umbs.sys start-end [start-end ...]` | Project extra | Supply unused, mapped RAM as UMBs. Use four-digit hex segments with an exclusive end. Each range is granted whole. |  |
 
 ## Configuration enhancements
 
