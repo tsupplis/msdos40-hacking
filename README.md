@@ -73,7 +73,7 @@ Enter a four-digit year from 1980 through 2099 in `DATE`, `XCOPY /D`, `BACKUP /D
 
 `DIR` displays four-digit years by default. Use `DIR /2Y` for the original column layout, or `SET DIRCMD=/2Y` to make it the default. `DIR /-2Y` overrides that preset. DOS date APIs and FAT timestamps retain their existing formats.
 
-On a PCE 5170 with the AMI AT BIOS, DOS read a cold-boot RTC date of 2000-01-02 correctly. The DOS date API and FAT timestamps advanced correctly across New Year 2000 and both sides of leap day. At the New Year rollover the raw BIOS date service (`INT 1Ah/AH=04h`) returned **1900-01-01**. Software reading that BIOS service directly sees the wrong century on this configuration. Run `test/check_y2k` for the command tests and `test/check_rtc` for the independent BIOS, DOS and FAT readings. The RTC check reports the BIOS mismatch as a failure.
+On the tested PCE 5170, DOS read the cold-boot date of 2000-01-02 correctly. The DOS date API and FAT timestamps advanced correctly across New Year 2000, February 29, and March 1.
 
 ## Command enhancements
 
@@ -95,7 +95,7 @@ The survey compares the commands shipped here with the command syntax and option
 | `format` | Gaps identified | `/Q` quick format. | *won't implement — Recoverable formatting, `/U`, and `/F` for 2.88 MB media.* |
 | `help [command]` | Project extra | With no argument, HELP pages the topic index on the console. Specify a topic for a one-screen reference. |  |
 | `if` | No known gaps | `IF [NOT] DIREXIST path command` tests for a directory. Wildcards match directories only. |  |
-| `keyb` | Gaps identified |  | `/E` explicitly selects an enhanced keyboard. |
+| `keyb` | No known gaps | `/E` selects enhanced keyboard handling at installation on PC/XT and AT systems. |  |
 | `deltree` | Project extra | Delete files and directory trees, including protected files. Use `/Y` to skip confirmation. |  |
 | `loadfix` | No known gaps | Run a DOS executable above the first 64 KiB and return its exit code. |  |
 | `loadhigh` (`lh`) | No known gaps | Run an external program in upper memory when it fits. |  |

@@ -246,6 +246,7 @@ P_KB_ID 	DB	08		       ;;
 ;;  Program Code
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 				       ;;
+EXTRN FORCE_ENHANCED:BYTE
 FIND_KEYB_TYPE	      PROC  NEAR       ;;
 				       ;;
 	PUSH	ES		       ;;
@@ -280,6 +281,8 @@ TEST_PC_XT_2:			       ;;
 	CMP   AL,ROMXT_ENHAN	       ;; IF FB IT IS ALSO AN XT
 	JNE   TEST_PC_AT_2	       ;; IF not then check for next type
 ITS_AN_XT_2:			       ;;
+	CMP   FORCE_ENHANCED,0
+	JNE   ForceEnhancedType
 	TEST  ES:KB_FLAG_3,KBX	       ;; IS THE ENHANCED KEYBOARD INSTALLED?
 	JZ    ITS_AN_XT_3	       ;;
 	JMP   FIND_KEYB_END	       ;; Yes, exit
@@ -288,10 +291,16 @@ ITS_AN_XT_3:			       ;;
 	MOV   HW_TYPE,XT_KB	       ;; NO, normal XT keyboard
 	JMP   FIND_KEYB_END	       ;;
 				       ;;
+ForceEnhancedType:
+        OR    ES:KB_FLAG_3,KBX         ; Keep BIOS and the G keyboard table in sync.
+        JMP   FIND_KEYB_END
+
 TEST_PC_AT_2:			       ;;
 				       ;; Is the hardware an AT ?
 	CMP   AL,ROMAT		       ;;
 	JNE   TEST_P12_2	       ;; IF not then check for next type
+	CMP   FORCE_ENHANCED,0
+	JNE   ForceEnhancedType
 				       ;;
 				       ;; CHECK FOR ENHANCED KEYBOARD...
 	OR    ES:KB_FLAG_2,08H	       ;; FROM COMNBODY.ASM - DON'T KNOW WHY

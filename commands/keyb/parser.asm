@@ -126,7 +126,7 @@ INCLUDE     PARSE.ASM	    ; Parsing code					    ;AN000
 ; PARM control blocks for KEYB
 ; Parsing command line as follows:
 ;
-; KEYB [lang],[cp],[[d:][path]KEYBOARD.SYS][/ID:id]
+; KEYB [lang],[cp],[[d:][path]KEYBOARD.SYS][/ID:id] [/E]
 ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -139,7 +139,8 @@ PARMSX	       LABEL BYTE		   ;AN000;					   ;AN000
 	       DW	LANG		   ;AN000;; pointer to control block		   ;AN000
 	       DW	CP		   ;AN000;; pointer to control block		   ;AN000
 	       DW	FILE_NAME	   ;AN000;; pointer to control block		   ;AN000
-	       DB	1		   ;AN000;; 1 switch				   ;AN000
+	       DB	2		   ;AN000;; /ID and /E				   ;AN000
+	       DW	E_SWITCH
 	       DW	ID_VALUE	   ;AN000;; pointer to control block		   ;AN000
 	       DB	0		   ;AN000;; no keywords 			   ;AN000
 
@@ -171,6 +172,13 @@ ID_VALUE       LABEL WORD		   ;AN000;					   ;AN000
 	       DW	NOVALS		   ;AN000;; no value checking done		   ;AN000
 	       DB	1		   ;AN000;; 1 switch synonym			   ;AN000
 	       DB	"/ID",0            ;AN000;; ID switch                              ;AN000
+
+E_SWITCH       LABEL WORD
+               DW       0,0,RESULT_BUF,NOVALS
+               DB       1
+E_NAME         DB       "/E",0
+               PUBLIC   FORCE_ENHANCED
+FORCE_ENHANCED DB       0               ; Installation-time override.
 
 NOVALS	       LABEL BYTE		   ;AN000;					   ;AN000
 	       DB	0		   ;AN000;; no value checking done		   ;AN000
@@ -244,6 +252,17 @@ PARSE_PARAMETERS       PROC	NEAR						    ;AN000
 
 ;***CNS
 	.ELSE					 ;AN000;;				   ;AN000
+          CMP    RESULT_SYN_PTR,OFFSET E_NAME
+          JNE    CheckOtherParm
+          OR     AX,AX
+          JNZ    BadEnhancedParm
+          MOV    FORCE_ENHANCED,1
+          JMP    NextKeybParm
+BadEnhancedParm:
+          MOV    [BP].RET_CODE_3,INVALID_SYNTAX
+          MOV    ERR_PART,INVALID_SWITCH
+          RET
+CheckOtherParm:
 	  .IF <RESULT_SYN_PTR NE 0>		 ;AN000;; was the switch found? 	   ;AN000
 	    MOV    AX,WORD PTR RESULT_VAL+2	 ;AN000;; is it valid?			   ;AN000
 	    OR	   AX,AX			 ;AN000;;				   ;AN000
@@ -319,6 +338,7 @@ PARSE_PARAMETERS       PROC	NEAR						    ;AN000
 	      MOV    LOOP_COUNT,ERROR_COND	 ;AN000;; set error flag to exit parse.    ;AN000
 	    .ENDSELECT				 ;AN000;;				   ;AN000
 	  .ENDIF				 ;AN000;;				   ;AN000
+NextKeybParm:
 	  MOV	 RESULT_TYPE,0			 ;AN000;; reset result block.		   ;AN000
 	  CALL	 SYSPARSE			 ;AN000;; parse next parameter. 	   ;AN000
 	.ENDIF					 ;AN000;;				   ;AN000
