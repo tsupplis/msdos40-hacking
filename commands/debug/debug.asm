@@ -786,41 +786,44 @@ DEVIOCALL:
             ret
 
 SETUDEV:
-	    MOV     DI,OFFSET DG:CONFCB
-	    MOV     AX,(PARSE_FILE_DESCRIPTOR SHL 8) OR SET_DRIVEID_OPTION
-	    INT     21H
+            call SCANB
+            jz OPENERR
+            mov di,offset DG:CONFCB
+            mov ax,(PARSE_FILE_DESCRIPTOR SHL 8) OR SET_DRIVEID_OPTION
+            int 21h
+            or al,al                    ; reject wildcards and invalid drives
+            jnz OPENERR
+            call GETEOL
+            cmp byte ptr [CONFCB+9],' ' ; device names have no extension
+            jne OPENERR
 
-	    CALL    USERDEV
-
-	    JMP     DISPREG
-
-USERDEV:
-	    MOV     DX,OFFSET DG:CONFCB
-	    MOV     AH,FCB_OPEN
-	    INT     21H
-
-	    OR	    AL,AL
-	    JNZ     OPENERR
-
-	    MOV     SI,DX
-;	    TEST    BYTE PTR [SI.FCB_DEVID],080H ; Device?	; KWC 12/10/86
-;	    JZ	    OPENERR		; NO			; KWC 12/10/86
-	    MOV     AL,BYTE PTR [SI.FCB_NSL_DRIVE] ; KWC 12/10/86
-	    AND     AL,NOT FCBMASK	; KWC 12/10/86
-	    CMP     AL,0C0H		; KWC 12/10/86
-	    JNE     OPENERR		; KWC 12/10/86
-	    XOR     AL,AL		; KWC 12/10/86
-
-;	    LDS     SI,DWORD PTR [CONFCB.FCB_FIRCLUS]		; KWC 12/10/86
-	    LDS     SI,DWORD PTR [CONFCB.FCB_NSLD_DRVPTR] ; KWC 12/10/86
-	    MOV     WORD PTR CS:[CIN],SI
-	    MOV     WORD PTR CS:[CIN+WORD],DS
-
-	    MOV     WORD PTR CS:[COUT],SI
-	    MOV     WORD PTR CS:[COUT+WORD],DS
-	    PUSH    CS
-	    POP     DS
-	    RET
+            ; Find the named character device without opening an FCB.
+            ; DOS returns ES:BX pointing to its system variables.
+            push es
+            mov ah,GET_IN_VARS
+            int 21h
+            add bx,DEVHEAD
+find_user_device:
+            test es:[bx.SDEVATT],8000h
+            jz next_user_device
+            mov si,offset DG:CONFCB+1
+            lea di,[bx.SDEVNAME]
+            mov cx,8
+            repe cmpsb
+            je set_user_device
+next_user_device:
+            les bx,es:[bx.SDEVNEXT]
+            cmp bx,0ffffh
+            jne find_user_device
+            pop es
+            jmp short OPENERR
+set_user_device:
+            mov word ptr [CIN],bx
+            mov word ptr [CIN+2],es
+            mov word ptr [COUT],bx
+            mov word ptr [COUT+2],es
+            pop es
+            jmp DISPREG
 
 OPENERR:
 	    MOV     DX,OFFSET DG:BADDEV_PTR
