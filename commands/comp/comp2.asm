@@ -265,6 +265,7 @@ qea	ends				;AN001;
 cseg	segment para public 'CODE'	;AC000;
 	assume	cs:cseg,ds:cseg,es:cseg,ss:cseg ;as set by DOS loader
 
+	extrn ignore_case:byte,show_lines:byte,limit_set:byte,line_limit:dword,byte_format:byte
 	extrn	parser:near		;AN000;
 	extrn	sysloadmsg:near 	;AN000;
 	extrn	sysdispmsg:near 	;AN000;
@@ -332,6 +333,9 @@ cur_name dw	00h			;AN000; ;ptr to current filename
 input_buf db	130 dup (0)		;AN000; ;input buffer for keyb input
 name1	db	130 dup (0)		;AN000; ;source file name
 name2	db	130 dup (0)		;AN000; ;target file name
+line_number dd 1
+after_lf db 0
+unequal_sizes db 0
 byte1	db	00h			;AN000; ;on compare: bad byte for source
 byte2	db	00h			;AN000; ;on compare: bad byte for target
 fcb2	db	16 dup (0)		;entered target filespec
@@ -704,14 +708,25 @@ filopn:
 	stosw
 	mov	ax,word ptr infcb+16	;low part of file size
 	mov	dx,word ptr infcb+18	;high part
+	mov unequal_sizes,0
 	cmp	ax,word ptr outfcb+16	;are files the same size?
 	jne	invsiz			;no, error
 	cmp	dx,word ptr outfcb+18
 	je	sizok			;yes, ok
 invsiz:
+	mov unequal_sizes,1
+	cmp limit_set,0
+	jne sizok
+size_error:
 	print_msg msgnum_badsiz,STDOUT	;AN000; ;"Files are different sizes"
 	jmp	quit3			;tell user sizes are different and process next source file
 sizok:
+	mov	word ptr line_number,1
+	mov	word ptr line_number+2,0
+	mov	after_lf,0
+	mov	al,byte_format
+	mov	sublist_7.sub_flags,al
+	mov	sublist_8.sub_flags,al
 ;;(deleted for AN009)	     call    comp_codepage	     ;AN000; ;VERIFY BOTH FILes HAVE THE SAME CODEPAGE
 ;;(deleted for AN009)	     $if     c			     ;AN000; ;ERROR WITH CODEPAGE
 ;;(deleted for AN009)		 jmp	 quit3		     ;AN000; ;go on to other files if any
@@ -730,6 +745,15 @@ process:				;**** PREPARE TO COMPARE DATA
 	test	byte ptr swt,1		;no, have we reached eof yet?
 	jz	large			;no - fill large buffer from other file
 	doscall FCBCLOSE		;AC000; CLOSE THE FILE FILLING SMALL BUFFER
+	cmp unequal_sizes,0
+	je complete_size_ok
+	mov ax,word ptr line_limit
+	or ax,word ptr line_limit+2
+	jz $$IF43                 ; zero requested lines compare equal
+	jmp size_error
+complete_size_ok:
+	cmp limit_set,0
+	jne $$IF43
 	test	byte ptr swt,8		;yes, files are done - did we find eof mark?
 ;	$if	z			;AC000; ;NO
 	JNZ $$IF43
@@ -751,14 +775,89 @@ large:					;Fill large buffer
 	jmp	process 		;and now fill small buffer from other file
 getsec:
 	call	getf2			;fill small buffer with 1024 bytes
+	or cx,cx
+	jnz have_chunk
+	jmp size_error
+have_chunk:
 	sub	siz,cx			;# bytes left in big buffer after this compare
 	mov	bp,cx			;save # bytes of compare
 	les	di,dword ptr curpos	;current byte in large buffer
 	mov	si,offset buf		;current byte in small buffer
 comp:
-	jcxz	compok			;all done and equal
+	cmp	limit_set,0
+	jne	check_line_limit
+	cmp	show_lines,0
+	jne	tracked_byte
+	cmp	ignore_case,0
+	jne	tracked_byte
+	jcxz	fast_done
 	repe	cmpsb
-	jne	cmp1			;bytes don't match
+	je	fast_done
+	jmp	cmp1
+fast_done:
+	jmp	compok
+check_line_limit:
+	cmp	after_lf,0
+	je	test_limit
+	call	advance_line
+test_limit:
+	mov	ax,word ptr line_number+2
+	cmp	ax,word ptr line_limit+2
+	ja	prefix_done
+	jb	tracked_byte
+	mov	ax,word ptr line_number
+	cmp	ax,word ptr line_limit
+	ja	prefix_done
+tracked_byte:
+	jcxz	compok
+	cmp	after_lf,0
+	je	line_ready
+	call	advance_line
+line_ready:
+ lodsb
+	mov	ah,es:[di]
+	inc	di
+	dec	cx
+	mov	bl,al
+	cmp	word ptr curfcb+2,offset infcb
+	je	primary_byte
+	mov	bl,ah
+primary_byte:
+	cmp	bl,10
+	jne	compare_byte
+	mov	after_lf,1
+compare_byte:
+	cmp	al,ah
+	je	comp
+	cmp	ignore_case,0
+	je	cmp1
+	xor	al,ah
+	cmp	al,20h
+	jne	cmp1
+	or	ah,20h
+	cmp	ah,'a'
+	jb	cmp1
+	cmp	ah,'z'
+	ja	cmp1
+	jmp	comp
+advance_line:
+	inc	word ptr line_number
+	jnz	line_advanced
+	inc	word ptr line_number+2
+line_advanced:
+	mov	after_lf,0
+ ret
+prefix_done:
+	push	ds
+	pop	es
+	test	swt,1
+	jnz	close_small
+	mov	dx,word ptr curfcb
+	doscall	FCBCLOSE
+close_small:
+	mov	dx,word ptr curfcb+2
+	doscall	FCBCLOSE
+	jmp	$$IF43
 compok:
 	push	ds
 	pop	es			;get es back
@@ -802,6 +901,12 @@ $$IF47:
 
 mdone:
 	mov	sublist_6.sub_value,offset OFF_byte ;AN000; ;sublist OF MSG DesC
+	cmp	show_lines,0
+	je	report_location
+	mov	sublist_6.sub_value,offset line_number
+	mov	sublist_6.sub_flags,31h       ; doubleword, unsigned decimal
+	mov	msgnum_bad,25
+report_location:
 	print_msg msgnum_bad,STDOUT	;AN000; ;"Compare error at offset %1"
 	mov	sublist_7.sub_value,offset byte1 ;AN000; ;sublist OF MSG DesC. (ptr TO BAD byte IN FIRST FILE)
 	print_msg msgnum_adr,STDOUT	;AN000; ;"File 1 = %1"
@@ -1228,7 +1333,11 @@ getf2	proc	near
 	mov	dx,offset buf		;small buffer addr
 	doscall SETDTA			;AC000; ;SET THE DTA
 	pop	dx
+	mov cx,siz
+	cmp cx,4096
+	jbe read_small
 	mov	cx,4096 		;ask for 8 sectors
+read_small:
 	doscall FCBRNDBLKREAD		;AC000; ;GET THE DATA
 	ret
 getf2	endp				;AN000;
@@ -1906,7 +2015,12 @@ cmem:
 	mov	parm_count,FIRST_PARM_CT ;AN000; ;parse the first parm and second parm
 	call	parser			;AC000; ;returns first filename in path1, and the
 					;AN000; ;second filename in path2.
-					;fcb is already formatted with correct drive
+					; A leading switch can occupy the first default PSP FCB.
+	mov	si,offset path1
+	mov	di,offset fcb
+	doscall	PARSE_FILENAME,01H
+	cmp	al,-1
+	je	invalid_parsed_drive
 	mov	si,offset path2
 	mov	di,offset fcb2
 	doscall PARSE_FILENAME,01H	;AC000; ;build 2nd fcb from 2nd parm,
@@ -1914,6 +2028,7 @@ cmem:
 	cmp	al,-1			;invalid drive?
 ;	$if	e			;AC000; ;Yes, invalid drive
 	JNE $$IF146
+invalid_parsed_drive:
 	    print_msg msgnum_baddrv,STDERR ;AN000; ;"Invalid drive spec."
 	    int     20h 		;and quit
 ;	$else				;AC000;

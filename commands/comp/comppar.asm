@@ -218,7 +218,8 @@ PARMSX	     LABEL BYTE 	   ;PARMS EXTENSION CONTROL BLOCK		;AN000;
 	     DW   CONTROL_POS	   ; DESCRIPTION OF POSITIONAL 1		;AN000;
 	     DW   CONTROL_POS	   ; DESCRIPTION OF POSITIONAL 2		;AN000;
 
-	     DB   0		   ; MAX SWITCH OPERANDS ALLOWED		;AN000;
+	     DB   2
+	     DW   mode_switch,limit_switch ; switch descriptor groups		;AN000;
 
 	     DB   0		   ; MAX KEYWORD OPERANDS ALLOWED		;AN000;
 				   ; THERE IS NO CONTROL BLOCK			;AN000;
@@ -231,6 +232,24 @@ PARMSX	     LABEL BYTE 	   ;PARMS EXTENSION CONTROL BLOCK		;AN000;
 ;	[d:][path][filename[.ext]]						;AN000;
 
 	     PUBLIC CONTROL_POS    ;LET LINK MAKE THIS ADDRESSABLE		;AN000;
+mode_switch dw 0,0,offset mode_result,offset novals
+	db	4
+mode_d db '/D',0
+mode_a db '/A',0
+mode_c db '/C',0
+mode_l db '/L',0
+limit_switch dw 8000h,0,offset limit_result,offset novals
+	db	1,'/N',0
+mode_result db 8 dup (0)
+limit_result db 8 dup (0)
+
+	public	ignore_case,show_lines,line_limit,byte_format,limit_set
+ignore_case db 0
+show_lines db 0
+limit_set db 0
+line_limit dd 0
+byte_format db 13h                 ; byte, unsigned hexadecimal (SUB_FLAGS)
+
 CONTROL_POS  LABEL BYTE 	   ;FIRST POSITIONAL DESCRIPTOR FOR FILESPEC,	;AN000;
 				   ; OPTIONAL					;AN000;
 	     DW   0201H 	   ; CONTROLS TYPE MATCHED			;AN000;
@@ -295,7 +314,7 @@ PARSER PROC NEAR		   ;AN000;
 ; =  =	=  =  =  =  =  =  =  =	=  =						;AN000;
 
 ;  $SEARCH COMPLEX		   ;LOOP THRU COMMAND LINE			;AN000;
-   JMP SHORT $$SS1
+	JMP	$$SS1
 $$DO1:
 				   ;LOOKING AT RETURN CODE FROM SYSPARSE...	;AN000;
        AND  AX,AX		   ;AN008; ;WERE THERE ANY ERRORS?			;AN000;
@@ -306,13 +325,42 @@ $$DO1:
        mov  ah,4ch
        int  21h
 ;  $ORELSE			   ;SINCE NO PROBLEM, SO FAR			;AN000;
-   JMP SHORT $$SR1
+	JMP	$$SR1
 $$IF1:
        MOV  ORDINAL,CX		   ;SAVE UPDATED COUNT				;AN000;
        MOV  CURRENT_PARM,SI	   ;REMEMBER HOW FAR I GOT			;AN000;
        MOV  BX,DX		   ;SET DATA BASE REG TO POINT TO		;AN000;
 				   ;RESULT BUFFER OF THIS OPERAND		;AN000;
 
+	cmp	bx,offset limit_result
+	jne	check_mode
+	mov	ax,word ptr limit_result+4
+	mov	word ptr line_limit,ax
+	mov	ax,word ptr limit_result+6
+	mov	word ptr line_limit+2,ax
+	mov	limit_set,1
+	jmp	short $$SS1
+check_mode:
+	cmp	bx,offset mode_result
+	jne	positional
+	mov	si,word ptr mode_result+2
+	mov	al,[si+1]
+	cmp	al,'L'
+	jne	check_case
+	mov	show_lines,1
+	jmp	short $$SS1
+check_case:
+	cmp	al,'C'
+	jne	check_format
+	mov	ignore_case,1
+	jmp	short $$SS1
+check_format:
+	mov	byte_format,0           ; single character
+	cmp	al,'A'
+	je	$$SS1
+	mov	byte_format,11h         ; byte, unsigned decimal
+	jmp	short $$SS1
+positional:
        MOV  SI,WORD PTR RESULT_PTR1 ;GET WHERE STRING IS PUT			;AN000;
 				   ;GUESS, THIS IS THE FIRST PARM		;AN000;
        MOV  DI,OFFSET PATH1	   ;GET WHERE STRING IS TO GO			;AN000;
@@ -347,6 +395,32 @@ $$SD6:
 $$SS1:
        LEA  DI,PARMS		   ;ES:DI = PARSE CONTROL DEFINITON		;AN000;
        MOV  SI,CURRENT_PARM	   ;DS:SI = COMMAND STRING, NEXT PARM		;AN000;
+       ; SYSPARSE accepts a colon for a valued switch. DOS 5 spells this /N=n.
+	xor	ax,ax                ; optional address of temporary delimiter
+	push	ax
+	mov	bx,si
+skip_space:
+	cmp	byte ptr [bx],' '
+	je	advance_space
+	cmp	byte ptr [bx],9
+	jne	check_limit
+advance_space:
+	inc	bx
+	jmp	short skip_space
+check_limit:
+	cmp	byte ptr [bx],'/'
+	jne	parse_next
+	mov	al,[bx+1]
+	or	al,20h
+	cmp	al,'n'
+	jne	parse_next
+	cmp	byte ptr [bx+2],'='
+	jne	parse_next
+	pop	ax
+	add	bx,2
+	push	bx
+	mov	byte ptr [bx],':'
+parse_next:
        XOR  DX,DX		   ;RESERVED, INIT TO ZERO			;AN000;
        MOV  CX,ORDINAL		   ;OPERAND ORDINAL, INITIALLY ZERO		;AN000;
        CALL SYSPARSE		   ;LOOK AT DOS PARMS				;AN000;
@@ -355,11 +429,18 @@ $$SS1:
 				   ;CX=NEW OPERAND ORDINAL			;AN000;
 				   ;SI=SET TO PAST SCANNED OPERAND		;AN000;
 				   ;DX=SELECTED RESULT BUFFER			;AN000;
+	pop	bx
+	or	bx,bx
+	jz	parsed_token
+	mov	byte ptr [bx],'='
+parsed_token:
        CMP  AX,SYSPRM_EX_EOL	   ;IS THAT THE END OF THE PARMS?		;AN000;
 				   ;IF NOT, LOOP BACK AND FIND OUT		;AN000;
 				   ;WHAT THAT PARM IS				;AN000;
 ;  $ENDLOOP E			   ;END OF LIST 				;AN000;
-   JNE $$DO1
+	JE	parser_done
+	JMP	$$DO1
+parser_done:
        CLC			   ;RETURN FLAG FOR "NO ERROR"			;AN000;
 ;  $ENDSRCH			   ;FINISHED WITH DOS COMMAND LINE		;AN000;
 $$SR1:

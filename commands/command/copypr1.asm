@@ -14,6 +14,7 @@
 
 
 TRANDATA	SEGMENT PUBLIC BYTE	;AC000;
+	extrn	string_buf_ptr:word
 	EXTRN	DEVWMES_ptr:word
 	EXTRN	ext_open_parms:byte	;AN000;
 	EXTRN	ext_open_seg:word	;AN000;
@@ -22,9 +23,12 @@ TRANDATA	SEGMENT PUBLIC BYTE	;AC000;
 	EXTRN	LOSTERR_ptr:word
 	EXTRN	NOSPACE_ptr:word
 	EXTRN	OVERWR_ptr:word
+replace_prompt db 'Overwrite ', '$'
+replace_choice db ' (Y/N)? $'
 TRANDATA ENDS
 
 TRANSPACE	SEGMENT PUBLIC BYTE	;AC000;
+	extrn	allswitch:word
 	EXTRN	ASCII:BYTE
 	EXTRN	BINARY:BYTE
 	EXTRN	CFLAG:BYTE
@@ -46,6 +50,7 @@ TRANSPACE	SEGMENT PUBLIC BYTE	;AC000;
 	EXTRN	TERMREAD:BYTE
 	EXTRN	TPA:WORD
 	EXTRN	WRITTEN:WORD
+extrn charbuf:byte
 TRANSPACE	ENDS
 
 TRANCODE	SEGMENT PUBLIC BYTE
@@ -56,6 +61,64 @@ TRANCODE	SEGMENT PUBLIC BYTE
 	PUBLIC	TRYFLUSH
 
 ASSUME	CS:TRANGROUP,DS:TRANGROUP,ES:TRANGROUP,SS:NOTHING
+
+; DS:SI is the destination. Carry set declines, including redirected EOF.
+confirm_replace proc near
+	push	bx
+	push	cx
+	push	dx
+	push	si
+	push	di
+	mov	dx,offset trangroup:replace_prompt
+	mov	ah,9
+	int	int_command
+	mov	string_ptr_2,si
+	mov	dx,offset trangroup:string_buf_ptr
+	invoke	std_printf
+ask_replace:
+	mov	dx,offset trangroup:replace_choice
+	mov	ah,9
+	int	int_command
+	xor	di,di
+read_response:
+	xor	bx,bx
+	mov	cx,1
+	mov	dx,offset trangroup:charbuf
+	mov	ah,READ
+	int	int_command
+	jc	decline_replace
+	or	ax,ax
+	jz	decline_replace
+	mov	al,charbuf
+	cmp	al,10
+	je	read_response
+	cmp	al,13
+	je	response_done
+	or	di,di
+	jnz	read_response
+	or	al,20h
+	xor	ah,ah
+	mov	di,ax
+	jmp	read_response
+response_done:
+	invoke	crlf2
+	cmp	di,'y'
+	je	allow_replace
+	cmp	di,'n'
+	jne	ask_replace
+decline_replace:
+ stc
+	jmp	short replace_done
+allow_replace:
+ clc
+replace_done:
+	pop	di
+	pop	si
+	pop	dx
+	pop	cx
+	pop	bx
+ ret
+confirm_replace endp
 
 TRYFLUSH:
 	mov	al,[CONCAT]
@@ -74,6 +137,13 @@ FLSHFIL:
 ; Outputs:
 ;	[NXTADD] = 0
 ;
+	cmp	destclosed,copy_declined
+	jne	flush_active
+discard_buffer:
+	mov	nxtadd,0
+	mov	termread,1
+	ret
+flush_active:
 	MOV	[TERMREAD],0
 	cmp	[CFLAG],0
 	JZ	NOTEXISTS
@@ -110,9 +180,32 @@ cont_no_xa:					;AN030;
 	mov	dx,write_open_flag		;AN000; set up open flags
 
 	CMP	[NOWRITE],0
-	JNZ	DODESTOPEN		; Don't actually create if NOWRITE set
+	jz	create_destination
+	test	allswitch,SwitchAsk
+	jz	DODESTOPEN
+	call	confirm_replace
+	jc	skip_destination
+	jmp	short DODESTOPEN
+create_destination:
 	mov	dx,creat_open_flag		;AC000; set up create flags
 
+	test	allswitch,SwitchAsk
+	jz	DODESTOPEN
+	; Try exclusive creation first so a newly appeared file is protected.
+	and	dl,0f0h
+	int	int_command
+	jnc	dest_open_okay
+	cmp	ax,error_file_exists
+	jne	xa_set_error
+	call	confirm_replace
+	jc	skip_destination
+	; Rebuild the open parameter list after prompting. Replace existing only.
+	mov	ax,EXTOPEN shl 8
+	mov	dx,creat_open_flag AND 0ffefh
+	jmp	short DODESTOPEN
+skip_destination:
+	mov	destclosed,copy_declined
+	jmp	discard_buffer
 DODESTOPEN:
 	INT	int_command
 ;

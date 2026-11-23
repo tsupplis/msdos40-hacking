@@ -23,6 +23,7 @@ TRANDATA	SEGMENT PUBLIC BYTE	;AC000;
 	EXTRN	Extend_buf_sub:byte	;AN000;
 	EXTRN	inornot_ptr:word
 	EXTRN	msg_disp_class:byte	;AC000;
+	extrn	del_q_syn:byte
 	EXTRN	parse_erase:byte	;AC000;
 	EXTRN	parse_mrdir:byte	;AC000;
 	EXTRN	parse_rename:byte	;AC000;
@@ -75,6 +76,7 @@ transpace   ends
 
 	EXTRN	cerror:near
 	EXTRN	error_output:near
+	extrn	noprmpt:near
 	EXTRN	notest2:near
 	EXTRN	slashp_erase:near	;AN000;
 	EXTRN	std_printf:near
@@ -139,8 +141,15 @@ erase_scan:
 	cmp	ax,end_of_line			;AN000; are we at end of line?
 	jz	good_line			;AN000; yes - done parsing
 	cmp	ax,result_no_error		;AC000; did we have an error?
-	jnz	errj2				;AC000; yes exit
+	jz	erase_parse_ok
+	jmp	errj2
+erase_parse_ok:				;AC000; yes exit
 
+	cmp	parse1_syn,offset trangroup:del_q_syn
+	jne	erase_check_p
+	or	comsw,2
+	jmp	erase_scan
+erase_check_p:
 	cmp	parse1_syn,offset trangroup:slash_p_syn ;AN000; was /P entered?
 	je	set_erase_prompt		;AN000; yes - go set prompt
 
@@ -162,7 +171,7 @@ erase_drive_ok:
 	jmp	short erase_scan		;AN000; continue parsing
 
 set_erase_prompt:
-	cmp	comsw,0 			;AN018; was /P already entered?
+	test	comsw,1			;AN018; was /P already entered?
 	jz	ok_to_set_erase_prompt		;AN018; no go set switch
 	mov	ax,moreargs_ptr 		;AN018; set up too many arguments
 	invoke	setup_parse_error_msg		;AN018; set up an error message
@@ -173,6 +182,11 @@ ok_to_set_erase_prompt: 			;AN018;
 	jmp	short erase_scan		;AN000; continue parsing
 
 good_line:					;G  We know line is good
+	; A leading switch may occupy the default PSP FCB. Use the parsed path.
+	mov	si,offset trangroup:srcbuf
+	mov	di,FCB
+	mov	ax,Parse_File_Descriptor SHL 8
+	int	int_command
 	invoke	pathcrunch
 	jnc	checkdr
 	mov	ax,[msg_numb]			;AN022; get message number
@@ -182,11 +196,15 @@ good_line:					;G  We know line is good
 	jnz	badpath_err			;AC022; see if they should have
 
 checkdr:
-	cmp	comsw,0 			;AN000; was /p specified
+	test	comsw,1			;AN000; was /p specified
 	jz	notest2j			;AN000; no - go to notest2
 	jmp	slashp_erase			;AN000; yes - go to slashp_erase
 
 notest2j:
+	test	comsw,2
+	jz	erase_normal
+	jmp	noprmpt
+erase_normal:
 	jmp	notest2
 
 badpath_err:					;AN022; "Path not found" message

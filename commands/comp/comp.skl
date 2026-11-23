@@ -26,4 +26,5 @@
 :use 21 EXTEND5 	   ;"Access Denied"                              ;AN000;
 :use 22 EXTEND37	   ;"Code page mismatch"                         ;AN000;
 :DEF 23 "Files compare ok",CR,LF                                         ;AN000;
+:def 25 "Compare error at LINE %1",CR,LF
 :end									 ;AN000;

@@ -345,7 +345,7 @@ x_done:
 ; Mod to recognize right and left parens as integral tokens.
 x_done2:
 ;---------------
-	jmp	short out_token
+	jmp	out_token
 
 a_switch:
 	OR	BH,1				; Indicate switch
@@ -369,6 +369,33 @@ a_switch_notkanj:				;AN057;
 						;   BP = fSwitch but no switch
 						;   bit is set (unknown switch)
 Store_swt:
+	cmp	cpyflag,1
+	jne	ordinary_switch
+	cmp	al,'-'
+	jne	check_switch_y
+	mov	al,[si]
+	or	al,20h
+	cmp	al,'y'
+	jne	invalid_minus
+	mov	al,'-'
+	call	move_char
+ lodsb
+	or	bp,SwitchAsk
+	jmp	store_copy_y
+invalid_minus:
+	mov	al,'-'
+	jmp	ordinary_switch
+check_switch_y:
+	or	al,20h
+	cmp	al,'y'
+	jne	restore_switch
+	or	bp,SwitchY
+store_copy_y:
+	call	move_char
+	jmp	out_token
+restore_switch:
+	mov	al,[si-1]
+ordinary_switch:
 	call	move_char			; store the character
 ;
 ;---------------

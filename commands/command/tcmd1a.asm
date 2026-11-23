@@ -25,6 +25,9 @@ TRANDATA	SEGMENT PUBLIC BYTE	;AC000;
 	EXTRN	bits:word
 	EXTRN	Bytmes_ptr:word
 	EXTRN	comsw:word
+	extrn	dir_l_syn:byte,dir_b_syn:byte
+DirBare equ 0100h
+DirLower equ 0200h
 	EXTRN	dir_w_syn:word		;AC000;
 	EXTRN	dirdat_mo_day:word	;AC000;
 	EXTRN	dirdat_yr:word		;AC000;
@@ -152,6 +155,16 @@ dirscan_cont:
 	jmp	badparm 			;AN000; yes - exit
 
 dirscan_cont2:
+	cmp	parse1_syn,offset trangroup:dir_b_syn
+	jne	dir_check_lower
+	or	bits,DirBare
+	jmp	dirscan
+dir_check_lower:
+	cmp	parse1_syn,offset trangroup:dir_l_syn
+	jne	dir_check_width
+	or	bits,DirLower
+	jmp	dirscan
+dir_check_width:
 	cmp	parse1_syn,offset trangroup:dir_w_syn ;AN000; was /W entered?
 	je	set_dir_width			;AN000; yes - go set wide lines
 	cmp	parse1_syn,offset trangroup:slash_p_syn ;AN000; was /P entered?
@@ -186,7 +199,7 @@ dir_check_device:				;AN022;
 
 dir_fspec_end:
 	pop	si				;AC000; restore position in line
-	jmp	short dirscan			;AC000; keep parsing
+	jmp	dirscan			;AC000; keep parsing
 
 set_dir_width:
 	test	byte ptr[bits],SwitchW		;AN018; /W already set?
@@ -199,7 +212,7 @@ ok_set_width:
 	or	bits,switchw			;AC000; indicate /w was selected
 	mov	linlen,wideperlin		;AC000; Set number of entries per line
 	mov	lincnt,wideperlin		;AC000;
-	jmp	short dirscan			;AC000; keep parsing
+	jmp	dirscan			;AC000; keep parsing
 
 set_dir_pause:
 	test	byte ptr[bits],SwitchP		;AN018; /p already set?
@@ -235,12 +248,27 @@ BadParm:
 	jmp	cerror				;AC000; invalid switches get displayed
 
 ScanDone:
+	; A leading switch may occupy the default PSP FCB. Use the parsed path.
+	mov	si,offset trangroup:srcbuf
+	mov	di,FCB
+	mov	ax,Parse_File_Descriptor SHL 8
+	int	int_command
 
 ;
 ; Find and display the volume ID on the drive.
 ;
 
-	invoke	okvolarg			;AC000;
+	test	bits,DirBare
+	jz	dir_volume
+	; OKVOLARG normally seeds the default *.* search mask.
+	mov	di,FCB+1
+	mov	cx,11
+	mov	al,'?'
+	rep	stosb
+	jmp	short dir_volume_done
+dir_volume:
+	invoke	okvolarg
+dir_volume_done:			;AC000;
 	mov	[filecnt],0			;AC000; Keep track of how many files found
 	cmp	comsw,0 			;AC000; did an error occur?
 	jnz	doheader			;AC000; yes - don't bother to fix path
@@ -331,6 +359,8 @@ DoHeader:
 ;
 
 DoHeaderCont:
+	test	bits,DirBare
+	jnz	dir_header_done
 	mov	al,blank			;AN051; Print out a blank
 	invoke	print_char			;AN051;   before DIR header
 	invoke	build_dir_string		; get current dir string
@@ -340,6 +370,7 @@ DoHeaderCont:
 ;
 ; If there were chars left after parse or device, then invalid file name
 ;
+dir_header_done:
 	cmp	ComSw,0
 	jz	DoSearch			; nothing left; good parse
 	jl	DirNFFix			; not .. => error file not found
@@ -405,6 +436,17 @@ DIRSTART:
 Display:
 	inc	[filecnt]			; Keep track of how many we find
 	mov	si,offset trangroup:dirbuf+8	; SI -> information returned by sys call
+	test	bits,DirBare
+	jz	dir_full_entry
+	cmp	byte ptr [si],dot_chr
+	jne	dir_bare_name
+	jmp	scroll
+dir_bare_name:
+	mov	di,offset trangroup:charbuf
+	invoke	fcb_to_ascz
+	call	dir_print_name
+	jmp	dir_end_line
+dir_full_entry:
 	call	shoname
 ;
 ; If we are displaying in wide mode, do not output the file info
@@ -479,6 +521,7 @@ millenium:
 prbuf:
 	mov	dx,offset trangroup:DirDatTim_ptr
 	call	std_printf
+dir_end_line:
 	invoke	crlf2				;AC066;end the line
 	dec	byte ptr [fullscr]		;AC066;count the line
 	jnz	endif04 			;AN066;IF the last on the screen THEN
@@ -538,6 +581,8 @@ dir_err_setup_jmp:				;AN022;
 ; CRLF.
 ;
 Trailer:
+	test	bits,DirBare
+	retnz
 	mov	al,[linlen]
 	cmp	al,[lincnt]			; Will be equal if just had CR/LF
 	jz	mmessage
@@ -574,6 +619,26 @@ shoname:
 	rep	movsb
 	xor	ax,ax
 	stosb
+dir_print_name:
+	test	bits,DirLower
+	jz	dir_name_ready
+	mov	si,offset trangroup:charbuf
+dir_lower_loop:
+	lodsb
+	or	al,al
+	jz	dir_name_ready
+	invoke	testkanj
+	jz	dir_single_byte
+	inc	si
+	jmp	dir_lower_loop
+dir_single_byte:
+	cmp	al,'A'
+	jb	dir_lower_loop
+	cmp	al,'Z'
+	ja	dir_lower_loop
+	or	byte ptr [si-1],20h
+	jmp	dir_lower_loop
+dir_name_ready:
 	push	dx
 	mov	dx,offset trangroup:charbuf
 	mov	string_ptr_2,dx

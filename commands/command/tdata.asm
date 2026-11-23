@@ -175,6 +175,7 @@ TRANDATA	SEGMENT PUBLIC BYTE
 	PUBLIC	dirmes_ptr		;AN000;
 	PUBLIC	dirtim_hr_min		;AN000;
 	PUBLIC	dirtim_sec_hn		;AN000;
+	public	dir_l_syn,dir_b_syn,del_q_syn
 	PUBLIC	DIR_W_SYN		;AN000;
 	PUBLIC	disp_file_size_ptr	;AN000;
 	PUBLIC	dmes_ptr		;AN000;
@@ -665,7 +666,8 @@ PARSE_ERASE	LABEL	BYTE			;AN000;
 ERASE_PARMS	LABEL	BYTE			;AN000;
 		DB	1,1			;AN000;  1 positional parm
 		DW	TRANGROUP:FILE_REQUIRED ;AN000;
-		DB	1			;AN000;  1 switch
+		DB	2
+		DW	TRANGROUP:del_q_switch
 		DW	TRANGROUP:SLASH_P_SWITCH;AN000;
 		DB	0			;AN000;  no keywords
 
@@ -697,10 +699,16 @@ DIR_SWITCH1	LABEL	BYTE			;AN000;
 		DW	2			;AN000;  capitalize by char table
 		DW	TRANGROUP:PARSE1_OUTPUT ;AN000;  result buffer
 		DW	TRANGROUP:NO_VALUES	;AN000;
-		DB	1			;AN000;  1 keyword
+		DB	3
+dir_l_syn db "/L",0
+dir_b_syn db "/B",0
 DIR_W_SYN	DB	"/W",0                  ;AN000;  /W switch
 
 ;
+del_q_switch dw 0,2,offset trangroup:parse1_output,offset trangroup:no_values
+	db	1
+del_q_syn db "/Q",0
+
 ; PARSE BLOCK FOR RENAME
 ;
 

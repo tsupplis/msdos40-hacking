@@ -219,7 +219,10 @@ fSwitch 	EQU	8000h
 fBadSwitch	EQU	4000h
 
 SwitchDir	EQU	SwitchP + SwitchW + fSwitch
-SwitchCopy	EQU	SwitchV + SwitchA + SwitchB + fSwitch
+copy_declined equ 0ffh ; DESTCLOSED marker for a skipped destination
+SwitchY equ 20h
+SwitchAsk equ 40h
+SwitchCopy	EQU	SwitchY + SwitchAsk + SwitchV + SwitchA + SwitchB + fSwitch
 
 break <Trap:  Get the attention of MSDOS>
 ;   TRAP snares the operating system for a service call

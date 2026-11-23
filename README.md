@@ -56,14 +56,19 @@ Applies to `command.com` and DOS buffered console input. Cooked handle reads sup
 
 ## Command enhancements
 
-| Command | Enhancement |
-|---|---|
-| `mem` | Report memory in whole Kbytes, including total, free and largest free blocks for UMB and XMS pools. |
-| `more [filename]` | Page a file or, with no filename, standard input. |
-| `loadhigh` (`lh`) | Run an external program in upper memory when it fits. |
-| `vi.exe` | Screen editor on the full floppy. |
-| `mbasic.com` | BASIC interpreter on the full floppy. |
-| `device=umbs.sys start-end [start-end ...]` | Supply unused, mapped RAM as UMBs. Use four-digit hex segments with an exclusive end. Each range is granted whole. |
+| Command | Enhancement | Missing MS-DOS 5.0 features |
+|---|---|---|
+| `dir` | `/B` prints bare names, one per line. `/L` displays ASCII letters in filenames in lowercase. Both work with an explicit drive. | `/A` attribute filters, `/O` sort order, `/S` recursion, and `DIRCMD` defaults and overrides. |
+| `copy` | `/Y` allows overwriting. `/-Y` prompts before overwriting. The last of these switches wins. | |
+| `del` (`erase`) | `/Q` skips the bulk-delete confirmation. An explicit `/P` still prompts for each file. | |
+| `comp` | `/D` reports decimal bytes, `/A` shows characters, `/L` reports line numbers, `/N=n` limits comparison to the first *n* lines, and `/C` ignores ASCII letter case. | |
+| `ver` | Displays the project version as `4.01N`. | |
+| `mem` | Report memory in whole Kbytes, including total, free and largest free blocks for UMB and XMS pools. | `/C` (classify). |
+| `more [filename]` | Page a file by name. | |
+| `loadhigh` (`lh`) | Run an external program in upper memory when it fits. | |
+| `vi.exe` | Screen editor on the full floppy. | |
+| `mbasic.com` | BASIC interpreter on the full floppy. | |
+| `device=umbs.sys start-end [start-end ...]` | Supply unused, mapped RAM as UMBs. Use four-digit hex segments with an exclusive end. Each range is granted whole. | |
 
 ## Configuration enhancements
 

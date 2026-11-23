@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+"""Check COMP output using the built utility and disposable DOS disks."""
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+work = root / "test/work"
+work.mkdir(exist_ok=True)
+with tempfile.TemporaryDirectory(dir=work) as tmp:
+    folder = Path(tmp)
+    boot = folder / "comp.img"
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), boot)
+    def install(path, name):
+        subprocess.run(["mcopy", "-o", "-i", boot, path, "::" + name], check=True)
+
+    install(root / "commands/comp/comp.com", "COMP.COM")
+    # LF at the 4 KiB small-buffer boundary. The second fixture crosses the
+    # 60 KiB large-buffer boundary where the two files exchange buffer roles.
+    prefix = b"x" * 4094 + b"\r\n" + b"z" * (61440 - 4096)
+    for name, data in {"LEFT": prefix + b"A\r\n!", "RIGHT": prefix + b"b\r\n!",
+                       "X": b"Aa\r\nz", "Y": b"AA\r\n!tail", "Z": b"AA\r\n!",
+                       "SAME": b"Aa\r\nz", "NO": b"N\r\n"}.items():
+        path = folder / name
+        path.write_bytes(data)
+        install(path, name)
+
+    cases = [
+        ("A:\\X A:\\SAME", ["Files compare OK"]),
+        ("A:\\X A:\\Z", ["OFFSET 1", "File 1 = 61", "File 2 = 41", "OFFSET 4"]),
+        ("/D A:\\X A:\\Z", ["File 1 = 97", "File 2 = 65"]),
+        ("A:\\X /A A:\\Z /L", ["LINE 1", "File 1 = a", "LINE 2", "File 2 = !"]),
+        ("/C /L A:\\X A:\\Z", ["LINE 2", "File 1 = 7A"]),
+        ("/C /N=1 A:\\X A:\\Y", ["Files compare OK"]),
+        ("/N=2 /C A:\\X A:\\Y", ["OFFSET 4", "Files are different sizes"]),
+        ("/N=1 A:\\LEFT A:\\RIGHT", ["Files compare OK"]),
+        ("/L /D A:\\LEFT A:\\RIGHT", ["LINE 2", "File 1 = 65", "File 2 = 98"]),
+        ("/N=oops A:\\X A:\\Y", ["Parameter format not correct"]),
+    ]
+    batch = folder / "comp.bat"
+    batch.write_text("b:\n" + "".join(
+        f"echo CASE{i}\na:\\comp {args} <a:\\no\n" for i, (args, _) in enumerate(cases)))
+    output = subprocess.check_output([root / "test/run_tests", batch], text=True,
+                                     env=dict(os.environ, IMG=str(boot)))
+    blocks = output.split("CASE")[1:]
+    if len(blocks) != len(cases):
+        raise SystemExit(output)
+    for (args, expected), block in zip(cases, blocks):
+        if (any(s not in block for s in expected)
+                or ("Files compare OK" in block) != ("Files compare OK" in expected)
+                or (args.startswith("/C /L") and "LINE 1" in block)):
+            raise SystemExit(f"FAIL {args}\n{block}")
+    print(f"PASS {len(cases)} COMP cases")

@@ -226,7 +226,11 @@ NOPLUS:
 ;AD018; or	[allswitch],FBadSwitch		;AN038; Set up bad switch
 	or	BP,FBadSwitch			;AN018; Set up bad switch
 
-not_slashv:					;AN038;
+not_slashv:
+	test	bp,SwitchY+SwitchAsk
+	jz	copy_switch_accum
+	and	allswitch,NOT (SwitchY+SwitchAsk) ; last overwrite option wins
+copy_switch_accum:					;AN038;
 	or	[DESTSWITCH],BP 		; Yes, assume destination
 	or	[ALLSWITCH],BP			; keep tabs on all switches
 
@@ -511,7 +515,10 @@ NODCLOSE:
 NOFLUSH:
 	call	SEARCHNEXT			; Try next match
 	jnz	NEXTSRCJ			; Finished with this source spec
+	cmp	concat,0
+	jne	next_ambig_same_dest
 	mov	[DESTCLOSED],0			; Not created or concat ->...
+next_ambig_same_dest:
 	jmp	NEXTAMBIG			; Do next ambig
 
 DOMELCOPY:
@@ -806,14 +813,25 @@ PUTZ:
 	ADD	AX,[NXTADD]
 	JC	BINCLOS 			; > 1
 	CMP	AX,1
-	JZ	FORGETITJ			; WRITTEN = 0 NXTADD = 1 (the ^Z)
+	JNZ	BINCLOS
+	cmp	cflag,0
+	je	empty_unopened
+	jmp	FORGETIT
+empty_unopened:
+	test	allswitch,SwitchAsk
+	jnz	ret_declined
+	jmp	FORGETIT			; WRITTEN = 0 NXTADD = 1 (the ^Z)
 BINCLOS:
 	invoke	TRYFLUSH
 	jnz	CONCHNG
+	cmp	destclosed,copy_declined
+	je	ret_declined
 	cmp	[WRITTEN],0
-ForgetItJ:
 	jnz	no_forget			;AC000; Wrote something
 	jmp	FORGETIT			;AC000; Never wrote nothing
+ret_declined:
+	clc
+	ret
 no_forget:
 	MOV	BX,[DESTHAND]
 	MOV	CX,[CPTIME]
