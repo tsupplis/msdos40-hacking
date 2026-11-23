@@ -1,0 +1,7 @@
+:class 1
+:use 1 help usage
+:use 2 help missing
+:use 3 help nofile
+:use 4 help unreadable
+;
+:end

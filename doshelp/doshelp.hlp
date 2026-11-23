@@ -1,0 +1,36 @@
+CD        CD [drive:][path] - Show or change the current directory.
+COPY      COPY source [destination] - Copy one or more files.
+DEL       DEL [drive:][path]filename - Delete files.
+DELTREE   DELTREE [/Y] path [path...] - Delete a directory tree. /Y skips confirmation.
+DIR       DIR [drive:][path] [options] - List files. /P pauses and /W uses wide columns.
+FORMAT    FORMAT drive: [options] - Prepare a disk for use with DOS.
+HELP      HELP [command] - List topics or display a command summary. Use HELP | MORE to page.
+MD        MD [drive:]path - Create a directory.
+MEM       MEM [/C | /D] [/P] - Display memory usage.
+MORE      MORE [filename] - Page a text file or piped input.
+MOVE      MOVE [/Y | /-Y] source[,source...] destination - Move files or rename a directory. /-Y asks before overwriting.
+RD        RD [drive:]path - Remove an empty directory.
+REN       REN [drive:][path]oldname newname - Rename files.
+TYPE      TYPE [drive:][path]filename - Display a text file.
+XCOPY     XCOPY source [destination] [options] - Copy files. /S includes subdirectories and /E includes empty ones with /S.
+CHDIR     CD [drive:][path] - Show or change the current directory.
+ERASE     DEL [drive:][path]filename - Delete files.
+MKDIR     MD [drive:]path - Create a directory.
+RMDIR     RD [drive:]path - Remove an empty directory.
+RENAME    REN [drive:][path]oldname newname - Rename files.
+/?        HELP [command] - List topics or display a command summary. Use HELP | MORE to page.
+
+CONFIG.SYS drivers and support files
+ANSI.SYS     DEVICE=ANSI.SYS - Add ANSI console escape-sequence support.
+DISPLAY.SYS  Load with DEVICE= to configure display code-page support.
+DRIVER.SYS   Load with DEVICE= to add a logical floppy drive.
+EMM386.SYS   Expanded-memory driver for 386-class systems.
+PRINTER.SYS  Load with DEVICE= to configure printer code-page support.
+RAMDRIVE.SYS Load with DEVICE= to create a RAM disk.
+SMARTDRV.SYS Load with DEVICE= to install the disk cache.
+UMBS.SYS     DEVICE=UMBS.SYS start-end [...] - Supply mapped RAM as UMBs. Use hexadecimal segment addresses and exclusive end addresses.
+VDISK.SYS    Load with DEVICE= to create a virtual disk in memory.
+XMAEM.SYS    XMA emulation driver.
+XMA2EMS.SYS  Provide EMS services using XMA memory.
+COUNTRY.SYS  Country data selected by the CONFIG.SYS COUNTRY= directive.
+KEYBOARD.SYS Keyboard layout data used by KEYB.

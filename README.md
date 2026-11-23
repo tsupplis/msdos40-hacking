@@ -85,7 +85,7 @@ The survey compares the commands shipped here with the command syntax and option
 | `fdisk` | No known gaps | `/STATUS` reports disk usage and DOS volumes. `/MBR` restores the master boot code on the first fixed disk. It preserves partition entries when the boot signature is present and installs an empty table when it is absent. |  |
 | `find` | No known gaps | `/I` ignores case when matching and preserves the spelling of displayed lines. |  |
 | `format` | Gaps identified | `/Q` quick format. | *won't implement — Recoverable formatting, `/U`, and `/F` for 2.88 MB media.* |
-| `help` | Missing command |  | Display the command index and command-specific help. |
+| `help [command]` | Project extra | Display a text index or a command summary. Use `HELP \| MORE` to page the index. |  |
 | `if` | No known gaps | `IF [NOT] DIREXIST path command` tests for a directory. Wildcards match directories only. |  |
 | `keyb` | Gaps identified |  | `/E` explicitly selects an enhanced keyboard. |
 | `deltree` | Project extra | Delete files and directory trees, including protected files. Use `/Y` to skip confirmation. |  |
