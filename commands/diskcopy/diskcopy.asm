@@ -275,6 +275,7 @@ CSEG	       SEGMENT PARA PUBLIC 'CODE' ;AN000;
  PUBLIC T_DRV_SECT_TRACK	   ;
  PUBLIC T_DRV_HEADS		   ;
  PUBLIC T_DRV_TRACKS		   ;
+ PUBLIC VERIFY_OPTION
  PUBLIC USER_OPTION		   ;
  PUBLIC COPY_TYPE		   ;
  PUBLIC BUFFER_BEGIN		   ;
@@ -331,6 +332,7 @@ T_OWNER_SAVED	     DB  0	   ;
 RECOMMENDED_BYTES_SECTOR DW 0	   ;RECOMMENED BYTES/SECTOR FROM DEVICE PARA
 SOURCE_DRIVE	     DB  0	   ;SOURCE DRIVE ID: 1=DRV A, 2=DRV B ETC.
 TARGET_DRIVE	     DB  0	   ;TARGET DRIVE ID
+VERIFY_OPTION        DB  0
 USER_OPTION	     DB  0	   ;=1 OF /1 OPTION IS ENTERED
 COPY_TYPE	     DB  1	   ;SINGLE DRV COPY=1, DOUBLE DRIVE COPY=2
 BUFFER_BEGIN	     DW  1000H	   ;BEGINNING OF BUFFER ADDR [IN SEGMENT]
@@ -1110,6 +1112,15 @@ $$DO73:
        MOV   DX, OFFSET IOCTL_R_W  ;
        CALL  GENERIC_IOCTL	   ;
 
+       CMP   IO_ERROR, NO_ERROR
+       JNE   check_write
+       CMP   VERIFY_OPTION, 0
+       JE    $$EN73
+       MOV   BL, TARGET_DRIVE
+       MOV   CL, 62h               ; verify one track, same head and cylinder
+       MOV   DX, OFFSET IOCTL_R_W
+       CALL  GENERIC_IOCTL
+check_write:
        CMP   IO_ERROR, NO_ERROR    ;OK?
 ;  $LEAVE E			   ;YES, SUCCESS. EXIT THIS ROUTINE
    JE $$EN73
@@ -1141,7 +1152,8 @@ $$IF73:
 
        CMP   COPY_STATUS, FATAL    ;
 ;  $ENDLOOP E			   ;
-   JNE $$DO73
+   JE $$EN73
+   JMP $$DO73
 $$EN73:
 .XLIST				   ;
 ;this next is dead code, nobody calls WO_FATAL, so the move copy_status

@@ -209,6 +209,8 @@
 :def 1077 " %1  %2"                             ;AC053;
 :def 1078 "Directory already exists",CR,LF      ;AC000;
 
+:def 1080 "%1 File(s) %2 bytes",CR,LF
+:def 1081 "Total files listed:",CR,LF
 :def 1079 "Overwrite %1 (Y/N)? "
 
 :end				;AC000;

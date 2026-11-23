@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""Check recursive listings, case folding, and track verification on scratch media."""
+import os
+import re
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+work = root / "test/work"
+work.mkdir(exist_ok=True)
+with tempfile.TemporaryDirectory(dir=work) as scratch:
+    folder = Path(scratch)
+    image = folder / "switches.img"
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+    def install(source, name):
+        subprocess.run(["mcopy", "-o", "-i", image, source, "::" + name], check=True)
+    for name, command in [("command.com", "command"), ("diskcopy.com", "diskcopy"),
+                          ("find.exe", "find")]:
+        install(root / "commands" / command / name, name)
+
+    def run(name, lines):
+        batch = folder / (name + ".bat")
+        batch.write_bytes(("\r\n".join(lines) + "\r\n").encode("cp437"))
+        return subprocess.check_output([root / "test/run_tests", batch],
+                                      env=dict(os.environ, IMG=str(image))).decode("cp437")
+
+    report = run("search", [
+        r"md b:\top", r"md b:\top\z", r"md b:\top\a", r"md b:\top\a\nest",
+        r"echo MiXeD>b:\top\a\nest\one.txt", r"echo Second>b:\top\z\two.txt",
+        "set DIRCMD=/s/b", r"dir b:\top\*.txt /on", r"dir b:\top\*.txt /-s",
+        "set DIRCMD=", r"dir b:\top\*.txt /s", r"dir b:\top\*.abs /s/b",
+        r'find /i /n "mixed" <b:\top\a\nest\one.txt',
+        r'find /i /v /c "MIXED" <b:\top\a\nest\one.txt',
+    ])
+    assert "B:\\TOP\\A\\NEST\\ONE.TXT\nB:\\TOP\\Z\\TWO.TXT\n" in report, report
+    assert report.count("File not found") == 2, report
+    for heading in [r"Directory of  B:\TOP\A\NEST", r"Directory of  B:\TOP\Z"]:
+        assert heading in report, report
+    assert "[1]MiXeD\n0\nENDTEST" in report, report
+    assert report.count("bytes free") == 1, report
+    assert re.search(r"Total files listed:\s+2 File\(s\)\s+15 bytes", report), report
+    pages = []
+    for i in range(12):
+        pages.extend([fr"md b:\p{i}", fr"echo x>b:\p{i}\page.txt"])
+    pages.append(r"dir b:\page.txt /s/p <a:\cr.txt")
+    paged = run("paging", pages)
+    before, prompt, after = paged.partition("Press any key")
+    assert prompt and "Directory of" in before and "Directory of" in after, paged
+    assert "Total files listed:" in after, paged
+    print("PASS DIR /S and FIND /I", flush=True)
+
+    keys = folder / "keys.txt"
+    keys.write_bytes(b" N\r\n")
+    install(keys, "keys.txt")
+    # The XT defaults to 360 KB drive geometry. Both scratch images are 1.44 MB.
+    (folder / "verify.cfg").write_text("DRIVPARM=/D:0 /F:7\nDRIVPARM=/D:1 /F:7\n")
+    probe = folder / "vfytrack.com"
+    subprocess.run(["nasm", "-f", "bin", root / "test/vfytrack.asm", "-o", probe], check=True)
+    install(probe, probe.name)
+    report = run("verify", ["vfytrack", r"diskcopy a: b: <a:\keys.txt",
+                            "vfytrack 0", "if errorlevel 1 echo UNEXPECTED-VERIFY",
+                            r"diskcopy a: b: /v <a:\keys.txt", "vfytrack 160",
+                            "if errorlevel 1 echo WRONG-VERIFY-COUNT"])
+    assert "UNEXPECTED-VERIFY" not in report and "WRONG-VERIFY-COUNT" not in report, report
+    assert "Copying 80 tracks" in report and "Volume Serial Number is" in report, report
+    source, dest = [(work / name).read_bytes() for name in ("boot.img", "b.img")]
+    assert len(source) == len(dest) == 1474560
+    # DISKCOPY assigns a fresh serial number in the destination boot sector.
+    assert source[:39] == dest[:39] and source[43:] == dest[43:]
+    print("PASS DISKCOPY /V")

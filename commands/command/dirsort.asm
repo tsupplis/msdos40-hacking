@@ -13,8 +13,8 @@ extrn bits:word
 dircmd_name db 'DIRCMD='
 reading_defaults db ?
 seen_simple dw ?
-simple_names db 'PWBL'
-simple_masks dw SwitchP,SwitchW,DirBare,DirLower
+simple_names db 'PWBLS'
+simple_masks dw SwitchP,SwitchW,DirBare,DirLower,DirTree
 dir_attrs db ?
 dir_ordered db ?
 dir_replay db ?
@@ -42,6 +42,14 @@ public dir_options,dir_matches,dir_collect,dir_sort,dir_take
 
 ; Consume compact /A and /O modifiers before the positional system parser.
 ; Replacing consumed bytes with spaces preserves the offsets of other tokens.
+public dir_reset_sort
+dir_reset_sort proc near
+ mov records,0
+ mov cursor,0
+ mov dir_replay,0
+ ret
+dir_reset_sort endp
+
 dir_options proc near
 	xor	ax,ax
 	mov	dir_attrs,al
@@ -107,10 +115,10 @@ option_letter:
  and al,0dfh
  mov dh,al
  mov di,offset trangroup:simple_names
- mov cx,4
+ mov cx,5
  repne scasb
  jne complex_switch
- mov di,3
+ mov di,4
  sub di,cx
  shl di,1
  mov ax,simple_masks[di]

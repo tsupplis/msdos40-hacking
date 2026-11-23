@@ -301,6 +301,7 @@ opt_tbl:
 
 v_flag   db      FALSE           ;AN000; Set to FALSE
 c_flag   db      FALSE           ;AN000; Set to FALSE
+i_flag   db      FALSE
 n_flag   db      FALSE           ;AN000; Set to FALSE
 
 
@@ -391,7 +392,8 @@ sw1     label   word            ;AN000;
         dw      2               ;AN005; capitalize
         dw      ret_buff        ;AN000; PLACE RESULT IN RET_BUFF
         dw      novals          ;AN000; NO VALUE LIST
-        db      3               ;AN000; THREE SWITCHES IN FOLLOWING LIST
+        db      4               ; FOUR SWITCHES IN FOLLOWING LIST
+i_swch  db      "/I",0
 n_swch  db      "/N",0          ;AN000;
 v_swch  db      "/V",0          ;AN000;
 c_swch  db      "/C",0          ;AN000;
@@ -743,6 +745,34 @@ no_last_line:
         dec     dx                      ;adjust for later use
         jmp     short try_again
 
+; Fold single-byte characters only. Keep the input buffer intact for output.
+fold_char proc near
+        cmp     al,80h
+        jae     fold_country
+        cmp     al,'a'
+        jb      fold_done
+        cmp     al,'z'
+        ja      fold_done
+        sub     al,20h
+fold_done:
+        ret
+fold_country:
+        push    bp
+        push    ax
+        mov     bp,sp
+        push    dx
+        mov     dl,al
+        mov     ax,6520h
+        int     21h
+        jc      fold_restore
+        mov     [bp],dl
+fold_restore:
+        pop     dx
+        pop     ax
+        pop     bp
+        ret
+fold_char endp
+
 more_stuff_o:
         jmp     more_stuff
 
@@ -813,6 +843,14 @@ nopre:
         lodsb
         cmp     al,byte ptr [di]
         jz      kmatch
+        cmp     cs:i_flag,TRUE
+        jne     back_up
+        call    fold_char
+        mov     ah,al
+        mov     al,[di]
+        call    fold_char
+        cmp     al,ah
+        je      kmatch
 back_up:
         pop     ax                      ; Original length of comp string
         push    ax
@@ -857,7 +895,8 @@ a_matchk:
 ;---------------------------
 try_again_opt:
         cmp     cs:v_flag,TRUE          ;is flag set?
-        jne     try_again               ;no goto next line
+        je      prt_line
+        jmp     try_again
 
 ;---------------------------
 ;-      PRINT THE LINE WITH THE MATCH
@@ -1444,7 +1483,11 @@ chek_v:                                                 ;AN000;
         cmp     bx,offset v_swch                        ;AN000; Is it the /N switch?
         jne     chek_c                                  ;AN000:  Yes, process it.
         jmp     parse_loop                              ;AN000;  Look for another
-chek_c:                                                 ;AN000;
+chek_c:
+        cmp     bx,offset i_swch
+        jne     check_count
+        jmp     parse_loop
+check_count:                                            ;AN000;
         cmp     bx,offset c_swch                        ;AN000; Is it the /N switch?
         jne     whoops                                  ;AN000:  Yes, process it.
         jmp     parse_loop                              ;AN000;  Look for another
@@ -1522,7 +1565,12 @@ pp_chek_v:                              ;AN005;
         jne     pp_chek_c               ;AN005:  Yes, process it.
         mov     cs:v_flag,TRUE          ;AN005;  Set the corresponding flag
         jmp     pp_loop                 ;AN005;  Look for another
-pp_chek_c:                              ;AN005;
+pp_chek_c:
+        cmp     bx,offset i_swch
+        jne     pp_count
+        mov     cs:i_flag,TRUE
+        jmp     pp_loop
+pp_count:                               ;AN005;
         cmp     bx,offset c_swch        ;AN005; Is it the /N switch?
         jne     pp_error                ;AN005:  Yes, process it.
         mov     cs:c_flag,TRUE          ;AN005;  Set the corresponding flag

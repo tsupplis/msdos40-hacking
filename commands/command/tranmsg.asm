@@ -97,6 +97,18 @@ Copied_Ptr	dw	1018				;AN000;message number
 
 ;  "%1 File(s) "
 ;
+public tree_stats_ptr,tree_total_ptr
+tree_total_ptr dw 1081
+        db no_subst
+tree_stats_ptr dw 1080
+        db 2
+        db parm_block_size,0
+        dw offset trangroup:tree_count_arg,0
+        db 1,Right_Align+Unsgn_Bin_DWord,10,9,blank
+        db parm_block_size,0
+        dw offset trangroup:File_size_low,0
+        db 2,Right_Align+Unsgn_Bin_DWord,10,10,blank
+
 DirMes_Ptr	dw	1019				;AN000;message number
 		db	1				;AN000;number of subst
 		db	parm_block_size 		;AN000;size of sublist
@@ -393,7 +405,8 @@ DirHead_Ptr	dw	1048				;AN000;message number
 		db	1				;AN000;number of subst
 		db	parm_block_size 		;AN000;size of sublist
 		db	0				;AN000;reserved
-		dw	OFFSET	TranGroup:BWDBUF	;AN000;offset of arg
+public dirhead_path
+dirhead_path	dw	OFFSET	TranGroup:BWDBUF	;AN000;offset of arg
 		dw	0				;AN000;segment of arg
 		db	1				;AN000;first subst
 		db	Char_field_ASCIIZ		;AN000;character string

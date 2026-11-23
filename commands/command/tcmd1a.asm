@@ -27,13 +27,15 @@ TRANDATA	SEGMENT PUBLIC BYTE	;AC000;
 	EXTRN	Bytmes_ptr:word
 	EXTRN	comsw:word
 	extrn	dir_l_syn:byte,dir_b_syn:byte
+tree_all db '*.*',0
 DirNoPause equ 0400h
 	EXTRN	dir_w_syn:word		;AC000;
 	EXTRN	dirdat_mo_day:word	;AC000;
 	EXTRN	dirdat_yr:word		;AC000;
 	EXTRN	dirdattim_ptr:word
-	EXTRN	dirhead_ptr:word
+	EXTRN	dirhead_ptr:word,dirhead_path:word
 	EXTRN	dirtim_hr_min:word	;AC000;
+	extrn tree_stats_ptr:word,tree_total_ptr:word
 	EXTRN	Dirmes_ptr:word
 	EXTRN	disp_file_size_ptr:word
 	EXTRN	Dmes_ptr:word
@@ -46,6 +48,23 @@ DirNoPause equ 0400h
 TRANDATA	ENDS
 
 TRANSPACE	SEGMENT PUBLIC BYTE	;AC000;
+        extrn bwdbuf:byte
+; Last visited child (ASCIIZ) and path end per level. A single DTA
+; suffices because child names are visited in lexical order.
+; The 64-character DOS directory limit permits at most 32 one-letter names.
+tree_frames db 33*15 dup (?)
+tree_best db 13 dup (?)
+tree_frame dw ?
+tree_path db 82 dup (?)
+tree_mask db 13 dup (?)
+tree_entry db 43 dup (?)
+tree_fcb db 37 dup (?)
+tree_seen db ?
+public tree_count_arg
+tree_count_arg dw 2 dup (?)
+tree_size dw 2 dup (?)
+total_count dw 2 dup (?)
+total_size dw 2 dup (?)
 	EXTRN	bytes_free:word
 	EXTRN	charbuf:byte
 	EXTRN	COM:byte
@@ -341,11 +360,18 @@ DoHeader:
 ;
 
 DoHeaderCont:
+        test bits,DirTree
+        jz single_header
+        cmp ComSw,0
+        jne single_header
+        jmp tree_start
+single_header:
 	test	bits,DirBare
 	jnz	dir_header_done
 	mov	al,blank			;AN051; Print out a blank
 	invoke	print_char			;AN051;   before DIR header
 	invoke	build_dir_string		; get current dir string
+        mov dirhead_path,offset trangroup:bwdbuf
 	mov	dx,offset trangroup:Dirhead_ptr
 	invoke	printf_crlf			; bang!
 
@@ -435,6 +461,47 @@ entry_selected:
 entry_saved:
  jmp scroll
 print_entry:
+        test bits,DirTree
+        jz entry_ready
+        test bits,DirBare
+        jz tree_has_entry
+        cmp byte ptr dirbuf+8,'.'
+        jne tree_has_entry
+        jmp scroll
+tree_has_entry:
+        mov tree_seen,1
+        add total_count,1
+        adc total_count+2,0
+        test [dirbuf+8].dir_attr,attr_directory
+        jnz tree_check_header
+        mov ax,[dirbuf+8].dir_size_l
+        mov dx,[dirbuf+8].dir_size_h
+        add tree_size,ax
+        adc tree_size+2,dx
+        add total_size,ax
+        adc total_size+2,dx
+tree_check_header:
+        cmp filecnt,0
+        jne entry_ready
+        test bits,DirBare
+        jnz entry_ready
+        mov bx,tree_frame
+        mov di,[bx+13]
+        cmp di,offset trangroup:tree_path+3
+        je tree_heading_end
+        dec di
+tree_heading_end:
+        mov byte ptr [di],0
+        mov dirhead_path,offset trangroup:tree_path
+        mov dx,offset trangroup:Dirhead_ptr
+        push di
+        call std_printf
+        call tree_line
+        invoke crlf2
+        call tree_line
+        pop di
+        mov byte ptr [di],5ch
+entry_ready:
 	inc	[filecnt]			; Keep track of how many we find
 	mov	si,offset trangroup:dirbuf+8	; SI -> information returned by sys call
 	test	bits,DirBare
@@ -443,7 +510,19 @@ print_entry:
 	jne	dir_bare_name
 	jmp	scroll
 dir_bare_name:
+        test bits,DirTree
+        jz bare_leaf
+        mov si,offset trangroup:tree_path
+        mov di,offset trangroup:charbuf
+        mov bx,tree_frame
+        mov cx,[bx+13]
+        sub cx,si
+        rep movsb
+        mov si,offset trangroup:dirbuf+8
+        jmp short bare_convert
+bare_leaf:
 	mov	di,offset trangroup:charbuf
+bare_convert:
 	invoke	fcb_to_ascz
 	call	dir_print_name
 	jmp	dir_end_line
@@ -568,6 +647,11 @@ scroll:
 sorted_end:
  jmp listing_end
 search_next_entry:
+        test bits,DirTree
+        jz single_next
+        mov ah,4fh
+        jmp tree_search
+single_next:
 	mov	ah,Dir_Search_Next
 	mov	dx,FCB-7			; DX -> Unopened FCB
 	int	int_command			; Search for a file to match FCB
@@ -584,6 +668,10 @@ DirDone:
  invoke dir_sort
  jmp scroll
 listing_end:
+        test bits,DirTree
+        jz single_end
+        jmp tree_children
+single_end:
 	test	[filecnt],-1
 	jnz	Trailer
 	mov	ax,error_file_not_found 	;AN022;
@@ -607,10 +695,20 @@ Trailer:
 	endif06:				;AN066;   displays
 
 mmessage:
+        test bits,DirTree
+        jz single_summary
+        mov ax,filecnt
+        mov tree_count_arg,ax
+        mov tree_count_arg+2,0
+        mov ax,tree_size
+        mov dx,tree_size+2
+        jmp tree_stats
+single_summary:
 	mov	dx,offset trangroup:Dirmes_ptr
 	mov	si,[filecnt]
 	mov	dir_num,si
 	call	std_printf
+dir_free_space:
 	mov	ah,Get_Drive_Freespace
 	mov	dl,byte ptr DS:[FCB]
 	int	int_command
@@ -622,6 +720,232 @@ mmessage:
 	mov	bytes_free+2,dx 		;AC000;
 	MOV	DX,OFFSET TRANGROUP:BYTMES_ptr
 	jmp	std_printf
+
+ ; Keep file selection and child enumeration independent. All handle searches
+ ; use absolute paths so output, paging and interrupts see the user's cwd.
+tree_start:
+        invoke build_dir_string
+        mov si,offset trangroup:bwdbuf
+        mov di,offset trangroup:tree_path
+tree_root_copy:
+        lodsb
+        stosb
+        or al,al
+        jnz tree_root_copy
+        dec di
+        cmp di,offset trangroup:tree_path+3
+        je tree_root_ready
+        mov al,5ch
+        stosb
+tree_root_ready:
+        mov bx,offset trangroup:tree_frames
+        mov tree_frame,bx
+        mov [bx+13],di
+        mov si,FCB+1
+        mov di,offset trangroup:tree_mask
+        invoke fcb_to_ascz
+        invoke restudir
+        mov tree_seen,0
+        xor ax,ax
+        mov total_count,ax
+        mov total_count+2,ax
+        mov total_size,ax
+        mov total_size+2,ax
+tree_node:
+        mov bx,tree_frame
+        mov byte ptr [bx],0
+        invoke dir_reset_sort
+        mov tree_size,0
+        mov tree_size+2,0
+        mov filecnt,0
+        mov al,linlen
+        mov lincnt,al
+        mov si,offset trangroup:tree_mask
+        call tree_spec
+        mov dx,offset trangroup:tree_entry
+        mov ah,1ah
+        int int_command
+        mov cx,attr_directory
+        cmp dir_attrs,0
+        je tree_first
+        or cl,attr_hidden+attr_system
+tree_first:
+        mov dx,offset trangroup:tree_path
+        mov ah,4eh
+tree_search:
+        int int_command
+        jnc tree_found
+        cmp ax,error_file_not_found
+        je tree_exhausted
+        cmp ax,error_no_more_files
+        je tree_exhausted
+        jmp dir_err_setup
+tree_exhausted:
+        cmp dir_ordered,0
+        je tree_children
+        invoke dir_sort
+        jmp scroll
+tree_found:
+        mov si,offset trangroup:tree_entry+30
+        mov di,offset trangroup:tree_fcb
+        mov ax,2900h
+        int int_command
+        cmp tree_entry+30,'.'
+        jne tree_name_ok
+        mov tree_fcb+1,'.'
+        cmp tree_entry+31,'.'
+        jne tree_name_ok
+        mov tree_fcb+2,'.'
+tree_name_ok:
+        mov si,offset trangroup:tree_fcb+1
+        mov di,offset trangroup:dirbuf+8
+        mov cx,11
+        rep movsb
+        mov al,tree_entry+21
+        stosb
+        mov si,offset trangroup:tree_entry+22
+        mov di,offset trangroup:dirbuf+8+22
+        movsw
+        movsw
+        mov di,offset trangroup:dirbuf+8+28
+        movsw
+        movsw
+        jmp Display
+
+tree_children:
+        test bits,DirBare
+        jnz tree_child_first
+        cmp filecnt,0
+        je tree_child_first
+        call Trailer
+tree_child_first:
+        mov si,offset trangroup:tree_all
+        call tree_spec
+        mov tree_best,0
+        mov dx,offset trangroup:tree_entry
+        mov ah,1ah
+        int int_command
+        mov cx,attr_directory
+        mov dx,offset trangroup:tree_path
+        mov ah,4eh
+tree_child_search:
+        int int_command
+        mov bx,tree_frame
+        jc tree_scan_end
+        test tree_entry+21,attr_directory
+        jz tree_next
+        cmp tree_entry+30,'.'
+        je tree_next
+        mov si,offset trangroup:tree_entry+30
+        mov di,bx
+        call tree_compare
+        jbe tree_next
+        mov di,offset trangroup:tree_best
+        cmp byte ptr [di],0
+        je tree_candidate
+        call tree_compare
+        jae tree_next
+tree_candidate:
+        mov cx,13
+        rep movsb
+tree_next:
+        mov ah,4fh
+        jmp short tree_child_search
+tree_scan_end:
+        cmp ax,error_no_more_files
+        je tree_choose
+        cmp ax,error_file_not_found
+        je tree_choose
+        jmp dir_err_setup
+tree_choose:
+        cmp tree_best,0
+        je tree_pop
+        mov di,bx
+        mov si,offset trangroup:tree_best
+        mov cx,13
+        rep movsb
+        mov di,[bx+13]
+        mov si,bx
+tree_child_copy:
+        lodsb
+        or al,al
+        jz tree_child_ready
+        cmp di,offset trangroup:tree_path+66
+        jb tree_child_byte
+        jmp tree_child_first
+tree_child_byte:
+        stosb
+        jmp short tree_child_copy
+tree_child_ready:
+        mov al,5ch
+        stosb
+        add bx,15
+        mov tree_frame,bx
+        mov [bx+13],di
+        jmp tree_node
+tree_pop:
+        cmp bx,offset trangroup:tree_frames
+        je tree_finish
+        sub bx,15
+        mov tree_frame,bx
+        jmp tree_child_first
+; Compare two DOS ASCIIZ names, preserving both pointers and returning flags.
+tree_compare:
+        push si
+        push di
+tree_compare_byte:
+        lodsb
+        scasb
+        jne tree_compared
+        or al,al
+        jnz tree_compare_byte
+tree_compared:
+        pop di
+        pop si
+        ret
+tree_finish:
+        mov dx,offset trangroup:dirbuf
+        mov ah,1ah
+        int int_command
+        cmp tree_seen,0
+        jne tree_return
+        jmp DirNF
+tree_return:
+        test bits,DirBare
+        retnz
+        mov dx,offset trangroup:tree_total_ptr
+        call std_printf
+        call tree_line
+        mov ax,total_count
+        mov tree_count_arg,ax
+        mov ax,total_count+2
+        mov tree_count_arg+2,ax
+        mov ax,total_size
+        mov dx,total_size+2
+        call tree_stats
+        jmp dir_free_space
+tree_stats:
+        mov file_size_low,ax
+        mov file_size_high,dx
+        mov dx,offset trangroup:tree_stats_ptr
+        call std_printf
+tree_line:
+        test bits,SwitchP
+        retz
+        dec fullscr
+        jz tree_pause
+        ret
+tree_pause:
+        jmp check_for_P
+tree_spec:
+        mov bx,tree_frame
+        mov di,[bx+13]
+tree_spec_copy:
+        lodsb
+        stosb
+        or al,al
+        jnz tree_spec_copy
+        ret
 
 shoname:
 	mov	di,offset trangroup:charbuf
