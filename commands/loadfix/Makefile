@@ -1,11 +1,19 @@
 ROOT ?= $(CURDIR)/../..
 SDKBIN ?= $(ROOT)/sdk/bin
+MSGDIR ?= $(ROOT)/messages
+COUNTRY = usa-ms
 export EMU2_DRIVE_C ?= $(ROOT)
 
 .PHONY: all clean
 all: loadfix.com
 
-loadfix.obj: loadfix.asm
+$(MSGDIR)/$(COUNTRY).idx: $(MSGDIR)/$(COUNTRY).msg
+	$(MAKE) -C $(MSGDIR)
+
+loadfix.cl1: loadfix.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
+	emu2 $(SDKBIN)/nosrvbld.exe loadfix.skl 'C:\messages\$(COUNTRY).msg' > /dev/null
+
+loadfix.obj: loadfix.asm loadfix.cl1
 	@echo | emu2 $(SDKBIN)/masm.exe -Mx -t 'loadfix.asm,loadfix.obj;'
 
 loadfix.com: loadfix.obj
@@ -14,4 +22,4 @@ loadfix.com: loadfix.obj
 	rm -f loadfix.exe
 
 clean:
-	rm -f loadfix.obj loadfix.exe loadfix.com loadfix.map
+	rm -f loadfix.obj loadfix.exe loadfix.com loadfix.map loadfix.cl1

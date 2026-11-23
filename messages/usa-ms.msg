@@ -1225,3 +1225,8 @@ UPDATE   d705 0013
 	"  Prepare system to be restarted",CR,LF
 	"  Press any key to restart system . . ."
 0220 U 0000 CR,LF,"Invalid keyboard code specified",CR,LF
+LOADFIX  db35 0004
+0001 U 0000 "LOADFIX program [arguments]",CR,LF,"$"
+0002 U 0000 "Program not found",CR,LF,"$"
+0003 U 0000 "Insufficient memory",CR,LF,"$"
+0004 U 0000 "Cannot load program",CR,LF,"$"

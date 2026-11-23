@@ -285,10 +285,9 @@ try_exec endp
 path_key db 'PATH='
 com_ext db '.COM',0
 exe_ext db '.EXE',0
-syntax db 'LOADFIX program [arguments]',13,10,'$'
-missing_msg db 'Program not found',13,10,'$'
-mem_err db 'Insufficient memory',13,10,'$'
-exec_msg db 'Cannot load program',13,10,'$'
+CR equ 13
+LF equ 10
+include loadfix.cl1
 strategy dw ?
 explicit_path db 0
 extension db 0
