@@ -459,6 +459,7 @@ ASSUME	DS:SYSINITSEG
 
 	MOV	AX,OFFSET SYSSIZE
 	Call	ParaRound
+	DEC     CX                      ; leave top paragraph for the UMB bridge
 	SUB	CX,AX			;Compute new sysinit location
 	MOV	ES,CX
 	MOV	CX,OFFSET SYSSIZE + 1
@@ -1908,6 +1909,8 @@ InitUmb PROC NEAR
 	RET
 UmbFindArena:
 	LES	DI,CS:DosInfo
+        CMP     ES:[DI.SYSI_UMB_HEAD],0 ; already built for automatic SHARE
+        JNE     UmbReturn
 	MOV	AX,ES:[DI-2]            ; conventional arena head
 UmbLowWalk:
 	MOV	ES,AX
@@ -1918,7 +1921,17 @@ UmbLowWalk:
 	JMP	UmbLowWalk
 UmbLowEnd:
 	CMP	ES:[arena_owner],0
-	JNE	UmbReturn
+        JE      UmbCheckSize
+        ; Before SHARE, SYSINIT owns the final block. Only borrow its
+        ; reserved top paragraph when the block ends at conventional top.
+        MOV     AX,ES
+        INC     AX
+        CMP     AX,CS:[AREA]
+        JNE     UmbReturn
+        ADD     AX,ES:[arena_size]
+        CMP     AX,CS:[MEMORY_SIZE]
+        JNE     UmbReturn
+UmbCheckSize:
 	CMP	ES:[arena_size],0
 	JE	UmbReturn
 	PUSH	ES
@@ -3020,6 +3033,10 @@ LoadShare	proc	near			;AN021;
 	cmp	al, 0ffh			;AN021;
 	jz	LShare_Ret			;AN021;Share already loaded!
 ;SHARE not loaded.
+        CMP     CS:UMB_REQUESTED,0
+        JE      SharePath
+        CALL    InitUmb
+SharePath:
 	push	cs				;AN021;
 	pop	ds				;AN021;
 	push	cs				;AN021;
@@ -3051,7 +3068,7 @@ LShare_Set_Filename:				;AN021;
 ;Now, we got a path,filename with no parameters for SHARE.EXE
 	mov	si, offset PathString		;AN021;
 	or	Install_Flag, SHARE_INSTALL	;AN021;Signals Do_Install_Exec that this is for SHARE.EXE.
-	call	Do_Install_Exec 		;AN021;execute it.
+	call	ExecAutoShare 		;AN021;execute it.
 	jnc	LShare_Ret			;AN021;No problem
 ;Load/Exec failed.  Show "Warning: SHARE should be loaded for large media"
 	push	cs				;AN021;
@@ -3061,6 +3078,44 @@ LShare_Set_Filename:				;AN021;
 LShare_Ret:					;AN021;
 	ret					;AN021;
 LoadShare	endp				;AN021;
+
+; Preserve the caller's policy around the automatic install. High-first EXEC
+; falls back to conventional memory when no upper block fits the image.
+ExecAutoShare PROC NEAR
+        CMP     CS:UMB_REQUESTED,0
+        JE      SharePlainExec
+        MOV     AX,5802h
+        INT     21h
+        XOR     AH,AH
+        PUSH    AX                      ; previous UMB link state
+        MOV     AX,5800h
+        INT     21h
+        PUSH    AX                      ; previous allocation strategy
+        MOV     AX,5803h
+        MOV     BX,1
+        INT     21h
+        JC      ShareNoUmb              ; no chain available
+        MOV     AX,5801h
+        MOV     BX,80h                  ; high first, then conventional
+        INT     21h
+        CALL    Do_Install_Exec
+        POP     BX
+        PUSHF                           ; return EXEC carry to LoadShare
+        MOV     AX,5801h
+        INT     21h
+        POPF
+        POP     BX
+        PUSHF
+        MOV     AX,5803h
+        INT     21h
+        POPF
+        RET
+ShareNoUmb:
+        POP     BX
+        POP     BX
+SharePlainExec:
+        JMP     Do_Install_Exec
+ExecAutoShare ENDP
 
 SYSINITSEG	ENDS
 	   END

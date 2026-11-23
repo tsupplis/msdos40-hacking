@@ -2,6 +2,7 @@
 """Verify FAT16 directory and file operations at the 32 MiB boundary."""
 import hashlib
 import os
+import re
 from pathlib import Path
 import shutil
 import struct
@@ -124,6 +125,8 @@ with tempfile.TemporaryDirectory(dir=work) as directory_name:
         batch.with_suffix(".cfg").write_text(config)
         for reboot in (False, True):
             commands = [f"hmaio {mode[0]}!"]
+            if not reboot:
+                commands.append("mem /c")
             for name in names:
                 if not reboot:
                     commands.append(f"md C:\\{name}")
@@ -131,6 +134,14 @@ with tempfile.TemporaryDirectory(dir=work) as directory_name:
             batch.write_text("\n".join(commands)+"\n")
             output = subprocess.check_output([root/"test/run_tests", batch],
                         env=dict(os.environ, IMG=str(boot), PCE_TEST_HD=str(disk))).splitlines()
+            if not reboot:
+                rows = [row for row in output if row.startswith(b"SHARE ")]
+                require(len(rows) == 1, f"{mode}: expected one automatic SHARE module: {rows!r}")
+                fields = re.findall(rb"([\d,]+)\s+\(", rows[0])
+                total, conventional, upper = [int(n.replace(b",", b"")) for n in fields]
+                require(total > 0 and (conventional, upper) ==
+                        ((0, total) if mode == "high" else (total, 0)),
+                        f"{mode}: wrong SHARE placement: {rows[0]!r}")
             for marker in [b"LAYOUT PASS", b"ENDTEST"] + [("OK-"+n).encode() for n in names]:
                 require(output.count(marker) == 1, f"{mode}: missing {marker!r} in {output!r}")
             saved = folder / "saved.img"
