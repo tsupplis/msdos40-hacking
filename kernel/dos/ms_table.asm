@@ -403,7 +403,7 @@ VAL1    =       ($-DISPATCH)/2 - 1
         short_addr  $Commit                         ; 104    68
         short_addr  $GSetMediaID                    ; 105    69   ;AN000;
         short_addr  $Commit                         ; 106    6A   ;AN000;
-        short_addr  $IFS_IOCTL                      ; 107    6B   ;AN000;
+        short_addr  CPMFunc                         ; 107    6B   reserved
         short_addr  $Extended_Open                  ; 108    6C   ;AN000;
 ;
 VAL2    =       ($-DISPATCH)/2 - 1
