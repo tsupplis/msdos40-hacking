@@ -178,6 +178,8 @@ DEBUG        Inspect and modify memory and run machine-code programs.
 
    filename        Program or file to load into the debugger.
    arguments       Command-line arguments for the program.
+
+ At the DEBUG prompt, type ? for a command list.
 DEL          Delete one or more files.
 
  DEL [drive:][path]filename [/P] [/Q]

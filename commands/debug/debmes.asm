@@ -366,6 +366,28 @@ db_drive_error label dword		;an000;drive error parameters
 ;=========================================================================
 
 
+	PUBLIC HELP_FIRST,HELP_END
+; One descriptor per block of help lines, in screen order.
+help_block macro number
+        dw number
+        db UTILITY_MSG_CLASS
+        dw stdout,0,0                  ; handle, substitution list and count
+        db no_input
+        dw 0                           ; no input buffer
+endm
+
+HELP_FIRST label word
+        irp number,<79,80,81,82,83,84,85,86,87,88>
+            help_block number
+        endm
+        IF SYSVER
+            help_block 91              ; system debugger user device
+        ELSE
+            help_block 89
+            help_block 90              ; DOS debugger EMS commands
+        ENDIF
+HELP_END label word
+
 crlf_ptr label	word			;an000;13,10,0
 	dw	0008			;an000;message number
 	db	UTILITY_MSG_CLASS	   ;an000;utility message

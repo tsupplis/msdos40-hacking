@@ -84,7 +84,7 @@ ASSUME	CS:DG,DS:DG,ES:DG,SS:DG
 	PUBLIC	GETHEX,GET_ADDRESS,GETEOL,GETHX,PERR
 	PUBLIC	PERR,MOVE,DUMP,ENTERDATA,FILL,SEARCH,DEFAULT
 	IF	SYSVER
-	    PUBLIC  IN
+	    PUBLIC  INPT
 	    EXTRN   DISPREG:NEAR,DEVIOCALL:NEAR
 	ENDIF
 	EXTRN	CRLF:NEAR,OUTDI:NEAR,OUTSI:NEAR,SCANP:NEAR
@@ -884,14 +884,16 @@ NOTCNTC:
 	    CMP     AL,UPPER_N - CHAR_AT_SIGN
 	    JZ	    PRINTOFF
 
+	    PUSH    AX                  ; Echo formats a string and consumes AL.
 	    CALL    OUT_CHAR
+	    POP     AX                  ; Return the original input character.
 
 	    RET
 
 PRINTOFF:
 PRINTON:
 	    NOT     [PFLAG]
-	    JMP     SHORT IN
+	    JMP     SHORT INPT
 
 	ELSE
 INPT:				; Change label for build

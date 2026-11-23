@@ -119,6 +119,29 @@
 :def 76 "Handle %1 deallocated",cr,lf
 :def 78 "EMS not installed",cr,lf
 
+:def 79 "A [address]                      Assemble instructions",CR,LF
+	"C range address                  Compare two memory areas",CR,LF
+:def 80 "D [range]                        Dump memory",CR,LF
+	"E address [list]                 Enter bytes",CR,LF
+:def 81 "F range list                     Fill memory",CR,LF
+	"G [=address] [breakpoints]       Run to a breakpoint or termination",CR,LF
+:def 82 "H value1 value2                  Show hexadecimal sum and difference",CR,LF
+	"I port                           Read a byte from a port",CR,LF
+:def 83 "L [address [drive sector count]] Load a file or read disk sectors",CR,LF
+	"M range address                  Move a memory block",CR,LF
+:def 84 "N filename [arguments]           Set filename and arguments",CR,LF
+	"O port byte                      Write a byte to a port",CR,LF
+:def 85 "P [=address] [count]             Proceed over calls and loops",CR,LF
+	"Q                                Quit DEBUG",CR,LF
+:def 86 "R [register]                     Display or change registers or flags",CR,LF
+	"S range list                     Search memory for bytes",CR,LF
+:def 87 "T [=address] [count]             Trace instructions",CR,LF
+	"U [range]                        Unassemble instructions",CR,LF
+:def 88 "W [address [drive sector count]] Write a file or write disk sectors",CR,LF
+:def 89 "XA pages / XD handle             Allocate or release EMS pages",CR,LF
+	"XM logical physical handle       Map an EMS page",CR,LF
+:def 90 "XS                               Show EMS status",CR,LF
+:def 91 "X device                         Select the user device",CR,LF
 :end
 
 ;=========================================================================

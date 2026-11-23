@@ -36,6 +36,8 @@
 ;
 ;======================= END OF SPECIFICATIONS ===========================
 
+HELP_DESC_SIZE EQU 12              ; Size of a DEBUG message descriptor
+
 	IF1
 	    %OUT    Including DEBEQU.ASM...
 	ENDIF

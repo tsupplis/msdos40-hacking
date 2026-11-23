@@ -82,6 +82,7 @@
 .LIST
 	INCLUDE DEBEQU.ASM
 	IF	SYSVER
+	INCLUDE DEVSYM.INC
 ; Structure for system call 72
 SYSINITVAR  STRUC
 DPBHEAD     DD	    ?			; Pointer to head of DPB-FAT list
@@ -156,6 +157,7 @@ CONST	SEGMENT PUBLIC BYTE
 	IF	IBMJAPAN
 	    EXTRN   PARITYMES_PTR:BYTE
 	ENDIF
+	EXTRN	HELP_FIRST:WORD,HELP_END:WORD
 	EXTRN	PROMPT_PTR:BYTE,ADD_PTR:BYTE,HEX_PTR:BYTE
 	EXTRN	USER_PROC_PDB:WORD,CSSAVE:WORD,DSSAVE:WORD
 	EXTRN	SPSAVE:WORD,IPSAVE:WORD,LINEBUF:BYTE,QFLAG:BYTE
@@ -209,7 +211,7 @@ CODE	SEGMENT PUBLIC
 
 	IF	SYSVER
 ;	    PUBLIC  SETUDEV,DEVIOCALL				; kwc 12/10/86
-	    PUBLIC  SETUDEV		; kwc 12/10/86
+	    PUBLIC  SETUDEV,DEVIOCALL		; kwc 12/10/86
 	    EXTRN   DISPREG:NEAR,INPT:NEAR
 	ENDIF
 
@@ -585,6 +587,18 @@ GOPROMPT:
 	JZ	COMMAND 		; if zero, Null command, go get another
 					; nonzero, got something in response
 	LODSB				; AL=first non-blank character
+	CMP	AL,'?'                  ; Punctuation is outside COMTAB's A-Z range.
+	JNE	LETTER_COMMAND
+	CALL	GETEOL                  ; Only trailing blanks are allowed.
+	MOV	DX,OFFSET DG:HELP_FIRST
+HELP_NEXT:
+	CALL	STD_PRINTF
+	ADD	DX,HELP_DESC_SIZE
+	CMP	DX,OFFSET DG:HELP_END
+	JB	HELP_NEXT
+	JMP	COMMAND
+
+LETTER_COMMAND:
 ; Prepare command letter for table lookup
 ; converts the first non-blank (assumed to be the command letter)
 ; to in index in the "comtab" array.
@@ -740,6 +754,37 @@ DABORT:
 	JMP	COMMAND
 
 	IF	SYSVER
+; Read one byte from the selected character driver. Both driver entries
+; receive ES:BX pointing to the same DOS request packet.
+DEVIOCALL:
+            push bx
+            push es
+            push cs
+            pop es
+            mov bx,offset DG:IOCALL
+            mov cs:[IOCOM],ah
+            mov cs:[IOSTAT],0
+            mov cs:[IOCNT],1
+            mov word ptr cs:[IOADDR+2],ds
+            mov ax,[si.SDEVSTRAT]
+            mov word ptr cs:[IOADDR],ax
+            push ds
+            push si
+            push es
+            push bx
+            call cs:[IOADDR]
+            pop bx
+            pop es
+            pop si
+            pop ds
+            mov ax,[si.SDEVINT]
+            mov word ptr cs:[IOADDR],ax
+            call cs:[IOADDR]
+            mov al,cs:[IOBUFF]
+            pop es
+            pop bx
+            ret
+
 SETUDEV:
 	    MOV     DI,OFFSET DG:CONFCB
 	    MOV     AX,(PARSE_FILE_DESCRIPTOR SHL 8) OR SET_DRIVEID_OPTION
