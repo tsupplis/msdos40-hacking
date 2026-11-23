@@ -449,7 +449,7 @@ KEYB         Select a keyboard layout.
    codepage        Code page to use with the layout.
    file            Keyboard definition file.
    /ID:id          Select a particular keyboard by ID.
-   /E              Assume an enhanced keyboard when installing on a PC/XT or AT.
+   /E              Assume an enhanced keyboard when installing on XT or AT.
 KEYBOARD.SYS Keyboard layout data used by KEYB.
 
  KEYB layout[,codepage[,file]]

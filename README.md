@@ -95,7 +95,7 @@ The survey compares the commands shipped here with the command syntax and option
 | `format` | Gaps identified | `/Q` quick format. | *won't implement — Recoverable formatting, `/U`, and `/F` for 2.88 MB media.* |
 | `help [command]` | Project extra | With no argument, HELP pages the topic index on the console. Specify a topic for a one-screen reference. |  |
 | `if` | No known gaps | `IF [NOT] DIREXIST path command` tests for a directory. Wildcards match directories only. |  |
-| `keyb` | No known gaps | `/E` selects enhanced keyboard handling at installation on PC/XT and AT systems. |  |
+| `keyb` | No known gaps | `/E` selects enhanced keyboard handling when installing on XT or AT. |  |
 | `deltree` | Project extra | Delete files and directory trees, including protected files. Use `/Y` to skip confirmation. |  |
 | `loadfix` | No known gaps | Run a DOS executable above the first 64 KiB and return its exit code. |  |
 | `loadhigh` (`lh`) | No known gaps | Run an external program in upper memory when it fits. |  |
