@@ -215,7 +215,7 @@ HAVSTART:
 	INC	[FSeek_logclus]
 	invoke	FastSeek_Truncate    ;
 ;;; 11/5/86 FastSeek
-	invoke	ALLOCATE
+	invoke	HMA_ALLOCATE
 	JNC	DOWRTJ
 
 	entry	WRTERR
@@ -268,7 +268,7 @@ NOGROW:
 	invoke	FastSeek_Truncate     ;FS.					;AN000;
 NULL_FILE:
 ;;; 11/5/86 FastSeek
-	invoke	ALLOCATE
+	invoke	HMA_ALLOCATE
 	POP	AX
 	JC	WRTERR
 	MOV	CX,AX
@@ -446,7 +446,7 @@ SET_ACC_ERRWJ2:
 	invoke	FastSeek_Truncate
 ;;; 11/5/86 FastSeek
 	JCXZ	RELFILE
-	invoke	ALLOCATE
+	invoke	HMA_ALLOCATE
 	JC	WRTERRJ 	     ;;;;;;;;; disk full
 UPDATE:
 	LES	DI,[THISSFT]

@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""Verify FAT16 allocation above cluster 4095 and persisted data in all layouts."""
+from pathlib import Path
+import os
+import shutil
+import struct
+import subprocess
+import tempfile
+
+from hmaprobe import install_probe
+
+root = Path(__file__).resolve().parents[1]
+work = root / "test/work"
+work.mkdir(exist_ok=True)
+with tempfile.TemporaryDirectory(dir=work) as name:
+    tmp = Path(name)
+    raw = tmp / "fat16.img"
+    # XT geometry, one primary DOS partition beginning after the first track.
+    sectors = 306 * 4 * 17
+    offset = 17 * 512
+    with raw.open("wb") as f:
+        f.truncate(sectors * 512)
+        mbr = bytearray(512)
+        mbr[446:462] = struct.pack("<B3sB3sII", 0x80, bytes([1, 1, 0]), 4,
+                                   bytes([3, 0x51, 49]), 17, sectors - 17)
+        mbr[510:] = b"\x55\xaa"
+        f.write(mbr)
+    volume = f"{raw}@@{offset}"
+    subprocess.run(["mformat", "-i", volume, "-T", str(sectors - 17), "-h", "4",
+                    "-s", "17", "-H", "17", "-c", "2", "-v", "TEST16", "::"], check=True)
+    with raw.open("r+b") as f:
+        f.seek(offset + 3)
+        f.write(b"MSDOS4.0")
+    payload = bytes(range(256)) * 257
+    (tmp / "source.bin").write_bytes(payload)
+    with (tmp / "pad.bin").open("wb") as f:
+        f.truncate(4300 * 1024)
+    for file in ("source.bin", "pad.bin"):
+        subprocess.run(["mcopy", "-i", volume, tmp / file, "::" + file.upper()], check=True)
+    boot = tmp / "system.img"
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), boot)
+    for binary in (root / "kernel/dos/msdos.sys", root / "kernel/bios/io.sys"):
+        if subprocess.check_output(["mtype", "-i", boot, "::" + binary.name]) != binary.read_bytes():
+            raise SystemExit(f"boot image differs from {binary}")
+    subprocess.run(["mcopy", "-o", "-i", boot, root / "extra/pcehimem.sys", "::HIMEM.SYS"], check=True)
+    batch = tmp / "fat.bat"
+    install_probe(root, tmp, boot)
+    workload = ("copy /b C:\\SOURCE.BIN C:\\RESULT.BIN\nfc /b C:\\SOURCE.BIN C:\\RESULT.BIN\n")
+    for layout, config in [("high", "dos=high,umb\ndevice=himem.sys"),
+                           ("near", "dos=high"), ("far", "device=ramdrive.sys 80")]:
+        batch.write_text(f"hmaio {layout[0]}!\n" + workload)
+        batch.with_suffix(".cfg").write_text(config + "\n")
+        disk = tmp / (layout + ".pimg")
+        subprocess.run(["pce-img", "convert", "-q", "-g", "306", "4", "17",
+                        "-O", "pimg", raw, disk], check=True)
+        output = subprocess.check_output([root / "test/run_tests", batch],
+                      env=dict(os.environ, IMG=str(boot), PCE_TEST_HD=str(disk))).splitlines()
+        if output.count(b"LAYOUT PASS") != 1 or b"fc: no differences encountered" not in output or b"ENDTEST" not in output:
+            raise RuntimeError(f"{layout}: {output!r}")
+        saved = tmp / (layout + ".img")
+        subprocess.run(["pce-img", "convert", "-q", "-O", "img", disk, saved], check=True)
+        if subprocess.check_output(["mtype", "-i", f"{saved}@@{offset}", "::RESULT.BIN"]) != payload:
+            raise RuntimeError(f"{layout}: persisted contents differ")
+        part = saved.read_bytes()[offset:]
+        fat_size = int.from_bytes(part[22:24], "little") * 512
+        directory = 512 + 2 * fat_size
+        if part[512:512+fat_size] != part[512+fat_size:directory]:
+            raise RuntimeError(f"{layout}: FAT copies differ")
+        root_entries = int.from_bytes(part[17:19], "little")
+        if not any(part[i:i+11] == b"RESULT  BIN" and int.from_bytes(part[i+26:i+28], "little") > 4095
+                   for i in range(directory, directory + 32 * root_entries, 32)):
+            raise RuntimeError(f"{layout}: result did not exercise a high FAT16 cluster")
+        print("PASS FAT16", layout, flush=True)

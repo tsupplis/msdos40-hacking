@@ -3,7 +3,7 @@
 #
 #   test/run_tests --list               list the test cases
 #   test/run_tests <case>               run one case, e.g.  test/run_tests c_keyb
-#   test/run_tests --all                run every case in turn
+#   test/run_tests --all                run the batch cases and FAT16 allocation check
 #   test/run_tests path/to/file.bat     run any batch file
 #
 # A case is test/cases/<name>.bat, optionally with <name>.cfg (extra CONFIG.SYS lines).
@@ -16,7 +16,7 @@
 # A:\CR.TXT holds empty lines, to be used as input (< A:\CR.TXT) for "press any key" prompts.
 # Limits: only DOS-handle output is captured; BIOS or direct-screen output and key input
 # bypass CTTY, so interactive programs (select, fdisk menus) cannot be driven this way.
-# Needs: pce-ibmpc, mtools, and the root msdos.cfg.
+# Needs: pce-ibmpc, mtools, and the test PCE configuration.
 
 set -e
 cd "$(dirname "$0")/.."
@@ -29,12 +29,14 @@ case "${1:-}" in
   ""|-h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   --list) list_cases; exit 0 ;;
   --all)
+    status=0
     for c in $(list_cases); do
       echo "##### $c"
-      "$0" "$c" || true
+      "$0" "$c" || status=1
       echo
     done
-    exit 0 ;;
+    "$PWD/test/check_fat16" || status=1
+    exit "$status" ;;
 esac
 
 if [ -f "$1" ]; then BAT=$1
@@ -73,24 +75,25 @@ mcopy -D o -i "$WORK"/boot.img "$WORK"/cr.tmp ::CR.TXT
   if [ -f "$CFG" ]; then LC_ALL=C tr -d '\r' < "$CFG" | sed 's/$/\r/'; fi; } > "$WORK"/config.tmp
 mcopy -D o -i "$WORK"/boot.img "$WORK"/config.tmp ::CONFIG.SYS
 
-# PCE config: root msdos.cfg with the scratch images and outputs
-sed -e "s#media/msdos40_full.img#$WORK/boot.img#" \
-    -e "s#fd1.img#$WORK/b.img#" \
-    -e "s#ser1\\.out#$WORK/ser1.out#" \
-    -e "s#par1\\.out#$WORK/par1.out#" \
-    -e "s#par2\\.out#$WORK/par2.out#" msdos.cfg > "$WORK"/pce.cfg
+# PCE_TEST_HD optionally attaches a generated scratch hard disk.
+python3 test/pcecfg.py "$WORK" ${PCE_TEST_HD:+"$PCE_TEST_HD"}
 
 pce-ibmpc -c "$WORK"/pce.cfg -t null -g vga -r > "$WORK"/pce.log 2>&1 &
 pid=$!
+marker=$(printf 'ENDTEST\r')
+completed() { grep -Fxq "$marker" "$WORK/ser1.out" 2>/dev/null; }
 i=0
 while [ "$i" -lt "$SECS" ]; do
   sleep 1; i=$((i+1))
-  grep -q ENDTEST "$WORK"/ser1.out 2>/dev/null && break
+  completed && break
 done
 kill $pid 2>/dev/null || true
 sleep 1
 kill -9 $pid 2>/dev/null || true
 wait $pid 2>/dev/null || true
 
-LC_ALL=C tr -d '\r' < "$WORK"/ser1.out
-grep -q ENDTEST "$WORK"/ser1.out || echo "[runner] ENDTEST not seen within ${SECS}s (hang or crash?)"
+if [ -f "$WORK/ser1.out" ]; then LC_ALL=C tr -d '\r' < "$WORK/ser1.out"; fi
+if ! completed; then
+  echo "[runner] ENDTEST not seen within ${SECS}s (hang or crash?)" >&2
+  exit 1
+fi

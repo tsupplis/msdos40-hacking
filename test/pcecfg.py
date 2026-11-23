@@ -1,0 +1,31 @@
+"""Bind the test PCE configuration to a prepared scratch floppy."""
+from pathlib import Path
+import re
+import sys
+
+root = Path(__file__).resolve().parents[1]
+
+
+def write_config(folder, hard_disk=None):
+    folder = Path(folder).resolve()
+    boot = folder / "boot.img"
+    if not boot.is_file():
+        raise FileNotFoundError(boot)
+    config = (root / "test/msdos-high.cfg").read_text()
+    # Replace only the file field of drive A, regardless of its default image.
+    drive_a = r'(?ms)(^disk\s*\{\s*drive\s*=\s*0x00\s*\n[^}]*?^\s*file\s*=\s*)"[^"]*"'
+    config, count = re.subn(drive_a, lambda m: m[1] + f'"{boot}"', config)
+    if count != 1:
+        raise ValueError("expected exactly one drive A in the test configuration")
+    for old, new in [('"rom"', f'"{root}/rom"'), ('"fd1.img"', f'"{folder}/b.img"')]:
+        config = config.replace(old, new)
+    for name in ("ser1.out", "par1.out", "par2.out"):
+        config = config.replace("file=" + name, f"file={folder / name}")
+    if hard_disk:
+        disk = Path(hard_disk).resolve(strict=True)
+        config += f'\ndisk {{\n drive = 0x80\n type = "auto"\n file = "{disk}"\n}}\n'
+    (folder / "pce.cfg").write_text(config)
+
+
+if __name__ == "__main__":
+    write_config(*sys.argv[1:])

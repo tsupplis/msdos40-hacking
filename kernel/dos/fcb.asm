@@ -302,8 +302,6 @@ TranslateDeleted:
 	return
 
 EndProc HMA_NAMETRANS
-	PUBLIC	HmaIoEnd
-HmaIoEnd LABEL BYTE
 LAST	ENDS
 
 CODE	SEGMENT BYTE PUBLIC 'CODE'

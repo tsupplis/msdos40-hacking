@@ -116,6 +116,52 @@ ELSE
 ENDIF
 
 LOCAL_SEARCH_FIRST:
+        transfer LocalFirst
+EndProc DOS_SEARCH_FIRST
+
+
+
+BREAK <DOS_SEARCH_NEXT - scan for subsequent matches>
+
+; Inputs:
+;	[DMAADD] Points to 53 byte buffer returned by DOS_SEARCH_FIRST
+;	    (only first 21 bytes must have valid information)
+; Function:
+;	Look for subsequent matches
+; Outputs:
+;	CARRY CLEAR
+;	    The 53 bytes at DMAADD are updated for next call
+;		(see DOS_SEARCH_FIRST)
+;	CARRY SET
+;	    AX = error code
+;		error_no_more_files
+;			No more files to find
+; DS preserved, others destroyed
+
+	procedure   DOS_SEARCH_NEXT,NEAR
+	DOSAssume   CS,<DS>,"DOS_Search_Next"
+	ASSUME	ES:NOTHING
+
+	LES	DI,[DMAADD]
+	MOV	AL,ES:[DI]
+	TEST	AL,80H			; Test for NET
+	JZ	LOCAL_SEARCH_NEXT
+IF NOT Installed
+	transfer NET_SEARCH_NEXT
+ELSE
+	MOV	AX,(multNET SHL 8) OR 28
+	INT	2FH
+	return
+ENDIF
+
+LOCAL_SEARCH_NEXT:
+        transfer LocalNext
+EndProc DOS_SEARCH_NEXT
+CODE ENDS
+
+LAST SEGMENT PARA PUBLIC 'LAST'
+        procedure HMA_LocalFirst,NEAR
+        ASSUME DS:DOSGROUP,ES:NOTHING
 	EnterCrit   critDisk
 	TEST	[DOS34_FLAG],SEARCH_FASTOPEN  ;AN000;
 	JZ	NOFN			      ;AN000;
@@ -126,7 +172,7 @@ NOFN:					      ;AN000;
 	JNC	norm_getpath		;AN000;;FO. no
 	AND	[FastOpenflg],Fast_yes	;AN000;;FO. reset fastopen
 norm_getpath:
-	invoke	GetPath
+	invoke	HMA_GetPath
 getdone:
 	JNC	find_check_dev
 	JNZ	bad_path
@@ -135,7 +181,7 @@ getdone:
 find_no_more:
 	MOV	AX,error_no_more_files
 BadBye:
-	AND	CS:[FastOpenflg],Fast_yes  ;AN000;;FO. reset fastopen
+	AND	SS:[FastOpenflg],Fast_yes  ;AN000;;FO. reset fastopen
 
 	STC
 	LeaveCrit   critDisk
@@ -230,53 +276,21 @@ DOSREL:
 NO05:
 
 ;;;;; 7/29/86
-	AND	CS:[FastOpenflg],Fast_yes  ;AN000;;FO. reset fastopen
+	AND	SS:[FastOpenflg],Fast_yes  ;AN000;;FO. reset fastopen
 	context DS
 	CLC
 	LeaveCrit   critDisk
 	return
 
-EndProc DOS_SEARCH_FIRST
+EndProc HMA_LocalFirst
 
-BREAK <DOS_SEARCH_NEXT - scan for subsequent matches>
-
-; Inputs:
-;	[DMAADD] Points to 53 byte buffer returned by DOS_SEARCH_FIRST
-;	    (only first 21 bytes must have valid information)
-; Function:
-;	Look for subsequent matches
-; Outputs:
-;	CARRY CLEAR
-;	    The 53 bytes at DMAADD are updated for next call
-;		(see DOS_SEARCH_FIRST)
-;	CARRY SET
-;	    AX = error code
-;		error_no_more_files
-;			No more files to find
-; DS preserved, others destroyed
-
-	procedure   DOS_SEARCH_NEXT,NEAR
-	DOSAssume   CS,<DS>,"DOS_Search_Next"
-	ASSUME	ES:NOTHING
-
-	LES	DI,[DMAADD]
-	MOV	AL,ES:[DI]
-	TEST	AL,80H			; Test for NET
-	JZ	LOCAL_SEARCH_NEXT
-IF NOT Installed
-	transfer NET_SEARCH_NEXT
-ELSE
-	MOV	AX,(multNET SHL 8) OR 28
-	INT	2FH
-	return
-ENDIF
-
-LOCAL_SEARCH_NEXT:
+        procedure HMA_LocalNext,NEAR
+        ASSUME DS:DOSGROUP,ES:NOTHING
 ;AL is drive A=1
 	MOV	[EXTERR_LOCUS],errLOC_Disk
 	EnterCrit   critDisk
 	MOV	WORD PTR ThisCDS,OFFSET DOSGROUP:DummyCDS
-	MOV	WORD PTR ThisCDS+2,CS
+	MOV	WORD PTR ThisCDS+2,SS
 	ADD	AL,'A'-1
 	invoke	InitCDS
 
@@ -299,7 +313,7 @@ ASSUME	DS:NOTHING
 ;	DEC	AL
 ;	MOV	[THISDRV],AL
 
-	entry	RENAME_NEXT		; Entry used by DOS_RENAME
+	entry	HMA_RENAME_NEXT		; Entry used by DOS_RENAME
 
 	context ES			; THIS BLOWS ES:BP POINTER TO DPB
 	MOV	DI,OFFSET DOSGROUP:NAME1
@@ -319,22 +333,22 @@ cont_load:
 	MOV	BX,AX
 	context DS
 	LES	BP,[THISDPB]		; Recover ES:BP
-	invoke	SetDirSrch
+	invoke	HMA_SetDirSrch
 	JNC	SEARCH_GOON
 	POP	AX			; Clean stack
 	JMP	No_files
 
 SEARCH_GOON:
-	invoke	StartSrch
+	invoke	HMA_StartSrch
 	POP	AX
-	invoke	GetEnt
+	invoke	HMA_GetEnt
 	JC	No_files
-	invoke	NextEnt
+	invoke	HMA_NextEnt
 	JC	No_files
 	XOR	AH,AH			; If Search_Next, can't be a DEV
 	JMP	found_it
 
-EndProc DOS_SEARCH_NEXT
+EndProc HMA_LocalNext
 
 
 ;Input: [WFP_START]= pointer to final path
@@ -345,7 +359,7 @@ EndProc DOS_SEARCH_NEXT
 	procedure   CHECK_QUESTION,NEAR ;AN000;
 	ASSUME	ES:NOTHING,DS:NOTHING	;AN000;
 
-	PUSH	CS			;AN000;;FO.
+	PUSH	SS			;AN000;;FO.
 	POP	DS			;AN000;;FO. ds:si -> final path
 	MOV	SI,[WFP_START]		;AN000;;FO.
 getnext:				;AN000;
@@ -360,5 +374,5 @@ NO_Question:				;AN000;
 
 EndProc CHECK_QUESTION			;AN000;
 
-CODE	ENDS
+LAST	ENDS
     END

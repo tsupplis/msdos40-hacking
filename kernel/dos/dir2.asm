@@ -316,7 +316,7 @@ NO_CURR_D:
 ;
 GOT_SEARCH_CLUSTER:
 	LES	BP,[THISDPB]		; Get ES:BP
-	invoke	SETDIRSRCH
+	invoke	HMA_SETDIRSRCH
 	JC	SETFERR
 	JMP	FINDPATH
 
@@ -394,7 +394,7 @@ Break	<ROOTPATH, FINDPATH -- PARSE A PATH>
 	DOSAssume   CS,<DS>,"RootPath"
 	ASSUME	ES:NOTHING
 
-	invoke	SETROOTSRCH
+	invoke	HMA_SETROOTSRCH
 	CMP	BYTE PTR [SI],0
 	JNZ	FINDPATH
 
@@ -628,7 +628,7 @@ NOE5:
 	JNC	DIR_FOUND		; found dir entry
 
 ;DOS 3.3 FastOPen 6/12/86 F.C.
-	invoke	FINDENTRY
+	invoke	HMA_FINDENTRY
 DIR_FOUND:
 	POP	CX
 	POP	ES
@@ -679,7 +679,7 @@ SetDir:
 	MOV	BX,DX		      ; not found
 	MOV	DI,[CLUSNUM]	      ; clusnum was set in LookupPath
 	PUSH	AX		      ; save device id (AH)
-	invoke	SETDIRSRCH
+	invoke	HMA_SETDIRSRCH
 	POP	AX		      ; restore device id (AH)
 	ADD	SP,2		      ; pop ds in stack
 	JMP	FAST_OPEN_SKIP
@@ -699,7 +699,7 @@ ASSUME	DS:NOTHING
 	PUSH	WORD PTR [DI.buf_sector+2]   ;AN000;>32mb
 	MOV	BX,DX
 	context DS
-	invoke	SETDIRSRCH		; This uses UNPACK which might blow
+	invoke	HMA_SETDIRSRCH		; This uses UNPACK which might blow
 					; the entry sector buffer
 	POP	[HIGH_SECTOR]
 	POP	DX
@@ -789,11 +789,7 @@ BADPRET:
 	STC
 	return
 EndProc ROOTPATH
-LAST	ENDS
-
-CODE	SEGMENT BYTE PUBLIC 'CODE'
-
-Break	<STARTSRCH -- INITIATE DIRECTORY SEARCH>
+Break	<HMA_STARTSRCH -- INITIATE DIRECTORY SEARCH>
 
 ; Inputs:
 ;	[THISDPB] Set
@@ -804,11 +800,11 @@ Break	<STARTSRCH -- INITIATE DIRECTORY SEARCH>
 ;	Sets up LASTENT, ENTFREE=ENTLAST=-1, VOLID=0
 ; Destroys ES,BP,AX
 
-	procedure   StartSrch,NEAR
-	DOSAssume   CS,<DS>,"StartSrch"
+	procedure   HMA_StartSrch,NEAR
+	DOSAssume   CS,<DS>,"HMA_StartSrch"
 	ASSUME	ES:NOTHING
 
-	Assert	ISDPB,<<WORD PTR THISDPB+2>,<WORD PTR THISDPB>>,"StartSrch"
+	Assert	ISDPB,<<WORD PTR THISDPB+2>,<WORD PTR THISDPB>>,"HMA_StartSrch"
 	LES	BP,[THISDPB]
 	XOR	AX,AX
 	MOV	[LASTENT],AX
@@ -817,9 +813,9 @@ Break	<STARTSRCH -- INITIATE DIRECTORY SEARCH>
 	MOV	[ENTFREE],AX
 	MOV	[ENTLAST],AX
 	return
-EndProc StartSrch
+EndProc HMA_StartSrch
 
-BREAK <MatchAttributes - the final check for attribute matching>
+BREAK <HMA_MatchAttributes - the final check for attribute matching>
 
 ;
 ; Input:    [Attrib] = attribute to search for
@@ -827,7 +823,7 @@ BREAK <MatchAttributes - the final check for attribute matching>
 ; Output:   JZ <match>
 ;	    JNZ <nomatch>
 ; Registers modified: noneski
-	procedure MatchAttributes,near
+	procedure HMA_MatchAttributes,near
 	ASSUME	DS:NOTHING,ES:NOTHING
 	PUSH	AX
 	MOV	AL,Attrib		; AL <- SearchSet
@@ -841,7 +837,11 @@ BREAK <MatchAttributes - the final check for attribute matching>
 ;
 	POP	AX
 	return
-EndProc MatchAttributes
+EndProc HMA_MatchAttributes
+
+LAST	ENDS
+
+CODE	SEGMENT BYTE PUBLIC 'CODE'
 
 Break <DevName - Look for name of device>
 

@@ -720,7 +720,7 @@ SCAN_DONE:
 	POP	CX
 	POP	BX
 	JCXZ	RDLAST
-	invoke	IsEOF			; test for eof on fat size
+	invoke	HMA_IsEOF			; test for eof on fat size
 	JAE	SETSFT
 	MOV	DL,0
 	INC	[LASTPOS]	; We'll be using next cluster

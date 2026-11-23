@@ -2,11 +2,12 @@
 """Exercise shared FCB, handle and device I/O on three scratch boot layouts."""
 
 import os
-import re
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+
+from hmaprobe import install_probe
 
 root = Path(__file__).resolve().parents[1]
 work = root / "test/work"
@@ -20,39 +21,8 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
         embedded = subprocess.check_output(["mtype", "-i", image, "::" + binary.name])
         if embedded != binary.read_bytes():
             raise SystemExit(f"{source_image}: {binary.name} differs from {binary}")
-    shutil.copyfile(root / "test/hmaio.asm", folder / "hmaio.asm")
-
-    def map_symbols(path):
-        return {
-            name: int(offset, 16)
-            for offset, name in re.findall(
-                r"[0-9A-F]{4}:([0-9A-F]{4}) +(\S+)", path.read_text()
-            )
-        }
-
-    dos = map_symbols(root / "kernel/dos/msdos.map")
-    bios = map_symbols(root / "kernel/bios/msbio.map")
-    (folder / "hma.inc").write_text(
-        f"ShareTable EQU {dos['JShare']}\n"
-        f"OpenSlot EQU {dos['DISPATCH'] + 30}\nEntryIP EQU {dos['FCB_ENTRY']}\n"
-        f"GateSeg EQU {dos['FCB_GATE'] + 2}\nBodyOff EQU {bios['GateBody'] - bios['GateStart']}\n"
-    )
-    env = dict(os.environ, EMU2_DRIVE_C=temp)
-    for tool, args in (
-        ("masm", "hmaio.asm,hmaio.obj;"),
-        ("link", "hmaio.obj,hmaio.exe,nul;"),
-    ):
-        subprocess.run(
-            ["emu2", root / f"sdk/bin/{tool}.exe", args],
-            env=env,
-            cwd=folder,
-            check=True,
-        )
-    for source, name in (
-        (folder / "hmaio.exe", "hmaio.exe"),
-        (root / "extra/pcehimem.sys", "himem.sys"),
-    ):
-        subprocess.run(["mcopy", "-i", image, source, "::" + name], check=True)
+    install_probe(root, folder, image)
+    subprocess.run(["mcopy", "-o", "-i", image, root / "extra/pcehimem.sys", "::HIMEM.SYS"], check=True)
     batch = folder / "io.bat"
 
     for layout, config in (
@@ -63,6 +33,17 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
         commands = [f"hmaio {layout[0]}"]
         if layout == "high":
             commands = ["share", *commands, "hmaio s"]
+        # Wildcard rename resumes the search through its own near entry.
+        commands.extend([
+            "md A:\\RENTEST",
+            "echo one>A:\\RENTEST\\ONE.OLD",
+            "echo two>A:\\RENTEST\\TWO.OLD",
+            "ren A:\\RENTEST\\*.OLD *.NEW",
+            "if exist A:\\RENTEST\\*.OLD goto rendone",
+            "if not exist A:\\RENTEST\\ONE.NEW goto rendone",
+            "if exist A:\\RENTEST\\TWO.NEW echo RENAME PASS",
+            ":rendone",
+        ])
         batch.write_text("\n".join(commands) + "\n")
         batch.with_suffix(".cfg").write_text(config + "\n")
         output = subprocess.check_output(
@@ -70,6 +51,6 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
         )
         lines = output.splitlines()
         expected = sum(cmd.startswith("hmaio ") for cmd in commands)
-        if lines.count(b"HMA I/O PASS") != expected or b"ENDTEST" not in lines:
+        if lines.count(b"HMA I/O PASS") != expected or b"RENAME PASS" not in lines or b"ENDTEST" not in lines:
             raise RuntimeError(f"{layout}: {output.decode('cp437')}")
         print("PASS", layout, flush=True)

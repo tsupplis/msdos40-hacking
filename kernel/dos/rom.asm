@@ -642,7 +642,20 @@ Break   <ALLOCATE -- Assign disk space>
 ;
 ;       USES    ALL but SI, BP
 
-        PROCEDURE   ALLOCATE,NEAR
+        EXTRN FCB_SELECTED:NEAR
+        PUBLIC ALLOCATE_VECTOR
+ALLOCATE_VECTOR DW OFFSET DOSGROUP:AllocateFar
+        PROCEDURE ALLOCATE,NEAR
+        JMP WORD PTR CS:[ALLOCATE_VECTOR]
+AllocateFar:
+        PUSH AX
+        MOV AH,65
+        JMP FCB_SELECTED
+EndProc ALLOCATE
+CODE ENDS
+
+LAST SEGMENT PARA PUBLIC 'LAST'
+        PROCEDURE   HMA_ALLOCATE,NEAR
 
         DOSAssume   CS,<DS>,"Allocate"
         ASSUME  ES:NOTHING
@@ -650,10 +663,12 @@ Break   <ALLOCATE -- Assign disk space>
         Assert      ISDPB,<ES,BP>,"Allocate"
         PUSH    BX                      ; save (bx)
         XOR     BX,BX
-        invoke  UNPACK
+        invoke  HMA_UNPACK
         MOV     [FATBYT],DI             ; save correct cluster 0 value
         POP     BX
-        retc                            ; abort if error   [INTERR?]
+        JNC     AllocScan
+        RET                             ; FAT read failed
+AllocScan:
 
         PUSH    CX
         PUSH    BX
@@ -687,7 +702,7 @@ FINDFRE:
         JBE     aupk
         jmp     ads7            ; at end of disk
 aupk:
-        invoke  UNPACK          ; check out this cluster
+        invoke  HMA_UNPACK          ; check out this cluster
         jc      ads4            ; FAT error             [INTERR?]
         jnz     findfre         ; not free, keep on truckin
 
@@ -699,7 +714,7 @@ aupk:
         mov     es:[bp.dpb_next_free],bx        ; next time start search here
         xchg    ax,dx           ; save (dx) in ax
         mov     dx,1            ; mark this free guy as "1"
-        invoke  PACK            ; set special "temporary" mark
+        invoke  HMA_PACK            ; set special "temporary" mark
         jc      ads4            ; FAT error             [INTERR?]
         CMP     ES:[BP.dpb_free_cnt],-1 ; Free count valid?
         JZ      NO_ALLOC                ; No
@@ -708,7 +723,7 @@ NO_ALLOC:
         xchg    ax,dx           ; (dx) = current last cluster in file
         XCHG    BX,DX
         MOV     AX,DX
-        invoke  PACK            ; link free cluster onto file
+        invoke  HMA_PACK            ; link free cluster onto file
                                 ;  CAVEAT.. On Nul file, first pass stuffs
                                 ;    cluster 0 with FIRCLUS value.
         jc      ads4            ; FAT error             [INTERR?]
@@ -721,7 +736,7 @@ NO_ALLOC:
 ;       (BX) = last cluster in file
 
         MOV     DX,0FFFFH
-        invoke  PACK            ; mark last cluster EOF
+        invoke  HMA_PACK            ; mark last cluster EOF
 
 ;   Note that FAT errors jump here to clean the stack and exit.  this saves us
 ;   2 whole bytes.  Hope its worth it...
@@ -731,15 +746,15 @@ NO_ALLOC:
 
 ads4:   POP     BX
         POP     CX              ; Don't need this stuff since we're successful
-        retc
-        invoke  UNPACK          ; Get first cluster allocated for return
+        JC      AllocReturn
+        invoke  HMA_UNPACK          ; Get first cluster allocated for return
                                 ; CAVEAT... In nul file case, UNPACKs cluster 0.
-        retc
+        JC      AllocReturn
         invoke  RESTFATBYT      ; Restore correct cluster 0 value
-        retc
+        JC      AllocReturn
         XCHG    BX,DI           ; (DI) = last cluster in file upon our entry
         OR      DI,DI           ; clear 'C'
-        retnz                   ; we were extending an existing file
+        JNZ     AllocReturn                   ; we were extending an existing file
 
 ;   We were doing the first allocation for a new file.  Update the SFT cluster
 ;   info
@@ -773,7 +788,8 @@ do_norm5:
         POP     ES
 ;; 11/6/86 FastSeek
         POP     DX
-        return
+AllocReturn:
+        RET
 
 
 ;** we're at the end of the disk, and not satisfied.  See if we've scanned ALL
@@ -813,9 +829,9 @@ endif
 ;       fmt     <>,<>,<"$p: disk full in allocate\n">
         MOV     [DISK_FULL],1   ;MS. indicating disk full
         STC
-        return
+        RET
 
-EndProc ALLOCATE
+EndProc HMA_ALLOCATE
 
 ; SEE ALLOCATE CAVEAT
 ;       Carry set if error (currently user FAILed to I 24)
@@ -829,12 +845,16 @@ EndProc ALLOCATE
         PUSH    DI
         XOR     BX,BX
         MOV     DX,[FATBYT]
-        invoke  PACK
+        invoke  HMA_PACK
         POP     DI
         POP     DX
         POP     BX
-        return
+        RET
+
 EndProc RESTFATBYT
+LAST ENDS
+
+CODE SEGMENT BYTE PUBLIC 'CODE'
 
 Break   <RELEASE -- DEASSIGN DISK SPACE>
 

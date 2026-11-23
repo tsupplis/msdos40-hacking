@@ -65,6 +65,41 @@ FastDiv = TRUE
 	i_need	CURSC_DRIVE,BYTE	       ;AN001;
 
 
+; Near callers enter the native copy directly or use the A20 gateway.
+        EXTRN FCB_SELECTED:NEAR
+        PUBLIC IsEof_VECTOR
+IsEof_VECTOR DW OFFSET DOSGROUP:IsEofFar
+        procedure IsEof,NEAR
+        JMP WORD PTR CS:[IsEof_VECTOR]
+IsEofFar:
+        PUSH AX
+        MOV AH,62
+        JMP FCB_SELECTED
+EndProc IsEof
+
+        PUBLIC Unpack_VECTOR
+Unpack_VECTOR DW OFFSET DOSGROUP:UnpackFar
+        procedure Unpack,NEAR
+        JMP WORD PTR CS:[Unpack_VECTOR]
+UnpackFar:
+        PUSH AX
+        MOV AH,63
+        JMP FCB_SELECTED
+EndProc Unpack
+
+        PUBLIC Pack_VECTOR
+Pack_VECTOR DW OFFSET DOSGROUP:PackFar
+        procedure Pack,NEAR
+        JMP WORD PTR CS:[Pack_VECTOR]
+PackFar:
+        PUSH AX
+        MOV AH,64
+        JMP FCB_SELECTED
+EndProc Pack
+
+CODE ENDS
+
+LAST SEGMENT PARA PUBLIC 'LAST'
 Break <IsEOF - check the quantity in BX for EOF>
 
 ;
@@ -74,7 +109,7 @@ Break <IsEOF - check the quantity in BX for EOF>
 ;		BX has fat value
 ;   Outputs:	JAE eof
 ;   Registers modified: none
-Procedure IsEof,NEAR
+Procedure HMA_IsEof,NEAR
 	ASSUME	SS:DOSGROUP,CS:DOSGROUP,DS:NOTHING,ES:NOTHING
 	Assert	    ISDPB,<ES,BP>,"IsEOF"
 	CMP	ES:[BP.dpb_max_cluster],4096-10 ; is this 16 bit fat?
@@ -92,7 +127,7 @@ IsEOF_other:
 EOF16:
 	CMP	BX,0FFF8h		; 16 bit compare
 	return
-EndProc IsEof
+EndProc HMA_IsEof
 
 Break	<UNPACK -- UNPACK FAT ENTRIES>
 
@@ -105,7 +140,7 @@ Break	<UNPACK -- UNPACK FAT ENTRIES>
 ;	Carry set means error (currently user FAILed to I 24)
 ; SI Destroyed, No other registers affected. Fatal error if cluster too big.
 
-	procedure   UNPACK,NEAR
+	procedure   HMA_UNPACK,NEAR
 	DOSAssume   CS,<DS>,"UnPack"
 	ASSUME	ES:NOTHING
 
@@ -152,7 +187,7 @@ HURTFAT:
 OKU_RET:
 	POP	AX
 	return
-EndProc UNPACK
+EndProc HMA_UNPACK
 
 Break	<PACK -- PACK FAT ENTRIES>
 
@@ -166,7 +201,7 @@ Break	<PACK -- PACK FAT ENTRIES>
 ;	Carry set means error (currently user FAILed to I 24)
 ;	No other registers affected
 
-	procedure   PACK,NEAR
+	procedure   HMA_PACK,NEAR
 	DOSAssume   CS,<DS>,"Pack"
 	ASSUME	ES:NOTHING
 
@@ -241,7 +276,7 @@ POPP_RET:
 	POP	AX
 	return
 
-EndProc PACK
+EndProc HMA_PACK
 
 Break	<MAPCLUSTER - BUFFER A FAT SECTOR>
 
@@ -362,6 +397,11 @@ ENDIF
 
 EndProc MAPCLUSTER
 
+        PUBLIC HmaIoEnd
+HmaIoEnd LABEL BYTE
+LAST ENDS
+
+CODE SEGMENT BYTE PUBLIC 'CODE'
 Break	<FATREAD_SFT/FATREAD_CDS -- CHECK DRIVE GET FAT>
 
 ; Inputs:

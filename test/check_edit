@@ -7,6 +7,8 @@ import subprocess
 import tempfile
 import time
 
+from pcecfg import write_config
+
 root = Path(__file__).resolve().parents[1]
 work = root / "test/work"
 work.mkdir(exist_ok=True)
@@ -25,11 +27,9 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
     run("mcopy", "-i", image, "editbuf.exe", "::EDITBUF.EXE")
     (folder / "auto.bat").write_bytes(b"@echo off\r\nprompt Q$G\r\neditbuf\r\necho on\r\n")
     run("mcopy", "-o", "-i", image, "auto.bat", "::AUTOEXEC.BAT")
-    cfg = (root / "msdos.cfg").read_text().replace('"rom"', f'"{root}/rom"')
-    cfg = cfg.replace("media/msdos40_full.img", "boot.img")
-    (folder / "test.cfg").write_text(cfg)
+    write_config(folder)
     with (folder / "pce.log").open("wb") as log:
-        proc = subprocess.Popen(["pce-ibmpc", "-c", "test.cfg", "-t", "null", "-g", "vga"],
+        proc = subprocess.Popen(["pce-ibmpc", "-c", "pce.cfg", "-t", "null", "-g", "vga"],
                                 cwd=folder, stdin=subprocess.PIPE, stdout=log, stderr=log)
         def send(command):
             proc.stdin.write((command + "\n").encode())

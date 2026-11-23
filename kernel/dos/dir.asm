@@ -56,6 +56,35 @@ asmvar	Kanji
 	I_need	FastOpenFlg,BYTE		;AN000;
 	I_need	HIGH_SECTOR,WORD		;AN000;
 
+
+; Resident near callers use the native address or the selected far gateway.
+        EXTRN FCB_SELECTED:NEAR
+WalkerEntry MACRO routine,selector
+        LOCAL farEntry
+        PUBLIC routine,routine&_VECTOR
+routine&_VECTOR DW OFFSET DOSGROUP:farEntry
+routine LABEL NEAR
+        JMP WORD PTR CS:[routine&_VECTOR]
+farEntry:
+        PUSH AX
+        MOV AH,selector
+        JMP FCB_SELECTED
+        ENDM
+        WalkerEntry FindEntry,50
+        WalkerEntry Srch,51
+        WalkerEntry NextEnt,52
+        WalkerEntry MetaCompare,53
+        WalkerEntry GetEntry,54
+        WalkerEntry GetEnt,55
+        WalkerEntry SetDirSrch,56
+        WalkerEntry StartSrch,57
+        WalkerEntry MatchAttributes,58
+        WalkerEntry LocalFirst,59
+        WalkerEntry LocalNext,60
+        WalkerEntry Rename_Next,61
+CODE ENDS
+
+LAST SEGMENT PARA PUBLIC 'LAST'
 Break	<FINDENTRY -- LOOK FOR AN ENTRY>
 
 ; Inputs:
@@ -85,22 +114,22 @@ Break	<FINDENTRY -- LOOK FOR AN ENTRY>
 
 	procedure   SEARCH,near
 
-	entry	FindEntry
-	DOSAssume   CS,<DS>,"FindEntry"
+	entry	HMA_FindEntry
+	DOSAssume   CS,<DS>,"HMA_FindEntry"
 	ASSUME	ES:NOTHING
 
-	invoke	STARTSRCH
+	invoke	HMA_STARTSRCH
 	MOV	AL,Attrib
 	AND	AL,NOT attr_ignore	; Ignore useless bits
 	CMP	AL,attr_volume_id	; Looking for vol ID only ?
 	JNZ	NOTVOLSRCH		; No
-	CALL	SETROOTSRCH		; Yes force search of root
+	CALL	HMA_SETROOTSRCH		; Yes force search of root
 NOTVOLSRCH:
-	CALL	GETENTRY
-	JNC	Srch
+	CALL	HMA_GETENTRY
+	JNC	HMA_Srch
 	JMP	SETESRET
 
-	entry	Srch
+	entry	HMA_Srch
 
 	PUSH	DS
 	MOV	DS,WORD PTR [CURBUF+2]
@@ -127,18 +156,18 @@ CHKFNAM:
 	MOV	BYTE PTR [NAME1],05H
 NO_E5:
 ;;;;; 7/29/86
-	CALL	MetaCompare
+	CALL	HMA_MetaCompare
 	JZ	FOUND
 	POP	DS
 
-	entry	NEXTENT
-	DOSAssume   CS,<DS>,"NextEnt"
+	entry	HMA_NEXTENT
+	DOSAssume   CS,<DS>,"HMA_NextEnt"
 
-	Assert	ISDPB,<<WORD PTR THISDPB+2>,<WORD PTR THISDPB>>,"NextEnt"
+	Assert	ISDPB,<<WORD PTR THISDPB+2>,<WORD PTR THISDPB>>,"HMA_NextEnt"
 	LES	BP,[THISDPB]
 ASSUME	ES:NOTHING
 	CALL	NEXTENTRY
-	JNC	SRCH
+	JNC	HMA_SRCH
 	JMP	SHORT SETESRET
 
 FREE:
@@ -151,7 +180,7 @@ FREE:
 TSTALL:
 	CMP	AH,BYTE PTR [DELALL]	; At end of directory?
 NextEntJ:
-	JZ	NEXTENT 		; No - continue search
+	JZ	HMA_NEXTENT 		; No - continue search
 	MOV	[ENTLAST],CX
 	STC
 	JMP	SHORT SETESRET
@@ -180,7 +209,7 @@ FOUND:
 check_one_volume_id:
 	CMP	AH,attr_volume_id	; Looking only for Volume ID?
 	JZ	NEXTENTJ		; Yes, continue search
-	invoke	MatchAttributes
+	invoke	HMA_MatchAttributes
 	JZ	RETFF
 	TEST	BYTE PTR [CREATING],-1	; Pass back mismatch if creating
 	JZ	NEXTENTJ		; Otherwise continue searching
@@ -204,7 +233,7 @@ EndProc Search
 ;	Zero if match else NZ
 ; Destroys CX,SI,DI all others preserved
 
-	procedure   MetaCompare,near
+	procedure   HMA_MetaCompare,near
 ASSUME	DS:NOTHING,ES:NOTHING
 	MOV	CX,11
  IF  DBCS				;AN000;
@@ -258,7 +287,7 @@ CHECK_META:
 MetaRet:
  ENDIF					;AN000;
 	return				; Zero set, Match
-EndProc MetaCompare
+EndProc HMA_MetaCompare
 
 Break	<NEXTENTRY -- STEP THROUGH DIRECTORY>
 
@@ -284,11 +313,11 @@ Procedure NextEntry
 	CMP	BL,BYTE PTR [CLUSFAC]
 	JB	SAMECLUS
 	MOV	BX,[NXTCLUSNUM]
-	Invoke	IsEOF
+	Invoke	HMA_IsEOF
 	JAE	NONE
 	CMP	BX,2
 	JB	NONE
-	JMP	GETENT
+	JMP	HMA_GETENT
 
 NONE:
 	STC
@@ -332,15 +361,15 @@ EndProc NextEntry
 ;	[NXTCLUSNUM],[SECCLUSPOS] set via DIRREAD
 ;	Carry set if error (currently user FAILed to I 24)
 
-Procedure GETENTRY,NEAR
-	DOSAssume   CS,<DS>,"GetEntry"
+Procedure HMA_GETENTRY,NEAR
+	DOSAssume   CS,<DS>,"HMA_GetEntry"
 	ASSUME	ES:NOTHING
 
 	MOV	AX,[LASTENT]
 
-	entry	GETENT
+	entry	HMA_GETENT
 
-	Assert	ISDPB,<ES,BP>,"GetEntry/GetEnt"
+	Assert	ISDPB,<ES,BP>,"HMA_GetEntry/HMA_GetEnt"
 	MOV	[LASTENT],AX
 ;
 ; Convert the entry number in AX into a byte offset from the beginning of the
@@ -370,9 +399,9 @@ SETENTRY:
 	ADD	BX,DX
 	ADD	DX,ES:[BP.dpb_sector_size]  ; Always clears carry
 	return
-EndProc GetEntry
+EndProc HMA_GetEntry
 
-Break	<SETDIRSRCH SETROOTSRCH -- Set Search environments>
+Break	<HMA_SETDIRSRCH HMA_SETROOTSRCH -- Set Search environments>
 
 ; Inputs:
 ;	BX cluster number of start of directory
@@ -386,13 +415,13 @@ Break	<SETDIRSRCH SETROOTSRCH -- Set Search environments>
 ;	Carry set if error (currently user FAILed to I 24)
 ; destroys AX,DX,BX
 
-	procedure SETDIRSRCH
-	DOSAssume   CS,<DS>,"SetDirSrch"
+	procedure HMA_SETDIRSRCH
+	DOSAssume   CS,<DS>,"HMA_SetDirSrch"
 	ASSUME	ES:NOTHING
 
-	Assert	ISDPB,<ES,BP>,"SetDirSrch"
+	Assert	ISDPB,<ES,BP>,"HMA_SetDirSrch"
 	OR	BX,BX
-	JZ	SETROOTSRCH
+	JZ	HMA_SETROOTSRCH
 	MOV	[DIRSTART],BX
 	MOV	AL,ES:[BP.dpb_cluster_mask]
 	INC	AL
@@ -403,7 +432,7 @@ Break	<SETDIRSRCH SETROOTSRCH -- Set Search environments>
 	JNZ	UNP_OK
 
 ; DOS 3.3 for FastOPen	F.C. 6/12/86
-	invoke	UNPACK
+	invoke	HMA_UNPACK
 	JNC	UNP_OK
 	RestoreReg  <SI>
 	return
@@ -423,8 +452,8 @@ UNP_OK:
 	CLC
 	return
 
-entry	SETROOTSRCH
-	DOSAssume   CS,<DS>,"SetRootSrch"
+entry	HMA_SETROOTSRCH
+	DOSAssume   CS,<DS>,"HMA_SetRootSrch"
 	ASSUME	ES:NOTHING
 	XOR	AX,AX
 	MOV	[DIRSTART],AX
@@ -439,7 +468,7 @@ entry	SETROOTSRCH
 	MOV	WORD PTR [DIRSEC+2],0		      ;F.C. >32mb
 	CLC
 	return
-EndProc SETDIRSRCH
+EndProc HMA_SETDIRSRCH
 
-CODE	ENDS
+LAST	ENDS
     END

@@ -100,8 +100,12 @@ for name, origin in [
     ("disk", symbols["hma_read"]),
     ("disk2", symbols["setup"]),
     ("disk3", symbols["diskwrite"]),
+    ("isearch", symbols["hma_localfirst"]),
+    ("dir", symbols["hma_findentry"]),
     ("dir2", symbols["hma_getpath"]),
+    ("rom", symbols["hma_allocate"]),
     ("fcb", symbols["hma_makefcb"]),
+    ("fat", symbols["hma_iseof"]),
 ]:
     for within, relative in object_fixups(dos / (name + ".obj")):
         address = origin + within
@@ -127,7 +131,10 @@ for name, origin in [
                 upper[off : off + 2] = word(base + symbols[body] - start)
             else:
                 upper[off : off + 2] = word(base + bridge(value))
-vectors = ("read", "write", "open", "create", "getpath", "getpathnoset", "makefcb", "nametrans", "packname")
+vectors = ("read", "write", "open", "create", "getpath", "getpathnoset", "makefcb", "nametrans", "packname",
+           "findentry", "srch", "nextent", "metacompare", "getentry", "getent",
+           "setdirsrch", "startsrch", "matchattributes", "localfirst", "localnext", "rename_next",
+           "iseof", "unpack", "pack", "allocate")
 table = [0] * (max(entries) + 1)
 lowentries = []
 for fn in entries:

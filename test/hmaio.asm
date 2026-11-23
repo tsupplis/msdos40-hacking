@@ -16,6 +16,8 @@ Start:  MOV     AL,ES:[82h]             ; expected layout from command tail
         JNE     CheckLayout
         JMP     CheckShare
 CheckLayout:
+        MOV     AH,ES:[83h]             ; ! requests only the placement check
+        MOV     ProbeMode,AH
         MOV     Layout,AL
         MOV     AX,3521h
         INT     21h
@@ -29,7 +31,11 @@ CheckLayout:
         MOV     AL,'f'
 Placed: CMP     AL,Layout
         Check   JE
-        CMP     AL,'h'
+        CMP     ProbeMode,'!'
+        JNE     CheckIO
+        MOV     DX,OFFSET LayoutOK
+        JMP     PrintResult
+CheckIO: CMP     AL,'h'
         JNE     RunIO
         MOV     AX,58FFh                ; both options in "dos=high, umb"
         INT     21h
@@ -367,6 +373,24 @@ CompareFCB:
         RET
 
 CheckFind:
+        ; Put the second match beyond 32 nonmatching directory entries.
+        MOV     BP,32
+FillDirectory:
+        MOV     DX,OFFSET FillPath
+        XOR     CX,CX
+        MOV     AH,5Bh
+        INT     21h
+        Check   JNC
+        MOV     BX,AX
+        CALL    Close
+        INC     FillDigit
+        CMP     FillDigit,'9'
+        JBE     FilledOne
+        MOV     FillDigit,'0'
+        INC     FillDigit-1
+FilledOne:
+        DEC     BP
+        JNZ     FillDirectory
         MOV     DX,OFFSET OtherPath
         MOV     CX,1                    ; read-only, zero-length file
         MOV     AH,3Ch
@@ -492,6 +516,8 @@ Close:  MOV     AH,3Eh
 Success DB      'HMA I/O PASS',13,10,'$'
 Failure DB      'HMA I/O FAIL',13,10,'$'
 Filled  DD      2                       ; two bytes before the fill loop
+LayoutOK DB     'LAYOUT PASS',13,10,'$'
+ProbeMode DB    ?
 Layout  DB      ?
 WildArg DB      'a:ab*.tx?'
 WildEnd DB      ' rest',0
@@ -500,6 +526,8 @@ PlainArg DB     'plain'
 PlainEnd DB     0
 PlainFCB DB     0,'PLAIN      '
 Parsed  DB      37 DUP (0)
+FillPath DB     '\HMAPATH\F0'
+FillDigit DB    '0.DAT',0
 FindMask DB     '\HMAPATH\*.TMP',0
 OtherPath DB    '\HMAPATH\OTHER.TMP',0
 OtherName DB    'OTHER.TMP',0
