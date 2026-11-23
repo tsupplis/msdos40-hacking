@@ -1684,8 +1684,8 @@ IF NOT COMR
           CMP     CX,11
           JNE     $MEN150
 $M_PUSH_COMMA:
-          CMP     $M_SL.$M_S_RESV,1     ; grouped decimal with normal field padding
           MOV     DL,$M_COMMA
+          CMP     $M_SL.$M_S_PAD,Grouped_Decimal_Pad
           JE      $M_GROUP_DIGITS
           CMP     $M_SL.$M_S_PAD,$M_COMMA
           JNE     $MEN150
@@ -2393,7 +2393,11 @@ ENDIF
 ;	      $DO					     ;;AN000;;	   Begin filling buffer with pad chars
 $MDO280:
 		MOV	AL,BYTE PTR $M_SL.$M_S_PAD	     ;;AN000;;
-		MOV	BYTE PTR $M_RT.$M_TEMP_BUF[BX],AL    ;;AN000;;	   Move in a pad char
+		CMP     AL,Grouped_Decimal_Pad
+                JNE     $M_PAD280
+                MOV     AL,$M_SPACE
+$M_PAD280:
+                MOV	BYTE PTR $M_RT.$M_TEMP_BUF[BX],AL    ;;AN000;;	   Move in a pad char
 		INC	BX				     ;;AN000;;
 		CMP	BX,$M_TEMP_BUF_SZ		     ;;AN000;;	   Is buffer full?
 ;		$IF	E				     ;;AN000;;	   Yes,
@@ -2464,7 +2468,11 @@ $MIF290:
 ;	      $DO					     ;;AN000;;	   Begin filling buffer with pad chars
 $MDO301:
 		MOV	AL,BYTE PTR $M_SL.$M_S_PAD	     ;;AN000;;
-		MOV	BYTE PTR $M_RT.$M_TEMP_BUF[BX],AL    ;;AN000;;	   Move in a pad char
+		CMP     AL,Grouped_Decimal_Pad
+                JNE     $M_PAD301
+                MOV     AL,$M_SPACE
+$M_PAD301:
+                MOV	BYTE PTR $M_RT.$M_TEMP_BUF[BX],AL    ;;AN000;;	   Move in a pad char
 		INC	BX				     ;;AN000;;
 		CMP	BX,$M_TEMP_BUF_SZ		     ;;AN000;;	   Is buffer full?
 ;		$IF	E				     ;;AN000;;	   Yes,

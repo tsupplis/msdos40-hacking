@@ -80,6 +80,8 @@ NO_REPLACE		EQU	0000H  ;; No replacable parameters
   Sublist_Length	EQU	11     ;; Length of sublist structure
   Reserved		EQU	0      ;; Reserved byte field
 
+  Grouped_Decimal_Pad   EQU     0FFh   ;; Unsigned DWORD: comma groups, space padding
+
   Left_Align		EQU	0      ;;00xxxxxx
   Right_Align		EQU	80h    ;;10xxxxxx
 
