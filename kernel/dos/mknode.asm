@@ -65,6 +65,52 @@ include devsym.inc
         I_need  HIGH_SECTOR,WORD              ;>32mb                            ;AN000;
         I_need  ACT_PAGE,WORD                 ;>32mb                            ;AN000;
 
+; Near callers use the native copy or the A20 gateway selected at boot.
+        EXTRN FCB_SELECTED:NEAR
+
+        PUBLIC NEWDIR_VECTOR
+NEWDIR_VECTOR DW OFFSET DOSGROUP:NEWDIRFar
+        procedure NEWDIR,NEAR
+        JMP WORD PTR CS:[NEWDIR_VECTOR]
+NEWDIRFar:
+        PUSH AX
+        MOV AH,67
+        JMP FCB_SELECTED
+EndProc NEWDIR
+
+        PUBLIC SETDOTENT_VECTOR
+SETDOTENT_VECTOR DW OFFSET DOSGROUP:SETDOTENTFar
+        procedure SETDOTENT,NEAR
+        JMP WORD PTR CS:[SETDOTENT_VECTOR]
+SETDOTENTFar:
+        PUSH AX
+        MOV AH,68
+        JMP FCB_SELECTED
+EndProc SETDOTENT
+
+        PUBLIC MakeNode_VECTOR
+MakeNode_VECTOR DW OFFSET DOSGROUP:MakeNodeFar
+        procedure MakeNode,NEAR
+        JMP WORD PTR CS:[MakeNode_VECTOR]
+MakeNodeFar:
+        PUSH AX
+        MOV AH,69
+        JMP FCB_SELECTED
+EndProc MakeNode
+
+        PUBLIC DOOPEN_VECTOR
+DOOPEN_VECTOR DW OFFSET DOSGROUP:DOOPENFar
+        procedure DOOPEN,NEAR
+        JMP WORD PTR CS:[DOOPEN_VECTOR]
+DOOPENFar:
+        PUSH AX
+        MOV AH,71
+        JMP FCB_SELECTED
+EndProc DOOPEN
+
+CODE ENDS
+
+LAST SEGMENT PARA PUBLIC 'LAST'
 Break   <BUILDDIR,NEWDIR -- ALLOCATE DIRECTORIES>
 
 ; Inputs:
@@ -84,7 +130,7 @@ Break   <BUILDDIR,NEWDIR -- ALLOCATE DIRECTORIES>
 ;               AX = first entry of new dir
 ;       GETENT should be called to set [LASTENT]
 
-        procedure   BUILDDIR,NEAR
+        procedure   HMA_BUILDDIR,NEAR
         DOSAssume   CS,<DS>,"BuildDir"
         ASSUME  ES:NOTHING
 
@@ -96,11 +142,11 @@ Break   <BUILDDIR,NEWDIR -- ALLOCATE DIRECTORIES>
 
 CHECK_IF_ROOT:
         CMP     [DIRSTART],0
-        JNZ     NEWDIR
+        JNZ     HMA_NEWDIR
         STC
         return                  ; Can't grow root
 
-        entry   NEWDIR
+        entry   HMA_NEWDIR
         MOV     BX,[DIRSTART]
         OR      BX,BX
         JZ      NULLDIR
@@ -108,19 +154,19 @@ CHECK_IF_ROOT:
         retc                    ; Screw up
 NULLDIR:
         MOV     CX,1
-        invoke  ALLOCATE
+        invoke  HMA_ALLOCATE
         retc
         MOV     DX,[DIRSTART]
         OR      DX,DX
         JNZ     ADDINGDIR
-        invoke  SETDIRSRCH
+        invoke  HMA_SETDIRSRCH
         retc
         MOV     [LASTENT],-1
         JMP     SHORT GOTDIRREC
 ADDINGDIR:
         PUSH    BX
         MOV     BX,[ClusNum]
-        Invoke  IsEof
+        Invoke  HMA_IsEof
         POP     BX
         JB      NOTFIRSTGROW
 ;;;; 10/17/86 update CLUSNUM in the fastopen cache
@@ -141,7 +187,7 @@ ADDINGDIR:
 NOTFIRSTGROW:
         MOV     DX,BX
         XOR     BL,BL
-        invoke  FIGREC
+        invoke  HMA_FIGREC
 GOTDIRREC:
         MOV     CL,ES:[BP.dpb_cluster_mask]
         INC     CL
@@ -185,7 +231,7 @@ yesdirty:
         CLC
         return
 
-EndProc BUILDDIR
+EndProc HMA_BUILDDIR
 
 ;
 ; set up a . or .. directory entry for a directory.
@@ -194,7 +240,7 @@ EndProc BUILDDIR
 ;               AX contains ". " or ".."
 ;               DX contains first cluster of entry
 ;
-        procedure   SETDOTENT,NEAR
+        procedure   HMA_SETDOTENT,NEAR
         DOSAssume   CS,<DS>,"SetDotEnt"
 ;
 ; Fill in name field
@@ -236,7 +282,7 @@ EndProc BUILDDIR
         STOSW
         errnz   <(size dir_entry)-(dir_size_l+4)>
         return
-EndProc SETDOTENT
+EndProc HMA_SETDOTENT
 
 Break   <MAKENODE -- CREATE A NEW NODE>
 
@@ -281,7 +327,7 @@ Break   <MAKENODE -- CREATE A NEW NODE>
 ;          Attribute byte in entry is input AL
 ; DS preserved, others destroyed
 
-        procedure   MakeNode,NEAR
+        procedure   HMA_MakeNode,NEAR
         DOSAssume   CS,<DS>,"MakeNode"
         ASSUME  ES:NOTHING
 
@@ -289,7 +335,7 @@ Break   <MAKENODE -- CREATE A NEW NODE>
         PUSH    AX              ; Save AH value
         MOV     [NoSetDir],0
         MOV     [SATTRIB],AL
-        invoke  GetPathNoSet
+        invoke  HMA_GetPathNoSet
         MOV     DL,CL           ; Save CL info
         MOV     CX,AX           ; Device ID to CH
         POP     AX              ; Get back AH
@@ -304,7 +350,7 @@ make_err_ret:
         STC
         return
 
-        entry   RENAME_MAKE     ; Used by DOS_RENAME to "copy" a node
+        entry   HMA_RENAME_MAKE     ; Used by DOS_RENAME to "copy" a node
 
 make_type:
 ;Extended Open hooks
@@ -344,7 +390,7 @@ make_exists:
         MOV     CH,ES:[BX+dir_attr] ; Get file attributes
         TEST    CH,attr_read_only
         JNZ     make_err_ret_5P ; Cannot create on read only files
-        invoke  MatchAttributes
+        invoke  HMA_MatchAttributes
         POP     CX              ; Devid back in CH
         JNZ     make_err_ret_5  ; Attributes not ok
         XOR     AL,AL           ; AL = 0, Disk Node
@@ -353,7 +399,7 @@ make_share:
         PUSH    AX              ; Save Disk or Device node
         PUSH    CX              ; Save Device ID
         MOV     AH,CH           ; Device ID to AH
-        CALL    DOOPEN          ; Fill in SFT for share check
+        CALL    HMA_DOOPEN          ; Fill in SFT for share check
         LES     DI,[THISSFT]
 ;       MOV     ES:[DI.sf_mode],sharing_compat + open_for_both
         SaveReg <SI,BX>         ; Save CURBUF pointers
@@ -453,7 +499,7 @@ MakeEndShare:
 ; If Share_check fails, then we have an internal ERROR!!!!!
 ;
         return
-EndProc MakeNode
+EndProc HMA_MakeNode
 
 ; Inputs:
 ;       [THISSFT] set
@@ -495,9 +541,9 @@ ASSUME  ES:NOTHING
         CMP     [FAILERR],0
         STC
         retnz                   ; User FAILed, node might exist
-        CALL    BUILDDIR        ; Try to build dir
+        CALL    HMA_BUILDDIR        ; Try to build dir
         retc                    ; Failed
-        invoke  GETENT          ; Point at that free entry
+        invoke  HMA_GETENT          ; Point at that free entry
         retc                    ; Failed
         JMP     SHORT FREESPOT
 
@@ -509,7 +555,7 @@ EXISTENT:
         DOSAssume   CS,<DS>,"MKNODE/ExistEnt"
         OR      AH,AH           ; Check if file is I/O device
         JNS     NOT_DEV1
-        JMP     DOOPEN          ; If so, proceed with open
+        JMP     HMA_DOOPEN          ; If so, proceed with open
 
 NOT_DEV1:
         invoke  FREEENT         ; Free cluster chain
@@ -639,7 +685,7 @@ Page_ok:                        ;BL-NETWORK PTM #-?
 ;           sf_dirsec sf_dirpos set
 ; DS,SI,BX preserved, others destroyed
 
-    entry   DOOPEN
+    entry   HMA_DOOPEN
         DOSAssume   CS,<DS>,"DoOpen"
         ASSUME  ES:NOTHING
 
@@ -857,6 +903,9 @@ RET1:
         return
 EndProc FREEENT
 
+LAST ENDS
+
+CODE SEGMENT BYTE PUBLIC 'CODE'
 ;
 ; CHECK_VIRT_OPEN checks to see if we had performed a "virtual open" (by
 ; examining the flag [VIRTUAL_OPEN] to see if it is 1). If we did, then

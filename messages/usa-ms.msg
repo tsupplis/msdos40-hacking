@@ -1220,7 +1220,7 @@ LOADFIX  d97b 0004
 0002 U 0000 "Program not found",CR,LF,"$"
 0003 U 0000 "Insufficient memory",CR,LF,"$"
 0004 U 0000 "Cannot load program",CR,LF,"$"
-MOVE     da49 0007
+MOVE     da49 0008
 0001 U 0000 "MOVE [/Y | /-Y] source[,source...] destination",CR,LF
 0002 U 0000 "Invalid parameter or path",CR,LF
 0003 U 0000 "Cannot move %1",CR,LF
@@ -1228,14 +1228,17 @@ MOVE     da49 0007
 0005 U 0000 "Overwrite %1 (Y/N)? "
 0006 U 0000 "Original destination saved as %1",CR,LF
 0007 U 0000 "%1 -> %2",CR,LF
-DELTREE  db97 0005
+0008 U 0000 "Both %1 and %2 would move to the same name",CR,LF
+DELTREE  dbd7 0005
 0001 U 0000 "DELTREE [/Y] path [path...]",CR,LF
 0002 U 0000 "Invalid parameter or path",CR,LF
 0003 U 0000 "Cannot delete %1",CR,LF
 0004 U 0000 "Delete %1 and all its contents (Y/N)? "
 0006 U 0000 "Deleting %1",CR,LF
-HELP     dc88 0004
+HELP     dcc8 0006
 0001 U 0000 "Usage: HELP [topic]",CR,LF,0
 0002 U 0000 "Unknown help topic. Type HELP for the topic list.",CR,LF,0
 0003 U 0000 "DOSHELP.HLP is missing or cannot be opened.",CR,LF,0
 0004 U 0000 "Cannot read DOSHELP.HLP or the file is too large.",CR,LF,0
+0005 U 0000 "Type HELP topic for details about a command or driver.",CR,LF,0
+0006 U 0000 "--More--",0

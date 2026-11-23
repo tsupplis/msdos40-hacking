@@ -325,7 +325,7 @@ NORM1:										;AN000;
 NORM0:
 
 ;;; File Tagging DOS 4.00
-	invoke	DOOPEN			; Fill in SFT
+	invoke	HMA_DOOPEN			; Fill in SFT
 	AND	BYTE PTR SS:[FastOpenFlg],Fast_yes    ;; DOS 3.3
 	CALL	DO_SHARE_CHECK		;
 	JNC	Share_Ok

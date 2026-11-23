@@ -64,6 +64,14 @@ with tempfile.TemporaryDirectory(dir=work) as name:
     batch = tmp / "fat.bat"
     install_probe(root, tmp, boot)
     workload = ("copy /b C:\\SOURCE.BIN C:\\RESULT.BIN\nfc /b C:\\SOURCE.BIN C:\\RESULT.BIN\n")
+    # A 1 KiB directory cluster holds 32 slots, including "." and "..".
+    workload += "md C:\\GROW\n"
+    workload += "".join(f"echo {i}>C:\\GROW\\F{i:02}.TXT\n" for i in range(35))
+    workload += ("del C:\\GROW\\F00.TXT\nren C:\\GROW\\F34.TXT LAST.TXT\n"
+                 "echo reused>C:\\GROW\\REUSED.TXT\n"
+                 "md C:\\DEST\nmove C:\\GROW\\F33.TXT C:\\DEST\\MOVED.TXT\n"
+                 "ren C:\\GROW\\F3?.TXT F3?.BIN\n"
+                 "ren C:\\GROW\\F01.TXT F02.TXT\n")
     for layout, config in [("high", "dos=high,umb\ndevice=himem.sys"),
                            ("near", "dos=high"), ("far", "device=ramdrive.sys 80")]:
         batch.write_text(f"hmaio {layout[0]}!\n" + workload)
@@ -88,4 +96,25 @@ with tempfile.TemporaryDirectory(dir=work) as name:
         if not any(part[i:i+11] == b"RESULT  BIN" and int.from_bytes(part[i+26:i+28], "little") > 4095
                    for i in range(directory, directory + 32 * root_entries, 32)):
             raise RuntimeError(f"{layout}: result did not exercise a high FAT16 cluster")
+        # Read the persisted directory, including its extension and reused slot.
+        grow_entry = next(i for i in range(directory, directory + 32 * root_entries, 32)
+                          if part[i:i+11] == b"GROW       ")
+        grow_cluster = int.from_bytes(part[grow_entry+26:grow_entry+28], "little")
+        data_start = directory + ((root_entries * 32 + 511) // 512) * 512
+        start = data_start + (grow_cluster - 2) * cluster_size
+        entries = part[start:start+96]
+        if (entries[:11] != b".          " or entries[32:43] != b"..         "
+                or int.from_bytes(entries[26:28], "little") != grow_cluster
+                or entries[58:60] != bytes(2) or entries[64:75] != b"REUSED  TXT"):
+            raise RuntimeError(f"{layout}: invalid dot entries or deleted slot was not reused")
+        for file, expected in [("GROW/LAST.TXT", b"34"), ("GROW/REUSED.TXT", b"reused"),
+                               ("GROW/F01.TXT", b"1"), ("GROW/F02.TXT", b"2"),
+                               ("GROW/F30.BIN", b"30"), ("GROW/F31.BIN", b"31"),
+                               ("GROW/F32.BIN", b"32"), ("DEST/MOVED.TXT", b"33")]:
+            if subprocess.check_output(["mtype", "-i", f"{saved}@@{offset}",
+                                        f"::{file}"]).strip() != expected:
+                raise RuntimeError(f"{layout}: bad directory contents for {file}")
+        names = subprocess.check_output(["mdir", "-b", "-i", f"{saved}@@{offset}", "::GROW/"]).upper().splitlines()
+        if any(name.rsplit(b"/", 1)[-1] in (b"F30.TXT", b"F31.TXT", b"F32.TXT", b"F33.TXT") for name in names):
+            raise RuntimeError(f"{layout}: rename left a source entry")
         print("PASS FAT16", layout, flush=True)

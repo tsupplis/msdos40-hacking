@@ -142,6 +142,20 @@ ELSE
 ENDIF
 
 LOCAL_RENAME:
+        JMP WORD PTR CS:[LocalRename_VECTOR]
+EndProc DOS_RENAME
+
+        EXTRN FCB_SELECTED:NEAR
+        PUBLIC LocalRename_VECTOR
+LocalRename_VECTOR DW OFFSET DOSGROUP:LocalRenameFar
+LocalRenameFar:
+        PUSH AX
+        MOV AH,70
+        JMP FCB_SELECTED
+CODE ENDS
+
+LAST SEGMENT PARA PUBLIC 'LAST'
+        procedure HMA_LocalRename,NEAR
 	MOV	[EXTERR_LOCUS],errLOC_Disk
 	MOV	SI,[WFP_START]
 	MOV	DI,[REN_WFP]
@@ -213,7 +227,7 @@ REN_OK1:				;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	MOV	WORD PTR [CREATING],0E5FFH  ; Creating, not DEL *.*
 					; A rename is like a CREATE_NEW as far
 					; as the destination is concerned.
-	invoke	GetPathNoSet
+	invoke	HMA_GetPathNoSet
 ;   If this Getpath fails due to file not found, we know all renames will work
 ;   since no files match the destination name.	If it fails for any other
 ;   reason, the rename fails on a path not found, or whatever (also fails if
@@ -280,9 +294,9 @@ BUILDDEST:
 	JNC	BAD_ACC
 	MOV	BX,[DESTSTART]
 	LES	BP,[THISDPB]
-	invoke	SetDirSrch		; Reset search to start of dir
+	invoke	HMA_SetDirSrch		; Reset search to start of dir
 	JC	BAD_ACC 		; Screw up
-	invoke	FINDENTRY		; See if new name already exists
+	invoke	HMA_FINDENTRY		; See if new name already exists
 	JNC	BAD_ACC 		; Error if found
 	CMP	[FAILERR],0
 	JNZ	BAD_ACCJ		; Find failed because user FAILed to I 24
@@ -301,7 +315,7 @@ BUILDDEST:
 	MOV	WORD PTR [THISSFT],SI
 	MOV	[SI].sf_mode,sharing_compat+open_for_both
 	XOR	CX,CX			; Set "device ID" for call into makenode
-	invoke	RENAME_MAKE		; This is in mknode
+	invoke	HMA_RENAME_MAKE		; This is in mknode
 	JNC	GOT_DEST
 BAD_ACCJ:
 	JMP	BAD_ACC
@@ -360,7 +374,7 @@ NEXT_SOURCE:
 	EnterCrit   critDisk
 	MOV	[CREATING],0	; Correct setting for search (we changed it
 				;   to FF when we made the prev new file).
-	invoke	RENAME_NEXT
+	invoke	HMA_RENAME_NEXT
 ;
 ; Note, now, that we have exited the previous ENTER and so are back to where
 ; we were before.
@@ -396,14 +410,14 @@ GET_SOURCE:
 
 	MOV	BX,WORD PTR [RENAMEDMA + 15]	; DirStart
 	LES	BP,ThisDPB
-	invoke	SetDirSrch
+	invoke	HMA_SetDirSrch
 	retc
-	invoke	StartSrch
+	invoke	HMA_StartSrch
 	MOV	AX,WORD PTR [RENAMEDMA + 13]	; Lastent
-	invoke	GetEnt
+	invoke	HMA_GetEnt
 	return
 
-EndProc DOS_RENAME
+EndProc HMA_LocalRename
 
 ;Input: DS:SI -> raw string with ?
 ;	ES:DI -> destination string
@@ -430,5 +444,5 @@ NOCHG:
 
 EndProc NEW_RENAME
 
-CODE	ENDS
+LAST	ENDS
     END

@@ -95,6 +95,7 @@ for name, origin in [
     ("fcbio", start),
     ("fcbio2", symbols["getrr"]),
     ("search", symbols["$find_first"]),
+    ("rename", symbols["hma_localrename"]),
     ("create", symbols["hma_create"]),
     ("open", symbols["hma_open"]),
     ("disk", symbols["hma_read"]),
@@ -103,6 +104,7 @@ for name, origin in [
     ("isearch", symbols["hma_localfirst"]),
     ("dir", symbols["hma_findentry"]),
     ("dir2", symbols["hma_getpath"]),
+    ("mknode", symbols["hma_builddir"]),
     ("rom", symbols["fndclus"]),
     ("fcb", symbols["hma_makefcb"]),
     ("fat", symbols["hma_iseof"]),
@@ -134,7 +136,8 @@ for name, origin in [
 vectors = ("read", "write", "open", "create", "getpath", "getpathnoset", "makefcb", "nametrans", "packname",
            "findentry", "srch", "nextent", "metacompare", "getentry", "getent",
            "setdirsrch", "startsrch", "matchattributes", "localfirst", "localnext", "rename_next",
-           "iseof", "unpack", "pack", "allocate", "figrec")
+           "iseof", "unpack", "pack", "allocate", "figrec",
+           "newdir", "setdotent", "makenode", "localrename", "doopen")
 table = [0] * (max(entries) + 1)
 lowentries = []
 for fn in entries:

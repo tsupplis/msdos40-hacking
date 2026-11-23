@@ -211,7 +211,7 @@ LAST	SEGMENT PARA PUBLIC 'LAST'
 	OR	ES:[DI].sf_mode,sharing_compat+open_for_both
 setdone:
 	EnterCrit   critDisk
-	invoke	MakeNode
+	invoke	HMA_MakeNode
 	JNC	Create_ok
 	mov	[VOLCHNG_FLAG],-1	; indicate no change in volume label
 	LeaveCrit   critDisk
