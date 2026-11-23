@@ -13,7 +13,7 @@ typedef unsigned short WORD;
 #define PATHLEN 128
 #define ALLATTR (_A_SUBDIR | _A_HIDDEN | _A_SYSTEM | _A_RDONLY)
 
-enum { usage = 1, bad = 2, failed = 3, make_dir = 4, replace_q = 5, saved = 6, arrow = 7 };
+enum { usage = 1, bad = 2, failed = 3, make_dir = 4, replace_q = 5, saved = 6, arrow = 7, collision = 8 };
 
 void sysloadmsg(union REGS *, union REGS *);
 void sysdispmsg(union REGS *, union REGS *);
@@ -157,9 +157,8 @@ static int temporary(char *dest, char *name)
     return r.x.cflag ? -1 : r.x.ax;
 }
 
-static int copyfile(char *src, char *dest, unsigned attr)
+static int stage_copy(char *src, char *dest, unsigned attr, char *tmp)
 {
-    char tmp[PATHLEN];
     unsigned count, written, date, time;
     int in, out, ok;
     if (_dos_open(src,O_RDONLY,&in)) return 0;
@@ -174,7 +173,7 @@ static int copyfile(char *src, char *dest, unsigned attr)
     if (ok && _dos_setftime(out,date,time)) ok = 0;
     if (_dos_close(out)) ok = 0;
     if (_dos_close(in)) ok = 0;
-    if (ok && !_dos_setfileattr(tmp,attr) && !dosrename(tmp,dest)) return 1;
+    if (ok && !_dos_setfileattr(tmp,attr)) return 1;
     _dos_setfileattr(tmp,0);
     unlink(tmp);
     return 0;
@@ -184,7 +183,8 @@ static int moveone(struct source *s, char *dest)
 {
     char src[PATHLEN], backup[PATHLEN];
     unsigned attr, err;
-    int old, h;
+    char staged[PATHLEN];
+    int old, h, copied = 0;
     if (s->attr & (_A_HIDDEN | _A_SYSTEM)) return 0;
     if (!canonical(s->path,src) || !stricmp(src,dest)) return 0;
     err = _dos_getfileattr(dest,&attr);
@@ -194,31 +194,46 @@ static int moveone(struct source *s, char *dest)
         if ((attr & (_A_RDONLY|_A_HIDDEN|_A_SYSTEM|_A_SUBDIR)) ||
             (s->attr & _A_SUBDIR)) return 0;
         if (warn_replace && !question(replace_q,dest)) return 1;
-        h = temporary(dest,backup);
-        if (h < 0) return 0;
-        if (_dos_close(h) || unlink(backup) || dosrename(dest,backup)) return 0;
     }
-    err = dosrename(src,dest);
-    if (err == 17 && !(s->attr & _A_SUBDIR) &&
-        copyfile(src,dest,s->attr)) {
-        if (((s->attr & _A_RDONLY) && _dos_setfileattr(src,s->attr & ~_A_RDONLY)) || unlink(src)) {
-            _dos_setfileattr(src,s->attr);
-            if (old) message(stderr, saved, backup, NULL);
-            return 0;
-        }
-        err = 0;
+
+    /* For a replacement, stage across drives (or network paths whose
+     * volume is unknown) while the original destination is accessible. */
+    if (old && (src[1] != ':' || dest[1] != ':' || src[0] != dest[0])) {
+        if (!stage_copy(src,dest,s->attr,staged)) return 0;
+        copied = 1;
+    }
+    if (old) {
+        h = temporary(dest,backup);
+        if (h < 0 || _dos_close(h) || unlink(backup) || dosrename(dest,backup))
+            goto discard_stage;
+    }
+    err = dosrename(copied ? staged : src,dest);
+    if (err == 17 && !old && !(s->attr & _A_SUBDIR)) {
+        if (!stage_copy(src,dest,s->attr,staged)) return 0;
+        copied = 1;
+        err = dosrename(staged,dest);
     }
     if (err) {
         if (old && dosrename(backup,dest)) message(stderr, saved, backup, NULL);
+        goto discard_stage;
+    }
+    if (copied && (((s->attr & _A_RDONLY) &&
+        _dos_setfileattr(src,s->attr & ~_A_RDONLY)) || unlink(src))) {
+        _dos_setfileattr(src,s->attr);
+        if (old) message(stderr, saved, backup, NULL);
         return 0;
     }
     if (old && unlink(backup)) { message(stderr, saved, backup, NULL); return 0; }
     message(stdout, arrow, s->path, dest);
     return 1;
+discard_stage:
+    if (copied) {
+        _dos_setfileattr(staged,0);
+        unlink(staged);
+    }
+    return 0;
 }
 
-/* Expand one source pattern at a time. Snapshotting its matches keeps
- * directory mutations from feeding new entries back into the enumeration. */
 static int make_path(char *dir)
 {
     char *p;
@@ -273,33 +288,36 @@ int main(int argc, char **argv)
         if (next) *next++ = 0;
         if (!matches(token,collect,0)) {
             message(stderr, failed, token, NULL);
+            return 1;
+        }
+    }
+    /* Every operand shares one destination directory. Equal leaf names
+     * therefore collide, including matches from different wildcards. */
+    for (s = first; s; s = s->next) {
+        struct source *other;
+        for (other = first; other != s; other = other->next)
+            if (!stricmp(leaf(other->path),leaf(s->path))) {
+                message(stderr,collision,s->path,other->path);
+                return 1;
+            }
+    }
+    if (!dir && (multiple || first->next)) {
+        if (!_dos_getfileattr(dest,&attr)) goto invalid;
+        if (!quiet && !question(make_dir,dest)) return 1;
+        if (!make_path(dest)) { message(stderr,failed,dest,NULL); return 1; }
+        dir = 1;
+    }
+    for (s = first; s; s = s->next) {
+        strcpy(target,dest);
+        if (dir) {
+            if (strlen(target)+strlen(leaf(s->path))+2 > PATHLEN) goto invalid;
+            if (target[strlen(target)-1] != '\\') strcat(target,"\\");
+            strcat(target,leaf(s->path));
+        }
+        if (!moveone(s,target)) {
+            message(stderr, failed, s->path, NULL);
             ok = 0;
-        } else {
-            if (!dir && (multiple || first->next)) {
-                if (!_dos_getfileattr(dest,&attr)) goto invalid;
-                if (!quiet && !question(make_dir,dest)) return 1;
-                if (!make_path(dest)) { message(stderr,failed,dest,NULL); return 1; }
-                dir = 1;
-            }
-            for (s = first; s; s = s->next) {
-                strcpy(target,dest);
-                if (dir) {
-                    if (strlen(target)+strlen(leaf(s->path))+2 > PATHLEN) goto invalid;
-                    if (target[strlen(target)-1] != '\\') strcat(target,"\\");
-                    strcat(target,leaf(s->path));
-                }
-                if (!moveone(s,target)) {
-                    message(stderr, failed, s->path, NULL);
-                    ok = 0;
-                }
-            }
         }
-        while (first) {
-            s = first->next;
-            free(first);
-            first = s;
-        }
-        tail = &first;
     }
     return !ok;
 invalid:

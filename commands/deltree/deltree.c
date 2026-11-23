@@ -134,10 +134,15 @@ static int selected(char *path, unsigned attr)
     char full[PATHLEN], current[PATHLEN]; static char drivecwd[] = "A:.";
     unsigned len;
     if (!canonical(path, full) || !full[0] || !*leaf(full)) return 0;
-    if ((attr & _A_SUBDIR) && full[1] == ':') {
-        drivecwd[0] = full[0];
-        if (!canonical(drivecwd, current)) return 0;
-        len = strlen(full);
+    len = strlen(full);
+    /* SUBST drives maintain independent current directories. Compare each
+     * logical drive in the same expanded namespace before descending. */
+    for (drivecwd[0] = 'A'; (attr & _A_SUBDIR) && drivecwd[0] <= 'Z';
+         ++drivecwd[0]) {
+        if (!canonical(drivecwd, current)) {
+            if (drivecwd[0] == full[0]) return 0;
+            continue;
+        }
         if (!strnicmp(full,current,len) &&
             (!current[len] || current[len]=='\\')) return 0;
     }
