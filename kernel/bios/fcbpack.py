@@ -103,7 +103,7 @@ for name, origin in [
     ("isearch", symbols["hma_localfirst"]),
     ("dir", symbols["hma_findentry"]),
     ("dir2", symbols["hma_getpath"]),
-    ("rom", symbols["hma_allocate"]),
+    ("rom", symbols["fndclus"]),
     ("fcb", symbols["hma_makefcb"]),
     ("fat", symbols["hma_iseof"]),
 ]:
@@ -134,7 +134,7 @@ for name, origin in [
 vectors = ("read", "write", "open", "create", "getpath", "getpathnoset", "makefcb", "nametrans", "packname",
            "findentry", "srch", "nextent", "metacompare", "getentry", "getent",
            "setdirsrch", "startsrch", "matchattributes", "localfirst", "localnext", "rename_next",
-           "iseof", "unpack", "pack", "allocate")
+           "iseof", "unpack", "pack", "allocate", "figrec")
 table = [0] * (max(entries) + 1)
 lowentries = []
 for fn in entries:

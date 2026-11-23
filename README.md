@@ -69,7 +69,7 @@ Applies to `command.com` and DOS buffered console input. Cooked handle reads sup
 
 | Directive | Enhancement | Conventional bytes saved on PCE¹ |
 |---|---|---:|
-| `dos=high` | Place filename parsing, directory search, local pathname lookup and file I/O in the HMA when available. Combine with `dos=high,umb` for UMBs. | 5,280 with the PCE configuration below |
+| `dos=high` | Place filename parsing, directory search, local pathname lookup and file I/O in the HMA when available. Combine with `dos=high,umb` for UMBs. | 7,504 with the PCE configuration below |
 | `dos=umb` | Enable upper memory blocks (UMBs) from an XMS provider. | — |
 | `devicehigh=driver [arguments]` | Try upper memory first, then conventional memory if the image cannot fit. | 4,544 with `ansi.sys` |
 | `shellhigh=interpreter [arguments]` | Try upper memory for the shell and, for permanent `command.com`, its `/e:bytes` environment. Each falls back independently. | 6,096 with `command.com /p /e:160` |
@@ -92,7 +92,7 @@ devicehigh=ansi.sys
 shellhigh=command.com /p /e:160
 ```
 
-¹ PCE XT with 512-byte floppy sectors. With 88 Kbytes of UMB and the HMA enabled, the example above gives a 598 Kbyte largest executable.
+¹ PCE XT with 512-byte floppy sectors. With 88 Kbytes of UMB and the HMA enabled, the example above gives a 614,448-byte largest executable (600 KiB plus 48 bytes). The launcher configuration in `pceconfig.sys` gives the same result.
 
 For a machine with unused RAM mapped from segment `ca00` up to `e000` (exclusive), use `umbs.sys` as the provider.
 

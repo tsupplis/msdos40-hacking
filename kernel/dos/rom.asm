@@ -68,6 +68,19 @@ include EA.inc
 
 
 
+        EXTRN FCB_SELECTED:NEAR
+        PUBLIC FIGREC_VECTOR
+FIGREC_VECTOR DW OFFSET DOSGROUP:FigRecFar
+        procedure FIGREC,NEAR
+        JMP WORD PTR CS:[FIGREC_VECTOR]
+FigRecFar:
+        PUSH AX
+        MOV AH,66
+        JMP FCB_SELECTED
+EndProc FIGREC
+CODE ENDS
+
+LAST SEGMENT PARA PUBLIC 'LAST'
 Break   <FNDCLUS -- Skip over allocation units>
 
 ; Inputs:
@@ -153,14 +166,16 @@ dodo:
 
 do_norm:
 
-        invoke  UNPACK
-        retc
+        invoke  HMA_UNPACK
+        JNC     WalkCluster
+        RET
+WalkCluster:
 
         invoke  FastSeek_Insert                   ; insert cluster # to         ;AN000;
 cluss:                                                                          ;AN000;
         PUSH    BX                                ; FastSeek                    ;AN000;
         MOV     BX,DI
-        Invoke  IsEOF
+        Invoke  HMA_IsEOF
         POP     BX
         JAE     RET10
         XCHG    BX,DI
@@ -173,13 +188,13 @@ SKPCLPX:
 RET10:                                                                          ;AN000;
         AND     [FastSeekflg],FS_no_insert       ; clear insert mode
         CLC
-        return
+        RET
 NOCLUS:
         POP     ES
         INC     CX
         DEC     DX
         CLC
-        return
+        RET
 clusfound:
         MOV     DX,[FSeek_logclus]                ; get cluster position        ;AN000;
         MOV     BX,[FSeek_logsave]                ; bx=previous cluster # PTM   ;AN000;
@@ -217,9 +232,11 @@ Break  <BUFSEC -- BUFFER A SECTOR AND SET UP A TRANSFER>
         MOV     DX,[CLUSNUM]
         MOV     BL,[SECCLUSPOS]
         MOV     [ALLOWED],allowed_FAIL + allowed_RETRY + allowed_IGNORE
-        CALL    FIGREC
+        CALL    HMA_FIGREC
         invoke  GETBUFFR
-        retc
+        JNC     BufReady
+        RET
+BufReady:
         MOV     BYTE PTR [TRANS],1      ; A transfer is taking place
         MOV     SI,[NEXTADD]
         MOV     DI,SI
@@ -232,7 +249,7 @@ Break  <BUFSEC -- BUFFER A SECTOR AND SET UP A TRANSFER>
         LEA     DI,[DI].BUFINSIZ        ; Point to buffer
         ADD     DI,[BYTSECPOS]
         CLC
-        return
+        RET
 EndProc BUFSEC
 
 Break   <BUFRD, BUFWRT -- PERFORM BUFFERED READ AND WRITE>
@@ -281,7 +298,7 @@ RBUFPLACEDC:
 RBUFPLACED:
         PUSH    SS
         POP     DS
-        return
+        RET
 EndProc BUFRD
 
 ; Do a partial sector write via one of the system buffers
@@ -342,7 +359,7 @@ WBUFPLACED:
         CLC
         PUSH    SS
         POP     DS
-        return
+        RET
 EndProc BUFWRT
 
 Break   <NEXTSEC -- Compute next sector to read or write>
@@ -362,7 +379,7 @@ Break   <NEXTSEC -- Compute next sector to read or write>
         CMP     AL,ES:[BP.dpb_cluster_mask]
         JBE     SAVPOS
         MOV     BX,[CLUSNUM]
-        Invoke  IsEOF
+        Invoke  HMA_IsEOF
         JAE     NONEXT
 ;; 11/5/86 FastSeek
         TEST    [FastSeekflg],Fast_yes            ; fastseek installed?         ;AN000;
@@ -388,7 +405,7 @@ parfound2:
                                         ; use the old bx                        ;AN000;
                                                                                 ;AN000;
 do_norm2:
-        invoke  UNPACK
+        invoke  HMA_UNPACK
         JC      NONEXT
         invoke  FastSeek_Insert         ; call insert                           ;AN000;
         AND     [FastSeekflg],FS_no_insert  ; clear insert flag                 ;AN000;
@@ -402,10 +419,10 @@ SAVPOS:
         MOV     [SECCLUSPOS],AL
 CLRET:
         CLC
-        return
+        RET
 NONEXT:
         STC
-        return
+        RET
 EndProc NEXTSEC
 
 Break   <OPTIMIZE -- DO A USER DISK REQUEST WELL>
@@ -475,7 +492,7 @@ par_found3:
         OR      [FastSeekflg],FS_insert           ; prepare for insertion       ;AN000;
                                                   ; use old bx                  ;AN000;
 do_norm3:
-        invoke  UNPACK
+        invoke  HMA_UNPACK
         JC      OP_ERR
 clusgot2:
         invoke  FastSeek_Insert         ; call insert                           ;AN000;
@@ -504,17 +521,17 @@ FINCLUS:
         SUB     BX,DX           ; Number of new clusters accessed
         ADD     [LASTPOS],BX
         POP     BX              ; BL = sector postion within cluster
-        invoke  FIGREC
+        invoke  HMA_FIGREC
         MOV     BX,SI
         AND     [FastSeekflg],FS_no_insert  ; clear insert flag
         CLC
-        return
+        RET
 
 OP_ERR:
         ADD     SP,4
         AND     [FastSeekflg],FS_no_insert  ; clear insert flag
         STC
-        return
+        RET
 
 BLKDON:
         SUB     CX,DX           ; Number of sectors in cluster we don't want
@@ -536,7 +553,7 @@ Break   <FIGREC -- Figure sector in allocation unit>
 ;       [HIGH_SECTOR] Physical sector address (HIGH)
 ; No other registers affected.
 
-        procedure   FIGREC,NEAR
+        procedure   HMA_FIGREC,NEAR
 ASSUME  DS:NOTHING,ES:NOTHING
 
         Assert      ISDPB,<ES,BP>,"FigRec"
@@ -560,9 +577,12 @@ noshift:
         ADD     DX,ES:[BP.dpb_first_sector]
         ADC     [HIGH_SECTOR],0              ;F.C. >32mb
         POP     CX
-        return
-EndProc FIGREC
+        RET
+EndProc HMA_FIGREC
 
+LAST ENDS
+
+CODE SEGMENT BYTE PUBLIC 'CODE'
 Break   <ALLOCATE -- Assign disk space>
 
 ;***    ALLOCATE - Allocate Disk Space
@@ -642,7 +662,6 @@ Break   <ALLOCATE -- Assign disk space>
 ;
 ;       USES    ALL but SI, BP
 
-        EXTRN FCB_SELECTED:NEAR
         PUBLIC ALLOCATE_VECTOR
 ALLOCATE_VECTOR DW OFFSET DOSGROUP:AllocateFar
         PROCEDURE ALLOCATE,NEAR

@@ -442,7 +442,7 @@ UNP_OK:
 	MOV	DX,BX
 	XOR	BL,BL
 	MOV	BYTE PTR [SECCLUSPOS],BL
-	invoke	FIGREC
+	invoke	HMA_FIGREC
 	RestoreReg  <SI>
 	PUSH	DX			   ;AN000; >32mb
 	MOV	DX,[HIGH_SECTOR]	   ;AN000; >32mb
