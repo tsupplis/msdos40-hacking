@@ -73,95 +73,41 @@ The survey compares the commands shipped here with the command syntax and option
 
 | Command | MS-DOS 5.0 comparison | Enhancement | Missing MS-DOS 5.0 features |
 |---|---|---|---|
-| `append` | No known gaps |  |  |
-| `assign` | No known gaps |  |  |
 | `attrib` | Gaps identified |  | `+H` / `-H` set or clear hidden, and `+S` / `-S` set or clear system. File selection must include files that already have these attributes. |
 | `backup` | Gaps identified |  | *won't implement — The 2.88 MB disk size for `/F` (including `/F:2880`).* |
-| `break` | No known gaps |  |  |
-| `call` | No known gaps |  |  |
-| `cd` (`chdir`) | No known gaps |  |  |
-| `chcp` | No known gaps |  |  |
-| `chkdsk` | No known gaps |  |  |
-| `cls` | No known gaps |  |  |
-| `command.com` | No known gaps |  |  |
 | `comp` | No known gaps | `/D` reports decimal bytes, `/A` shows characters, `/L` reports line numbers, `/N=n` limits comparison to the first *n* lines, and `/C` ignores ASCII letter case. |  |
 | `copy` | No known gaps | `/Y` allows overwriting. `/-Y` prompts before overwriting. `COPYCMD` presets either switch. The last explicit overwrite switch wins. |  |
-| `ctty` | No known gaps |  |  |
-| `cv.com` | Missing command |  | The DOS 5.0 compatibility launcher for older CodeView releases. |
-| `date` | No known gaps |  |  |
 | `debug` | Gaps identified |  | The interactive `?` command that lists debugger commands. |
 | `del` (`erase`) | No known gaps | `/Q` skips the bulk-delete confirmation. An explicit `/P` still prompts for each file. |  |
 | `dir` | No known gaps | `/B` prints bare names, one per line. `/L` displays ASCII letters in filenames in lowercase. `/A[:]` filters by D, R, H, S, or A. `/O[:]` orders by N (name), E (extension), S (size), D (date), or G (directories first). Prefix a letter with `-` to exclude an attribute or reverse a key. `/P` pages console output. `DIRCMD` presets switches, and `/-` disables a preset switch on the command line. `/S` lists matching entries in subdirectories. With `/B`, it prints full paths. |  |
-| `diskcomp` | No known gaps |  |  |
 | `diskcopy` | No known gaps | `/V` asks the disk driver to verify each destination track after writing it. |  |
-| *`doskey`* | *won't implement* |  | *Command history, editing and named macros through DOSKEY.COM.* |
-| *`dosshell`* | *won't implement* |  | *DOS Shell file manager and task switcher, including its DOSSWAP component.* |
-| `echo` | No known gaps |  |  |
-| *`edit`* | *won't implement* | *`vi` provides screen editing on the full floppy.* |  |
-| `edlin` | No known gaps |  |  |
 | `emm386` | Missing command |  | The EMM386.EXE command interface for querying and changing expanded-memory operation. The full floppy ships EMM386.SYS. |
-| `exe2bin` | No known gaps |  |  |
-| `exit` | No known gaps |  |  |
-| *`expand`* | *won't implement* |  | *Expand compressed distribution files.* |
-| `fastopen` | No known gaps |  |  |
-| `fc` | No known gaps |  |  |
 | `fdisk` | No known gaps | `/STATUS` reports disk usage and DOS volumes. `/MBR` restores the master boot code on the first fixed disk. It preserves partition entries when the boot signature is present and installs an empty table when it is absent. |  |
 | `filesys` | No same-name DOS 5.0 utility |  |  |
 | `find` | No known gaps | `/I` ignores case when matching and preserves the spelling of displayed lines. |  |
-| `for` | No known gaps |  |  |
 | `format` | Gaps identified | `/Q` quick format. | *won't implement — Recoverable formatting, `/U`, and `/F` for 2.88 MB media.* |
-| `goto` | No known gaps |  |  |
-| `graftabl` | No known gaps |  |  |
-| `graphics` | No known gaps |  |  |
 | `help` | Missing command |  | Display the command index and command-specific help. |
 | `if` | No known gaps | `IF [NOT] DIREXIST path command` tests for a directory. Wildcards match directories only. |  |
 | `ifsfunc` | No same-name DOS 5.0 utility |  |  |
-| `join` | No known gaps |  |  |
 | `keyb` | Gaps identified |  | `/E` explicitly selects an enhanced keyboard. |
-| `label` | No known gaps |  |  |
 | `loadfix` | No known gaps | Run a DOS executable above the first 64 KiB and return its exit code. |  |
 | `loadhigh` (`lh`) | No known gaps | Run an external program in upper memory when it fits. |  |
 | `mbasic` | Project extra | BASIC interpreter on the full floppy. |  |
-| `md` (`mkdir`) | No known gaps |  |  |
 | `mem` | Gaps identified | Show total, used, and free memory by pool and the largest usable blocks. `/C` (`/CLASSIFY`) groups modules by memory usage. Combine `/P` with `/C` or `/D` (`/DEBUG`) to page console output. Alone, `/P` pages the summary. | `/PROGRAM` lists loaded programs. |
-| `mirror` | Missing command |  | Save disk recovery information and track deletions. |
-| `mode` | No known gaps |  |  |
 | `more [filename]` | No known gaps | Page a file by name. |  |
-| `msherc` | Missing command |  | Hercules graphics support utility. |
-| `nlsfunc` | No known gaps |  |  |
-| `path` | No known gaps |  |  |
-| `pause` | No known gaps |  |  |
-| `print` | No known gaps |  |  |
 | `printfix` | Missing command |  | Suppress printer status checks for printers that cannot answer them. |
-| `prompt` | No known gaps |  |  |
-| *`qbasic`* | *won't implement* | *`mbasic` provides BASIC on the full floppy.* |  |
-| `rd` (`rmdir`) | No known gaps |  |  |
-| `recover` | No known gaps |  |  |
-| `rem` | No known gaps |  |  |
-| `ren` (`rename`) | No known gaps |  |  |
-| `replace` | No known gaps |  |  |
 | `restore` | No known gaps | `/D` lists matching backup paths and preserves destination files. |  |
 | `select` | No same-name DOS 5.0 utility |  |  |
-| `set` | No known gaps |  |  |
-| *`setup`* | *won't implement* |  | *The DOS 5.0 installation program.* |
 | `setver` | Missing command |  | Display or edit the per-program DOS version table. |
-| `share` | No known gaps |  |  |
-| `shift` | No known gaps |  |  |
-| `sort` | No known gaps |  |  |
-| `subst` | No known gaps |  |  |
 | `sys` | Gaps identified |  | *won't implement — Transfer `COMMAND.COM`, recognize both IBM and Microsoft system-file names when replacing an installation, and allow the first three contiguous sectors of `IO.SYS` to reside later in the data area. The placement change also requires boot-loader support.* |
-| `time` | No known gaps |  |  |
-| `tree` | No known gaps |  |  |
-| `truename` | No known gaps |  |  |
-| `type` | No known gaps |  |  |
-| *`undelete`* | *won't implement* |  | *Recover deleted files.* |
-| *`unformat`* | *won't implement* |  | *Recover a formatted volume using saved or reconstructed disk information.* |
 | `ver` | No known gaps | Displays the project version as `4.01N`. |  |
-| `verify` | No known gaps |  |  |
 | `vi` | Project extra | Screen editor on the full floppy. |  |
-| `vol` | No known gaps |  |  |
 | `xcopy` | No known gaps | `XCOPYCMD` presets XCOPY switches. Explicit switches take precedence. For example, `SET XCOPYCMD=/S /E` includes empty subdirectories and `XCOPY source dest /-S /-E` copies only the top level. |  |
-| Batch syntax | No known gaps in surveyed syntax |  |  |
+
+| Status | Commands |
+|---|---|
+| *Won't implement* | *`cv`, `doskey`, `dosshell`, `edit`, `expand`, `mirror`, `msherc`, `qbasic`, `setup`, `undelete`, `unformat`*<br><br>*The full floppy provides `vi` for editing and `mbasic` for BASIC.* |
+| No known gaps | `append`, `assign`, `break`, `call`, `cd` (`chdir`), `chcp`, `chkdsk`, `cls`, `command.com`, `ctty`, `date`, `diskcomp`, `echo`, `edlin`, `exe2bin`, `exit`, `fastopen`, `fc`, `for`, `goto`, `graftabl`, `graphics`, `join`, `label`, `md` (`mkdir`), `mode`, `nlsfunc`, `path`, `pause`, `print`, `prompt`, `rd` (`rmdir`), `recover`, `rem`, `ren` (`rename`), `replace`, `set`, `share`, `shift`, `sort`, `subst`, `time`, `tree`, `truename`, `type`, `verify`, `vol` |
 
 The batch comparison covers `CALL` with arguments, `ECHO` and leading `@`, `FOR %%v IN (...) DO`, `GOTO` and labels, `IF [NOT]` with ERRORLEVEL, string equality or EXIST, `PAUSE`, `REM`, `SHIFT`, positional arguments and environment expansion. All eight DOS 5.0 batch commands are present. A batch fixture booted on both systems produced identical output for CALL/SHIFT, FOR, IF, GOTO, environment expansion and a blank ECHO line. Individual command rows record project extensions.
 
