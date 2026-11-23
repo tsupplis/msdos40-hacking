@@ -7,7 +7,7 @@ MS-DOS 4.01 rebuilt on Unix with GNU make and the original tools under `emu2`. T
 | **Stability** | Apply the documented Microsoft and IBM fixes and regression-test the rebuilt system. |
 | **Memory** | Surpass DOS 3.3 and approach DOS 5.0, targeting 610 Kbytes free. UMB allocation and XMS reporting are available. Selected kernel services can run in the HMA. |
 | **Usability** | Stay MS-DOS, smooth the angles. Command-line editing and recall, clearer memory diagnostics, BASIC (`mbasic.com`) and a screen editor (`vi.exe`) on the full floppy. |
-| **Compatibility** | Match as closely as possible or exceed DOS 5.0 commands and functionality. |
+| **Compatibility** | Match closely or exceed DOS 5.0 commands and functionality. For example some 6.X DOS command have been reimplemented and Y2k has a stronger enforcement (4 digit dates are mandatory) |
 
 ![MS-DOS 4.01 running in PCE with upper memory enabled](images/mem.png)
 
@@ -189,7 +189,7 @@ Programs can link UMBs with `int 21h/5803h` and select upper-only or upper-first
 | [cpm86-menu](https://github.com/tsupplis/cpm86-menu)   | A submit replacement and a menu system for submit orchestration for CP/M-86 1.1 |
 | [cpm86-make](https://github.com/tsupplis/cpm86-make)   | A simple submit based make tool for CP/M-86 |
 | [pcdos11-hacking](https://github.com/tsupplis/pcdos11-hacking) | PC-DOS 1.1 distribution, tools and notes |
-| [msdos40-hacking](https://github.com/tsupplis/msdos40-hacking) | MS-DOS 4.0 distribution, tools and notes |
+| [msdos40-kernel](https://github.com/tsupplis/msdos40-kernel) | MS-DOS 4.0 distribution, tools and notes |
 
 ---
 
