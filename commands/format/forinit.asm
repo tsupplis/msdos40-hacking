@@ -731,6 +731,11 @@ Procedure Interpret_Parse			;				;AN000;
 	   mov	   DriveLetter,al		;Save it			;AN000;
 ;	$ENDIF					;				;AN000;
 $$IF36:
+	cmp Switch_Buffer.Switch_Pointer,offset Switch_Q_Control.Keyword
+	jne CheckSwitchOne
+	mov Switch_Q_Control.Keyword,20h
+	or SwitchMap,Switch_Q
+CheckSwitchOne:
 	cmp	Switch_Buffer.Switch_Pointer,offset Switch_1_Control.Keyword ;;AN000;
 ;	$IF	E				;				;AN000;
 	JNE $$IF38

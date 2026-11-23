@@ -62,7 +62,8 @@ struct p_sw_blk 							/*;AN000;4*/
 	 BYTE	switch1[3];		/* Save area for switches */	/*;AN000;4*/
 	 BYTE	switch2[3];		/* Save area for switches */	/*;AN000;4*/
 	 BYTE	switch3[3];		/* Save area for switches */	/*;AN000;4*/
-	 BYTE	switch4[3];		/* Save area for switches */	/*;AN000;4*/
+	 BYTE	switch4[3];
+         BYTE   list_switch[3];		/* Save area for switches */	/*;AN000;4*/
 	};								/*;AN000;4*/
 /**/
 /*---------------------------------------------------------------------------*/

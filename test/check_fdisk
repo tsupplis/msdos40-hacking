@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+"""Check FDISK on disposable XT disks, comparing every sector after each boot."""
+from pathlib import Path
+import os
+import re
+import shutil
+import struct
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+work = root / "test/work"
+work.mkdir(exist_ok=True)
+with tempfile.TemporaryDirectory(dir=work) as name:
+    tmp = Path(name)
+    boot = tmp / "source.img"
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), boot)
+    subprocess.run(["mcopy", "-o", "-i", boot, root / "commands/fdisk/fdisk.exe",
+                    "::FDISK.EXE"], check=True)
+    raw, disk, saved = (tmp / n for n in ("raw.img", "disk.pimg", "saved.img"))
+    sectors = 306 * 4 * 17
+    data = bytearray(sectors * 512)
+    data[:446] = b"X" * 446
+    data[446:462] = struct.pack("<B3sB3sII", 128, bytes([1,1,0]), 4,
+                                bytes([3,17,149]),17,150*68-17)
+    data[462:478] = struct.pack("<B3sB3sII", 0, bytes([0,1,150]), 5,
+                                bytes([3,17,219]), 150*68,70*68)
+    ebr = 150*68*512
+    data[ebr+446:ebr+462] = struct.pack("<B3sB3sII", 0, bytes([1,1,150]), 1,
+                                        bytes([3,17,219]),17,70*68-17)
+    data[ebr+510:ebr+512] = b"\x55\xaa"
+    data[510:512] = b"\x55\xaa"
+    data[-512:] = b"Z" * 512
+    batch = tmp / "probe.bat"
+    def run(lines):
+        raw.write_bytes(data)
+        subprocess.run(["pce-img", "convert", "-q", "-g", "306", "4", "17",
+                        "-O", "pimg", raw, disk], check=True)
+        batch.write_text("\n".join(lines) + "\n")
+        output = subprocess.check_output([root / "test/run_tests", batch],
+            env=dict(os.environ, IMG=str(boot), PCE_TEST_HD=str(disk))).decode("cp437")
+        subprocess.run(["pce-img", "convert", "-q", "-O", "img",disk,saved], check=True)
+        assert "ENDTEST" in output and "FAILED" not in output, output
+        return output
+    report = run(["fdisk /status > b:\\report.txt", "if errorlevel 1 echo FAILED",
+                  "fdisk /pri:1", "if not errorlevel 1 echo FAILED",
+                  "fdisk 2 /pri:1", "if not errorlevel 1 echo FAILED",
+                  "type b:\\report.txt", "fdisk /status /bad",
+                  "if not errorlevel 1 echo FAILED", "fdisk /status /mbr",
+                  "if not errorlevel 1 echo FAILED"])
+    assert saved.read_bytes() == data
+    assert "Fixed Disk Drive Status" in report and re.search(r"C:\s+5\b", report), report
+    assert re.search(r"D:\s+2\b", report), report
+    print("PASS read-only redirected status and conflicting switches", flush=True)
+    # Drive the DOS menu through its standard input handle; /Q suppresses reboot.
+    def delete_menu(keys):
+        keyfile = tmp / "keys.bin"
+        keyfile.write_bytes(keys)
+        subprocess.run(["mcopy", "-o", "-i", boot, keyfile, "::KEYS.BIN"], check=True)
+        run(["fdisk /q < a:\\keys.bin", "if errorlevel 1 echo FAILED", "echo."])
+
+    delete_last = b"3\r3\rD\r\rY\r\x1b\x1b"
+    delete_menu(delete_last + b"\x1b")
+    expected = bytearray(data)
+    expected[ebr:ebr+510] = bytes(510)
+    assert saved.read_bytes() == expected, "last logical drive remained on disk"
+    print("PASS delete last logical drive", flush=True)
+
+    delete_menu(delete_last + b"3\r2\rY\r\x1b\x1b")
+    expected = bytearray(data)
+    expected[462:478] = bytes(16)
+    assert saved.read_bytes() == expected, "extended deletion touched unexpected sectors"
+    print("PASS delete logical and extended partition together", flush=True)
+    hook = tmp / "fdwrfail.com"
+    subprocess.run(["nasm", "-f", "bin", root / "test/fdwrfail.asm", "-o", hook], check=True)
+    subprocess.run(["mcopy", "-i", boot, hook, "::FDWRFAIL.COM"], check=True)
+    keyfile = tmp / "keys.bin"
+    keyfile.write_bytes(delete_last + b"\x1b")
+    subprocess.run(["mcopy", "-o", "-i", boot, keyfile, "::KEYS.BIN"], check=True)
+    run(["fdwrfail e", "fdisk /q < a:\\keys.bin", "if not errorlevel 1 echo FAILED",
+         "fdwrfail check", "if errorlevel 1 echo FAILED", "echo."])
+    assert saved.read_bytes() == data
+    print("PASS failed chain-head write returns an error and preserves disk", flush=True)
+    # A new extended partition and logical drive require both an MBR and EBR.
+    extended = data[462:478]
+    data[462:478] = bytes(16)
+    run(["fdwrfail", "fdisk 1 /ext:2 /log:1 /q", "if not errorlevel 1 echo FAILED",
+         "fdwrfail check", "if errorlevel 1 echo FAILED", "echo."])
+    assert saved.read_bytes()[:512] == data[:512]
+    data[462:478] = extended
+    print("PASS failed MBR write stops dependent writes", flush=True)
+    template = (root / "commands/fdisk/fdboot.bin").read_bytes()[-512:]
+    for signed in (True, False):
+        if not signed:
+            data[510:512] = b"XX"
+        run(["fdisk /mbr", "if errorlevel 1 echo FAILED"])
+        expected = bytearray(data)
+        length = 446 if signed else 512
+        expected[:length] = template[:length]
+        assert saved.read_bytes() == expected
+        print("PASS MBR", "signed" if signed else "unsigned", flush=True)
+
+    # Link the extended record back to itself. Discovery must fail before
+    # an explicit partition-creation request can use the incomplete model.
+    data[510:512] = b"\x55\xaa"
+    # Install the cycle after boot so DOS itself can mount the valid fixture.
+    bad_ebr = bytearray(data[ebr:ebr+512])
+    bad_ebr[462:478] = data[462:478]
+    (tmp / "cycle.bin").write_bytes(bad_ebr)
+    (tmp / "cycle.asm").write_text("""bits 16
+org 100h
+    push cs
+    pop es
+    mov bx, sector
+    mov ax, 0301h
+    mov cx, 9601h       ; fixture EBR at cylinder 150, sector 1
+    mov dx, 0080h       ; first hard disk, head 0
+    int 13h
+    mov ax, 4c00h
+    adc al, 0
+    int 21h
+sector: incbin "cycle.bin"
+""")
+    subprocess.run(["nasm", "-f", "bin", "-o", "cycle.com", "cycle.asm"], cwd=tmp, check=True)
+    subprocess.run(["mcopy", "-i", boot, tmp / "cycle.com", "::CYCLE.COM"], check=True)
+    run(["cycle", "if errorlevel 1 echo FAILED", "fdisk /status", "if not errorlevel 1 echo FAILED",
+         "fdisk 1 /log:1", "if not errorlevel 1 echo FAILED"])
+    data[ebr:ebr+512] = bad_ebr
+    assert saved.read_bytes() == data
+    print("PASS cyclic extended chain")

@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""Exercise the workspace FORMAT.COM on disposable media under PCE."""
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+work = root / "test/work"
+work.mkdir(exist_ok=True)
+with tempfile.TemporaryDirectory(dir=work) as name:
+    folder = Path(name)
+    image = folder / "format.img"
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+    binaries = [root / "commands/format/format.com"]
+    for name in ("fatfail", "fatseed"):
+        binary = folder / (name + ".com")
+        subprocess.run(["nasm", "-f", "bin", root / ("test/" + name + ".asm"), "-o", binary], check=True)
+        binaries.append(binary)
+    for binary in binaries:
+        subprocess.run(["mcopy", "-o", "-i", image, binary, "::" + binary.name], check=True)
+
+    def run(lines):
+        batch = folder / "case.bat"
+        batch.write_text("\n".join(lines + ["echo."]) + "\n")
+        return subprocess.check_output([root / "test/run_tests", batch],
+                                       env=dict(os.environ, IMG=str(image))).decode("cp437")
+
+    answers = [r"echo.>a:\ans.txt", r"echo N>>a:\ans.txt"]
+    quick = r"format b: /q /v:QUICK <a:\ans.txt"
+    report = run(answers + [r"echo FORMAT-Q-PAYLOAD>b:\old.txt", "fatseed",
+                            "if errorlevel 1 echo FAILED", quick,
+                            "if errorlevel 1 echo FAILED", r"if exist b:\old.txt echo STALE",
+                            "vol b:"])
+    assert "FAILED" not in report and "STALE" not in report and "is QUICK" in report, report
+    disk = (work / "b.img").read_bytes()
+    assert b"FORMAT-Q-PAYLOAD" in disk[33 * 512:]
+    for sector in (1, 10):
+        offset = sector * 512 + 510
+        assert disk[offset:offset + 3] == bytes.fromhex("f7 7f ff")
+    print("PASS quick format clears directory and preserves data sectors", flush=True)
+
+    report = run(["REM @blank-b"] + answers + [quick, "if errorlevel 1 echo REJECTED"])
+    assert "REJECTED" in report and not any((work / "b.img").read_bytes()), report
+    print("PASS quick format rejects blank media without writing", flush=True)
+
+    report = run(answers + ["fatfail", quick, "if errorlevel 1 echo FAT-FAILED"])
+    assert "Error writing FAT" in report and "FAT-FAILED" in report and "Format complete" not in report, report
+    print("PASS final FAT write failure returns an error", flush=True)

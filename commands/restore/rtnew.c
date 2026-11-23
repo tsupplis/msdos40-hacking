@@ -165,8 +165,9 @@ void search_src_disk_new(dinfo,finfo,dheadold,dheadnew,fheadnew, /* wrw! */
 	  /* if the diskette is out of sequence, then do not check the sequence  */
 	  /* number of the 1st file.  Otherwise, check sequence number		 */
 	  /***********************************************************************/
-	     if (set_reset_test_flag(&control_flag2,OUTOF_SEQ,TEST) == TRUE &&
-		 first_file_on_diskette == TRUE && finfo->dnum != file_seq_num)
+	     if ((list_only && finfo->dnum != 1) ||
+                 (set_reset_test_flag(&control_flag2,OUTOF_SEQ,TEST) == TRUE &&
+		 first_file_on_diskette == TRUE && finfo->dnum != file_seq_num))
 	      {
 	      }
 	     else
@@ -199,7 +200,10 @@ void search_src_disk_new(dinfo,finfo,dheadold,dheadnew,fheadnew, /* wrw! */
 	     /***********************************************************************/
 	     /* restore the file						    */
 	     /***********************************************************************/
-		restore_a_file(finfo,dinfo,buf_size,control_buf_size,
+		if (list_only)
+                    set_reset_test_flag(&control_flag,FOUND,SET);
+                else
+                    restore_a_file(finfo,dinfo,buf_size,control_buf_size,
 			    fheadnew,dheadold,dheadnew,
 			    srcd,destd,inpath,infname,infspec,dnumwant,&my_own_little_dirhandle);      /* wrw! */
 

@@ -318,6 +318,7 @@ RWPacket     a_TrackReadWritePacket <>
 RW_TRF_Area	db    512     dup(0)
 
 startSector dw	?
+extrn scratchBuffer:byte
 fatSpace dd	?
 fBigFat db	FALSE
 
@@ -847,6 +848,10 @@ STATUS:
 	JMP	FRMTPROB			;Report an error
 
 REPORTC:
+	test SwitchMap,(Switch_Select or SWITCH_AUTOTEST)
+	jnz SkipCompleteMessage
+	Message msgFormatComplete
+SkipCompleteMessage:
 
 ;
 ;TEMP FIX for /AUTOTEST
@@ -1961,6 +1966,41 @@ GotDeviceParameters:
 	mov	savedDeviceParameters.DP_TrackTableEntries, 0
 	mov	validSavedDeviceParameters, 1
 
+        test SwitchMap,SWITCH_Q
+        jz HaveFormatParameters
+        ; Allocate for the mounted volume, even on a dual-density drive.
+        mov deviceParameters.DP_SpecialFunctions,BUILD_DEVICE_BPB
+        lea dx,deviceParameters
+        call GetDeviceParameters
+        retc
+        ; Bound the media-derived fields before sizing the shared FAT buffer.
+        cmp deviceParameters.DP_BPB.BPB_BytesPerSector,512
+        jne InvalidQuickMedia
+        mov al,deviceParameters.DP_BPB.BPB_SectorsPerCluster
+        or al,al
+        jz InvalidQuickMedia
+        mov ah,al
+        dec ah
+        test al,ah
+        jnz InvalidQuickMedia
+        cmp deviceParameters.DP_BPB.BPB_NumberOfFATs,2
+        ja InvalidQuickMedia
+        cmp deviceParameters.DP_BPB.BPB_NumberOfFATs,0
+        je InvalidQuickMedia
+        mov ax,deviceParameters.DP_BPB.BPB_SectorsPerFAT
+        dec ax
+        cmp ax,255
+        ja InvalidQuickMedia
+        cmp deviceParameters.DP_BPB.BPB_ReservedSectors,0
+        je InvalidQuickMedia
+        mov ax,deviceParameters.DP_BPB.BPB_RootEntries
+        dec ax
+        cmp ax,2031
+        jbe HaveFormatParameters
+InvalidQuickMedia:
+        stc
+        ret
+HaveFormatParameters:
 ; Initialise this to zero to know if CheckSwitches defined the track layout
 	mov	deviceParameters.DP_TrackTableEntries, 0
 
@@ -1986,6 +2026,8 @@ $$IF19:
 ENDIF
 
 
+	test SwitchMap,SWITCH_Q
+	jnz TrackLayoutSet
 	cmp	deviceParameters.DP_TrackTableEntries, 0
 	jne	TrackLayoutSet			; There is a good track layout
 
@@ -2130,6 +2172,8 @@ SetfBigFat endp
 ;	First initialise the directory buffer
 ;
 Phase2Initialisation proc near
+	test SwitchMap,SWITCH_Q
+	jnz InitDirectoryBuffer
 
 ; Calculate first track/head to format (round up - kludge)
 	mov	ax, deviceParameters.DP_BPB.BPB_HiddenSectors
@@ -2157,6 +2201,7 @@ NotBigTotalSectors:
 	div	deviceParameters.DP_BPB.BPB_SectorsPerTrack
 	mov	tracksPerDisk, ax
 
+InitDirectoryBuffer:
 ; Initialise the directory buffer
 ; Clear out the Directory Sector before any information is inserted.
 	mov	cx, deviceParameters.DP_BPB.BPB_BytesPerSector
@@ -2276,6 +2321,15 @@ NotBig: stosw
 	jmp	FormatDone			;FormatDone is to far away
 
 Keep_Going:
+	test SwitchMap,Switch_Q
+	jz FullTrackFormat
+	call Prompt_User_For_Disk
+	call QuickFormat
+	jnc QuickReturn
+	mov ExitStatus,ExitFatal
+QuickReturn:
+	ret
+FullTrackFormat:
 foofoo	=	INSTALL_FAKE_BPB or TRACKLAYOUT_IS_GOOD
 	mov	deviceParameters.DP_SpecialFunctions, foofoo
 	lea	dx, deviceParameters
@@ -2404,6 +2458,160 @@ FormatDone:
 
 DiskFormat endp
 
+; Read the mounted FAT before changing any filesystem metadata.  BadClus
+; populates the already cleared destination FAT, including packed FAT12 cells.
+QuickFormat proc near
+        mov Read_Write_Relative.Start_Sector_High,0
+        xor dx,dx
+        mov cx,1
+        lea bx,scratchBuffer
+        mov al,drive
+        call Read_Disk
+        jnc QuickCheckBoot
+        ret
+QuickCheckBoot:
+        cmp word ptr scratchBuffer[510],0aa55h
+        jne QuickRejectBoot
+        push ds
+        pop es
+        lea si,scratchBuffer[11]
+        lea di,deviceParameters.DP_BPB
+        mov cx,19               ; sector size through head count
+        repe cmpsb
+        jne QuickRejectBoot
+        mov ax,deviceParameters.DP_BPB.BPB_TotalSectors
+        xor dx,dx
+        or ax,ax
+        jnz QuickSize
+        mov ax,deviceParameters.DP_BPB.BPB_BigTotalSectors
+        mov dx,deviceParameters.DP_BPB.BPB_BigTotalSectors+2
+        cmp ax,word ptr scratchBuffer[32]
+        jne QuickRejectBoot
+        cmp dx,word ptr scratchBuffer[34]
+        jne QuickRejectBoot
+QuickSize:
+        sub ax,startSector
+        sbb dx,0
+        xor bx,bx
+        mov bl,deviceParameters.DP_BPB.BPB_SectorsPerCluster
+        cmp dx,bx
+        jae QuickRejectBoot
+        div bx
+        mov bp,ax               ; data clusters remaining
+        mov dx,deviceParameters.DP_BPB.BPB_ReservedSectors
+        mov di,deviceParameters.DP_BPB.BPB_SectorsPerFAT
+        mov si,512              ; force first sector read
+        mov bx,2                ; current cluster
+        call QuickByte
+        jc QuickRejectBoot
+        cmp al,deviceParameters.DP_BPB.BPB_MediaDescriptor
+        jne QuickRejectBoot
+        call QuickByte
+        jc QuickRejectBoot
+        cmp al,0ffh
+        jne QuickRejectBoot
+        call QuickByte
+        jc QuickRejectBoot
+        cmp al,0ffh
+        jne QuickRejectBoot
+        cmp fBigFat,TRUE
+        jne QuickCluster
+        call QuickByte
+        jc QuickRejectBoot
+        cmp al,0ffh
+        je QuickCluster
+QuickRejectBoot:
+        stc
+        ret
+QuickCluster:
+        or bp,bp
+        jz QuickDone
+        cmp fBigFat,TRUE
+        je QuickWord
+        test bl,1
+        jz QuickWord
+        ; AH holds the shared byte from the previous even FAT12 cell.
+        mov cl,4
+        shr ah,cl
+        call QuickByte
+        jc QuickRejectBoot
+        xor ch,ch
+        mov cl,ah
+        mov ah,0
+        shl ax,1
+        shl ax,1
+        shl ax,1
+        shl ax,1
+        or ax,cx
+        jmp short QuickFat12
+QuickWord:
+        call QuickByte
+        jc QuickRejectBoot
+        mov ah,al
+        call QuickByte
+        jc QuickRejectBoot
+        xchg ah,al
+        cmp fBigFat,TRUE
+        jne QuickEven
+        cmp ax,0fff7h
+        jmp short QuickMark
+QuickEven:
+        mov ch,ah
+        and ah,0fh
+QuickFat12:
+        cmp ax,0ff7h
+QuickMark:
+        jne QuickNext
+        ; System transfer requires contiguous, usable startup clusters.
+        test SwitchMap,SWITCH_S or SWITCH_B
+        jnz QuickRejectBoot
+        push dx
+        push si
+        xor dx,dx
+        mov ax,bx
+        call BadClus
+        pop si
+        pop dx
+QuickNext:
+        mov ah,ch
+        inc bx
+        dec bp
+        jmp QuickCluster
+QuickDone:
+        clc
+        ret
+QuickFormat endp
+
+; DX is the next FAT sector, DI the number left and SI the byte offset.
+QuickByte proc near
+        cmp si,512
+        jb QuickBuffered
+        or di,di
+        jz QuickEmpty
+        push ax
+        push bx
+        push cx
+        mov al,drive
+        lea bx,scratchBuffer
+        mov cx,1
+        call Read_Disk
+        pop cx
+        pop bx
+        pop ax
+        jc QuickEmpty
+        inc dx
+        dec di
+        xor si,si
+QuickBuffered:
+        mov al,scratchBuffer[si]
+        inc si
+        clc
+        ret
+QuickEmpty:
+        stc
+        ret
+QuickByte endp
+
 
 ;-------------------------------------------------------------------------------
 ;
@@ -2436,7 +2644,7 @@ BadSector proc	near
 
 
 ; don't bother to do the formatting if /c was given
-	test	switchmap, SWITCH_C
+	test	switchmap, SWITCH_C or SWITCH_Q
 	jnz	NoMoreTracks
 
 	test	formatError, 0ffH
@@ -2483,12 +2691,6 @@ ReportBadTrack:
 	return
 
 NoMoreTracks:
-	test	SwitchMap,(Switch_Select or SWITCH_AUTOTEST) ;Don't display done msg;AN000;
-;	$IF	Z				; if EXEC'd by SELECT           ;AN000;
-	JNZ $$IF52
-	   Message msgFormatComplete		;				;AC000;
-;	$ENDIF					;				;AN000;
-$$IF52:
 	mov	ax, 0
 	clc
 	return
@@ -2792,7 +2994,7 @@ $$IF69:
 			push	ax		;an000;save ax
 			call	write_disk	;an000;write it
 			pop	ax		;an000;restore ax
-			xor	cx,cx		;an000;set cx to 0 - last read
+			ret                     ; Return the final write status
 ;		$endif
 $$EN69:
 ;	$enddo

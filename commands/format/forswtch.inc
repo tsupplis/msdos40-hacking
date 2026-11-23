@@ -1,5 +1,6 @@
 ;
 ;FORMAT Pre-defined switches
+ SWITCH_Q EQU           8000h
  SWITCH_S EQU		0001h			   ; System transfer
  SWITCH_V EQU		0002h			   ; Volume ID prompt
  SWITCH_BACKUP EQU	0004h

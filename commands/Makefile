@@ -1,7 +1,7 @@
 # MS-DOS 4.00 - commands dispatcher (original nmake build order)
 #
 # Ported (GNU make):
-SUBDIRS = command attrib assign chkdsk debug edlin exe2bin fdisk find fc format join more \
+SUBDIRS = command attrib assign chkdsk debug edlin exe2bin fdisk find fc format join loadfix more \
           print recover restore sort subst sys share nlsfunc ifsfunc mem filesys backup comp \
           diskcomp diskcopy label mode tree replace xcopy graftabl fastopen append \
           graphics keyb select

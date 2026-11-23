@@ -42,5 +42,6 @@
 :use 29  COMMON26						;AN000; ;For  "No source drive specified
 :use 30  COMMON27						;AN000; ;For  "No target drive specified
 :def 31  CR,LF							;AN000;
+:def 32  CR,LF,"Listing backup files from drive %1:",CR,LF
 :end								;AN000;
 ;==========================================================

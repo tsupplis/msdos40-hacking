@@ -410,7 +410,7 @@ struct timedate *td;
    /***********************************************************************/
    /* if PROMPT and fileinfo->file_attrib indicate READONLY, or CHANGED*/
    /***********************************************************************/
-      if  ((set_reset_test_flag(&rtswitch,PROMPT,TEST) == TRUE) &&
+      if  (!list_only && (set_reset_test_flag(&rtswitch,PROMPT,TEST) == TRUE) &&
 	  (((retcode = attributes & 0x0001) == 0x0001) ||
 	  ((retcode = attributes & 0x0020) == 0x0020) ))
       {

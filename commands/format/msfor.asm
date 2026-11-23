@@ -267,6 +267,13 @@ SwitchError:
 	ret
 
 CheckExcl:
+        test SwitchMap,SWITCH_Q
+        jz CheckFormatSize
+        test SwitchMap,SWITCH_F or SWITCH_T or SWITCH_N or SWITCH_1 or SWITCH_4 or SWITCH_8
+        jz CheckFormatSize
+        Message msgIncompatibleParameters
+        jmp SwitchError
+CheckFormatSize:
 
 	test	SwitchMap,Switch_F		;Specify size?			;AN001;
 ;	$IF	NZ				;Yes				;AN001;
@@ -308,7 +315,7 @@ ExclChkDone:
 ; Formatting a hard disk so we must repatch the boot sector
 ;	 mov	 Boot.Boot_PhyDrv, 80H		 ;AC000;
 	mov	Boot.EXT_PHYDRV, 80H		;AN00?;
-	test	switchmap, not (SWITCH_S or SWITCH_V or SWITCH_Select or SWITCH_AUTOTEST or Switch_B) ;AN007;
+	test	switchmap, not (SWITCH_Q or SWITCH_S or SWITCH_V or SWITCH_Select or SWITCH_AUTOTEST or Switch_B) ;AN007;
 	jz	SwitchesOkForHardDisk
 
 	Message msgIncompatibleParametersForHardDisk ;			     ;AC000;
@@ -382,7 +389,7 @@ CheckFor5InchDrives:
 	je	Got48
 
 	xor	ax,ax								;an000; dms;clear reg
-	or	ax,(Switch_V or Switch_S or Switch_N or Switch_T or Switch_B)	;an000; dms;set up switch mask
+	or	ax,(Switch_Q or Switch_V or Switch_S or Switch_N or Switch_T or Switch_B)	;an000; dms;set up switch mask
 	or	ax,(Switch_Backup or Switch_Select or Switch_Autotest)		;an000; dms;
 IF ShipDisk
 	or	ax,Switch_Z							;an000; dms;
@@ -426,7 +433,7 @@ Got48:
 
 						;Are any interesting switches set?
 CheckForInterestingSwitches:
-	test	switchmap, not (SWITCH_V or SWITCH_S or Switch_Backup or SWITCH_SELECT or SWITCH_AUTOTEST or Switch_B)
+	test	switchmap, not (SWITCH_Q or SWITCH_V or SWITCH_S or Switch_Backup or SWITCH_SELECT or SWITCH_AUTOTEST or Switch_B)
 	jz	Goto_EndSwitchCheck		;No, everything ok
 
 						;At this point there are switches other than /v/s/h

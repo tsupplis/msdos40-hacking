@@ -158,7 +158,9 @@ BEGIN                                                                   /* AN000
   p_swi2.sp_function_flag = u(0x0000);                                   /* AN000 DO NOTHING FOR FUNCTION FLAG */
   p_swi2.sp_buff1_ptr     = (unsigned)&sp_buff;                          /* AN000 */
   p_swi2.sp_val1_ptr      = (unsigned)NOVAL;                             /* AN000 */
-  p_swi2.sp_nid           = uc(1);                                       /* AN000 3 switches allowed */
+  strcpy((char *)p_swi2.status_name,"/STATUS");
+  strcpy((char *)p_swi2.mbr_name,"/MBR");
+  p_swi2.sp_nid           = uc(3);                                       /* AN000 3 switches allowed */
   strcpy((char *) p_swi2.sp_switch4,QUIET);                                /* AN000 /a switch */
 
   p_val.p_values         =  uc(1);                                      /* AN000 - Number of values items returned */
@@ -248,6 +250,9 @@ BEGIN                                                                   /* AN000
              logical_flag = (FLAG)TRUE;                                 /* AN000 */
              logical_buff = (unsigned)sp_buff.p_value;                  /* AN000 */
             END                                                         /* AN000 */
+
+           if (sp_buff.p_synonym == (unsigned)p_swi2.status_name) status_flag = TRUE;
+           if (sp_buff.p_synonym == (unsigned)p_swi2.mbr_name) mbr_flag = TRUE;
 
            if (sp_buff.p_synonym == (unsigned)p_swi2.sp_switch4)        /* AN000 */
             BEGIN                                                       /* AN000 */

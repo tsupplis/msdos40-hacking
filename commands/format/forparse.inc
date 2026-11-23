@@ -188,10 +188,11 @@ Command_Control label byte			;				;AN000;
 	db	1,1				;Only drive letter posistional	;AN000;
 	dw	Positional_Control		;Pointer to control table	;AN000;
 IF ShipDisk
-	db	13				;if /Z switch needed		;an000; dms;
+	db	14				;if /Z switch needed		;an000; dms;
 ELSE
-	db	12				;				;AC001;
+	db	13				;				;AC001;
 ENDIF
+	dw	Switch_Q_Control
 	dw	Switch_V_Control		;Without quotes 		AN000;
 	dw	Switch_S_Control		;				;AN000;
 	dw	Switch_4_Control		;				;AN000;
@@ -243,6 +244,10 @@ Switch_V_Control label byte			;				;AN000;
 	dw	No_Value			;				;AN000;
 	db	1				;				;AN000;
 	db	"/V",0                          ;                               ;AN000;
+
+Switch_Q_Control label byte
+	dw None,None,Switch_Buffer,No_Value
+	db 1,"/Q",0
 
 Switch_S_Control label byte			;				;AN000;
 

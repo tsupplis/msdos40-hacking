@@ -68,6 +68,8 @@ struct p_switch1_blk                             /* AN000 */
         unsigned        sp_buff1_ptr;           /* AN000 - Result buffer address */
         unsigned        sp_val1_ptr;            /* AN000 - Value list address */
         unsigned char   sp_nid;                 /* AN000 - # of keyword/SW synonyms */
+        unsigned char   status_name[8];
+        unsigned char   mbr_name[5];
         unsigned char   sp_switch4[3];          /* AN000 - keyword or sw */
        END;                                     /* AN000 */
 

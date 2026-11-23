@@ -2,11 +2,24 @@
 #include "dos.h"                                                        /* AN000 */
 #include "fdisk.h"                                                      /* AN000 */
 #include "subtype.h"                                                    /* AN000 */
+#include <string.h>
 #include "extern.h"                                                     /* AN000 */
 
 
 /*  */
-void write_info_to_disk()
+/* Invoked before partition discovery, while the built-in template is intact.
+ * A signed sector retains all four partition entries, including unused slots. */
+int repair_master_boot(void)
+{
+    unsigned length;
+    if (!read_boot_record(0,0,0,1)) return 6;
+    length = boot_record[510] == 0x55 && boot_record[511] == 0xaa
+           ? 446 : BYTES_PER_SECTOR;
+    memcpy(boot_record, master_boot_record[0], length);
+    return write_boot_record(0,0) ? 0 : 7;
+}
+
+char write_info_to_disk(void)
 
 BEGIN
 
@@ -14,13 +27,11 @@ char            i;
 unsigned char   j;
 unsigned        extended_location;
 char            extended_index;
-char            temp;
-char            first_found;
+char            first_drive;
 char            changed_flag;
 char            temp_disk;
 
 
-        temp = c(NUL);                                                  /* AN009 */
         temp_disk = cur_disk;
         /* See if need to update the master boot record */
         for (j = uc(0); j < number_of_drives; j++)                      /* AC000 */
@@ -36,7 +47,7 @@ char            temp_disk;
                    BEGIN
                     if (part_table[j][i].changed)
                        BEGIN
-                        write_master_boot_to_disk(j);
+                        if (!write_master_boot_to_disk(j)) goto write_failed;
                         break;
                        END
                    END
@@ -46,7 +57,7 @@ char            temp_disk;
                 /* the logical drive based on the start of the extended partition, but there isn't one */
                 /* because it has already been deleted already. Bad things happen - PTM P941  */
 
-                if (find_partition_type(uc(EXTENDED)));                 /* AC000 */
+                if (find_partition_type(uc(EXTENDED)))                 /* AC000 */
                    BEGIN
                     /* See if any extended partitions need to be updated */
                     changed_flag = FALSE;
@@ -63,6 +74,7 @@ char            temp_disk;
                        BEGIN
                         /* First,get them in order - drive letters are assigned in the order */
                         /* that they exist on the disk */
+                        first_drive = c(NOT_FOUND);
                         sort_ext_table(c(23));                          /* AC000 */
 
                         for (i=c(0);i < c(23); i++)                     /* AC000 */
@@ -71,7 +83,8 @@ char            temp_disk;
                             /* If there is a valid drive existing, write it out */
                             if (ext_table[j][sort[i]].sys_id != uc(0))  /* AC000 */
                                BEGIN
-                                write_ext_boot_to_disk(i,j);
+                                if (first_drive == c(NOT_FOUND)) first_drive = sort[i];
+                                if (!write_ext_boot_to_disk(i,j)) goto write_failed;
                                END
                            END
 
@@ -79,19 +92,9 @@ char            temp_disk;
                         extended_index = find_partition_location(uc(EXTENDED));     /* AC000 */
                         extended_location = part_table[j][extended_index].start_cyl;
 
-                        /* See if the first entry in EXTENDED DOS partition will be written out */
-                        /* Need to find the first drive in the sorted list */
-                        for (i=c(0);i < c(23); i++)                     /* AC000 */
-                           BEGIN
-                            if (ext_table[j][sort[i]].sys_id != uc(0))  /* AC000 */
-                               BEGIN
-                                temp = sort[i];
-                                break;
-                               END
-                           END
-                        /* See if drive written out */
-                        if ((temp != c(NUL)) &&
-                            (extended_location != ext_table[j][temp].start_cyl))   /* AC009 */
+                        /* Keep a signed chain head even when the last drive was deleted. */
+                        if (first_drive == c(NOT_FOUND) ||
+                            extended_location != ext_table[j][first_drive].start_cyl)
                            BEGIN
                             /* If not, make a special case and go do it */
                             /* Use the 24 entry in the array to set up a dummy entry */
@@ -103,14 +106,18 @@ char            temp_disk;
                             ext_table[j][23].start_sector = uc(1);      /* AC000 */
 
                             /* Write out our modified first location - only pointer info will be sent to the disk*/
-                            write_ext_boot_to_disk(c(23),j);            /* AC000 */
+                            if (!write_ext_boot_to_disk(c(23),j)) goto write_failed;            /* AC000 */
                            END
                        END
                    END
                END
            END
         cur_disk = temp_disk;
-        return;
+        return TRUE;
+
+write_failed:
+        cur_disk = temp_disk;
+        return FALSE;
 END
 
 /*  */
@@ -221,7 +228,7 @@ char            write;
         /* See if it has been deleted - if so, leave entries as zero */
         /* Otherwise - go unscramble everything out of the arrays */
 
-        if (ext_table[disk][sort[entry]].sys_id != uc(0))               /* AC000 */
+        if (entry != c(23) && ext_table[disk][sort[entry]].sys_id != uc(0))               /* AC000 */
            BEGIN
             /* Get boot ind */
             boot_record[0x1BE] = ext_table[disk][sort[entry]].boot_ind;

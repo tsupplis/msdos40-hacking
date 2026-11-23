@@ -336,7 +336,7 @@ BEGIN
         else
            BEGIN
             /* Save the number of drives */
-            number_of_drives = regs.h.dl;
+            number_of_drives = regs.h.dl > 2 ? 2 : regs.h.dl; /* partition arrays have two slots */
             return(TRUE);
            END
 END

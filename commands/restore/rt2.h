@@ -31,6 +31,7 @@
 #define  FILE_CREATION_ERROR	       18	/*;AN000;6*/
 #define  TARGET_IS_FULL 	       19	/*;AN000;6*/
 #define  NOT_ABLE_TO_RESTORE_FILE      20	/*;AN000;6*/
+#define  LIST_BACKUP_FILES             32
 #define  RESTORE_FILE_FROM_DRIVE       21	/*;AN000;6*/
 #define  FILE_WAS_CHANGED	       22	/*;AN000;6*/
 #define  DISKETTE_NUM		       23	/*;AN000;6*/

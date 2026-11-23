@@ -164,8 +164,9 @@ do
 	       /*************************************************************************/
 	       /*if dnum in fheadold.disknum is not 1 and is not in sequence, error    */
 	       /*************************************************************************/
-	    if (set_reset_test_flag(&control_flag2,OUTOF_SEQ,TEST) == TRUE &&
-	       first_file_on_diskette == TRUE && finfo->dnum != 1)
+	    if ((list_only && finfo->dnum != 1) ||
+                 (set_reset_test_flag(&control_flag2,OUTOF_SEQ,TEST) == TRUE &&
+	       first_file_on_diskette == TRUE && finfo->dnum != 1))
 	    {}
 	    else
 	    {
@@ -198,7 +199,10 @@ do
 	       /*************************************************************************/
 	       /* call restore_a_file to restore the file				*/
 	       /*************************************************************************/
-		restore_a_file(finfo,dinfo,buf_size,&control_bufsize,
+		if (list_only)
+                    set_reset_test_flag(&control_flag,FOUND,SET);
+                else
+                    restore_a_file(finfo,dinfo,buf_size,&control_bufsize,
 			  fheadnew,dheadold,dheadnew,
 			  srcd,destd,inpath,infname,infspec,dnumwant,&dirhandle);
 

@@ -19,7 +19,7 @@ void     get_video_attribute(void);                                     /* AN006
 /*************************************************************/
 /* DISKOUT.C ROUTINES                                        */
 /*************************************************************/
-void     write_info_to_disk(void);
+char     write_info_to_disk(void);
 char     write_master_boot_to_disk(unsigned char);
 char     write_ext_boot_to_disk(char,unsigned char);
 
@@ -69,6 +69,8 @@ void     sort_ext_table(char);
 /* INT13.C ROUTINES                                          */
 /*************************************************************/
 char     get_disk_info(void);
+int repair_master_boot(void);
+void display_disk_status(void);
 char     read_boot_record(unsigned,unsigned char,unsigned char,unsigned char);         /* AC000 */
 char     write_boot_record(unsigned,unsigned char);
 unsigned verify_tracks(char,char);

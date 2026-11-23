@@ -242,7 +242,7 @@ unsigned int *control_bufsize;
    sublist.max_width1 = (BYTE)strlen(temp_array1);		  /*;AN000;6 */
    sublist.min_width1 = sublist.max_width1;			  /*;AN000;6 */
 
-   display_it(RESTORE_FILE_FROM_DRIVE,STND_OUT_DEV,1,NO_RESPTYPE,(BYTE)UTIL_MSG);/*;AN000;6*/
+   display_it(list_only ? LIST_BACKUP_FILES : RESTORE_FILE_FROM_DRIVE,STND_OUT_DEV,1,NO_RESPTYPE,(BYTE)UTIL_MSG);/*;AN000;6*/
 
    /********************************************************************/
    /* if the source disk is removable, output diskette number also     */
@@ -395,7 +395,7 @@ void check_bkdisk_old(dheadold, dinfo, srcd, dnumwant) /* wrw! */
    sublist.flags1 = LEFT_ALIGN + CHAR_FIELD_ASCIIZ;		      /*;AN000;6 */
    sublist.max_width1 = (BYTE)strlen(temp_array1);		      /*;AN000;6 */
    sublist.min_width1 = sublist.max_width1;			      /*;AN000;6 */
-   display_it(RESTORE_FILE_FROM_DRIVE,STND_OUT_DEV,1,NO_RESPTYPE,(BYTE)UTIL_MSG);    /*;AN000;6*/
+   display_it(list_only ? LIST_BACKUP_FILES : RESTORE_FILE_FROM_DRIVE,STND_OUT_DEV,1,NO_RESPTYPE,(BYTE)UTIL_MSG);    /*;AN000;6*/
 
    /********************************************************************/
    /* if the source disk is removable, output msg "diskette xx"        */

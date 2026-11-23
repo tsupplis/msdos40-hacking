@@ -1,12 +1,12 @@
 # MS-DOS 4.01 rebuild
 
-MS-DOS 4.01 rebuilt on Unix with GNU make and the original tools under `emu2`. The goal is a usable replacement for DOS 3.3.
+MS-DOS 4.01 rebuilt on Unix with GNU make and the original tools under `emu2`. The goal is a usable replacement for DOS 3.3 and 5.5.
 
 | Goal | Details |
 |---|---|
 | **Stability** | Apply the documented Microsoft and IBM fixes and regression-test the rebuilt system. |
 | **Memory** | Surpass DOS 3.3 and approach DOS 5.0, targeting 610 Kbytes free. UMB allocation and XMS reporting are available. Selected kernel services can run in the HMA. |
-| **Usability** | Command-line editing and recall, clearer memory diagnostics, BASIC (`mbasic.com`) and a screen editor (`vi.exe`) on the full floppy. |
+| **Usability** | Stay MS-DOS, smooth the angles. Command-line editing and recall, clearer memory diagnostics, BASIC (`mbasic.com`) and a screen editor (`vi.exe`) on the full floppy. |
 | **Compatibility** | Match as closely as possible or exceed DOS 5.0 commands and functionality. |
 
 ![MS-DOS 4.01 running in PCE with upper memory enabled](images/mem.png)
@@ -23,7 +23,9 @@ Based on hharte’s [4.01 reconstruction](https://github.com/lotharsm/MS-DOS/tre
 | `asminc/`, `include/`, `sdk/` | Headers and vintage build tools |
 | `media/` | Floppy image rules and startup files |
 
-## Historical changes
+## System fixes
+
+### Historical changes
 
 The 4.01 reconstruction changes 12 source files and corrects encoding in 17 others.
 
@@ -43,6 +45,16 @@ The 4.01 reconstruction changes 12 source files and corrects encoding in 17 othe
 | Microsoft PD0255 | `graphics.com` | Avoid the `mscdex` multiplex number. |
 | IBM UR31300, IR80263 | `ansi.sys` | Fix Shift-PrtSc above 25 rows. |
 
+### Project fixes
+
+| Component | Fix |
+|---|---|
+| `fdisk` | Return errorlevel 1 for invalid switches or a missing or out-of-range disk number. |
+| `fdisk` | Clear the last deleted logical drive and skip logical writes after extended partition deletion. |
+| `fdisk` | Stop on partition-record write errors and return errorlevel 1. |
+| `fdisk` | Prevent logical-drive table overflow by rejecting partition chains longer than 23 entries. |
+| `format` | Stop on a failed final FAT write. |
+
 ## Command-line editing
 
 | Key | Action |
@@ -57,14 +69,14 @@ Applies to `command.com` and DOS buffered console input. Cooked handle reads sup
 
 ## Command enhancements
 
-The survey compares the commands shipped here with the command syntax and options in the [Microsoft MS-DOS 5.0 distribution](https://www.pcjs.org/software/pcx86/sys/dos/microsoft/5.00/) (720 KB disk set). “No known gaps” covers that interface. Hardware behavior, diagnostics, and application-level compatibility require separate testing. DOS 5.0 ships `SETUP` as its installer.
+The survey compares the commands shipped here with the command syntax and options in the [Microsoft MS-DOS 5.0 distribution](https://www.pcjs.org/software/pcx86/sys/dos/microsoft/5.00/) (720 KB disk set). “No known gaps” covers that interface. Hardware behavior, diagnostics, and application-level compatibility require separate testing. The inventory uses Microsoft's DOSHELP command list, the batch syntax in COMMAND.COM, and the executables on the three distribution disks. Availability is checked against the project's full floppy.
 
 | Command | MS-DOS 5.0 comparison | Enhancement | Missing MS-DOS 5.0 features |
 |---|---|---|---|
 | `append` | No known gaps |  |  |
 | `assign` | No known gaps |  |  |
 | `attrib` | Gaps identified |  | `+H` / `-H` set or clear hidden, and `+S` / `-S` set or clear system. File selection must include files that already have these attributes. |
-| `backup` | Gaps identified |  | The 2.88 MB disk size for `/F` (including `/F:2880`). |
+| `backup` | Gaps identified |  | *won't implement — The 2.88 MB disk size for `/F` (including `/F:2880`).* |
 | `break` | No known gaps |  |  |
 | `call` | No known gaps |  |  |
 | `cd` (`chdir`) | No known gaps |  |  |
@@ -75,79 +87,112 @@ The survey compares the commands shipped here with the command syntax and option
 | `comp` | No known gaps | `/D` reports decimal bytes, `/A` shows characters, `/L` reports line numbers, `/N=n` limits comparison to the first *n* lines, and `/C` ignores ASCII letter case. |  |
 | `copy` | No known gaps | `/Y` allows overwriting. `/-Y` prompts before overwriting. `COPYCMD` presets either switch. The last explicit overwrite switch wins. |  |
 | `ctty` | No known gaps |  |  |
+| `cv.com` | Missing command |  | The DOS 5.0 compatibility launcher for older CodeView releases. |
 | `date` | No known gaps |  |  |
 | `debug` | Gaps identified |  | The interactive `?` command that lists debugger commands. |
 | `del` (`erase`) | No known gaps | `/Q` skips the bulk-delete confirmation. An explicit `/P` still prompts for each file. |  |
 | `dir` | No known gaps | `/B` prints bare names, one per line. `/L` displays ASCII letters in filenames in lowercase. `/A[:]` filters by D, R, H, S, or A. `/O[:]` orders by N (name), E (extension), S (size), D (date), or G (directories first). Prefix a letter with `-` to exclude an attribute or reverse a key. `/P` pages console output. `DIRCMD` presets switches, and `/-` disables a preset switch on the command line. `/S` lists matching entries in subdirectories. With `/B`, it prints full paths. |  |
 | `diskcomp` | No known gaps |  |  |
 | `diskcopy` | No known gaps | `/V` asks the disk driver to verify each destination track after writing it. |  |
+| *`doskey`* | *won't implement* |  | *Command history, editing and named macros through DOSKEY.COM.* |
+| *`dosshell`* | *won't implement* |  | *DOS Shell file manager and task switcher, including its DOSSWAP component.* |
 | `echo` | No known gaps |  |  |
+| `edit` | Missing command |  | MS-DOS Editor and its QBASIC runtime. |
 | `edlin` | No known gaps |  |  |
+| `emm386` | Missing command |  | The EMM386.EXE command interface for querying and changing expanded-memory operation. The full floppy ships EMM386.SYS. |
 | `exe2bin` | No known gaps |  |  |
 | `exit` | No known gaps |  |  |
+| *`expand`* | *won't implement* |  | *Expand compressed distribution files.* |
 | `fastopen` | No known gaps |  |  |
 | `fc` | No known gaps |  |  |
-| `fdisk` | Gaps identified |  | `/STATUS` displays a partition summary. The undocumented `/MBR` rewrites master boot code while retaining an existing valid partition table. |
+| `fdisk` | No known gaps | `/STATUS` reports disk usage and DOS volumes. `/MBR` restores the master boot code on the first fixed disk. It preserves partition entries when the boot signature is present and installs an empty table when it is absent. |  |
 | `filesys` | No same-name DOS 5.0 utility |  |  |
 | `find` | No known gaps | `/I` ignores case when matching and preserves the spelling of displayed lines. |  |
 | `for` | No known gaps |  |  |
-| `format` | Gaps identified |  | `/Q` quick format, recoverable formatting and its `/U` unconditional option, and the 2.88 MB size for `/F`. |
+| `format` | Gaps identified | `/Q` quick format. | *won't implement — Recoverable formatting, `/U`, and `/F` for 2.88 MB media.* |
 | `goto` | No known gaps |  |  |
 | `graftabl` | No known gaps |  |  |
 | `graphics` | No known gaps |  |  |
+| `help` | Missing command |  | Display the command index and command-specific help. |
 | `if` | No known gaps | `IF [NOT] DIREXIST path command` tests for a directory. Wildcards match directories only. |  |
 | `ifsfunc` | No same-name DOS 5.0 utility |  |  |
 | `join` | No known gaps |  |  |
 | `keyb` | Gaps identified |  | `/E` explicitly selects an enhanced keyboard. |
 | `label` | No known gaps |  |  |
+| `loadfix` | No known gaps | Run a DOS executable above the first 64 KiB and return its exit code. |  |
 | `loadhigh` (`lh`) | No known gaps | Run an external program in upper memory when it fits. |  |
 | `mbasic.com` | Project extra | BASIC interpreter on the full floppy. |  |
 | `md` (`mkdir`) | No known gaps |  |  |
 | `mem` | Gaps identified | Show total, used, and free memory by pool and the largest usable blocks. `/C` (`/CLASSIFY`) groups modules by memory usage. Combine `/P` with `/C` or `/D` (`/DEBUG`) to page console output. Alone, `/P` pages the summary. | `/PROGRAM` lists loaded programs. |
+| `mirror` | Missing command |  | Save disk recovery information and track deletions. |
 | `mode` | No known gaps |  |  |
 | `more [filename]` | No known gaps | Page a file by name. |  |
+| `msherc` | Missing command |  | Hercules graphics support utility. |
 | `nlsfunc` | No known gaps |  |  |
 | `path` | No known gaps |  |  |
 | `pause` | No known gaps |  |  |
 | `print` | No known gaps |  |  |
+| `printfix` | Missing command |  | Suppress printer status checks for printers that cannot answer them. |
 | `prompt` | No known gaps |  |  |
+| `qbasic` | Missing command |  | Run and edit programs in the QBasic environment. |
 | `rd` (`rmdir`) | No known gaps |  |  |
 | `recover` | No known gaps |  |  |
 | `rem` | No known gaps |  |  |
 | `ren` (`rename`) | No known gaps |  |  |
 | `replace` | No known gaps |  |  |
-| `restore` | Gaps identified |  | `/D` lists matching files on the backup disk without restoring them. |
+| `restore` | No known gaps | `/D` lists matching backup paths and preserves destination files. |  |
 | `select` | No same-name DOS 5.0 utility |  |  |
 | `set` | No known gaps |  |  |
+| *`setup`* | *won't implement* |  | *The DOS 5.0 installation program.* |
+| `setver` | Missing command |  | Display or edit the per-program DOS version table. |
 | `share` | No known gaps |  |  |
 | `shift` | No known gaps |  |  |
 | `sort` | No known gaps |  |  |
 | `subst` | No known gaps |  |  |
-| `sys` | Gaps identified |  | Transfer `COMMAND.COM`, recognize both IBM and Microsoft system-file names when replacing an installation, and allow the first three contiguous sectors of `IO.SYS` to reside later in the data area. The placement change also requires boot-loader support. |
+| `sys` | Gaps identified |  | *won't implement — Transfer `COMMAND.COM`, recognize both IBM and Microsoft system-file names when replacing an installation, and allow the first three contiguous sectors of `IO.SYS` to reside later in the data area. The placement change also requires boot-loader support.* |
 | `time` | No known gaps |  |  |
 | `tree` | No known gaps |  |  |
 | `truename` | No known gaps |  |  |
 | `type` | No known gaps |  |  |
+| *`undelete`* | *won't implement* |  | *Recover deleted files.* |
+| *`unformat`* | *won't implement* |  | *Recover a formatted volume using saved or reconstructed disk information.* |
 | `ver` | No known gaps | Displays the project version as `4.01N`. |  |
 | `verify` | No known gaps |  |  |
 | `vi.exe` | Project extra | Screen editor on the full floppy. |  |
 | `vol` | No known gaps |  |  |
 | `xcopy` | No known gaps | `XCOPYCMD` presets XCOPY switches. Explicit switches take precedence. For example, `SET XCOPYCMD=/S /E` includes empty subdirectories and `XCOPY source dest /-S /-E` copies only the top level. |  |
-| `device=umbs.sys start-end [start-end ...]` | Project extra | Supply unused, mapped RAM as UMBs. Use four-digit hex segments with an exclusive end. Each range is granted whole. |  |
+| Batch syntax | No known gaps in surveyed syntax |  |  |
+
+The batch comparison covers `CALL` with arguments, `ECHO` and leading `@`, `FOR %%v IN (...) DO`, `GOTO` and labels, `IF [NOT]` with ERRORLEVEL, string equality or EXIST, `PAUSE`, `REM`, `SHIFT`, positional arguments and environment expansion. All eight DOS 5.0 batch commands are present. A batch fixture booted on both systems produced identical output for CALL/SHIFT, FOR, IF, GOTO, environment expansion and a blank ECHO line. Individual command rows record project extensions.
 
 ## Configuration enhancements
 
-| Directive | Enhancement | Conventional bytes saved on PCE¹ |
-|---|---|---:|
-| `dos=high` | Place filename parsing, directory search, local pathname lookup and file I/O in the HMA when available. Combine with `dos=high,umb` for UMBs. | 7,504 with the PCE configuration below |
-| `dos=umb` | Enable upper memory blocks (UMBs) from an XMS provider. | — |
-| `devicehigh=driver [arguments]` | Try upper memory first, then conventional memory if the image cannot fit. | 4,544 with `ansi.sys` |
-| `shellhigh=interpreter [arguments]` | Try upper memory for the shell and, for permanent `command.com`, its `/e:bytes` environment. Each falls back independently. | 6,096 with `command.com /p /e:160` |
-| `buffers=` | Place the primary buffer pool in one UMB when it fits. | 10,640 with `buffers=20` |
-| `stacks=` | Place interrupt handlers and stacks together in one UMB when they fit. | 3,296 with `stacks=9,128` |
-| `fcbs=n,m` | Place the FCB table in one UMB when it fits. | 272 with `fcbs=4,1` |
-| `lastdrive=` | Place the permanent current-directory table in one UMB when it fits. | 464 with `lastdrive=e`, 2,304 with `lastdrive=z` |
-| `files=` | Place the file table extension in one UMB when it fits. The first five entries stay in the kernel. | 912 with `files=20` |
+| Directive | MS-DOS 5.0 comparison | Enhancement | Missing MS-DOS 5.0 features |
+|---|---|---|---|
+| `break=` | No known syntax gaps |  |  |
+| `buffers=` | Placement gap | Place the primary buffer pool in one UMB when it fits. | DOS 5.0 can keep disk buffers in available HMA space with `DOS=HIGH`. |
+| `comment=` | Present in both parsers |  |  |
+| `country=` | No known syntax gaps |  |  |
+| `cpsw=` | Project's DOS 4.x directive |  |  |
+| `device=` | Driver availability gaps | `UMBS.SYS start-end [start-end ...]` supplies mapped RAM as UMBs. Ranges are hexadecimal segments with exclusive ends. | The DOS 5.0 SETVER.EXE version-table driver and EMM386.EXE memory manager. |
+| `devicehigh=` | Gaps identified | Try upper memory first and fall back to conventional memory. | `DEVICEHIGH SIZE=hexsize driver` specifies a minimum upper-memory block size. |
+| `dos=` | Gaps identified | `HIGH` moves selected kernel routines into the HMA. `UMB` enables upper memory from an XMS provider. The two options can be combined. | Explicit `LOW` and `NOUMB` keywords. |
+| `drivparm=` | Gaps identified |  | `/F:9` for a 2.88 MB floppy. The project's geometry table ends at `/F:7`. |
+| `fcbs=n,m` | No known syntax gaps | Place the FCB table in one UMB when it fits. |  |
+| `files=` | No known syntax gaps | Place the file table extension in one UMB when it fits. The first five entries stay in the kernel. |  |
+| `ifs=` | Project's DOS 4.x directive |  |  |
+| `install=` | No known syntax gaps |  |  |
+| `lastdrive=` | No known syntax gaps | Place the permanent current-directory table in one UMB when it fits. |  |
+| `multitrack=` | Present in both parsers |  |  |
+| `rem` | No known syntax gaps |  |  |
+| `shell=` | No known syntax gaps |  |  |
+| `shellhigh=` | Project extra | Try upper memory for the shell and the permanent COMMAND.COM environment. Each falls back independently. |  |
+| `stacks=` | No known syntax gaps | Place interrupt handlers and stacks together in one UMB when they fit. |  |
+| `switches=` | Gaps identified |  | DOS 5.0 IO.SYS recognizes `/T` (BIOS midnight rollover handling) and `/W` (Windows WINA20.386 loading). The project recognizes `/K`. |
+
+The directive inventory comes from the keyword tables in both versions of IO.SYS. Parser coverage does not establish hardware or driver compatibility. [MS-DOS 5.0 distribution](https://www.pcjs.org/software/pcx86/sys/dos/microsoft/5.00/), [Microsoft CONFIG.SYS defaults](https://jeffpar.github.io/kbarchive/kb/077/Q77052/), [Microsoft floppy geometry reference](https://minuszerodegrees.net/ms_kb_articles/Q75131%20revision%202.pdf).
+
+Measured conventional-memory savings on PCE¹ are 7,504 bytes for `DOS=HIGH`, 4,544 for `DEVICEHIGH=ANSI.SYS`, 6,096 for `SHELLHIGH=COMMAND.COM /P /E:160`, 10,640 for `BUFFERS=20`, 3,296 for `STACKS=9,128`, 272 for `FCBS=4,1`, 464 for `LASTDRIVE=E` (2,304 for Z), and 912 for `FILES=20`.
 
 PCE example for `config.sys`
 

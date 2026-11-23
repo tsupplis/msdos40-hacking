@@ -105,6 +105,7 @@
 BYTE destddir[MAXPATH+3] = {'\0'};
 BYTE srcddir[MAXPATH+3] = {'\0'};
 BYTE rtswitch=0;
+BYTE list_only=0;
 BYTE control_flag=0;
 BYTE control_flag2=0;
 BYTE *buf_pointer;

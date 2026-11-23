@@ -848,8 +848,8 @@ unsigned index;
                         ext_table[j][i].changed = FALSE;
                         ext_table[j][i].drive_letter = NUL;                 /* AN000 */
 
-                        strcpy(ext_table[cur_disk][i].system,NUL);          /* AN000 */
-                        strcpy(ext_table[cur_disk][i].vol_label,NUL);       /* AN000 */
+                        ext_table[cur_disk][i].system[0] = '\0';          /* AN000 */
+                        ext_table[cur_disk][i].vol_label[0] = '\0';       /* AN000 */
 
                        END
 
@@ -874,6 +874,10 @@ unsigned index;
                                               uc(0),
                                               uc(1)))   /* AC000 */
                             BEGIN
+                             if (num_logical_drives >= 23) {
+                                 good_disk[j] = FALSE;
+                                 break; /* continue discovery on the next disk */
+                             }
                              load_logical_drive(num_logical_drives,j);
 
 
@@ -999,8 +1003,13 @@ unsigned    partition_location;                                         /* AN000
                         cylinders_to_percent(((ext_table[drive][point].end_cyl-ext_table[drive][point].start_cyl)+1),
                         ((part_table[drive][ext_part_num].end_cyl-part_table[drive][ext_part_num].start_cyl)+1));      /* AN000 */
 
+                    if (status_flag && ext_table[drive][point].sys_id != DOS12 &&
+                        ext_table[drive][point].sys_id != DOS16 &&
+                        ext_table[drive][point].sys_id != DOSNEW) return;
                     ext_table[drive][point].drive_letter = next_letter++;                                      /* AN000 */
 
+                    /* Status needs only the EBR fields, including the next link. */
+                    if (status_flag) return;
                     partition_location = ext_table[drive][point].start_cyl;
 
                     if (read_boot_record(ext_table[drive][point].start_cyl,

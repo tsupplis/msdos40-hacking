@@ -333,7 +333,8 @@ void	parse_init()					/*;AN000;4 */
 	sw3.p_function_flag = 0;			/*;AN000;4 */
 	sw3.p_result_buf = (WORD)&sw_buff;		/*;AN000;4 */
 	sw3.p_value_list = (WORD)&noval;		/*;AN000;4 */
-	sw3.p_nid = 4;					/*;AN000;4 */
+	sw3.p_nid = 5;
+        strcpy(sw3.list_switch,"/D");					/*;AN000;4 */
 	strcpy(sw3.switch1,"/S");                       /*;AN000;4 */
 	strcpy(sw3.switch2,"/P");                       /*;AN000;4 */
 	strcpy(sw3.switch3,"/M");                       /*;AN000;4 */
@@ -941,7 +942,10 @@ char *ptr;							      /*;AN002;*/
 	      set_reset_test_flag(&control_flag, SWITCHES, SET);      /*;AN000;4*/
 	     }							      /*;AN000;4*/
 
-	   if (sw_buff.sw_synonym_ptr == (WORD)&sw3.switch4[0])       /*;AN000;4   /N */
+	   if (sw_buff.sw_synonym_ptr == (WORD)sw3.list_switch)
+               list_only = TTRUE;
+
+           if (sw_buff.sw_synonym_ptr == (WORD)&sw3.switch4[0])       /*;AN000;4   /N */
 	     {							      /*;AN000;4*/
 	      set_reset_test_flag(&rtswitch, NOTEXIST, SET);	      /*;AN000;4*/
 	      set_reset_test_flag(&control_flag, SWITCHES, SET);      /*;AN000;4*/

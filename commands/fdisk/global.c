@@ -44,6 +44,7 @@ char            primary_flag;                                           /* AC000
 char            extended_flag;                                          /* AC000 */
 char            logical_flag;                                           /* AC000 */
 char            disk_flag;                                              /* AC000 */
+FLAG status_flag, mbr_flag;
 char            quiet_flag;                                             /* AC000 */
 unsigned        primary_buff;                                           /* AC000 */
 unsigned        extended_buff;                                          /* AC000 */

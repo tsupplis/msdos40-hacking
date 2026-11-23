@@ -9,6 +9,7 @@
 :def 10 "N",0              ;"N"
 ;
 :class B
+:def 11 "Fixed Disk Drive Status",CR,LF,"Disk  Drive   Mbytes    Free  Usage",CR,LF
 :def 4 "Cannot FDISK with network loaded",CR,LF
 :def 5 "No fixed disks present",CR,LF
 :def 6 "Error reading fixed disk",CR,LF

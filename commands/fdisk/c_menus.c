@@ -5,6 +5,7 @@
 #include "subtype.h"                                                    /* AN000 */
 #include "fdiskmsg.h"                                                   /* AN000 */
 #include "stdio.h"
+#include <stdlib.h>
 
 /*  */
 /******************* START OF SPECIFICATIONS *******************/
@@ -317,7 +318,7 @@ BEGIN
                     reboot_flag = (FLAG)TRUE;                           /* AC000 */
                     if (number_of_drives == uc(1))                      /* AN000 */
                         BEGIN                                           /* AN000 */
-                        write_info_to_disk();
+                        if (!write_info_to_disk()) exit(ERR_LEVEL_1);
                         reboot_system();                                /* AC000 */
                         END                                             /* AN000 */
                     clear_screen(u(16),u(0),u(23),u(79));               /* AN000 */

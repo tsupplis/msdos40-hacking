@@ -176,6 +176,27 @@ BEGIN
         if(parse_command_line(argc,argv))                               /* AN000 */
 
         BEGIN                                                           /* AN000 */
+        if (status_flag || mbr_flag)
+        {
+            int error = 0;
+            good_disk[0] = good_disk[1] = TRUE;
+            /* A report cannot be combined with a write. /MBR targets BIOS 80h. */
+            if ((status_flag && mbr_flag) || primary_flag || extended_flag ||
+                logical_flag || (disk_flag && (status_flag || cur_disk_buff != 0)))
+                error = 8;
+            else if (!get_disk_info())
+                error = number_of_drives ? 6 : 5;
+            else if (mbr_flag)
+                error = repair_master_boot();
+            else
+            {
+                init_partition_tables();
+                if (!good_disk[0] || !good_disk[1]) error = 6;
+                else display_disk_status();
+            }
+            if (error) display_msg(error,DosStdEr,0,0,0,Utility_Msg_Class);
+            exit(error ? ERR_LEVEL_1 : ERR_LEVEL_0);
+        }
         /* check to see if switches were set */
         if ((primary_flag == FALSE)  &&
             (extended_flag == FALSE) &&
@@ -202,7 +223,7 @@ BEGIN
 
                     /* Go do main screen */
                     do_main_menu();
-                    write_info_to_disk();
+                    if (!write_info_to_disk()) exit(ERR_LEVEL_1);
                     END
 
                 if (reboot_flag)
@@ -227,8 +248,10 @@ BEGIN
             if ( ((primary_flag == FALSE)  &&
                   (extended_flag == FALSE) &&
                   (logical_flag == FALSE)) ||
-                  (disk_flag == FALSE)  )                                 /* AN000 */
+                  (disk_flag == FALSE)  ) {
                 display_msg((int)8,(int)DosStdEr,(int)nosubcnt,(int)nosubptr,c(noinput),c(Utility_Msg_Class)); /*;AN000; AC014 AC015 */
+                exit(ERR_LEVEL_1);
+            }
 
             else
                 BEGIN
@@ -238,12 +261,19 @@ BEGIN
                 good_disk[1] = TRUE;                                        /* AN000 */
                 if (get_disk_info())                                        /* AN000 */
                     BEGIN
-                    if (number_of_drives < (cur_disk_buff+1))
+                    if (number_of_drives < (cur_disk_buff+1)) {
                         display_msg((int)8,(int)DosStdEr,(int)nosubcnt,(int)nosubptr,c(noinput),c(Utility_Msg_Class)); /*;AN000; AC014 AC015*/
+                        exit(ERR_LEVEL_1);
+                    }
                     else
                         BEGIN                                                   /* AN000 */
                         /* build memory model of partitions */
                         init_partition_tables();                                /* AN000 */
+
+                        if (!good_disk[cur_disk_buff]) {
+                            display_msg(6,DosStdEr,0,0,0,Utility_Msg_Class);
+                            exit(ERR_LEVEL_1);
+                        }
 
                         /* set cur_disk to current disk */
                         cur_disk = cur_disk_buff;                               /* AN000 */
@@ -299,7 +329,7 @@ BEGIN
                             END
 
                         /* This is end of switch execution */
-                        write_info_to_disk();                                   /* AN000 */
+                        if (!write_info_to_disk()) exit(ERR_LEVEL_1);                                   /* AN000 */
                         END                                                     /* AN000 */
                     /* This is the end of compare cur_disk_buff for valid drive */
                     END
@@ -309,6 +339,8 @@ BEGIN
             END
         /* This is end of Parse command line */
         END                                                             /* AN000 */
+        else
+            exit(ERR_LEVEL_1); /* parser already displayed the diagnostic */
     /* This end of Preload_messages function */
     END                                                                 /* AN000 */
     cur_disk = c(0);                                                    /* AN001 */

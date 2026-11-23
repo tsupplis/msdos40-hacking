@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Verify executable placement, raw arguments, PATH search and child exit status."""
+from pathlib import Path
+import os
+import shutil
+import struct
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+work = root / "test/work"
+work.mkdir(exist_ok=True)
+with tempfile.TemporaryDirectory(dir=work) as scratch:
+    folder = Path(scratch)
+    image = folder / "source.img"
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+    probe = folder / "lfprobe.com"
+    subprocess.run(["nasm", "-f", "bin", root / "test/lfprobe.asm", "-o", probe], check=True)
+    for source, name in [(probe, "lfprobe.com"), (root / "extra/pcehimem.sys", "himem.sys"),
+                         (root / "commands/loadfix/loadfix.com", "loadfix.com")]:
+        subprocess.run(["mcopy", "-o", "-i", image, source, "::" + name], check=True)
+    # A real one-page MZ executable that exits with ERRORLEVEL 19.
+    exe = folder / "mzprobe.exe"
+    header = struct.pack("<14H", 0x5a4d, 37, 1, 0, 2, 16, 16, 0, 0x100,
+                         0, 0, 0, 0x1c, 0)
+    exe.write_bytes(header.ljust(32, bytes(1)) + bytes.fromhex("b8134ccd21"))
+    subprocess.run(["mcopy", "-o", "-i", image, exe, "::mzprobe.exe"], check=True)
+    batch = folder / "check.bat"
+    batch.write_text(r"""lfprobe CONTROL
+echo.
+md b:\bin
+copy a:\lfprobe.com b:\bin\probe.com
+path b:\bin
+loadfix probe first  "two words"
+if errorlevel 38 echo FAILED
+if not errorlevel 37 echo FAILED
+echo.
+loadfix b:\bin\probe.com
+if not errorlevel 37 echo FAILED
+echo.
+copy a:\lfprobe.com b:\bin\sample.bat
+loadfix b:\bin\sample.bat
+if errorlevel 2 echo FAILED
+if not errorlevel 1 echo FAILED
+loadfix mzprobe
+if errorlevel 20 echo FAILED
+if not errorlevel 19 echo FAILED
+loadfix b:\absent
+if not errorlevel 1 echo FAILED
+lfprobe AFTER
+echo.
+""")
+    for layout, config in [("low", ""), ("high", "dos=high,umb\ndevice=himem.sys\n"
+                                                "shellhigh=command.com /p /e:160\n")]:
+        batch.with_suffix(".cfg").write_text(config)
+        output = subprocess.check_output([root / "test/run_tests", batch],
+                         env=dict(os.environ, IMG=str(image))).decode("cp437")
+        assert "FAILED" not in output and "Program not found" in output, output
+        assert 'PSP HIGH first  "two words"' in output and "PSP HIGH\n" in output, output
+        if layout == "high":
+            assert "PSP LOW CONTROL" in output and "PSP LOW AFTER" in output, output
+        print("PASS LOADFIX shell", layout, flush=True)

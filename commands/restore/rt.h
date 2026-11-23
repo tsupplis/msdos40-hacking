@@ -11,6 +11,8 @@
 /* The equates for messages can be found in rt2.h			    */
 /****************************************************************************/
 
+extern unsigned char list_only;  /* RESTORE /D: enumerate selected backup entries. */
+
 #define BYTE	unsigned char
 #define WORD	unsigned short
 #define DWORD	unsigned long

@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+"""Exercise both RESTORE archive readers on disposable floppies."""
+from pathlib import Path
+import os
+import shutil
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+work = root / "test/work"
+work.mkdir(exist_ok=True)
+with tempfile.TemporaryDirectory(dir=work) as name:
+    tmp = Path(name)
+    boot = tmp / "source.img"
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), boot)
+    def install(path, target):
+        subprocess.run(["mcopy", "-o", "-i", boot, path, "::" + target], check=True)
+    install(root / "commands/restore/restore.com", "restore.com")
+    ident = tmp / "ident.bin"
+    ident.write_bytes(bytes([255,1,0,1990 % 256,1990 // 256,1,1]))
+    install(ident, "ident.bin")
+    for stem in ["KEEP", "MISS"]:
+        header = bytes([255,1,0,0,0]) + ("\\" + stem + ".TXT").encode()
+        payload = tmp / (stem + ".bin")
+        payload.write_bytes(header.ljust(128,b"\0") + b"archive\r\n")
+        install(payload, payload.name)
+    for legacy in (False, True):
+        prepare = ([r"copy a:\ident.bin b:\backupid.@@@", r"copy a:\keep.bin b:\keep.001",
+                    r"copy a:\miss.bin b:\miss.001"] if legacy else
+                   [r"echo archive>a:\keep.txt", r"echo archive>a:\miss.txt",
+                    r"backup a:\*.txt b: <a:\cr.txt", r"del a:\miss.txt"])
+        batch = tmp / "report.bat"
+        batch.write_text("\n".join(prepare + [r"echo sentinel>a:\keep.txt",
+            r"restore b: a:\*.txt /d <a:\cr.txt >a:\list.out",
+            "if errorlevel 1 echo FAILED", r"if exist a:\miss.txt echo FAILED",
+            r"restore b: a:\miss.txt <a:\cr.txt", "if errorlevel 1 echo FAILED"])+"\n")
+        output = subprocess.check_output([root / "test/run_tests",batch],env=dict(os.environ, IMG=str(boot)))
+        assert b"FAILED" not in output, output
+        def read(file):
+            return subprocess.check_output(["mtype","-i",work/"boot.img","::"+file])
+        listing = read("list.out")
+        assert b"Listing backup files from drive B:" in listing, listing
+        assert b"\\KEEP.TXT\r\n" in listing and b"\\MISS.TXT\r\n" in listing, listing
+        assert read("keep.txt").strip() == b"sentinel"
+        assert read("miss.txt").strip() == b"archive"
+        print("PASS RESTORE /D and normal restore", "legacy" if legacy else "CONTROL", flush=True)

@@ -9,6 +9,37 @@
 #include "memory.h"
 
 /*  */
+#include "msgret.h"
+
+static void status_volume(struct entry *entry)
+{
+    char letter = entry->drive_letter;
+    if (letter >= 'C' && letter <= 'Z')
+        printf("      %c: %7u\n",letter,entry->mbytes_used);
+}
+
+void display_disk_status(void)
+{
+    unsigned disk, i, used, percent;
+    struct entry *entry;
+    display_msg(11,1,0,0,0,Utility_Msg_Class);
+    for (disk = 0; disk < number_of_drives; ++disk) {
+        used = percent = 0;
+        for (i = 0; i < 4; ++i) {
+            entry = &part_table[disk][i];
+            if (entry->sys_id) {
+                used += entry->mbytes_used;
+                percent += entry->percent_used;
+            }
+        }
+        printf("%4u     %7u %7u %5u%%\n",disk+1,total_mbytes[disk],
+               used < total_mbytes[disk] ? total_mbytes[disk]-used : 0,
+               percent > 100 ? 100 : percent);
+        for (i = 0; i < 4; ++i) status_volume(&part_table[disk][i]);
+        for (i = 0; i < 23; ++i) status_volume(&ext_table[disk][i]);
+    }
+}
+
 char volume_display()
 
 BEGIN

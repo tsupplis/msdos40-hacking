@@ -40,6 +40,7 @@ extern  FLAG            primary_flag;                                   /* AN000
 extern  FLAG            extended_flag;                                  /* AN000 */
 extern  FLAG            logical_flag;                                   /* AN000 */
 extern  FLAG            disk_flag;                                      /* AN000 */
+extern FLAG status_flag, mbr_flag;
 extern  FLAG            quiet_flag;                                     /* AN000 */
 extern  unsigned        primary_buff;                                   /* AN000 */
 extern  unsigned        extended_buff;                                  /* AN000 */
