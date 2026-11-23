@@ -50,7 +50,7 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
         )
     for source, name in (
         (folder / "hmaio.exe", "hmaio.exe"),
-        (root / "local/pcehimem.sys", "himem.sys"),
+        (root / "extra/pcehimem.sys", "himem.sys"),
     ):
         subprocess.run(["mcopy", "-i", image, source, "::" + name], check=True)
     batch = folder / "io.bat"
