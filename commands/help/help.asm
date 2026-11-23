@@ -1,7 +1,11 @@
+; HELP.COM - display the DOSHELP.HLP index or one command description.
+; Each unindented record starts with a topic key and its index summary.
+; Empty lines and lines with one leading space form the topic body.
 code segment
     assume cs:code, ds:code
     org 100h
 
+; Read one case-insensitive topic from the counted PSP command tail.
 start:
     cld
     xor cx,cx
@@ -35,6 +39,7 @@ name_done:
     call skip_space
     jz lookup
     jmp invalid
+; Prefer a local database, then try the directory containing HELP.COM.
 lookup:
     mov dx,offset filename
     mov ax,3d00h
@@ -44,6 +49,8 @@ lookup:
     jnc opened
     mov dx,offset nofile
     jmp fail
+; Read into free space above the image. Reserve stack room and reject
+    ; a full buffer because the file may have been truncated.
 opened:
     mov bx,ax
     mov dx,offset buffer
@@ -62,14 +69,20 @@ room_available:
 read_file:
     mov ah,3fh
     int 21h
-    jc read_error
+    jc bad_read
     cmp ax,cx
-    je read_error
+    jne read_complete
+bad_read:
+    jmp read_error
+read_complete:
     mov bp,ax
     mov ah,3eh
     int 21h
     or byte ptr topic,0
-    jz show_index
+    jnz topic_lookup
+    jmp show_index
+; BP bounds every scan. Match the whole key before its padding.
+topic_lookup:
     mov si,offset buffer
     add bp,si
 next_line:
@@ -89,9 +102,9 @@ compare:
     jmp compare
 end_name:
     cmp al,' '
-    je find_end
+    je skip_padding
     cmp al,9
-    je find_end
+    je skip_padding
 skip_char:
     cmp al,10
     je next_line
@@ -99,34 +112,37 @@ skip_char:
     jae unknown
     lodsb
     jmp skip_char
-find_end:
+skip_padding:
+    cmp si,bp
+    jae unknown
+    lodsb
+    cmp al,' '
+    je skip_padding
+    cmp al,9
+    je skip_padding
+    mov dx,si
+    dec dx
+    ; Print the summary from DX, followed by its display lines. Strip the
+    ; single record-indent space while retaining option-column alignment.
+    dec si
+topic_line:
+    call line_end
+    call put_line
+    cmp si,bp
+    jae success
+    mov al,[si]
+    cmp al,' '
+    jne topic_blank
+    inc si
+    jmp short topic_body
+topic_blank:
+    cmp al,13
+    je topic_body
     cmp al,10
-    je write_line
-    cmp si,bp
-    jae write_line
-    lodsb
-    jmp find_end
-write_line:
-    ; Indented lines continue the preceding topic.
-    cmp si,bp
-    jae topic_end
-    cmp byte ptr [si],' '
-    je continue_line
-    cmp byte ptr [si],9
-    jne topic_end
-continue_line:
-    lodsb
-    jmp find_end
-topic_end:
-    mov cx,si
-    sub cx,dx
-    jmp short output
-show_index:
-    mov cx,bp
-    mov dx,offset buffer
-output:
-    mov bx,1
-    call write_count
+    jne success
+topic_body:
+    mov dx,si
+    jmp topic_line
 success:
     mov ax,4c00h
     int 21h
@@ -187,6 +203,7 @@ bad_environment:
 no_companion:
     stc
     ret
+; DX follows the last drive or directory separator in the copied path.
 append_filename:
     pop es
     mov di,dx
@@ -222,6 +239,7 @@ scan:
     mov cx,si
     sub cx,dx
     dec cx
+; Write CX bytes at DS:DX to handle BX. Treat a short write as failure.
 write_count:
     mov ah,40h
     int 21h
@@ -233,6 +251,116 @@ output_error:
     mov ax,4c01h
     int 21h
 
+ ; Scan to the next physical line, including its LF in the output span.
+line_end:
+    cmp si,bp
+    jae line_done
+    lodsb
+    cmp al,10
+    jne line_end
+line_done:
+    ret
+
+; Write [DX,SI) to standard output, preserving the database cursor.
+put_line:
+    mov cx,si
+    sub cx,dx
+    mov bx,1
+    jmp write_count
+
+show_index:
+    ; Only pause when both standard handles are console devices. Pipes,
+    ; files and NUL receive the complete index without keyboard reads.
+    mov ax,4400h
+    xor bx,bx
+    int 21h
+    jc index_start
+    and dl,81h
+    cmp dl,81h
+    jne index_start
+    inc bx
+    mov ax,4400h
+    int 21h
+    jc index_start
+    and dl,82h
+    cmp dl,82h
+    jne index_start
+    ; BIOS returns the current text width in AH, including 40-column modes.
+    mov ah,0fh
+    int 10h
+    xor al,al
+    xchg ah,al
+    mov columns,ax
+index_start:
+    mov dx,offset intro
+    call print
+    cmp columns,0
+    je index_buffer
+    mov ax,cx
+    sub ax,2                  ; intro ends in CR/LF
+    xor dx,dx
+    div columns
+    sub rows,ax               ; charge additional wrapped intro rows
+index_buffer:
+    mov si,offset buffer
+    add bp,si
+index_line:
+    cmp si,bp
+    jae index_done
+    mov dx,si
+    call line_end
+    mov bx,dx
+    cmp byte ptr [bx],' '
+    jbe index_line
+    ; Delay the prompt until another index entry actually exists.
+    cmp columns,0
+    je index_write
+    ; A full-width line wraps even when CR/LF immediately follows it.
+    mov ax,si
+    sub ax,bx
+    cmp byte ptr [si-1],10
+    jne measure_row
+    dec ax
+    cmp byte ptr [si-2],13
+    jne measure_row
+    dec ax
+measure_row:
+    push dx
+    xor dx,dx
+    div columns
+    pop dx
+    inc ax
+    cmp rows,ax
+    jae count_row
+    push ax
+    push dx
+    push si
+    mov dx,offset moremsg
+    call print
+    mov ah,08h
+    int 21h
+    or al,al
+    jnz key_done
+    mov ah,08h
+    int 21h
+key_done:
+    mov dx,offset newline
+    call print
+    pop si
+    pop dx
+    mov rows,23
+    pop ax
+count_row:
+    sub rows,ax
+index_write:
+    call put_line
+    jmp index_line
+index_done:
+    jmp success
+
+columns dw 0
+rows dw 22
+newline db 13,10,0
 pathname db 140 dup (0)
 topic db 13 dup (0)
 filename db 'DOSHELP.HLP',0

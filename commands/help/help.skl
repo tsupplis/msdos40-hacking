@@ -3,5 +3,7 @@
 :use 2 help missing
 :use 3 help nofile
 :use 4 help unreadable
+:use 5 help intro
+:use 6 help moremsg
 ;
 :end
