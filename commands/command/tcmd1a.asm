@@ -11,6 +11,7 @@ TITLE	PART4 COMMAND Transient routines.
 	INCLUDE DOSSYM.INC
 	INCLUDE comseg.asm
 	INCLUDE comequ.asm		;AC000;
+	include sysmsg.inc
 	include ioctl.inc		;AN000;
 .list
 .cref
@@ -22,6 +23,7 @@ DATARES ENDS				;AN020;
 
 TRANDATA	SEGMENT PUBLIC BYTE	;AC000;
 	EXTRN	BadCD_ptr:word
+	extrn DirDateFormat:byte, dir_short_year:byte
 	extrn dir_attrs:byte,dir_ordered:byte,dir_replay:byte
 	EXTRN	bits:word
 	EXTRN	Bytmes_ptr:word
@@ -579,10 +581,16 @@ nofsiz:
 	mov	cl,bh
 	shr	cl,1				; Align year
 	xor	ch,ch
-	add	cx,80				; Relative 1980
-	cmp	cl,100
-	jb	millenium
-	sub	cl,100
+	mov	DirDateFormat,Right_Align+DATE_MDY_4
+	add	cx,1980
+	cmp	dir_short_year,0
+	je	millenium
+	mov	DirDateFormat,Right_Align+DATE_MDY_2
+	mov	ax,cx
+	mov	cl,100
+	div	cl				; AH = last two digits, including FAT years after 2099
+	mov	cl,ah
+	xor	ch,ch
 
 millenium:
 	xchg	dh,dl				;AN000; switch month & day

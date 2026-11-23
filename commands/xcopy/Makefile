@@ -30,5 +30,7 @@ $(MSGS): xcopy.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 xcopy.exe: $(OBJS) xcopy.lnk
 	$(LINK) @xcopy.lnk
 
+xcopypar.obj: $(ROOT)/asminc/parse.asm
+
 clean:
 	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*

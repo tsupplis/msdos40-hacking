@@ -257,8 +257,8 @@ NewDat_Format	dw	0				;AN000;offset of replacement
 		dw	0				;AN000;segment of arg
 		db	1				;AN000;first subst
 		db	Char_field_ASCIIZ		;AN000;character string
-		db	8				;AN000;maximum width
-		db	8				;AN000;minimum width
+		db	10				;AN000;maximum width
+		db	10				;AN000;minimum width
 		db	blank				;AN000;pad character
 
 ;  "Invalid time",13,10
@@ -665,7 +665,8 @@ DirDatTim_Ptr	dw	1077				;AN000;message number
 DirDat_yr	dw	0				;AN000;year
 DirDat_mo_day	dw	0				;AN000;month,day
 		db	1				;AN000;first subst
-		db	Right_Align+DATE_MDY_2		;AN000;date
+		public DirDateFormat
+DirDateFormat	db	Right_Align+DATE_MDY_4		;AN000;date
 		db	10				;AN000;maximum width
 		db	8				;AN000;minimum width
 		db	blank				;AN000;pad character

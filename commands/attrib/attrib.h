@@ -366,9 +366,9 @@ struct m_sublist msg_date =            /*;AN000; describes substitutions   */
        0,                              /*;AN000;                           */
        0,                              /*;AN000;                           */
        1,                              /*;AN000;                           */
-       sf_date | sf_mdy2,              /*;AN000;  unsigned binary to decimal*/
-       9,                              /*;AN000;                           */
-       9,                              /*;AN000;                           */
+       sf_date | sf_mdy4,              /*;AN000;  unsigned binary to decimal*/
+      10,                              /*;AN000;                           */
+      10,                              /*;AN000;                           */
        0 };                            /*;AN000;                           */
 struct m_sublist msg_time =            /*;AN000; describes substitutions   */
      { 24,                             /*;AN000;   for parm one of message */

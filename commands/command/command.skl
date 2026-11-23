@@ -201,9 +201,9 @@
 :def 1069 8," ",8                               ;AC000;
 :def 1070 CR,LF 				;AC000;
 :def 1071 "%1"                                  ;AC000;
-:def 1072 "mm-dd-yy"                            ;AC000;
-:def 1073 "dd-mm-yy"                            ;AC000;
-:def 1074 "yy-mm-dd"                            ;AC000;
+:def 1072 "mm-dd-yyyy"                            ;AC000;
+:def 1073 "dd-mm-yyyy"                            ;AC000;
+:def 1074 "yyyy-mm-dd"                            ;AC000;
 :def 1075 "%1 %2"                               ;AC000;
 :def 1076 "%1"                                  ;AC000;
 :def 1077 " %1  %2"                             ;AC053;

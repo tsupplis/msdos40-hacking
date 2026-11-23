@@ -99,3 +99,8 @@ if ! completed; then
   echo "[runner] ENDTEST not seen within ${SECS}s (hang or crash?)" >&2
   exit 1
 fi
+
+# c_move reports individual filesystem assertions over the serial console.
+if [ "$BAT" = "$CASES/c_move.bat" ] && grep -q '^FAILED ' "$WORK/ser1.out"; then
+  exit 1
+fi

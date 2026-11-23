@@ -67,6 +67,14 @@ The 4.01 reconstruction changes 12 source files and corrects encoding in 17 othe
 
 Applies to `command.com` and DOS buffered console input. Cooked handle reads support editing without recall. For historical editing, set `LINEEDIT EQU 0` in `kernel/dos/editsw.inc` and rebuild. Test with `test/check_edit`.
 
+## Y2K and calendar dates
+
+Enter a four-digit year from 1980 through 2099 in `DATE`, `XCOPY /D`, `BACKUP /D`, and the `RESTORE /A` and `/B` filters. The configured country determines field order. For US settings, use `DATE 02-29-2000`. Batch files that supply two-digit years must be updated.
+
+`DIR` displays four-digit years by default. Use `DIR /2Y` for the original column layout, or `SET DIRCMD=/2Y` to make it the default. `DIR /-2Y` overrides that preset. DOS date APIs and FAT timestamps retain their existing formats.
+
+On a PCE 5170 with the AMI AT BIOS, DOS read a cold-boot RTC date of 2000-01-02 correctly. The DOS date API and FAT timestamps advanced correctly across New Year 2000 and both sides of leap day. At the New Year rollover the raw BIOS date service (`INT 1Ah/AH=04h`) returned **1900-01-01**. Software reading that BIOS service directly sees the wrong century on this configuration. Run `test/check_y2k` for the command tests and `test/check_rtc` for the independent BIOS, DOS and FAT readings. The RTC check reports the BIOS mismatch as a failure.
+
 ## Command enhancements
 
 The survey compares the commands shipped here with the command syntax and options in the [Microsoft MS-DOS 5.0 distribution](https://www.pcjs.org/software/pcx86/sys/dos/microsoft/5.00/) (720 KB disk set). “No known gaps” covers that interface. Hardware behavior, diagnostics, and application-level compatibility require separate testing. The inventory uses Microsoft's DOSHELP command list, the batch syntax in COMMAND.COM, and the executables on the three distribution disks. Availability is checked against the project's full floppy.
@@ -79,7 +87,7 @@ The survey compares the commands shipped here with the command syntax and option
 | `copy` | No known gaps | `/Y` allows overwriting. `/-Y` prompts before overwriting. `COPYCMD` presets either switch. The last explicit overwrite switch wins. |  |
 | `debug` | No known gaps | Type `?` at the debugger prompt for a one-screen command reference, including the EMS commands in the shipped build. |  |
 | `del` (`erase`) | No known gaps | `/Q` skips the bulk-delete confirmation. An explicit `/P` still prompts for each file. |  |
-| `dir` | No known gaps | `/B` prints bare names, one per line. `/L` displays ASCII letters in filenames in lowercase. `/A[:]` filters by D, R, H, S, or A. `/O[:]` orders by N (name), E (extension), S (size), D (date), or G (directories first). Prefix a letter with `-` to exclude an attribute or reverse a key. `/P` pages console output. `DIRCMD` presets switches, and `/-` disables a preset switch on the command line. `/S` lists matching entries in subdirectories. With `/B`, it prints full paths. |  |
+| `dir` | No known gaps | `/B` prints bare names, one per line. `/L` displays ASCII letters in filenames in lowercase. `/A[:]` filters by D, R, H, S, or A. `/O[:]` orders by N (name), E (extension), S (size), D (date), or G (directories first). `/2Y` restores two-digit year display. Prefix a letter with `-` to exclude an attribute or reverse a key. `/P` pages console output. `DIRCMD` presets switches, and `/-` disables a preset switch on the command line. `/S` lists matching entries in subdirectories. With `/B`, it prints full paths. |  |
 | `diskcopy` | No known gaps | `/V` asks the disk driver to verify each destination track after writing it. |  |
 | `emm386` | Missing command |  | The EMM386.EXE command interface for querying and changing expanded-memory operation. The full floppy ships EMM386.SYS. |
 | `fdisk` | No known gaps | `/STATUS` reports disk usage and DOS volumes. `/MBR` restores the master boot code on the first fixed disk. It preserves partition entries when the boot signature is present and installs an empty table when it is absent. |  |

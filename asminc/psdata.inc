@@ -368,9 +368,7 @@ $P_Val_List	   ends 		;AN000;
 ;Note: ITEM_TAG is 0FFH when the caller does not specify the choice
 ;      list.
 ;
-;      YEAR: If the input value for the year is less than 100, parser
-;	     adds 1900 to it.  For example, when 87 is input to parser for
-;	     the year value, he returns 1987.
+;      YEAR: Four decimal digits, 1980 through 2099 inclusive.
 ;---------------------------------------------------------------------------------------------------------
 
 ;-------------------------------- Result block structure

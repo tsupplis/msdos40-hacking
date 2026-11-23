@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+"""Cold boot an AT with a known CMOS date and cross three calendar boundaries."""
+from datetime import date
+import os
+from pathlib import Path
+import shutil
+import struct
+import subprocess
+import tempfile
+
+from pcecfg import write_config
+
+root = Path(__file__).resolve().parents[1]
+work = root / "test/work"
+work.mkdir(exist_ok=True)
+with tempfile.TemporaryDirectory(dir=work) as temp:
+    folder = Path(temp)
+    boot = folder / "boot.img"
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), boot)
+    shutil.copyfile(root / "test/y2krtc.asm", folder / "y2krtc.asm")
+    for tool, args in (("masm", "y2krtc.asm,y2krtc.obj;"), ("link", "y2krtc.obj,y2krtc.exe,nul;")):
+        subprocess.run(["emu2", root / f"sdk/bin/{tool}.exe", args], cwd=folder,
+                       env=dict(os.environ, EMU2_DRIVE_C=temp), check=True)
+    # Stop PCE through its guest exit hook so the native FDC image is flushed.
+    stop = folder / "exitpce.com"
+    stop.write_bytes(bytes.fromhex("b80101 bb0000 d500 f4"))
+    batch = folder / "autoexec.bat"
+    batch.write_bytes(b"@echo off\r\nmode com1:9600,n,8,1\r\nctty com1\r\necho RTC READY\r\ny2krtc\r\necho ENDTEST\r\nexitpce\r\n")
+    subprocess.run(["mcopy", "-o", "-i", boot, batch, stop, folder / "y2krtc.exe", "::"], check=True)
+    write_config(folder)
+    cfg = folder / "pce.cfg"
+    cfg.write_text(cfg.read_text().replace('"5160"', '"5170"').replace('"8086"', '"80286"')
+                   .replace("patch_bios_init  = 1", "patch_bios_init  = 0")
+                   .replace("ibm-xt-1986-05-09.rom", "ami-at-158c.rom")
+                   .replace("rtc  = 1", "rtc  = 0").replace("patch_bios_int19 = 1", "patch_bios_int19 = 0")
+                   .replace("speed = 16", "speed = 2").replace("xms_size = 4M", "xms_size = 0")
+                   + "\nram { address = 0x100000 size = 1024K }\nwd1003 {}\n"
+                   + '\ncmos { floppy0_type = 4\n floppy1_type = 4\n start = "2000-01-02 12:00:00"\n}\n')
+    serial = folder / "ser1.out"
+    with (folder / "pce.log").open("wb") as log:
+        subprocess.run(["pce-ibmpc", "-c", cfg, "-t", "null", "-g", "vga", "-R"],
+                       cwd=folder, stdout=log, stderr=log, check=True, timeout=300)
+    out = serial.read_bytes().splitlines()
+    if b"ENDTEST" not in out or b"RTC DONE" not in out:
+        raise RuntimeError(f"Incomplete clock probe: {out!r}")
+    raw = boot.read_bytes()
+    word = lambda i: struct.unpack_from("<H", raw, i)[0]
+    start = (word(14) + raw[16]*word(22))*word(11)
+    dates = {raw[i:i+11]: word(i+24) for i in range(start,start+word(17)*32,32)}
+    expected = [date(2000,1,2), date(2000,1,1), date(2000,2,29), date(2000,3,1)]
+    failures = []
+    for prefix in ("D", "B"):
+        readings = [v.decode()[1:] for v in out if len(v)==9 and v.startswith(prefix.encode())]
+        if len(readings) != len(expected):
+            raise RuntimeError(f"Incomplete BIOS/DOS readings: {out!r}")
+        for value, d in zip(readings, expected):
+            want = (f"{d.year:04X}{d.month:02X}{d.day:02X}" if prefix=="D"
+                    else d.strftime("%Y%m%d"))
+            result = "PASS" if value==want else "FAIL"
+            print(result, "DOS" if prefix=="D" else "BIOS", d, value)
+            if value!=want:
+                failures.append((prefix,d,value))
+    for name, d in zip((b"JAN", b"FEB", b"MAR"), expected[1:]):
+        value = dates.get(name.ljust(8)+b"RTC")
+        want = (20<<9 | d.month<<5 | d.day)
+        print("PASS" if value==want else "FAIL", "FAT", d, value)
+        if value!=want:
+            failures.append(("FAT",d,value))
+    if failures:
+        raise SystemExit("BIOS/DOS date discrepancy: " + str(failures))

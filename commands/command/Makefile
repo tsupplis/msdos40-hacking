@@ -41,5 +41,7 @@ command.com: $(OBJS) command.lnk
 	$(EXE2BIN) command.exe command.com
 	rm -f command.exe
 
+tparse.obj: $(ROOT)/asminc/parse.asm
+
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*

@@ -8,6 +8,8 @@ include comseg.asm
 .list
 
 TRANDATA segment public byte
+public dir_short_year
+dir_short_year db ?
 public dir_attrs, dir_ordered, dir_replay
 extrn bits:word
 dircmd_name db 'DIRCMD='
@@ -52,6 +54,7 @@ dir_reset_sort endp
 
 dir_options proc near
 	xor	ax,ax
+	mov	dir_short_year,al
 	mov	dir_attrs,al
 	mov	dir_ordered,al
 	mov	dir_replay,al
@@ -110,8 +113,23 @@ option_switch:
  inc bh
 option_letter:
  cmp byte ptr [si],13
- je simple_error
+ jne read_option
+ stc
+ ret
+read_option:
  lodsb
+ cmp al,'2'
+ jne option_single
+ lodsb
+ and al,0dfh
+ cmp al,'Y'
+ jne simple_error
+ mov al,1
+ sub al,bh
+ mov dir_short_year,al
+ mov dh,'Y'
+ jmp short plain_end
+option_single:
  and al,0dfh
  mov dh,al
  mov di,offset trangroup:simple_names

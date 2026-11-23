@@ -1162,7 +1162,7 @@ PANEL30_W	EQU	($-PANEL30)					  ;AN000;
 	DB   '                                       '                    ;AN000;
 	DB   'Current date:                          '                    ;AN000;
 	DB   '                                       '                    ;AN000;
-	DB   '  Year . . . .         (1980-2079)     '                    ;AN000;
+	DB   '  Year . . . .         (1980-2099)     '                    ;AN000;
 	DB   '                                       '                    ;AN000;
 	DB   '  Month  . . .         (1-12)          '                    ;AN000;
 	DB   '                                       '                    ;AN000;

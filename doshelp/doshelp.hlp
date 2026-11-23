@@ -50,7 +50,7 @@ BACKUP       Back up files to another disk.
    /S              Include subdirectories.
    /M              Select files marked as changed.
    /A              Append to an existing backup.
-   /D:date         Select files by modification date.
+   /D:date         Select by modification date (four-digit year).
    /T:time         Select files by modification time.
    /L[:logfile]    Record backup activity in a log.
    /F[:size]       Format backup media at the specified capacity.
@@ -171,7 +171,7 @@ DATE         Display or set the date.
 
  DATE [date]
 
-   date            New date in the active country format.
+   date            New date in country order, with a four-digit year (1980-2099).
 DEBUG        Inspect and modify memory and run machine-code programs.
 
  DEBUG [filename [arguments]]
@@ -209,7 +209,9 @@ DEVICEHIGH=  Load a driver in upper memory when space permits.
  DOS uses conventional memory if the driver cannot load high.
 DIR          List files and subdirectories.
 
- DIR [path] [/A[:attrs]] [/B] [/L] [/O[:order]] [/P] [/S] [/W]
+ DIR [path] [/2Y] [/A[:attrs]] [/B] [/L] [/O[:order]] [/P] [/S] [/W]
+
+   /2Y             Display two-digit years (legacy layout).
 
    path        Drive, directory or filename pattern to list.
    /A          Select entries by attribute. Prefix a letter with - to exclude.
@@ -630,6 +632,7 @@ RESTORE      Restore files from a backup.
    /M              Select modified files.
    /N              Select files missing from the destination.
    /D              List matches without restoring them.
+   Dates require four-digit years.
    /B:date         Select files dated on or before the specified date.
    /A:date         Select files dated on or after the specified date.
    /E:time         Select files at or before the specified time.
@@ -775,7 +778,7 @@ XCOPY        Copy files and directory trees.
    destination     Drive, directory or filename for the copies.
    /A              Copy files with the archive bit set. Leave the bit set.
    /M              Copy marked files and clear their archive bit.
-   /D:date         Copy files changed on or after this date.
+   /D:date         Copy files changed on or after this date (four-digit year).
    /P              Ask before copying each file.
    /S              Copy subdirectories that contain files.
    /E              With /S, copy empty subdirectories as well.

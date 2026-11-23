@@ -39,5 +39,7 @@ restore.com: $(C_OBJS) $(ASM_OBJS) restore.lnk $(MAPPER)/mapper.lib
 	$(CONVERT) restore.exe restore.com
 	rm -f restore.exe
 
+_parse.obj: $(ROOT)/asminc/parse.asm
+
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*

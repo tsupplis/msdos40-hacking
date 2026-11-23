@@ -1737,6 +1737,7 @@ $P_Date_Format proc			;AN000;
 	mov	psdata_seg:$P_1st_Val,0 ;AC034; set initial value
 	mov	psdata_seg:$P_2nd_Val,0 ;AC034; set initial value
 	mov	psdata_seg:$P_3rd_Val,0 ;AC034; set initial value
+	mov	cx,si			; YMD year field starts here
 	call	$P_Get_DecNum		;AN000; get 1st number
 	jc	$P_DateF_Err0		;AN000;-----------------------+
 
@@ -1745,12 +1746,16 @@ $P_Date_Format proc			;AN000;
 	je	$P_DateF_YMD		;AN000; 		      |
 
 	call	$P_Get_DecNum		;AN000; get 2nd number	      |
-	jc	$P_DateF_Error		;AN000; 		      |
+	jc	$P_DateF_Err0		;AN000; 		      |
 
 	mov	psdata_seg:$P_2nd_Val,ax ;AC034;	      |
 	or	bl,bl			;AN000; end of line ?	      |
 	je	$P_DateF_YMD		;AN000; 		      |
 
+	cmp	psdata_seg:$P_Country_Info.$P_CDI_DateF,$P_Date_YMD
+	je	$P_DateThird
+	mov	cx,si			; MDY and DMY year starts here
+$P_DateThird:
 	call	$P_Get_DecNum		;AN000; get 3rd number	      |
 $P_DateF_Err0:				;AN000; Bridge	  <-----------+
 	jc	$P_DateF_Error		;AN000;
@@ -1760,6 +1765,10 @@ $P_DateF_Err0:				;AN000; Bridge	  <-----------+
 	jne	$P_DateF_Error		;AN000;
 
 $P_DateF_YMD:				;AN000;
+	; The range requires four significant digits. Reject extra leading zeroes.
+	mov	bx,cx
+	cmp	byte ptr psdata_seg:[bx],'0'
+	je	$P_DateF_Error
 	mov	bx,psdata_seg:$P_Country_Info.$P_CDI_DateF ;AC034; get date format
 	cmp	bx,$P_Date_YMD		;AN000;
 	je	$P_DateF00		;AN000;
@@ -1795,11 +1804,10 @@ $P_DateF00:				;AN000; / here format = YMD
 
 	mov	ch,al			;AN000; set date
 $P_DateF02:				;AN000;
-	cmp	dx,100			;AN000; year is less that 100 ?
-	jae	$P_DateF03		;AN000;
-
-	add	dx,1900 		;AN000; set year 19xx
-$P_DateF03:				;AN000;
+	cmp	dx,1980
+	jb	$P_DateF_Error
+	cmp	dx,2099
+	ja	$P_DateF_Error
 	pop	bx			;AN000; recover CONTROL block
 	pop	si			;AN000; recover string pointer
 	mov	ah,$P_No_Tag		;AN000; set

@@ -38,5 +38,7 @@ backup.com: backup.obj $(ASM_OBJS) $(MAPPER)/mapper.lib
 	$(CONVERT) backup.exe backup.com
 	rm -f backup.exe
 
+_parse.obj: $(ROOT)/asminc/parse.asm
+
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*

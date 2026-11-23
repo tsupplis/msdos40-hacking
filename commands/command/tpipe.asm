@@ -61,6 +61,7 @@ TRANSPACE	SEGMENT PUBLIC BYTE	;AC000;
 	EXTRN	date_day:byte		;AN000;
 	EXTRN	date_month:byte 	;AN000;
 	EXTRN	date_year:word		;AN000;
+	EXTRN	arg_buf:byte
 	EXTRN	INTERNATVARS:BYTE
 	EXTRN	RESSEG:WORD
 	EXTRN	time_fraction:byte	;AN000;
@@ -577,7 +578,7 @@ PRINT_TIME:
 GETDAT	proc	near				;AC000;
 
 	mov	ax,(International SHL 8)	; Determine what format the date
-	mov	dx,5ch				;  should be entered in and
+	mov	dx,offset trangroup:INTERNATVARS				;  should be entered in and
 	int	int_command			;  print a message describing it
 	mov	si,dx
 	lodsw
@@ -591,7 +592,20 @@ printformat:
 	mov	ax,dx				;AN000; get message number of format
 	mov	dh,util_msg_class		;AN000; this is a utility message
 	call	Tsysgetmsg			;AN000; get the address of the message
-	mov	newdat_format,si		;AN000; put the address in subst block
+	; Localize the separators in the catalog's date-order example.
+	mov	bx,offset trangroup:arg_buf
+	mov	newdat_format,bx
+	mov	cx,10
+date_prompt_char:
+	lodsb
+	cmp	al,'-'
+	jne	date_prompt_store
+	mov	al,[INTERNATVARS].Date_sep
+date_prompt_store:
+	mov	[bx],al
+	inc	bx
+	loop	date_prompt_char
+	mov	byte ptr [bx],0
 	MOV	DX,OFFSET TRANGROUP:NEWDAT_ptr	;AC000; get address of message to print
 	invoke	std_printf
 	mov	newdat_format,no_subst		;AN000; reset subst block

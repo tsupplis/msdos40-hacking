@@ -687,7 +687,7 @@ E_NOCPSW_DISP	EQU	1			      ;AN000; display type will not support CPSW
 		PUBLIC	N_YEAR, MIN_YEAR, MAX_YEAR    ;AN000;
 N_YEAR		DW	?			      ;AN000; calender year
 MIN_YEAR	EQU	1980			      ;AN000;
-MAX_YEAR	EQU	2079			      ;AN000;
+MAX_YEAR	EQU	2099			      ;AN000;
 						      ;
 		PUBLIC	N_MONTH, MIN_MONTH, MAX_MONTH ;AN000;
 N_MONTH 	DW	?			      ;AN000; calender month

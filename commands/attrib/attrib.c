@@ -1762,9 +1762,7 @@ Convert_date(dosdate,msgdate1,msgdate2)
 {
    WORD     day,month,year;
 
-   year = dosdate;
-   year = ((year >> 1) & 0x7f00) + 80*256;   /* DOS year + 80 */
-   year = (year >> 8) & 0x007f;                                        /*;AN000;*/
+   year = 1980 + (dosdate >> 9);
    day = dosdate;
    day = (day << 8) & 0x1f00;
    month = dosdate;
