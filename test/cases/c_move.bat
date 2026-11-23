@@ -55,7 +55,15 @@ IF NOT ERRORLEVEL 1 ECHO FAILED missing comma
 IF NOT EXIST EARLY ECHO FAILED invalid grammar changed source
 A:\MOVE EARLY,MISSING FROM
 IF NOT ERRORLEVEL 1 ECHO FAILED partial move status
-IF NOT EXIST FROM\EARLY ECHO FAILED partial move order
+IF NOT EXIST EARLY ECHO FAILED missing operand removed source
+IF EXIST FROM\EARLY ECHO FAILED missing operand created target
+MD OTHER
+ECHO SECOND>OTHER\EARLY
+A:\MOVE EARLY,OTHER\EARLY FROM
+IF NOT ERRORLEVEL 1 ECHO FAILED duplicate target status
+IF NOT EXIST EARLY ECHO FAILED duplicate target removed first source
+IF NOT EXIST OTHER\EARLY ECHO FAILED duplicate target removed second source
+IF EXIST FROM\EARLY ECHO FAILED duplicate target created destination
 ECHO ONE>ITEM1
 ECHO TWO>ITEM2
 A:\MOVE /Y ITEM* PARENT\CHILD
