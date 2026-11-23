@@ -107,6 +107,17 @@ find_end:
     lodsb
     jmp find_end
 write_line:
+    ; Indented lines continue the preceding topic.
+    cmp si,bp
+    jae topic_end
+    cmp byte ptr [si],' '
+    je continue_line
+    cmp byte ptr [si],9
+    jne topic_end
+continue_line:
+    lodsb
+    jmp find_end
+topic_end:
     mov cx,si
     sub cx,dx
     jmp short output

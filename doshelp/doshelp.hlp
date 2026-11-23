@@ -1,9 +1,19 @@
 CD        CD [drive:][path] - Show or change the current directory.
-COPY      COPY source [destination] [/Y | /-Y] - COPYCMD presets overwrite behavior. The last explicit overwrite switch wins.
+COPY         COPY source[+source...] [destination] [/A | /B] [/V] [/Y | /-Y]
+    /A selects text handling, /B binary handling, and /V verifies writes.
+    COPYCMD presets overwrite behavior. The last explicit switch wins.
 DEL       DEL [drive:][path]filename [/P] [/Q] - /Q skips bulk confirmation and /P prompts for each file.
 DELTREE   DELTREE [/Y] path [path...] - Delete a directory tree. /Y skips confirmation.
-DIR       DIR [path] [/A[:attrs]] [/B] [/L] [/O[:order]] [/P] [/S] [/W] - DIRCMD sets defaults. /- cancels a preset switch.
-FORMAT    FORMAT drive: [options] - /Q performs a quick format.
+DIR          DIR [path] [/A[:attrs]] [/B] [/L] [/O[:order]] [/P] [/S] [/W]
+    Attributes D=directory, R=read-only, H=hidden, S=system, A=archive.
+    Sort keys N=name, E=extension, S=size, D=date, G=directories first.
+    Prefix an attribute with - to exclude it or a sort key to reverse it.
+    /B bare names, /L lowercase, /P page, /S recurse, /W wide.
+    DIRCMD sets defaults. /- cancels a preset switch.
+FORMAT       FORMAT drive: [/Q] [/V[:label]] [/S] [/B] [/F:size]
+    /Q quick formats, /V sets the label, /S transfers DOS system files.
+    /B reserves system space. /F selects a supported floppy size.
+    The parser also recognizes /T and /N for geometry and /1, /4 and /8.
 HELP      HELP [command] - List topics or display a command summary. Use HELP | MORE to page.
 MD        MD [drive:]path - Create a directory.
 MEM       MEM [/C | /CLASSIFY | /D | /DEBUG] [/P] - Show memory usage, optionally with paging.
@@ -12,7 +22,11 @@ MOVE      MOVE [/Y | /-Y] source[,source...] destination - Move files or rename 
 RD        RD [drive:]path - Remove an empty directory.
 REN       REN [drive:][path]oldname newname - Rename files.
 TYPE      TYPE [drive:][path]filename - Display a text file.
-XCOPY     XCOPY source [destination] [options] - /S includes subdirectories and /E includes empty ones with /S. XCOPYCMD sets defaults. /-S and /-E cancel those presets.
+XCOPY        XCOPY source [destination] [/A | /M] [/D:date] [/P] [/S] [/E] [/V] [/W]
+    /A selects archive files, /M also clears their archive bits.
+    /D filters by date, /P prompts, /V verifies, /W waits before starting.
+    /S includes subdirectories. /E with /S includes empty directories.
+    XCOPYCMD sets defaults. Explicit switches, including /-S and /-E, win.
 CHDIR     CD [drive:][path] - Show or change the current directory.
 ERASE     Alias for DEL. /Q skips bulk confirmation and /P prompts for each file.
 MKDIR     MD [drive:]path - Create a directory.
@@ -21,29 +35,46 @@ RENAME    REN [drive:][path]oldname newname - Rename files.
 /?        HELP [command] - List topics or display a command summary. Use HELP | MORE to page.
 
 CONFIG.SYS drivers and support files
-ANSI.SYS     DEVICE=ANSI.SYS - Add ANSI console escape-sequence support.
-DISPLAY.SYS  Load with DEVICE= to configure display code-page support.
-DRIVER.SYS   Load with DEVICE= to add a logical floppy drive.
-EMM386.SYS   Expanded-memory driver for 386-class systems.
-PRINTER.SYS  Load with DEVICE= to configure printer code-page support.
-RAMDRIVE.SYS Load with DEVICE= to create a RAM disk.
+ANSI.SYS     DEVICE=ANSI.SYS [/X] [/L] [/K] - Add ANSI console support.
+DISPLAY.SYS  DEVICE=DISPLAY.SYS CON[:]=(type[,hwcp[,n]])
+    Select display type, hardware code page and software code-page slots.
+    The parser also accepts a parenthesized hardware page and (n,m) counts.
+DRIVER.SYS   DEVICE=DRIVER.SYS /D:drive [/F:type] [/H:heads] [/S:sectors]
+    [/T:tracks] [/C] - Add a logical floppy drive. /D selects the physical unit.
+EMM386.SYS   DEVICE=EMM386.SYS [size] [Mx] [ON | OFF | AUTO]
+    Size is in KB. Mx selects the page-frame mapping. AUTO enables on demand.
+PRINTER.SYS  DEVICE=PRINTER.SYS LPT#[:]=(type[,hwcp[,n]])
+    Select printer type, hardware code page(s) and software page slots.
+    Use a parenthesized list to give multiple hardware code pages.
+RAMDRIVE.SYS DEVICE=RAMDRIVE.SYS [KB] [sector-size] [entries] [/E | /A]
+    /E uses extended memory, /A uses expanded memory. /U is hardware-specific.
 SMARTDRV.SYS Load with DEVICE= to install the disk cache.
 UMBS.SYS     DEVICE=UMBS.SYS start-end [...] - Supply mapped RAM as UMBs. Use hexadecimal segment addresses and exclusive end addresses.
-VDISK.SYS    Load with DEVICE= to create a virtual disk in memory.
-XMAEM.SYS    XMA emulation driver.
+VDISK.SYS    DEVICE=VDISK.SYS [KB] [sector-size] [entries] [/E[:sectors]]
+    Defaults are 64 KB, 128 bytes per sector and 64 directory entries.
+    /E uses extended memory. Optional transfer count is 1-8 (default 8).
+XMAEM.SYS    DEVICE=XMAEM.SYS [KB] - Emulate XMA on supported hardware.
 XMA2EMS.SYS  Provide EMS services using XMA memory.
 COUNTRY.SYS  Country data selected by the CONFIG.SYS COUNTRY= directive.
 KEYBOARD.SYS Keyboard layout data used by KEYB.
 
 Additional commands
-APPEND     Set the search path for data files.
-ASSIGN     Redirect drive letters.
-ATTRIB     Display or change file attributes.
-BACKUP     Back up files for later use with RESTORE.
+APPEND       APPEND [path[;path...]] [/X[:ON|OFF]] [/PATH:ON|OFF] [/E]
+    /X extends which operations use APPEND. /PATH controls explicit paths.
+    /E stores the list in the environment. APPEND ; clears the list.
+ASSIGN       ASSIGN [x=y ...] [/STATUS | /STA]
+    Run without mappings to reset assignments. /STATUS lists mappings.
+ATTRIB       ATTRIB [+R|-R] [+A|-A] [path] [/S]
+    /S includes subdirectories. R is read-only and A is archive.
+BACKUP       BACKUP source target [/S] [/M] [/A] [/D:date] [/T:time]
+    Additional switches are /L[:logfile] and /F[:size].
+    /S includes subdirectories, /M selects changed files, /A appends.
+    /D and /T select by date and time. /L logs and /F formats media.
 BREAK      BREAK [ON|OFF] - Control extended Ctrl+C checking.
 CALL       CALL batchfile [arguments] - Run a nested batch file.
 CHCP       CHCP [codepage] - Display or change the active code page.
-CHKDSK     Check disk allocation and report errors.
+CHKDSK       CHKDSK [drive:][path] [/F] [/V]
+    /F repairs filesystem errors. /V lists files as they are checked.
 CLS        Clear the display.
 COMMAND    Start another command interpreter.
 COMP       Compare files. /D shows decimal bytes, /A characters, /L line numbers, /N=n limits lines, /C ignores ASCII case.
@@ -53,44 +84,64 @@ DEBUG      Inspect and modify memory and run machine-code programs.
 DISKCOMP   Compare two floppy disks.
 DISKCOPY   Copy a floppy disk. /V verifies destination tracks.
 ECHO       ECHO [ON|OFF|message] - Control batch echoing or print a message.
-EDLIN      Edit text one line at a time.
+EDLIN        EDLIN filename [/B] - Edit a text file. /B ignores Ctrl+Z.
 EXE2BIN    Convert an eligible EXE image to binary form.
 EXIT       Leave the current command interpreter.
-FASTOPEN   Cache information about frequently opened files.
-FC         Compare files and report differences.
+FASTOPEN     FASTOPEN [drive:[entries] ...] [/X] - Cache file and directory lookups.
+    /X uses expanded memory.
+FC           FC [/A] [/B] [/C] [/L] [/LBn] [/N] [/T] [/W] [/n] file1 file2
+    /A abbreviates output, /B selects binary comparison, /L selects text.
+    /C ignores case, /N numbers lines, /T preserves tabs, /W ignores whitespace.
+    /LBn sets the line buffer limit. /n sets the resynchronization match length.
 FDISK      Manage fixed-disk partitions. /STATUS reports disk usage and /MBR restores master boot code.
-FIND       Search for text in files or input. /I ignores case.
+FIND         FIND [/V] [/C] [/N] [/I] "text" [files...]
+    /V selects nonmatches, /C counts, /N numbers lines, /I ignores case.
 FOR        Run a command for each item in a set.
 GOTO       GOTO label - Continue a batch file at the named label.
-GRAFTABL   Load an extended character table for graphics modes.
-GRAPHICS   Enable graphics screen printing.
+GRAFTABL     GRAFTABL [codepage | /STATUS | /STA]
+    Load a graphics character table or display the currently loaded table.
+GRAPHICS     GRAPHICS [type] [/R] [/B] [/LCD] [/PRINTBOX:name | /PB:name]
+    /R reverses the image, /B includes the background, /LCD selects LCD.
 IF         Execute a batch command conditionally. IF [NOT] DIREXIST path command tests for a directory.
-JOIN       Make a drive accessible through an existing directory.
-KEYB       Configure the keyboard layout.
+JOIN         JOIN [drive: path | drive: /D] - Join a drive to a directory or undo it.
+KEYB         KEYB [layout[,codepage[,file]]] [/ID:id]
+    Select a keyboard layout, optionally by keyboard ID.
 LABEL      Display, set, or remove a disk volume label.
 LH         Run an external program in upper memory when available.
 LOADFIX    LOADFIX program [arguments] - Run a program above the first 64 KiB.
 LOADHIGH   Run an external program in upper memory when available.
 MBASIC     Start the BASIC interpreter.
-MODE       Configure a display or communications or printer device.
+MODE         MODE [device] [/STATUS | /STAT | /STA]
+    Configure display modes, serial ports, printer ports or code pages.
 NLSFUNC    Load national-language support.
 PATH       Display or set the executable search path.
 PAUSE      Suspend batch execution until a key is pressed.
-PRINT      Queue text files for background printing.
+PRINT        PRINT [files...] [/D:device] [/B:size] [/Q:count]
+    [/S:ticks] [/U:ticks] [/M:ticks] [/T] [/C] [/P]
+    /D selects a device. /B and /Q size the buffer and queue.
+    /S, /U and /M adjust timing. /T clears the queue.
+    /C cancels listed files and /P adds listed files.
 PROMPT     Change the command prompt.
 RECOVER    Recover readable data from a file or disk.
 REM        Add a comment to a batch file.
-REPLACE    Replace files in a destination directory.
-RESTORE    Restore BACKUP files. /D lists matching backup paths.
+REPLACE      REPLACE source [destination] [/A] [/P] [/R] [/S] [/U] [/W]
+    /A adds new files, /P prompts, /R permits replacing read-only files.
+    /S includes subdirectories, /U replaces older files, /W waits for a disk.
+RESTORE      RESTORE source-drive: [destination] [/S] [/P] [/M] [/N] [/D]
+    [/B:date] [/A:date] [/E:time] [/L:time]
+    /S includes subdirectories, /P prompts, /M selects modified files.
+    /N selects missing files. /D lists matches without restoring.
+    /B and /A filter by date, and /E and /L filter by time.
 SELECT     Run the DOS setup utility.
 SET        Display or change environment variables.
-SHARE      Install file-sharing and locking support.
+SHARE        SHARE [/F:bytes] [/L:locks] [/NC]
+    /F sizes file space, /L sets lock count, /NC disables sharing checks.
 SHIFT      Shift the batch positional arguments.
-SORT       Sort input lines.
-SUBST      Associate a drive letter with a directory.
+SORT         SORT [/R] [/+column] - Sort input. /R reverses the order.
+SUBST        SUBST [drive: path | drive: /D] - Map a drive or remove its mapping.
 SYS        Transfer DOS system files to a disk.
 TIME       TIME [time] - Display or set the time.
-TREE       Display the directory tree.
+TREE         TREE [drive:][path] [/F] [/A] - /F includes files, /A uses ASCII.
 TRUENAME   Display the canonical path for a file or directory.
 VER        Display the DOS version.
 VERIFY     VERIFY [ON|OFF] - Control verification of disk writes.
