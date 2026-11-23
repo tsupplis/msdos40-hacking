@@ -163,6 +163,19 @@ EXTRN		PARM_FLAG: BYTE    ;AN000;
 COMMAND_LINE	DB   127 DUP(?)    ;AN000;TEXT OF DOS COMMAND LINE (INTERNAL USE)
 		PUBLIC COMMAND_LINE
 
+EXTRN PSP_SEG:WORD
+env_name db 'XCOPYCMD='
+env_len equ $-env_name
+env_line db CMD_BUF_SIZE+2 dup (?)
+parse_block dw DGROUP:PARMS
+
+; Defaults use the normal switch descriptors with no positional operands.
+env_parms dw DGROUP:env_ext
+          db 0,1,';'
+env_ext   db 0,0,2
+          dw DGROUP:SW1_7,DGROUP:SW8
+          db 0
+
 CURRENT_PARM	DW   DGROUP:COMMAND_LINE ;AN000;POINTER INTO COMMAND OF NEXT
 				   ;OPERAND
 		PUBLIC CURRENT_PARM
@@ -324,7 +337,7 @@ SW1_7		LABEL BYTE	   ;AN000;SWITCH DESCRIPTOR FOR THE FIRST SEVEN SW
 		DW   DGROUP:RESULTSW1 ;AN000; RESULT BUFFER
 		PUBLIC RESULTSW1   ;AN000;LET LINK MAKE THIS ADDRESSABLE
 		DW   DGROUP:NOVALS ;AN000; VALUE LISTS
-		DB   7		   ;AN000; NUMBER OF KEYWORD/SWITCH SYNONYMS
+		DB   15		   ;AN000; NUMBER OF KEYWORD/SWITCH SYNONYMS
 				   ;AN000;   IN FOLLOWING LIST
 SW_A		DB   "/A",0
 		PUBLIC SW_A
@@ -341,6 +354,10 @@ SW_V		DB   "/V",0
 SW_W		DB   "/W",0
 		PUBLIC SW_W
 
+; Kept in OPTION_FLAG bit order for the override handler.
+sw_off db '/-A',0,'/-D',0,'/-E',0,'/-M',0
+       db '/-P',0,'/-S',0,'/-V',0,'/-W',0
+public sw_off
 ;PARSER CONTROL BLOCK DEFINING THE DATE SWITCH, OPTIONAL
 
 		PUBLIC SW8	   ;AN000; LET LINK MAKE THIS ADDRESSABLE
@@ -419,9 +436,70 @@ PARSER PROC NEAR
 ;	"ORDINAL" = COUNT OF NEXT PARM TO PARSE
 ;OUTPUT: CARRY IS SET IF THERE WAS A PROBLEM, AX HAS PARSE RET CODE.
 ;	 CARRY IS CLEAR IF ALL OK WITH THE PARMS
-;THE PSP IS NOT REFERENCED, SINCE THE PARMS HAVE BEEN MOVED OUT OF THERE.
 
+   mov es,PSP_SEG
+   mov ax,es:[2ch]
+   or ax,ax
+   jz parse_cli
+   mov es,ax
+   xor di,di
+env_entry:
+   cmp byte ptr es:[di],0
+   je parse_cli
+   push di
+   lea si,env_name
+   mov cx,env_len
+   repe cmpsb
+   pop di
+   je env_found
+   xor al,al
+   mov cx,0ffffh
+   repne scasb
+   jmp env_entry
+env_found:
+   add di,env_len
+   lea si,env_line
+   mov current_parm,si
+   mov cx,CMD_BUF_SIZE+1
+env_copy:
+   mov al,es:[di]
+   inc di
+   or al,al
+   jz env_ready
+   mov [si],al
+   inc si
+   loop env_copy
+   push ds
+   pop es
+   mov ax,SYSPRM_EX_SYNTAX
+   stc
+   ret
+env_ready:
+   mov byte ptr [si],13
+   push ds
+   pop es
+   mov parse_block,offset DGROUP:env_parms
+   call parse_list
+   jc parser_done
+   ; GET_OPTIONS marks used synonyms to reject duplicates within a pass.
+   lea di,sw_a
+   mov cx,7
+restore_switch:
+   mov byte ptr [di],'/'
+   add di,3
+   loop restore_switch
+   mov sw_d,'/'
+parse_cli:
+   push ds
+   pop es
+   mov current_parm,offset DGROUP:command_line
+   mov parse_block,offset DGROUP:parms
+   call parse_list
+parser_done:
+   ret
+PARSER ENDP
 
+parse_list proc near
    MOV	ORDINAL,ZERO		   ;AN000;OPERAND ORDINAL, INITALLY ZERO
 ;  $SEARCH COMPLEX		   ;AN000;LOOP THRU COMMAND LINE
    JMP SHORT $$SS1
@@ -450,7 +528,7 @@ $$IF1:
 ;  $STRTSRCH
 $$SS1:
 
-       LEA  DI,PARMS		   ;AN000; ES:DI = PARSE CONTROL DEFINITON
+       MOV  DI,parse_block		   ;AN000; ES:DI = PARSE CONTROL DEFINITON
        MOV  SI,CURRENT_PARM	   ;AN000; DS:SI = COMMAND STRING, NEXT PARM
        XOR  DX,DX		   ;AN000; RESERVED, INIT TO ZERO
        MOV  CX,ORDINAL		   ;AN000; OPERAND ORDINAL, INITIALLY ZERO
@@ -469,7 +547,7 @@ $$SS1:
 ;  $ENDSRCH
 $$SR1:
    RET				   ;AN000;RETURN TO CALLER
-PARSER ENDP
+parse_list ENDP
 ; =  =	=  =  =  =  =  =  =  =	=  =
    HEADER <PARM_ERROR - ????????????>
 PARM_ERROR PROC NEAR

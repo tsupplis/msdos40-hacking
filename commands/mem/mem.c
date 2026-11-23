@@ -11,10 +11,10 @@
 |               MEM                                                     |
 |                       - Used to display DOS memory map summary.       |
 |                                                                       |
-|               MEM /PROGRAM                                            |
-|                       - Used to display DOS memory map.               |
+|               MEM /C[LASSIFY] [/P]                                            |
+|                       - Group allocations by module.                  |
 |                                                                       |
-|               MEM /DEBUG                                              |
+|               MEM /D[EBUG] [/P]                                              |
 |                       - Used to display a detailed DOS memory map.    |
 |                                                                       |
 |       AN001 - PTM P2914 -> This PTM relates to MEM's ability to report|
@@ -84,12 +84,9 @@ struct p_parms  p_p;                                                            
                                                                                                                                  /* ;an000; */
 struct p_parmsx p_px;                                                                                                            /* ;an000; */
                                                                                                                                  /* ;an000; */
-struct p_control_blk p_con1;                                                                                                     /* ;an000; */
-struct p_control_blk p_con2;                                                                                                     /* ;an000; */
-                                                                                                                                 /* ;an000; */
-struct p_result_blk  p_result1;                                                                                                  /* ;an000; */
-struct p_result_blk  p_result2;                                                                                                  /* ;an000; */
-                                                                                                                                 /* ;an000; */
+static struct p_control_blk debug_switch, classify_switch, page_switch;
+static struct p_result_blk debug_result, classify_result, page_result;
+
 struct p_value_blk p_noval;                                                                                                      /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -204,6 +201,15 @@ struct p_value_blk p_noval;                                                     
                                                                                                                                  /* ;an000; */
 void     main(int, char *[]);                                                                                                    /* ;an000; */
                                                                                                                                  /* ;an000; */
+struct memory_pool { unsigned long total, available, largest; };
+static struct memory_pool conventional, upper, extended, expanded;
+static int hasXms;
+static void DisplaySummary(int exact);
+static void DisplayClassification(void);
+static int Paging, PageLines, PageHeight;
+static void NextReportLine(void);
+static void ReportMessage(void);
+static void StartPager(void);
 int      printf();
 int      sprintf();
 int      strcmp(const char *, const char *);
@@ -215,13 +221,13 @@ char     *TypeOf(struct ARENA far *);                                           
 unsigned long AddressOf(char far *);                                                                                             /* ;an000; */
                                                                                                                                  /* ;an000; */
 char     EMSInstalled(void);                                                                                                     /* ;an000; */
-void     DisplayEMSSummary(void);                                                                                                /* ;an000; */
+void     ReadExpandedPool(void);                                                                                                /* ;an000; */
 void     DisplayEMSDetail(void);                                                                                                 /* ;an000; */
                                                                                                                                  /* ;an000; */
-void     DisplayBaseSummary(void);                                                                                               /* ;an000; */
+void     ReadConventionalPool(void);                                                                                               /* ;an000; */
 void XmsPool(unsigned long *);
-void     DisplayPoolSummary(void);
-void     DisplayExtendedSummary(void);                                                                                           /* ;an000; */
+void     ReadMemoryPools(void);
+void     ReadExtendedPool(void);                                                                                           /* ;an000; */
 void     DisplayExpandedSummary(void);                                                                                           /* ;an000; */
                                                                                                                                  /* ;an000; */
 void     DisplayBaseDetail(void);                                                                                                /* ;an000; */
@@ -234,7 +240,6 @@ void     parse_init(void);                                                      
                                                                                                                                  /* ;an000; */
 void     Parse_Message(int,int,unsigned char);                                                                                    /* ;an000; */
 void     Sub0_Message(int,int,unsigned char);                                                                                    /* ;an000; */
-void     PrintKbytes(int,int,unsigned char,unsigned long int *);                                                                /* ;an000; */
 void     Sub2_Message(int,int,unsigned char,char *,int);                                                                         /* ;an000; */
 void     Sub3_Message(int,int,unsigned char,                                                                                     /* ;an000; */
                       char *,                                                                                                    /* ;an000; */
@@ -304,14 +309,15 @@ char     *argv[];                                                               
         parse(&InRegs,&OutRegs);                                                /* an000; dms; parse command line       */       /* ;an000; */
         while (OutRegs.x.ax == p_no_error)                                      /* an000; dms; good parse loop          */       /* ;an000; */
                 {                                                                                                                /* ;an000; */
-                if (p_result1.P_SYNONYM_Ptr == (unsigned int)p_con1.p_keyorsw)  /* an000; dms; DEBUG switch             */       /* ;an000; */
-                        DataLevel = 2;                                          /* an000; dms; flag DEBUG switch        */       /* ;an000; */
-                if (p_result2.P_SYNONYM_Ptr == (unsigned int)p_con2.p_keyorsw)  /* an000; dms; PROGRAM switch           */       /* ;an000; */
-                        DataLevel = 1;                                          /* an000; dms; flag PROGRAM switch      */       /* ;an000; */
-                Parse_Ptr = OutRegs.x.si;                                       /* an003; dms; point to next parm       */
-                parse(&OutRegs,&OutRegs);                                       /* an000; dms; parse the line           */       /* ;an000; */
-                if (OutRegs.x.ax == p_no_error)                                 /* an000; dms; check for > 1 switch     */       /* ;an000; */
-                        OutRegs.x.ax = p_too_many;                              /* an000; dms; flag too many            */       /* ;an000; */
+                if (OutRegs.x.dx == (unsigned)&page_result && !Paging) {
+                        Paging = 1;
+                } else if (DataLevel || OutRegs.x.dx == (unsigned)&page_result) {
+                        OutRegs.x.ax = p_too_many;
+                        break;
+                } else if (OutRegs.x.dx == (unsigned)&classify_result) DataLevel = 3;
+                else DataLevel = 2;
+                Parse_Ptr = OutRegs.x.si;
+                parse(&OutRegs,&OutRegs);
                 }                                                                                                                /* ;an000; */
                                                                                                                                  /* ;an000; */
         if (OutRegs.x.ax != p_rc_eol)                                           /* an000; dms; parse error?             */       /* ;an000; */
@@ -321,23 +327,26 @@ char     *argv[];                                                               
                 }                                                                                                                /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
-        if (DataLevel > 0)                                                                                                       /* ;an000; */
+        if (Paging) StartPager();
+        if (DataLevel == 3) DisplayClassification();
+        else if (DataLevel > 0)                                                                                                       /* ;an000; */
               {                                                                                                                  /* ;an000; */
                 DisplayBaseDetail();                                                                                             /* ;an000; */
                 Sub0_Message(NewLineMsg,STDOUT,Utility_Msg_Class);                                                                       /* ;an000; */
                 }                                                                                                                /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
-        DisplayBaseSummary();           /* display low memory totals */                                                          /* ;an000; */
+        ReadConventionalPool();           /* display low memory totals */                                                          /* ;an000; */
                                                                                                                                  /* ;an000; */
-        if (EMSInstalled() && (DataLevel > 1))                                                                                   /* ;an000; */
+        if (EMSInstalled() && (DataLevel == 2))                                                                                   /* ;an000; */
           DisplayEMSDetail();           /* display EMS memory totals */                                                          /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
         if (EMSInstalled())                                                                                                      /* ;an000; */
-          DisplayEMSSummary();          /* display EMS memory totals */                                                          /* ;an000; */
+          ReadExpandedPool();          /* display EMS memory totals */                                                          /* ;an000; */
                                                                                                                                  /* ;an000; */
-        DisplayPoolSummary();
+        ReadMemoryPools();
+        DisplaySummary(DataLevel == 3);
                                                                                                                                  /* ;an000; */
         return;                         /* end of MEM main routine */                                                            /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -638,20 +647,17 @@ int      DeviceDriverType;                                                      
                                                                                                                                 /* ;an000; */
 /*컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�*/                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
-void DisplayBaseSummary()                                                                                                        /* ;an000; */
+void ReadConventionalPool()                                                                                                        /* ;an000; */
         {                                                                                                                        /* ;an000; */
                                                                                                                                  /* ;an000; */
         struct ARENA far *arena;
         unsigned far *head;
         unsigned psp, segment, next, first, limit;
-        char     far *CarvedPtr;                                                                                                 /* ;an000; */
+        /* Conventional capacity comes from the BIOS base-memory count. */                                                                                                 /* ;an000; */
                                                                                                                                  /* ;an000; */
         unsigned long int total_mem;              /* total memory in system */                                                   /* ;an000; */
         unsigned long int avail_mem;              /* avail memory in system */                                                   /* ;an000; */
         unsigned long int free_mem;               /* free memory */                                                              /* ;an000; */
-                                                                                                                                 /* ;an000; */
-/* skip a line */                                                                                                                /* ;an000; */
-        Sub0_Message(NewLineMsg,STDOUT,Utility_Msg_Class);                                                                       /* ;an000; */
                                                                                                                                  /* ;an000; */
 /*  get PSP info */                                                                                                              /* ;an000; */
         InRegs.h.ah = GET_PSP;                  /* get PSP function call */                                                      /* ;an000; */
@@ -665,20 +671,8 @@ void DisplayBaseSummary()                                                       
 /* Convert to bytes */                                                                                                           /* ;an000; */
         total_mem = (unsigned long int) OutRegs.x.ax * 1024l;                                                                    /* ;an000; */
         avail_mem = total_mem;
-        InRegs.x.bx = 0;                                                                                                         /* ;an000; */
-        InRegs.x.ax = 0xc100;                                                                                                    /* ;an000; */
-        int86x(0x15, &InRegs, &OutRegs, &SegRegs);                                                                               /* ;an000; */
-        if (OutRegs.x.cflag == 0)                                                                                                /* ;an000; */
-              {                                                                                                                  /* ;an000; */
-                FP_SEG(CarvedPtr) = SegRegs.es;                                                                                  /* ;an000; */
-                FP_OFF(CarvedPtr) = 0;                                                                                           /* ;an000; */
-                total_mem = total_mem + ( (unsigned long int) (*CarvedPtr) * 1024l) ;   /* ;an002; dms;adjust total for */
-                }                                                                       /*             RAM carve value  */
-                                                                                                                                 /* ;an000; */
-        PrintKbytes(TotalMemoryMsg,STDOUT,Utility_Msg_Class,&total_mem);                                                        /* ;an000; */
-                                                                                                                                 /* ;an000; */
-        PrintKbytes(AvailableMemoryMsg,STDOUT,Utility_Msg_Class,&avail_mem);                                                    /* ;an000; */
-                                                                                                                                 /* ;an000; */
+        conventional.total = avail_mem;
+
 /* Adjacent free blocks and this process's blocks coalesce when MEM exits. */
         limit = (unsigned)(avail_mem / 16UL);
         InRegs.x.ax = 0x5200;
@@ -694,13 +688,14 @@ void DisplayBaseSummary()                                                       
             next = segment + arena->Paragraphs + 1;
             if (next <= segment || next > limit) break;
             if (arena->Owner == 0 || arena->Owner == psp) {
+                conventional.available += (next - segment) * 16UL;
                 if (!first) first = segment;
                 if ((next - first - 1) * 16UL > free_mem)
                     free_mem = (next - first - 1) * 16UL;
             } else first = 0;
             if (arena->Signature == 'Z') break;
         }
-        PrintKbytes(FreeMemoryMsg,STDOUT,Utility_Msg_Class,&free_mem);                                                          /* ;an000; */
+        conventional.largest = free_mem;
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -776,15 +771,307 @@ void DisplayEMSDetail()                                                         
                                                                                                                                 /* ;an000; */
 /*컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�*/                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
-void DisplayPoolSummary(void)
+/* One line is reserved for the prompt. DOS messages used by the reports
+ * each occupy one line; errors and redirected reports are never paged. */
+static void StartPager(void)
+{
+    union REGS r;
+    unsigned char far *lastRow;
+    r.x.ax = 0x4400;
+    r.x.bx = STDOUT;
+    intdos(&r,&r);
+    /* Character device, console output (including CTTY), and not NUL. */
+    Paging = !r.x.cflag && (r.x.dx & 0x86) == 0x82;
+    FP_SEG(lastRow) = 0x40;
+    FP_OFF(lastRow) = 0x84;
+    PageHeight = (*lastRow >= 24 && *lastRow <= 99) ? *lastRow : 24;
+}
+
+static void NextReportLine(void)
+{
+    union REGS r;
+    char key;
+    if (!Paging) return;
+    if (PageLines == PageHeight) {
+        printf("Press any key to continue...");
+        fflush(stdout);
+        r.x.ax = 0x4400;
+        r.x.bx = 0;
+        intdos(&r,&r);
+        if (!r.x.cflag && (r.x.dx & 0x80) && !(r.x.dx & 4)) {
+            r.h.ah = 8;
+            intdos(&r,&r);
+            if (!r.h.al) { r.h.ah = 8; intdos(&r,&r); }
+        } else {
+            r.h.ah = 0x3f;
+            r.x.bx = 0;
+            r.x.cx = 1;
+            r.x.dx = (unsigned)&key;
+            intdos(&r,&r);
+            if (r.x.cflag || !r.x.ax) Paging = 0;
+        }
+        printf("\n");
+        PageLines = 0;
+    }
+    ++PageLines;
+}
+
+static void ReportMessage(void)
+{
+    if (InRegs.x.bx == STDOUT) NextReportLine();
+    sysdispmsg(&InRegs,&OutRegs);
+}
+
+static void ReportLine(char *line)
+{
+    NextReportLine();
+    printf("%s\n", line);
+}
+
+/* Emit numeric fields ourselves so both summary modes fit an 80-column screen. */
+static char *Number(char *field, unsigned long bytes, int exact)
+{
+    char digits[12];
+    unsigned i, n = 0, length;
+    if (!exact) bytes = bytes / 1024 + (bytes % 1024 >= 512);
+    sprintf(digits, "%lu", bytes);
+    length = strlen(digits);
+    for (i = 0; i < length; ++i) {
+        if (i && (length-i) % 3 == 0) field[n++] = ',';
+        field[n++] = digits[i];
+    }
+    if (!exact) field[n++] = 'K';
+    field[n] = 0;
+    return field;
+}
+
+/* The title, rules and numeric cells share the same column boundaries. */
+static void SummaryLine(char *name, char *total, char *used, char *avail)
+{
+    char line[80];
+    sprintf(line, "%-18s %13s %13s %13s", name, total, used, avail);
+    ReportLine(line);
+}
+
+static void ModuleLine(char *name, char *total, char *low, char *high)
+{
+    char line[80];
+    sprintf(line, "%-8s   %17s   %17s   %17s", name, total, low, high);
+    ReportLine(line);
+}
+
+static char *ModuleSize(char *field, unsigned long bytes)
+{
+    char count[16], kbytes[16];
+    sprintf(field, "%9s (%4s)", Number(count,bytes,1), Number(kbytes,bytes,0));
+    return field;
+}
+
+static void PoolRow(char *name, unsigned long total, unsigned long avail, int exact)
+{
+    char a[16], b[16], c[16];
+    SummaryLine(name, Number(a,total,exact), Number(b,total-avail,exact),
+                Number(c,avail,exact));
+}
+
+static void SizeLine(char *name, unsigned long bytes)
+{
+    char line[80], k[16], b[16];
+    sprintf(line, "%-34s %10s (%s bytes)", name, Number(k,bytes,0),
+            Number(b,bytes,1));
+    ReportLine(line);
+}
+
+static void DisplaySummary(int exact)
+{
+    unsigned long below = conventional.total + upper.total;
+    unsigned long freeBelow = conventional.available + upper.available;
+    unsigned long reserved = 1048576UL - below;
+    char *rule = "-------------";
+    ReportLine("");
+    SummaryLine("Memory Type", "Total", "Used", "Free");
+    SummaryLine("------------------", rule, rule, rule);
+    PoolRow("Conventional", conventional.total, conventional.available, exact);
+    PoolRow("Upper", upper.total, upper.available, exact);
+    PoolRow("Reserved", reserved, 0UL, exact);
+    PoolRow(hasXms ? "Extended (XMS)" : "Extended", extended.total,
+            extended.available, exact);
+    SummaryLine("------------------", rule, rule, rule);
+    PoolRow("Total memory", 1048576UL + extended.total,
+            freeBelow + extended.available, exact);
+    ReportLine("");
+    PoolRow("Total under 1 MB", below, freeBelow, exact);
+    if (expanded.total) {
+        ReportLine("");
+        SizeLine("Total Expanded (EMS)", expanded.total);
+        SizeLine("Free Expanded (EMS)", expanded.available);
+    }
+    if (hasXms) {
+        ReportLine("");
+        SizeLine("Total Extended (XMS)", extended.total);
+        SizeLine("Free Extended (XMS)", extended.available);
+        SizeLine("Largest free XMS block", extended.largest);
+    }
+    ReportLine("");
+    SizeLine("Largest executable program size", conventional.largest);
+    SizeLine("Largest free upper memory block", upper.largest);
+}
+
+/* Classify MCBs by resident module. Charge the paragraph containing each
+ * header to its block. MEM's own allocations become free when it exits. */
+struct module_usage {
+    struct module_usage *next;
+    char name[9];
+    unsigned long conventional, upper;
+};
+
+static int AddUsage(struct module_usage **rows, char *name, unsigned long bytes,
+                    int upper)
+{
+    struct module_usage *row;
+    while ((row = *rows) != NULL && strcmp(row->name, name) != 0)
+        rows = &row->next;
+    if (!row) {
+        row = calloc(1, sizeof(*row));
+        if (!row) return 0;
+        strcpy(row->name, name);
+        *rows = row;
+    }
+    if (upper) row->upper += bytes;
+    else row->conventional += bytes;
+    return 1;
+}
+
+static void ModuleName(char *name, struct ARENA far *arena)
+{
+    int i;
+    for (i = 0; i < 8 && (unsigned char)arena->OwnerName[i] > ' '; ++i)
+        name[i] = arena->OwnerName[i];
+    name[i] = 0;
+}
+
+/* The DOS-owned conventional arena contains SYSINIT's device markers.
+ * Attribute named drivers to their own rows; leave the rest under SYSTEM. */
+static int ClassifySystem(struct module_usage **rows, unsigned segment,
+                          unsigned end, unsigned long bytes)
+{
+    struct ARENA far *mark;
+    char name[9];
+    unsigned next;
+    FP_OFF(mark) = 0;
+    for (++segment; segment < end; segment = next) {
+        FP_SEG(mark) = segment;
+        next = segment + mark->Paragraphs + 1;
+        if (next <= segment || next > end) break;
+        if (mark->Signature == 'D' || mark->Signature == 'I') {
+            unsigned long size = (next - segment) * 16UL;
+            ModuleName(name, mark);
+            if (name[0]) {
+                if (!AddUsage(rows, name, size, 0)) return 0;
+                bytes -= size;
+            }
+        }
+    }
+    return AddUsage(rows, "SYSTEM", bytes, 0);
+}
+
+static void DisplayClassification(void)
+{
+    struct ARENA far *arena, far *owner;
+    struct module_usage *rows = NULL, *row;
+    unsigned far *head;
+    unsigned segment, next, limit, psp;
+    int restore = 0, ok = 1;
+    unsigned long upperTotal = 0, accounted = 0, bytes;
+    char name[9];
+
+    int86(MEMORY_DET, &InRegs, &OutRegs);
+    limit = OutRegs.x.ax * 64;
+    InRegs.h.ah = GET_PSP;
+    intdos(&InRegs, &OutRegs);
+    psp = OutRegs.x.bx;
+    InRegs.x.ax = 0x58ff;
+    intdos(&InRegs, &OutRegs);
+    if (!OutRegs.x.cflag) upperTotal = OutRegs.x.ax * 16UL;
+    InRegs.x.ax = 0x5802;
+    intdos(&InRegs, &OutRegs);
+    if (!OutRegs.x.cflag && !OutRegs.h.al) {
+        InRegs.x.ax = 0x5803;
+        InRegs.x.bx = 1;
+        intdos(&InRegs, &OutRegs);
+        restore = !OutRegs.x.cflag;
+    }
+    InRegs.x.ax = 0x5200;
+    intdosx(&InRegs, &OutRegs, &SegRegs);
+    FP_SEG(head) = SegRegs.es;
+    FP_OFF(head) = OutRegs.x.bx - 2;
+    segment = *head;
+    ok = AddUsage(&rows, "SYSTEM", segment * 16UL, 0);
+    FP_OFF(arena) = FP_OFF(owner) = 0;
+    while (ok) {
+        FP_SEG(arena) = segment;
+        if (arena->Signature != 'M' && arena->Signature != 'Z') break;
+        next = segment + arena->Paragraphs + 1;
+        if (next <= segment) break;
+        bytes = (next - segment) * 16UL;
+        if (arena->Owner == 8 && next > limit) {
+            /* SYSINIT links disjoint UMBs with inaccessible gap MCBs. */
+            if (segment < limit)
+                ok = AddUsage(&rows, "SYSTEM", (limit - segment) * 16UL, 0);
+        } else if (arena->Owner == 8) {
+            ok = ClassifySystem(&rows, segment, next, bytes);
+        } else {
+            if (!arena->Owner || arena->Owner == psp) strcpy(name, "Free");
+            else {
+                FP_SEG(owner) = arena->Owner - 1;
+                ModuleName(name, owner);
+                if (!name[0]) sprintf(name, "%04X", arena->Owner);
+            }
+            ok = AddUsage(&rows, name, bytes, segment >= limit);
+            if (segment >= limit) accounted += bytes;
+        }
+        if (arena->Signature == 'Z') break;
+        segment = next;
+    }
+    if (restore) {
+        InRegs.x.ax = 0x5803;
+        InRegs.x.bx = 0;
+        intdos(&InRegs, &OutRegs);
+    }
+    /* Boot-time upper allocations are removed from the allocatable chain. */
+    if (ok && upperTotal > accounted)
+        ok = AddUsage(&rows, "SYSTEM", upperTotal - accounted, 1);
+    if (ok) {
+        ReportLine("Modules using memory below 1 MB");
+        ReportLine("");
+        ModuleLine("Name", "Total", "Conventional", "Upper Memory");
+        ModuleLine("--------", "-----------------", "-----------------", "-----------------");
+    } else ReportLine("Insufficient memory for classification");
+    while (rows) {
+        char all[24], low[24], high[24];
+        row = rows;
+        if (ok) {
+            unsigned long total = row->conventional + row->upper;
+            ModuleLine(row->name, ModuleSize(all,total), ModuleSize(low,row->conventional),
+                       ModuleSize(high,row->upper));
+        }
+        rows = row->next;
+        free(row);
+    }
+}
+
+void ReadMemoryPools(void)
 {
     struct ARENA far *arena;
     unsigned far *head;
     unsigned segment, next;
     unsigned long xms[3];
     unsigned long umbTotal = 0;
-    unsigned long bytes, block, freeBytes = 0, largestBytes = 0;
-    unsigned linked;
+    unsigned long block, freeBytes = 0, largestBytes = 0;
+    unsigned linked, psp, firstFree = 0;
+    InRegs.h.ah = GET_PSP;
+    intdos(&InRegs,&OutRegs);
+    psp = OutRegs.x.bx;
 
     InRegs.x.ax = 0x58ff;            /* paragraphs granted by the UMB provider */
     intdos(&InRegs,&OutRegs);
@@ -806,11 +1093,13 @@ void DisplayPoolSummary(void)
             for (;;) {
                 FP_SEG(arena) = segment;
                 if (arena->Signature != 'M' && arena->Signature != 'Z') break;
-                if (segment >= 0xa000 && !arena->Owner) {
+                if (segment >= 0xa000 && (!arena->Owner || arena->Owner == psp)) {
                     block = arena->Paragraphs * 16UL;
-                    freeBytes += block;
+                    freeBytes += block + 16;
+                    if (!firstFree) firstFree = segment;
+                    block += (segment - firstFree) * 16UL;
                     if (block > largestBytes) largestBytes = block;
-                }
+                } else firstFree = 0;
                 next = segment + arena->Paragraphs + 1;
                 if (arena->Signature == 'Z' || next <= segment) break;
                 segment = next;
@@ -820,28 +1109,22 @@ void DisplayPoolSummary(void)
             intdos(&InRegs,&OutRegs);
         }
     }
-    if (umbTotal || freeBytes) {
-        Sub0_Message(NewLineMsg,STDOUT,Utility_Msg_Class);
-        if (umbTotal) PrintKbytes(UmbTotalMsg,STDOUT,Utility_Msg_Class,&umbTotal);
-        PrintKbytes(UmbFreeMsg,STDOUT,Utility_Msg_Class,&freeBytes);
-        PrintKbytes(UmbLargestMsg,STDOUT,Utility_Msg_Class,&largestBytes);
-    }
+    upper.total = umbTotal;
+    upper.available = freeBytes;
+    upper.largest = largestBytes;
     xms[0] = xms[1] = xms[2] = 0;
-    XmsPool(xms);                    /* total, free and largest in Kbytes */
+    XmsPool(xms);
     if (xms[0]) {
-        Sub0_Message(NewLineMsg,STDOUT,Utility_Msg_Class);
-        bytes = xms[0] * 1024UL;
-        PrintKbytes(XmsTotalMsg,STDOUT,Utility_Msg_Class,&bytes);
-        bytes = xms[1] * 1024UL;
-        PrintKbytes(XmsFreeMsg,STDOUT,Utility_Msg_Class,&bytes);
-        bytes = xms[2] * 1024UL;
-        PrintKbytes(XmsLargestMsg,STDOUT,Utility_Msg_Class,&bytes);
+        hasXms = 1;
+        extended.total = xms[0] * 1024UL;
+        extended.available = xms[1] * 1024UL;
+        extended.largest = xms[2] * 1024UL;
     } else {
-        DisplayExtendedSummary();
+        ReadExtendedPool();
     }
 }
 
-void DisplayExtendedSummary()                                                                                                    /* ;an000; */
+void ReadExtendedPool()                                                                                                    /* ;an000; */
   {                                                                                                                              /* ;an000; */
                                                                                                                                  /* ;an000; */
   unsigned long int       EXTMemoryTot;                                                                                          /* ;an000; */
@@ -855,8 +1138,8 @@ void DisplayExtendedSummary()                                                   
   {                                                                             /* yes                  ;an001; dms;*/
       EXTMemoryTot = (long) (SysVarsPtr) -> ExtendedMemory;                     /* get total EM size    ;an001; dms;*/
       EXTMemoryTot *= (long) 1024l;                                             /*  at boot time        ;an001; dms;*/
-      Sub0_Message(NewLineMsg,STDOUT,Utility_Msg_Class);                        /* print blank line     ;an001; dms;*/
-      PrintKbytes(EXTMemoryMsg,STDOUT,Utility_Msg_Class,&EXTMemoryTot);        /* print total EM mem   ;an001; dms;*/
+      /* Values are displayed together in the summary table. */                        /* print blank line     ;an001; dms;*/
+      extended.total = EXTMemoryTot;
                                                                                                                                  /* ;an000; */
       OutRegs.x.cflag = 0;                                                      /* clear carry flag     ;an001; dms;*/
       InRegs.x.ax = GetExtended;                                                /* get extended mem     ;an001; dms;*/
@@ -866,13 +1149,13 @@ void DisplayExtendedSummary()                                                   
       EXTMemoryTot = (long) OutRegs.x.ax;                                       /* returns 1K mem blocks;an001; dms;*/
       EXTMemoryTot *= (long) 1024l;                                             /* convert to bytes     ;an001; dms;*/
 
-      PrintKbytes(EXTMemAvlMsg,STDOUT,Utility_Msg_Class,&EXTMemoryTot);        /* display available    ;an001; dms;*/
+      if (!OutRegs.x.cflag) extended.available = EXTMemoryTot;
   }
 
                                                                                                                                  /* ;an000; */
   return;                                                                                                                        /* ;an000; */
                                                                                                                                  /* ;an000; */
-  }                                     /* end of DisplayExtendedSummary */                                                      /* ;an000; */
+  }                                     /* end of ReadExtendedPool */                                                      /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -880,13 +1163,13 @@ void DisplayExtendedSummary()                                                   
                                                                                                                                 /* ;an000; */
 /*컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�*/                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
-void DisplayEMSSummary()                                                                                                         /* ;an000; */
+void ReadExpandedPool()                                                                                                         /* ;an000; */
   {                                                                                                                              /* ;an000; */
                                                                                                                                  /* ;an000; */
   unsigned long int       EMSFreeMemoryTot;                                                                                      /* ;an000; */
   unsigned long int       EMSAvailMemoryTot;                                                                                     /* ;an000; */
                                                                                                                                  /* ;an000; */
-  Sub0_Message(NewLineMsg,STDOUT,Utility_Msg_Class);                                                                             /* ;an000; */
+
                                                                                                                                  /* ;an000; */
   InRegs.x.ax = EMSGetFreePgs;              /* get total number unallocated pages */                                             /* ;an000; */
   int86x(EMS, &InRegs, &OutRegs, &SegRegs);                                                                                      /* ;an000; */
@@ -897,12 +1180,12 @@ void DisplayEMSSummary()                                                        
   EMSAvailMemoryTot = OutRegs.x.dx;         /* total pages */                                                                    /* ;an000; */
   EMSAvailMemoryTot *= (long) (16l*1024l);                                                                                       /* ;an000; */
                                                                                                                                  /* ;an000; */
-  PrintKbytes(EMSTotalMemoryMsg,STDOUT,Utility_Msg_Class,&EMSAvailMemoryTot);                                                   /* ;an000; */
-  PrintKbytes(EMSFreeMemoryMsg,STDOUT,Utility_Msg_Class,&EMSFreeMemoryTot);                                                     /* ;an000; */
+  expanded.total = EMSAvailMemoryTot;
+  expanded.available = EMSFreeMemoryTot;
                                                                                                                                  /* ;an000; */
   return;                                                                                                                        /* ;an000; */
                                                                                                                                  /* ;an000; */
-  }                                     /* end of DisplayEMSSummary */                                                           /* ;an000; */
+  }                                     /* end of ReadExpandedPool */                                                           /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                 /* ;an000; */
 /*컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�*/                                                  /* ;an000; */
@@ -1149,77 +1432,13 @@ unsigned char   Message_Type;                                                   
         InRegs.x.cx = No_Replace;                                               /* no replaceable subparms              */       /* ;an000; */
         InRegs.h.dl = No_Input;                                                 /* no keyboard input                    */       /* ;an000; */
         InRegs.h.dh = Message_Type;                                             /* type of message to display           */       /* ;an000; */
-        sysdispmsg(&InRegs,&OutRegs);                                          /* display the message                  */        /* ;an000; */
+        ReportMessage();                                          /* display the message                  */        /* ;an000; */
                                                                                                                                  /* ;an000; */
         return;                                                                                                                  /* ;an000; */
         }                                                                                                                        /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
 /************************************************************************/                                                       /* ;an000; */
-/* SUB1_MESSAGE                 - This routine will print only those    */                                                       /* ;an000; */
-/*                                messages that require 1 replaceable   */                                                       /* ;an000; */
-/*                                parm.                                 */                                                       /* ;an000; */
-/*                                                                      */                                                       /* ;an000; */
-/*      Inputs  : Msg_Num       - number of applicable message          */                                                       /* ;an000; */
-/*                Handle        - display type                          */                                                       /* ;an000; */
-/*                Message_Type  - type of message to display            */                                                       /* ;an000; */
-/*                Replace_Parm  - pointer to parm to replace            */                                                       /* ;an000; */
-/*                                                                      */                                                       /* ;an000; */
-/*      Outputs : message                                               */                                                       /* ;an000; */
-/*                                                                      */                                                       /* ;an000; */
-/************************************************************************/                                                       /* ;an000; */
-                                                                                                                                 /* ;an000; */
-void PrintKbytes(Msg_Num,Handle,Message_Type,Replace_Parm)                                                                      /* ;an000; */
-                                                                                                                                 /* ;an000; */
-int             Msg_Num;                                                                                                         /* ;an000; */
-int             Handle;                                                                                                          /* ;an000; */
-unsigned char   Message_Type;                                                                                                    /* ;an000; */
-                                                                                /*     extended, parse, or utility      */       /* ;an000; */
-unsigned long int    *Replace_Parm;                                             /* pointer to message to print          */       /* ;an000; */
-                                                                                                                                 /* ;an000; */
-{                                                                                                                                /* ;an000; */
-                                                                                                                                 /* ;an000; */
-                                                                                                                                 /* ;an000; */
-        {                                                                                                                        /* ;an000; */
-                                                                                                                                 /* ;an000; */
-        unsigned long kbytes = *Replace_Parm / 1024UL;
-        sublist[1].value     = (unsigned far *)&kbytes;                                                                     /* ;an000; */
-        sublist[1].size      = Sublist_Length;                                                                                   /* ;an000; */
-        sublist[1].reserved  = Reserved;                                                                                         /* ;an000; */
-        sublist[1].id        = 1;                                                                                                /* ;an000; */
-        sublist[1].flags     = Unsgn_Bin_DWord+Right_Align;                                                                      /* ;an000; */
-        sublist[1].max_width = 10;                                                                                               /* ;an000; */
-        sublist[1].min_width = 10;                                                                                               /* ;an000; */
-        sublist[1].pad_char  = Blank;                                                                                            /* ;an000; */
-                                                                                                                                 /* ;an000; */
-        InRegs.x.ax = Msg_Num;                                                                                                   /* ;an000; */
-        InRegs.x.bx = Handle;                                                                                                    /* ;an000; */
-        InRegs.x.cx = SubCnt1;                                                                                                   /* ;an000; */
-        InRegs.h.dl = No_Input;                                                                                                  /* ;an000; */
-        InRegs.h.dh = Message_Type;                                                                                              /* ;an000; */
-        InRegs.x.si = (unsigned int)&sublist[1];                                                                                 /* ;an000; */
-        sysdispmsg(&InRegs,&OutRegs);                                                                                            /* ;an000; */
-        }                                                                                                                        /* ;an000; */
-        return;                                                                                                                  /* ;an000; */
-}                                                                                                                                /* ;an000; */
-                                                                                                                                 /* ;an000; */
-                                                                                                                                 /* ;an000; */
-/************************************************************************/                                                       /* ;an000; */
-/* SUB2_MESSAGE                 - This routine will print only those    */                                                       /* ;an000; */
-/*                                messages that require 2 replaceable   */                                                       /* ;an000; */
-/*                                parms.                                */                                                       /* ;an000; */
-/*                                                                      */                                                       /* ;an000; */
-/*      Inputs  : Msg_Num       - number of applicable message          */                                                       /* ;an000; */
-/*                Handle        - display type                          */                                                       /* ;an000; */
-/*                Message_Type  - type of message to display            */                                                       /* ;an000; */
-/*                Replace_Parm1 - pointer to parm to replace            */                                                       /* ;an000; */
-/*                Replace_Parm2 - pointer to parm to replace            */                                                       /* ;an000; */
-/*                Replace_Parm3 - pointer to parm to replace            */                                                       /* ;an000; */
-/*                                                                      */                                                       /* ;an000; */
-/*      Outputs : message                                               */                                                       /* ;an000; */
-/*                                                                      */                                                       /* ;an000; */
-/************************************************************************/                                                       /* ;an000; */
-                                                                                                                                 /* ;an000; */
 void Sub2_Message(Msg_Num,Handle,Message_Type,                                                                                   /* ;an000; */
              Replace_Parm1,                                                                                                      /* ;an000; */
              Replace_Message1)                                                                                                   /* ;an000; */
@@ -1269,7 +1488,7 @@ char    *Replace_Parm1;                                                         
         InRegs.h.dl = No_Input;                                                                                                  /* ;an000; */
         InRegs.h.dh = Message_Type;                                                                                              /* ;an000; */
         InRegs.x.si = (unsigned int)&sublist[1];                                                                                 /* ;an000; */
-        sysdispmsg(&InRegs,&OutRegs);                                                                                            /* ;an000; */
+        ReportMessage();                                                                                            /* ;an000; */
         }                                                                                                                        /* ;an000; */
         return;                                                                                                                  /* ;an000; */
 }                                                                                                                                /* ;an000; */
@@ -1385,7 +1604,7 @@ int               Replace_Message1;                                             
         InRegs.h.dl = No_Input;                                                                                                  /* ;an000; */
         InRegs.h.dh = Message_Type;                                                                                              /* ;an000; */
         InRegs.x.si = (unsigned int)&sublist[1];                                                                                 /* ;an000; */
-        sysdispmsg(&InRegs,&OutRegs);                                                                                            /* ;an000; */
+        ReportMessage();                                                                                            /* ;an000; */
         }                                                                                                                        /* ;an000; */
         return;                                                                                                                  /* ;an000; */
 }                                                                                                                                /* ;an000; */
@@ -1484,7 +1703,7 @@ int                     Replace_Message2;                                       
         InRegs.h.dl = No_Input;                                                                                                  /* ;an000; */
         InRegs.h.dh = Message_Type;                                                                                              /* ;an000; */
         InRegs.x.si = (unsigned int)&sublist[1];                                                                                 /* ;an000; */
-        sysdispmsg(&InRegs,&OutRegs);                                                                                            /* ;an000; */
+        ReportMessage();                                                                                            /* ;an000; */
         }                                                                                                                        /* ;an000; */
         return;                                                                                                                  /* ;an000; */
 }                                                                                                                                /* ;an000; */
@@ -1574,7 +1793,7 @@ char                    *Replace_Message2;                                      
         InRegs.h.dl = No_Input;                                                                                                  /* ;an000; */
         InRegs.h.dh = Message_Type;                                                                                              /* ;an000; */
         InRegs.x.si = (unsigned int)&sublist[1];                                                                                 /* ;an000; */
-        sysdispmsg(&InRegs,&OutRegs);                                                                                            /* ;an000; */
+        ReportMessage();                                                                                            /* ;an000; */
         }                                                                                                                        /* ;an000; */
         return;                                                                                                                  /* ;an000; */
 }                                                                                                                                /* ;an000; */
@@ -1636,7 +1855,7 @@ unsigned long int       *Replace_Value2;                                        
         InRegs.h.dl = No_Input;                                                                                                  /* ;an000; */
         InRegs.h.dh = Message_Type;                                                                                              /* ;an000; */
         InRegs.x.si = (unsigned int)&sublist[1];                                                                                 /* ;an000; */
-        sysdispmsg(&InRegs,&OutRegs);                                                                                            /* ;an000; */
+        ReportMessage();                                                                                            /* ;an000; */
         }                                                                                                                        /* ;an000; */
         return;                                                                                                                  /* ;an000; */
 }                                                                                                                                /* ;an000; */
@@ -1657,47 +1876,36 @@ unsigned long int       *Replace_Value2;                                        
 |       properly initialized parser control blocks                      |
 |                                                                       |
 +----------------------------------------------------------------------*/
-void parse_init()                                                                                                                /* ;an000; */
-  {                                                                                                                              /* ;an000; */
-  p_p.p_parmsx_address    = &p_px;      /* address of extended parm list */                                                      /* ;an000; */
-  p_p.p_num_extra         = 0;                                                                                                   /* ;an000; */
-                                                                                                                                 /* ;an000; */
-  p_px.p_minp             = 0;                                                                                                   /* ;an000; */
-  p_px.p_maxp             = 0;                                                                                                   /* ;an000; */
-  p_px.p_maxswitch        = 2;                                                                                                   /* ;an000; */
-  p_px.p_control[0]       = &p_con1;                                                                                             /* ;an000; */
-  p_px.p_control[1]       = &p_con2;                                                                                             /* ;an000; */
-  p_px.p_keyword          = 0;                                                                                                   /* ;an000; */
-                                                                                                                                 /* ;an000; */
-  p_con1.p_match_flag     = p_none;                                                                                              /* ;an000; */
-  p_con1.p_function_flag  = p_cap_file;                                                                                          /* ;an000; */
-  p_con1.p_result_buf     = (unsigned int)&p_result1;                                                                            /* ;an000; */
-  p_con1.p_value_list     = (unsigned int)&p_noval;                                                                              /* ;an000; */
-  p_con1.p_nid            = 1;                                                                                                   /* ;an000; */
-  strcpy(p_con1.p_keyorsw,"/DEBUG"+NUL);                                                                                         /* ;an000; */
-                                                                                                                                 /* ;an000; */
-  p_con2.p_match_flag     = p_none;                                                                                              /* ;an000; */
-  p_con2.p_function_flag  = p_cap_file;                                                                                          /* ;an000; */
-  p_con2.p_result_buf     = (unsigned int)&p_result2;                                                                            /* ;an000; */
-  p_con2.p_value_list     = (unsigned int)&p_noval;                                                                              /* ;an000; */
-  p_con2.p_nid            = 1;                                                                                                   /* ;an000; */
-  strcpy(p_con2.p_keyorsw,"/PROGRAM"+NUL);                                                                                       /* ;an000; */
-                                                                                                                                 /* ;an000; */
-  p_noval.p_val_num       = 0;                                                                                                   /* ;an000; */
-                                                                                                                                 /* ;an000; */
-  p_result1.P_Type        = 0;                                                                                                   /* ;an000; */
-  p_result1.P_Item_Tag    = 0;                                                                                                   /* ;an000; */
-  p_result1.P_SYNONYM_Ptr = 0;                                                                                                   /* ;an000; */
-  p_result1.p_result_buff = 0;                                                                                                   /* ;an000; */
-                                                                                                                                 /* ;an000; */
-  p_result2.P_Type        = 0;                                                                                                   /* ;an000; */
-  p_result2.P_Item_Tag    = 0;                                                                                                   /* ;an000; */
-  p_result2.P_SYNONYM_Ptr = 0;                                                                                                   /* ;an000; */
-  p_result2.p_result_buff = 0;                                                                                                   /* ;an000; */
-                                                                                                                                 /* ;an000; */
-  return;                                                                                                                        /* ;an000; */
-                                                                                                                                 /* ;an000; */
-  }                                     /* end parse_init */                                                                     /* ;an000; */
+/* The DOS parser stores each accepted spelling as a NUL-terminated synonym.
+ * The longest list (/C through /CLASSIFY) uses 52 of the 64 available bytes. */
+static void SetSwitch(struct p_control_blk *control, struct p_result_blk *result,
+                      char *name)
+{
+    unsigned length;
+    char *out = control->p_keyorsw;
+    control->p_match_flag = p_none;
+    control->p_function_flag = p_cap_file;
+    control->p_result_buf = (unsigned)result;
+    control->p_value_list = (unsigned)&p_noval;
+    control->p_nid = strlen(name) - 1;
+    for (length = 2; length <= strlen(name); ++length) {
+        memcpy(out, name, length);
+        out[length] = 0;
+        out += length + 1;
+    }
+}
+
+void parse_init()
+{
+    p_p.p_parmsx_address = &p_px;
+    p_px.p_maxswitch = 3;
+    p_px.p_control[0] = &debug_switch;
+    p_px.p_control[1] = &classify_switch;
+    p_px.p_control[2] = &page_switch;
+    SetSwitch(&debug_switch, &debug_result, "/DEBUG");
+    SetSwitch(&classify_switch, &classify_result, "/CLASSIFY");
+    SetSwitch(&page_switch, &page_result, "/P");
+} /* end parse_init */                                                                     /* ;an000; */
 
 
 /************************************************************************/                                                       /* ;an000; */
@@ -1746,7 +1954,7 @@ char    far *Cmd_Ptr;                                                           
         InRegs.h.dl = No_Input;                                                 /*;an003; dms;                          */
         InRegs.h.dh = Message_Type;                                             /*;an003; dms;                          */
         InRegs.x.si = (unsigned int)&sublist[1];                                /*;an003; dms;                          */
-        sysdispmsg(&InRegs,&OutRegs);                                           /*;an003; dms;                          */
+        ReportMessage();                                           /*;an003; dms;                          */
         }                                                                       /*;an003; dms;                          */
         return;                                                                 /*;an003; dms;                          */
 }                                                                               /*;an003; dms;                          */

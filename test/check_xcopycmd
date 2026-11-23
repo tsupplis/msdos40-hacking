@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""Check XCOPYCMD precedence and failure behavior on disposable DOS volumes."""
+from pathlib import Path
+import os
+import shutil
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+work = root / "test/work"
+work.mkdir(exist_ok=True)
+with tempfile.TemporaryDirectory(dir=work) as folder:
+    image = Path(folder) / "source.img"
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+    subprocess.run(["mcopy", "-o", "-i", image, root / "commands/xcopy/xcopy.exe",
+                    "::XCOPY.EXE"], check=True)
+    subprocess.run(["mcopy", "-o", "-i", image, root / "commands/command/command.com",
+                    "::COMMAND.COM"], check=True)
+    batch = Path(folder) / "defaults.bat"
+    batch.write_text(r"""md b:\src
+md b:\src\empty
+md b:\src\sub
+echo TOP>b:\src\top.txt
+echo CHILD>b:\src\sub\file.txt
+md b:\inherit
+md b:\tree
+md b:\head
+md b:\tail
+md b:\flat
+md b:\bad
+set DIRCMD=/b /l /a-d
+dir b:\src >b:\lower.txt
+dir /-l b:\src >b:\upper.txt
+dir /b,/-l b:\src >b:\comma.txt
+set DIRCMD=
+echo OLD>b:\saved.txt
+echo N>b:\no.txt
+set COPYCMD=/-Y
+copy b:\src\top.txt b:\saved.txt <b:\no.txt
+type b:\saved.txt >b:\before.txt
+copy /y b:\src\top.txt b:\saved.txt
+set COPYCMD=
+set XCOPYCMD=/s
+xcopy b:\src b:\inherit
+xcopy b:\src b:\tree /s
+xcopy b:\src b:\flat /-s
+xcopy /s /e b:\src b:\head
+xcopy b:\src b:\tail /s /e
+xcopy /x /e b:\src b:\bad
+if errorlevel 4 echo BADHEAD
+xcopy b:\src b:\bad /e /x
+if errorlevel 4 echo BADTAIL
+set XCOPYCMD=b:\src
+xcopy b:\src b:\bad
+if errorlevel 4 echo REJECTED
+""")
+    output = subprocess.check_output([root / "test/run_tests", batch],
+                                     env=dict(os.environ, IMG=str(image))).decode("cp437")
+    assert "REJECTED\r" in output or "REJECTED\n" in output, output
+    assert {"BADHEAD", "BADTAIL"} <= set(output.splitlines()), output
+    for destination in ("HEAD", "TAIL"):
+        subprocess.run(["mdir", "-i", work / "b.img", "::" + destination + "/EMPTY"],
+                       check=True, stdout=subprocess.DEVNULL)
+    for path, content in [("INHERIT/SUB/FILE.TXT", b"CHILD"), ("TREE/SUB/FILE.TXT", b"CHILD"), ("FLAT/TOP.TXT", b"TOP")]:
+        assert subprocess.check_output(["mtype", "-i", work / "b.img", "::" + path]).strip() == content
+    for path, expected in [("LOWER.TXT", b"top.txt"), ("UPPER.TXT", b"TOP.TXT"),
+                           ("COMMA.TXT", b"TOP.TXT"), ("BEFORE.TXT", b"OLD"), ("SAVED.TXT", b"TOP")]:
+        actual = subprocess.check_output(["mtype", "-i", work / "b.img", "::" + path])
+        assert actual.strip() == expected, (path, actual)
+    for path in ["FLAT/SUB", "BAD/TOP.TXT"]:
+        assert subprocess.run(["mdir", "-i", work / "b.img", "::" + path],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 1
+    print("PASS XCOPYCMD defaults, explicit overrides, invalid operands")

@@ -16,7 +16,7 @@ BUILDMSG = $(EMU2) $(SDKBIN)/buildmsg.exe
 COUNTRY  = usa-ms
 
 OBJS     = command1.obj command2.obj rucode.obj rdata.obj init.obj iparse.obj \
-           uinit.obj tcode.obj tbatch.obj tbatch2.obj tfor.obj tcmd1a.obj tcmd1b.obj \
+           uinit.obj tcode.obj tbatch.obj tbatch2.obj tfor.obj tcmd1a.obj dirsort.obj tcmd1b.obj \
            tcmd2a.obj tcmd2b.obj tenv.obj tenv2.obj tmisc1.obj tmisc2.obj tpipe.obj \
            parse2.obj path1.obj path2.obj tucode.obj copy.obj copypr1.obj copypr2.obj \
            cparse.obj tparse.obj tprintf.obj tdata.obj tspc.obj

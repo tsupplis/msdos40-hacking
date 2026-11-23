@@ -213,6 +213,8 @@ parseflags RECORD special_delim:1, unused:4, path_sep:1, wildcard:1, sw_flag:1
 SwitchV 	EQU	10h
 SwitchB 	EQU	08h
 SwitchA 	EQU	04h
+DirBare equ 0100h
+DirLower equ 0200h
 SwitchP 	EQU	02h
 SwitchW 	EQU	01h
 fSwitch 	EQU	8000h

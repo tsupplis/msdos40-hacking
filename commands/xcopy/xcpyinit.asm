@@ -83,6 +83,7 @@ DGROUP	GROUP	DSEG, DSEG_INIT
 DSEG	SEGMENT PARA	PUBLIC
 ;--- EXTERNAL VARIABLES ---
 EXTRN	ERRORLEVEL:BYTE
+EXTRN sw_off:byte
 EXTRN	PSP_SEG:WORD			;PSP segment ** USE OF ES SHOULD BE EXAMINED FURTHER
 EXTRN	SAV_DEFAULT_DRV:BYTE		;1 = A, 2 = B ...
 EXTRN	SAV_DEFAULT_DIR:BYTE
@@ -385,6 +386,21 @@ $$EN15:
 ;	$ELSE			    ;AN000;
 	JMP SHORT $$EN14
 $$IF14:
+            test OPTION_FLAG,SLASH_P
+            jz check_verify
+            or MY_FLAG,SINGLE_COPY_FLAG
+check_verify:
+            test OPTION_FLAG,SLASH_V
+            jz options_ready
+            mov ah,54h
+            int 21h
+            or al,al
+            jnz options_ready
+            mov ax,2e01h
+            xor dl,dl
+            int 21h
+            or SYS_FLAG,TURN_VERIFY_OFF_FLAG
+options_ready:
 	    CALL    GET_DRIVES	    ;get source, target drive
 	    TEST    PARM_FLAG, INIT_ERROR_FLAG ;critical syntax error?
 ;	    $IF     Z		    ;if not,
@@ -791,6 +807,18 @@ GET_OPTIONS PROC NEAR
 	JE $$XL1
 	JMP $$IF78
 $$XL1:
+            cmp byte ptr es:[di+1],'-'
+            jne positive_switch
+            sub di,offset DGROUP:sw_off
+            mov cx,di
+            shr cx,1
+            shr cx,1
+            mov al,1
+            shl al,cl
+            not al
+            and OPTION_FLAG,al
+            ret
+positive_switch:
 	    CMP     BYTE PTR ES:[DI+BYTE],ALPHA_S ;AC000;"S"
 	    JNE     GO_A
 	    OR	    OPTION_FLAG, SLASH_S ;set the walk the tree bit on.
@@ -821,7 +849,7 @@ GO_P:
 	    JNE     GO_E
 	    MOV     SW_P,SPACE		;AN004;DISALLOW DUPLICATE SWITCHES
 	    OR	    OPTION_FLAG, SLASH_P
-	    OR	    MY_FLAG, SINGLE_COPY_FLAG ;if user want prompt, then should be single copy (not a multi copy).
+
 	    JMP     SHORT  GO_EXIT	;AC000;
 GO_E:
 	    CMP     BYTE PTR ES:[DI+BYTE],ALPHA_E ;AN000;"E"
@@ -833,13 +861,7 @@ GO_V:
 	    CMP     BYTE PTR ES:[DI+BYTE],ALPHA_V ;AN000;"V"
 	    JNE     GO_W
 	    MOV     SW_V,SPACE		;AN004;DISALLOW DUPLICATE SWITCHES
-	    MOV     AH, 54h		;get verify setting
-	    INT     21H
-	    CMP     AL, 0
-	    JNE     GO_EXIT		;AC000;if not 0, then already on.
-	    MOV     AX, 2E01h		;else set it on
-	    INT     21h
-	    OR	    SYS_FLAG, TURN_VERIFY_OFF_FLAG ;don't forget it off when exit to dos.
+	    OR      OPTION_FLAG, SLASH_V
 	    JMP     SHORT   GO_EXIT	;AC000;
 GO_W:
 	    OR	    OPTION_FLAG, SLASH_W

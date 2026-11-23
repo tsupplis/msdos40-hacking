@@ -8,7 +8,7 @@ MS-DOS 4.01 rebuilt on Unix with GNU make and the original tools under `emu2`. T
 | **Memory** | Surpass DOS 3.3 and approach DOS 5.0, targeting 610 Kbytes free. UMB allocation and XMS reporting are available. Selected kernel services can run in the HMA. |
 | **Usability** | Command-line editing and recall, clearer memory diagnostics, BASIC (`mbasic.com`) and a screen editor (`vi.exe`) on the full floppy. |
 
-![MS-DOS 4.01 running in PCE with upper memory enabled](images/msdos40.png)
+![MS-DOS 4.01 running in PCE with upper memory enabled](images/mem.png)
 
 ## Sources
 
@@ -58,12 +58,13 @@ Applies to `command.com` and DOS buffered console input. Cooked handle reads sup
 
 | Command | Enhancement | Missing MS-DOS 5.0 features |
 |---|---|---|
-| `dir` | `/B` prints bare names, one per line. `/L` displays ASCII letters in filenames in lowercase. Both work with an explicit drive. | `/A` attribute filters, `/O` sort order, `/S` recursion, and `DIRCMD` defaults and overrides. |
-| `copy` | `/Y` allows overwriting. `/-Y` prompts before overwriting. The last of these switches wins. | |
+| `dir` | `/B` prints bare names, one per line. `/L` displays ASCII letters in filenames in lowercase. `/A[:]` filters by D, R, H, S, or A. `/O[:]` orders by N (name), E (extension), S (size), D (date), or G (directories first). Prefix a letter with `-` to exclude an attribute or reverse a key. `/P` pages console output. `DIRCMD` presets switches, and `/-` disables a preset switch on the command line. | `/S` recursion. |
+| `copy` | `/Y` allows overwriting. `/-Y` prompts before overwriting. `COPYCMD` presets either switch. The last explicit overwrite switch wins. | |
+| `xcopy` | `XCOPYCMD` presets XCOPY switches. Explicit switches take precedence. For example, `SET XCOPYCMD=/S /E` includes empty subdirectories and `XCOPY source dest /-S /-E` copies only the top level. | |
 | `del` (`erase`) | `/Q` skips the bulk-delete confirmation. An explicit `/P` still prompts for each file. | |
 | `comp` | `/D` reports decimal bytes, `/A` shows characters, `/L` reports line numbers, `/N=n` limits comparison to the first *n* lines, and `/C` ignores ASCII letter case. | |
 | `ver` | Displays the project version as `4.01N`. | |
-| `mem` | Report memory in whole Kbytes, including total, free and largest free blocks for UMB and XMS pools. | `/C` (classify). |
+| `mem` | Show total, used, and free memory by pool and the largest usable blocks. `/C` (`/CLASSIFY`) groups modules by memory usage. Combine `/P` with `/C` or `/D` (`/DEBUG`) to page console output. Alone, `/P` pages the summary. | |
 | `more [filename]` | Page a file by name. | |
 | `loadhigh` (`lh`) | Run an external program in upper memory when it fits. | |
 | `vi.exe` | Screen editor on the full floppy. | |

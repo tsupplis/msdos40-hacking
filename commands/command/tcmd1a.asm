@@ -22,12 +22,12 @@ DATARES ENDS				;AN020;
 
 TRANDATA	SEGMENT PUBLIC BYTE	;AC000;
 	EXTRN	BadCD_ptr:word
+	extrn dir_attrs:byte,dir_ordered:byte,dir_replay:byte
 	EXTRN	bits:word
 	EXTRN	Bytmes_ptr:word
 	EXTRN	comsw:word
 	extrn	dir_l_syn:byte,dir_b_syn:byte
-DirBare equ 0100h
-DirLower equ 0200h
+DirNoPause equ 0400h
 	EXTRN	dir_w_syn:word		;AC000;
 	EXTRN	dirdat_mo_day:word	;AC000;
 	EXTRN	dirdat_yr:word		;AC000;
@@ -115,6 +115,12 @@ assume	ds:trangroup,es:trangroup
 ; ****************************************************************
 
 CATALOG:
+ invoke dir_options
+ jnc catalog_start
+ mov ax,BadSwt_ptr
+ invoke setup_parse_error_msg
+ jmp cerror
+catalog_start:
 
 ;
 ; Set up DTA for dir search firsts
@@ -137,7 +143,6 @@ CATALOG:
 	mov	di,offset trangroup:parse_dir	;AN000; Get adderss of PARSE_DIR
 	xor	cx,cx				;AC000; clear counter for positionals
 	mov	ComSw,cx			;AC000; initialize flags
-	mov	bits,cx 			;AC000; initialize switches
 	mov	linperpag,linesperpage		;AC000; Set default for lines per page
 	mov	linlen,normperlin		;AC000; Set number of entries per line
 	mov	lincnt,normperlin		;AC000;
@@ -155,23 +160,6 @@ dirscan_cont:
 	jmp	badparm 			;AN000; yes - exit
 
 dirscan_cont2:
-	cmp	parse1_syn,offset trangroup:dir_b_syn
-	jne	dir_check_lower
-	or	bits,DirBare
-	jmp	dirscan
-dir_check_lower:
-	cmp	parse1_syn,offset trangroup:dir_l_syn
-	jne	dir_check_width
-	or	bits,DirLower
-	jmp	dirscan
-dir_check_width:
-	cmp	parse1_syn,offset trangroup:dir_w_syn ;AN000; was /W entered?
-	je	set_dir_width			;AN000; yes - go set wide lines
-	cmp	parse1_syn,offset trangroup:slash_p_syn ;AN000; was /P entered?
-	je	set_dir_pause			;AN000; yes - go set pause at end of screen
-;
-; Must be filespec since no other matches occurred. move filename to srcbuf
-;
 	push	si				;AC000; save position in line
 	lds	si,parse1_addr			;AC000; get address of filespec
 	push	si				;AN000; save address
@@ -201,30 +189,26 @@ dir_fspec_end:
 	pop	si				;AC000; restore position in line
 	jmp	dirscan			;AC000; keep parsing
 
-set_dir_width:
-	test	byte ptr[bits],SwitchW		;AN018; /W already set?
-	jz	ok_set_width			;AN018; no - okay to set width
-	mov	ax,moreargs_ptr 		;AN018; set up too many arguments
-	invoke	setup_parse_error_msg		;AN018; set up an error message
-	jmp	badparm 			;AN018; exit
-
-ok_set_width:
-	or	bits,switchw			;AC000; indicate /w was selected
+ScanDone:
+ test bits,SwitchW
+ jz check_paging
 	mov	linlen,wideperlin		;AC000; Set number of entries per line
 	mov	lincnt,wideperlin		;AC000;
-	jmp	dirscan			;AC000; keep parsing
-
-set_dir_pause:
-	test	byte ptr[bits],SwitchP		;AN018; /p already set?
-	jz	ok_set_pause			;AN018; no - okay to set width
-	mov	ax,moreargs_ptr 		;AN018; set up too many arguments
-	invoke	setup_parse_error_msg		;AN018; set up an error message
-	jmp	badparm 			;AN018; exit
-
-ok_set_pause:
-	or	bits,switchp			;AC000; indicate /p was selected
+check_paging:
+ test bits,SwitchP
+ jz dir_path_setup
 	push	cx				;AN000; save necessary registers
 	push	si				;AN000;
+	mov bx,stdout
+	mov ax,IOCTL SHL 8
+	int int_command
+	jc no_dir_paging
+	test dl,devid_ISDEV
+	jz no_dir_paging
+	test dl,devid_ISNUL
+	jnz no_dir_paging
+	test dl,devid_ISCOT             ; CTTY sets this on its selected handle
+	jz no_dir_paging
 	mov	ax,(IOCTL SHL 8) + generic_ioctl_handle ;AN000; get lines per page on display
 	mov	bx,stdout			;AN000; lines for stdout
 	mov	ch,ioc_sc			;AN000; type is display
@@ -232,6 +216,9 @@ ok_set_pause:
 	mov	dx,offset trangroup:display_ioctl ;AN000;
 	int	int_command			;AN000;
 
+	jmp short lines_set
+no_dir_paging:
+	or bits,DirNoPause
 lines_set:
 	dec	linperpag			;AN000; lines per actual page should
 	dec	linperpag			;AN000;     two less than the max
@@ -239,15 +226,10 @@ lines_set:
 	mov	[fullscr],ax			;AC000;    screen line counter
 	pop	si				;AN000; restore registers
 	pop	cx				;AN000;
-	jmp	dirscan 			;AC000; keep parsing
-
-;
-; The syntax is incorrect.  Report only message we can.
-;
+ jmp short dir_path_setup
 BadParm:
-	jmp	cerror				;AC000; invalid switches get displayed
-
-ScanDone:
+ jmp cerror
+dir_path_setup:
 	; A leading switch may occupy the default PSP FCB. Use the parsed path.
 	mov	si,offset trangroup:srcbuf
 	mov	di,FCB
@@ -387,7 +369,11 @@ DirNFFix:
 ;
 DoSearch:
 	mov	byte ptr DS:[FCB-7],0FFH
-	mov	byte ptr DS:[FCB-1],010H
+	mov byte ptr DS:[FCB-1],attr_directory
+ cmp dir_attrs,0
+ je search_mask_ready
+ or byte ptr DS:[FCB-1],attr_hidden+attr_system
+search_mask_ready:
 ;
 ; Caution!  Since we are using an extended FCB, we will *also* be returning
 ; the directory information as an extended FCB.  We must bias all fetches into
@@ -434,6 +420,21 @@ DIRSTART:
 ;
 
 Display:
+ cmp dir_attrs,0
+ je entry_selected
+ invoke dir_matches
+ jz entry_selected
+ jmp scroll
+entry_selected:
+ cmp dir_ordered,0
+ je print_entry
+ invoke dir_collect
+ jnc entry_saved
+ mov ax,error_not_enough_memory
+ jmp dir_err_setup
+entry_saved:
+ jmp scroll
+print_entry:
 	inc	[filecnt]			; Keep track of how many we find
 	mov	si,offset trangroup:dirbuf+8	; SI -> information returned by sys call
 	test	bits,DirBare
@@ -559,6 +560,14 @@ nexent:
 ; All we need to do now is to get the next directory entry.
 ;
 scroll:
+ cmp dir_replay,0
+ je search_next_entry
+ invoke dir_take
+ jc sorted_end
+ jmp print_entry
+sorted_end:
+ jmp listing_end
+search_next_entry:
 	mov	ah,Dir_Search_Next
 	mov	dx,FCB-7			; DX -> Unopened FCB
 	int	int_command			; Search for a file to match FCB
@@ -570,6 +579,11 @@ DirDone:
 	invoke	get_ext_error_number		;AN022; get the extended error number
 	cmp	ax,error_no_more_files		;AN022; was error file not found?
 	jnz	dir_err_setup_jmp		;AN022; no - setup error message
+ cmp dir_ordered,0
+ je listing_end
+ invoke dir_sort
+ jmp scroll
+listing_end:
 	test	[filecnt],-1
 	jnz	Trailer
 	mov	ax,error_file_not_found 	;AN022;
@@ -649,6 +663,8 @@ dir_name_ready:
 
 check_for_P    PROC  NEAR			;AN066;
 
+test bits,DirNoPause
+jnz endif05
 test	byte ptr[bits],SwitchP	     ;P switch present?
 jz	endif05 				;AN066;
    mov	   ax,linperpag 		   ;AN000;  transfer lines per page

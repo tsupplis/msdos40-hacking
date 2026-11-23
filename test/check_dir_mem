@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+"""Exercise DIR and MEM against the rebuilt binaries on disposable floppies."""
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+work = root / "test/work"
+work.mkdir(exist_ok=True)
+with tempfile.TemporaryDirectory(dir=work) as tmp:
+    folder = Path(tmp)
+    boot = folder / "source.img"
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), boot)
+    def disk(*args):
+        subprocess.run([args[0], "-i", boot, *args[1:]], check=True)
+
+    for name, source in [("COMMAND.COM", "commands/command/command.com"),
+                         ("MEM.EXE", "commands/mem/mem.exe"),
+                         ("HIMEM.SYS", "extra/pcehimem.sys")]:
+        disk("mcopy", "-o", root / source, "::" + name)
+    disk("mmd", "::DTEST")
+    for name, size in [("ZZ.TXT", 3), ("BB.BIN", 2), ("AA.TXT", 1)]:
+        src = folder / name
+        src.write_bytes(b"x" * size)
+        os.utime(src, (946684800 + size * 86400,) * 2)
+        disk("mcopy", "-m", src, "::DTEST/" + name)
+    disk("mmd", "::DTEST/MIDDLE")
+    disk("mattrib", "+h", "::DTEST/BB.BIN")
+    disk("mattrib", "+r", "+s", "::DTEST/AA.TXT")
+    cases = [
+        ("", ["ZZ.TXT", "MIDDLE"]),
+        ("/a /o", ["MIDDLE", "AA.TXT", "BB.BIN", "ZZ.TXT"]),
+        ("/a:hs", []),
+        ("/ah", ["BB.BIN"]),
+        ("/asr", ["AA.TXT"]),
+        ("/ad", ["MIDDLE"]),
+        ("/a:-d /o:-s", ["ZZ.TXT", "BB.BIN", "AA.TXT"]),
+        ("/a-d /od", ["AA.TXT", "BB.BIN", "ZZ.TXT"]),
+        ("/aa-d /o:e-n", ["BB.BIN", "ZZ.TXT", "AA.TXT"]),
+    ]
+    batch = folder / "report.bat"
+    batch.write_text("b:\n" + "".join(
+        f"echo CASE{i}\ndir {options} a:\\dtest /b\n" for i, (options, _) in enumerate(cases)) +
+        "echo REPORT\na:\\mem /c/p <a:\\cr.txt\na:\\mem /p /debug <a:\\cr.txt\n"
+        "dir a:\\ /b /p /on >b:\\list.txt\na:\\mem /debug/p >b:\\debug.txt\n"
+        "dir a:\\ /b /p >prn <a:\\cr.txt\na:\\mem /debug/p >prn <a:\\cr.txt\n"
+        "a:\\mem /classify >b:\\class.txt\na:\\mem /c >b:\\shortc.txt\n"
+        "a:\\mem /d/p >b:\\shortd.txt\na:\\mem /p >b:\\progp.txt\n"
+        "a:\\mem /clas >b:\\midc.txt\na:\\mem /deb >b:\\midd.txt\na:\\mem >b:\\summary.txt\n")
+    for high in (False, True):
+        batch.with_suffix(".cfg").write_text(
+            "DOS=HIGH,UMB\nDEVICE=HIMEM.SYS\n" if high else "")
+        (work / "par1.out").write_bytes(b"")
+        output = subprocess.check_output([root / "test/run_tests", batch], text=True,
+                                        encoding="cp437", env=dict(os.environ, IMG=str(boot)))
+        listing, report = output.split("REPORT\n")
+        for (options, names), block in zip(cases, listing.split("CASE")[1:], strict=True):
+            actual = block.splitlines()[1:]
+            assert actual == (names or ["File not found"]), (options, actual)
+        assert "Press any key to continue..." in report and "SYSTEM" in report, report
+        printed = (work / "par1.out").read_bytes()
+        assert b"MEM.EXE" in printed and b"Largest executable" in printed, printed
+        assert b"Press any key" not in printed, printed
+        def read(name):
+            return subprocess.check_output(["mtype", "-i", work / "b.img", "::" + name]).decode("cp437")
+        names = read("list.txt").splitlines()
+        assert len(names) > 25 and "MEM.EXE" in names and not any("Press" in n for n in names)
+        assert "Press any key" not in read("debug.txt")
+        for full, alias in [("class.txt","shortc.txt"), ("debug.txt","shortd.txt"), ("summary.txt","progp.txt"), ("class.txt","midc.txt"), ("debug.txt","midd.txt")]:
+            assert read(full) == read(alias), alias
+        class_lines = read("class.txt").splitlines()
+        title = next(line for line in class_lines if line.startswith("Name "))
+        system = next(line for line in class_lines if line.startswith("SYSTEM "))
+        ends = [m.end() for m in re.finditer(r"\)", system)]
+        assert ends == [title.index(label) + len(label)
+                        for label in ("Total", "Conventional", "Upper Memory")], (title, system)
+        summary = read("summary.txt")
+        title = next(line for line in summary.splitlines() if line.startswith("Memory Type"))
+        low = next(line for line in summary.splitlines() if line.startswith("Conventional"))
+        assert [m.end() for m in re.finditer(r"[\d,]+K", low)] == [
+            title.index(label) + len(label) for label in ("Total", "Used", "Free")], (title, low)
+        assert "Largest executable program size" in summary
+        upper = re.search(r"^Upper\s+([\d,]+)K", summary, re.M)
+        assert upper and (int(upper[1].replace(",", "")) > 0) == high, summary
+        print("PASS DIR and MEM", "high" if high else "low")

@@ -43,6 +43,9 @@ TRANSPACE	SEGMENT PUBLIC BYTE	;AC000;
 	EXTRN	Arg_Buf:BYTE
 	EXTRN	RESSEG:WORD
 	EXTRN	USERDIR1:BYTE
+; Error reporting may NUL-terminate immediately after a trailing CR.
+cmd_defaults db COMBUFLEN+1 dup (?)
+	extrn parse_last:word
 TRANSPACE	ENDS
 
 TRANCODE	SEGMENT PUBLIC byte
@@ -293,6 +296,41 @@ DEL1:
 	POP	DS
 	POP	SI
 	return
+
+; DS:SI names an environment variable (including '='). Return a writable
+; CR-terminated option string in DS:SI; leave the environment untouched.
+; A missing variable is an empty list. Carry indicates an overlong value.
+public get_cmd_defaults
+get_cmd_defaults proc near
+ call FIND_NAME_IN_environment
+ mov si,offset trangroup:cmd_defaults
+ mov parse_last,si
+ jc defaults_empty
+ mov bx,si
+ mov cx,COMBUFLEN-1
+defaults_copy:
+ mov al,es:[di]
+ inc di
+ or al,al
+ jz defaults_end
+ mov [bx],al
+ inc bx
+ loop defaults_copy
+ cmp byte ptr es:[di],0
+ je defaults_end
+ mov si,bx
+ stc
+ jmp short defaults_return
+defaults_empty:
+ mov bx,si
+defaults_end:
+ mov byte ptr [bx],13
+ clc
+defaults_return:
+ push ds
+ pop es
+ ret
+get_cmd_defaults endp
 
 FIND_PATH:
 	MOV	SI,OFFSET TRANGROUP:PATH_TEXT

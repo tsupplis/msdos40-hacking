@@ -28,7 +28,7 @@ struct p_parmsx
 	unsigned char	p_minp; 		/* Minimum positional number */
 	unsigned char	p_maxp; 		/* Maximum positional number  */
 	unsigned char	p_maxswitch;		/* Maximum switches	*/
-	struct p_control_blk *p_control[2];	/* Address of the 1st CONTROL block */
+	struct p_control_blk *p_control[3];	/* Address of the 1st CONTROL block */
 	unsigned char	p_keyword;		/* Keyword count */
 	};
 

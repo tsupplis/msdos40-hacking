@@ -56,6 +56,7 @@ TRANDATA	SEGMENT PUBLIC BYTE	;AC000;
 	EXTRN	INBDEV_ptr:word 	;AC000;
 	EXTRN	msg_disp_class:byte	;AN000;
 	EXTRN	overwr_ptr:word
+copycmd_name db 'COPYCMD='
 TRANDATA	ENDS
 
 TRANSPACE	SEGMENT PUBLIC BYTE	;AC000;
@@ -200,6 +201,38 @@ COPY:
 	mov	[FIRSTDEST],al			; First time
 	mov	[DESTISDIR],al			; Don't know about dest
 	mov	src_xa_seg,ax			;AN000; initialize attribute segment to -1
+	mov si,offset trangroup:copycmd_name
+ invoke get_cmd_defaults
+ jc copy_bad_default
+copy_default_next:
+ lodsb
+ cmp al,13
+ je copy_defaults_done
+ cmp al,' '
+ je copy_default_next
+ cmp al,9
+ je copy_default_next
+ mov parse_last,si
+ dec parse_last
+ cmp al,'/'
+ jne copy_bad_default
+ mov bx,SwitchY
+ lodsb
+ cmp al,'-'
+ jne copy_default_y
+ mov bx,SwitchAsk
+ lodsb
+copy_default_y:
+ and al,0dfh
+ cmp al,'Y'
+ jne copy_bad_default
+ mov allswitch,bx
+ jmp copy_default_next
+copy_bad_default:
+ mov ax,BadSwt_ptr
+ invoke setup_parse_error_msg
+ jmp cerror
+copy_defaults_done:
 	mov	si,81H
 	mov	bl,plus_chr			; include '+' as a delimiter
 	inc	byte ptr [expand_star]		; want to include * expansion in cparse

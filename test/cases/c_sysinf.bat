@@ -1,8 +1,8 @@
 REM Commands: MEM (3 forms), MODE, GRAFTABL
 ECHO == mem
 MEM
-ECHO == mem /program
-MEM /PROGRAM
+ECHO == mem /classify
+MEM /CLASSIFY
 ECHO == mem /debug
 MEM /DEBUG
 ECHO == mode
