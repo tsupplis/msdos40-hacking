@@ -504,8 +504,6 @@ Org3:
 	je	Org_file
 	cmp	Cmd_Indicator, 'D'      ;AN000; Device= command?
 	je	Org_file		;AN000;
-	cmp	Cmd_Indicator, 'J'      ;AN000; IFS= command?
-	je	Org_file		;AN000;
 	cmp	Cmd_Indicator, 'T'
 	je	Org_file
 	cmp	Cmd_Indicator, 'S'      ;AN000; Shell= is a special one!!!
@@ -1520,7 +1518,6 @@ COMTAB	LABEL	BYTE
 	DB	9,"SHELLHIGH",'T'
 	DB	5,"SHELL",    'S'
 	db	7,"INSTALL",  'I'       ;AN000;
-	db	3,"IFS",      'J'       ;AN000;
 	db	4,"CPSW",     'W'       ;AN000;
 ;;;;	   DB	   8,"SWITCHAR",'W'     ; NO LONGER SUPPORTED
 	db	7,"COMMENT",  'Y'       ;AN000;

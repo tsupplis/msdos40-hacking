@@ -115,10 +115,8 @@ COPY_OPER_1200_1440	LABEL	BYTE				;AN000; this will copy files to 1.2M $ 1.44M d
 	DB	'EDLIN.COM   '                                  ;AN000;
 	DB	'EXE2BIN.EXE '
 	DB	'FC.EXE      '
-	DB	'FILESYS.EXE '
 	DB	'FIND.EXE    '                                  ;AN000;
 	DB	'GWBASIC.EXE '
-	DB	'IFSFUNC.EXE '
 	DB	'JOIN.EXE    '                                  ;AN000;
 	DB	'LABEL.COM   '                                  ;AN000;
 	DB	'LINK.EXE    '

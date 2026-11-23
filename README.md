@@ -83,12 +83,10 @@ The survey compares the commands shipped here with the command syntax and option
 | `diskcopy` | No known gaps | `/V` asks the disk driver to verify each destination track after writing it. |  |
 | `emm386` | Missing command |  | The EMM386.EXE command interface for querying and changing expanded-memory operation. The full floppy ships EMM386.SYS. |
 | `fdisk` | No known gaps | `/STATUS` reports disk usage and DOS volumes. `/MBR` restores the master boot code on the first fixed disk. It preserves partition entries when the boot signature is present and installs an empty table when it is absent. |  |
-| `filesys` | No same-name DOS 5.0 utility |  |  |
 | `find` | No known gaps | `/I` ignores case when matching and preserves the spelling of displayed lines. |  |
 | `format` | Gaps identified | `/Q` quick format. | *won't implement — Recoverable formatting, `/U`, and `/F` for 2.88 MB media.* |
 | `help` | Missing command |  | Display the command index and command-specific help. |
 | `if` | No known gaps | `IF [NOT] DIREXIST path command` tests for a directory. Wildcards match directories only. |  |
-| `ifsfunc` | No same-name DOS 5.0 utility |  |  |
 | `keyb` | Gaps identified |  | `/E` explicitly selects an enhanced keyboard. |
 | `loadfix` | No known gaps | Run a DOS executable above the first 64 KiB and return its exit code. |  |
 | `loadhigh` (`lh`) | No known gaps | Run an external program in upper memory when it fits. |  |
@@ -126,7 +124,6 @@ The batch comparison covers `CALL` with arguments, `ECHO` and leading `@`, `FOR 
 | `drivparm=` | Gaps identified |  | `/F:9` for a 2.88 MB floppy. The project's geometry table ends at `/F:7`. |
 | `fcbs=n,m` | No known syntax gaps | Place the FCB table in one UMB when it fits. |  |
 | `files=` | No known syntax gaps | Place the file table extension in one UMB when it fits. The first five entries stay in the kernel. |  |
-| `ifs=` | Project's DOS 4.x directive |  |  |
 | `install=` | No known syntax gaps |  |  |
 | `lastdrive=` | No known syntax gaps | Place the permanent current-directory table in one UMB when it fits. |  |
 | `multitrack=` | Present in both parsers |  |  |

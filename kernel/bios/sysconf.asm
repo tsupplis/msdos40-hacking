@@ -63,8 +63,6 @@ KANJI	   EQU	   FALSE
 HAVE_INSTALL_CMD      equ     00000001b ;AN018; CONFIG.SYS has INSTALL= commands
 HAS_INSTALLED	      equ     00000010b ;AN018; SYSINIT_BASE installed.
 
-IS_IFS		      equ   00000001b	;IFS command?
-NOT_IFS 	      equ   11111110b
 ;
 ;AN016; Undo the extended attribute handling
 ;;Extended attribute value
@@ -144,8 +142,6 @@ ASSUME	CS:SYSINITSEG,DS:NOTHING,ES:NOTHING,SS:NOTHING
 	extrn	LineCount:word			;AN000;
 	extrn	ShowCount:byte			;AN000;
 	extrn	Buffer_LineNum:word		;AN000;
-	extrn	IFS_Flag:word			;AN000;
-	extrn	IFS_RH:byte			;AN000;
 	extrn	H_Buffers:word			;AN000;
 	extrn	Buffer_Slash_X:byte		;AN000;AN025;
 	extrn	Badparm:byte			;AN007;
@@ -747,7 +743,7 @@ CONFERR:
 	CALL	BADFIL
 ENDCONV:JMP	ENDCONF
 
-Multi_Pass:				;AN018;AN026; called to execute IFS=,  INSTALL= commands
+Multi_Pass:				;AN018;AN026; replay CONFIG.SYS for device setup and INSTALL=
 	push	cs			;AN018;
 	pop	ds			;AN018;
 	cmp	Multi_Pass_id, 10	;J.K.
@@ -817,11 +813,7 @@ TRYI:
 	jne     DosPass1
         jmp     Multi_Try_XMAEM
 DosPass1: 		;AN029;     and BUFFERS= ... /X pre scan.
-	cmp	Multi_Pass_Id, 2		;AN026; the second pass for IFS= ?
-	jne     DosPass2
-        jmp     Multi_Try_J
-DosPass2:			;AN026;
-	cmp	Multi_Pass_Id, 3		;AN026; the third pass for INSTALL= ?
+	cmp	Multi_Pass_Id, 2		;AN026; the final pass for INSTALL= ?
 	jne     DosPass3
         jmp     Multi_Try_I
 DosPass3:			;AN026;
@@ -893,11 +885,6 @@ Multi_Try_Buff: 				;AN030;
 	jne	Multi_Pass_Filter		;AN030;
 	mov	Buffer_Pre_Scan, 1		;AN030; Set Buffer_Pre_Scan
 	jmp	TryB				;AN030; TryB will set P_Buffer_Slash_X to non-zero value.
-
-Multi_Try_J:					;AN026;
-	cmp	ah, 'J' 			;AN026; IFS= command?
-	jne	Multi_Pass_Filter		;AN026; No. Ignore this.
-	jmp	GotJ				;AN026; Handles IFS= command.
 
 Multi_Try_I:					;AN026;
 	cmp	ah, 'I' 			;AN026; INSTALL= command?
@@ -1338,7 +1325,6 @@ $$SR40:
 ; Device command
 ;------------------------------------------------------------------------------
 TRYDJ:
-	and	cs:IFS_Flag, NOT_IFS	;AN000; Reset the flag
 	CMP	AH,'H'
 	JNE	TryDevice
 	MOV	CS:HIGH_DEVICE,1
@@ -1347,32 +1333,13 @@ TRYDJ:
 TryDevice:
 	CMP	AH,'D'
 	JZ	GOTDJ
-	CMP	AH,'J'
-	jz	GOTJ
 	JMP	TRYQ
-GOTJ:					;AN000; IFS= command.
-	or	cs:[IFS_Flag], IS_IFS	;AN000; set the flag.
-	cmp	Multi_Pass_Id, 2	;second pass?
-	je	GOTDJ			;then proceed
-	jmp	Coff			;else ignore this until the second pass.
-
-;	 jmp	 GOTDJ_Cont
-;GOTD:
-;	 test	 cs:[IFS_Flag], HAD_IFS  ;AN000; Cannot have DEVICE= command after IFS= command.
-;	 jz	 GOTDJ_Cont		 ;AN000;
-;	 call	 Incorrect_Order	 ;AN000; Display "Incorrect order ..." msg.
-;	 jmp	 COFF			 ;AN000;
-
 GOTDJ:
-	MOV	BX,CS			;DEVICE= or IFS= command.
+	MOV	BX,CS			;Device command.
 	MOV	DS,BX
 
 	MOV	WORD PTR [BPB_ADDR],SI
 	MOV	WORD PTR [BPB_ADDR+2],ES
-
-;J.K. In case it is for IFS=, then set the parameter pointer.
-	mov	word ptr [ifs_rh.IFSR_PARMS@], SI   ;AN000; for IFS
-	mov	word ptr [ifs_rh.IFSR_PARMS@+2], ES ;AN000;
 
 	CALL	ROUND
 ;J.K. Set up the DEVMARK entries here for MEM command.
@@ -1418,7 +1385,6 @@ DeviceOpened:
 ;AN016; UNDO THE EXTENDED ATTRIBUTE HANDLING
 ;	 call	 Get_Ext_Attribute	 ;AN009;
 ;	 jc	 BadLdReset		 ;AN009;
-;	 test	 cs:[IFS_Flag], IS_IFS	 ;AN009;
 ;	 jnz	 Chk_Ext_Attr_IFS	 ;AN009;
 ;	 cmp	 al, EA_UNSPECIFIED	 ;AN009;Check the extended attr. for device driver
 ;	 je	 Ext_Attr_Ok		 ;AN009;  Allow 0 and EA_DEVICE_DRIVER
@@ -1503,23 +1469,6 @@ BADBRK_1:
 	JMP	COFF
 
 GOODLD:
-;J.K. If it is IFS=, then we should set IFS_DOSCALL@ field in IFSHEADER.
-	test	cs:[IFS_Flag], IS_IFS		;AN000;
-	jz	Skip_IFSHEADER_Set		;AN000;
-	push	es				;AN000;
-	push	di				;AN000;
-	push	ds				;AN000;
-	mov	bx, word ptr cs:[ENTRY_POINT+2] ;AN000;
-	mov	ds, bx				;AN000; DS:0 will be the header
-	les	di, cs:[DosInfo]		;AN000;
-	mov	bx, word ptr es:[di.SYSI_IFS_DOSCALL@]	 ;AN000;
-	mov	word ptr ds:[IFS_DOSCALL@], bx		 ;AN000;
-	mov	bx, word ptr es:[di.SYSI_IFS_DOSCALL@]+2 ;AN000;
-	mov	word ptr ds:[IFS_DOSCALL@]+2, bx	 ;AN000;
-	pop	ds				;AN000;
-	pop	di				;AN000;
-	pop	es				;AN000;
-Skip_IFSHEADER_Set:				;AN000;
 	SaveReg <ES,SI> 		;INITIALIZE THE DEVICE
 ;	 call	 Chk_IBMCACHE		 ;AN024 IBMCACHE.SYS problem.;AN026;IBMDOS will handles this thru 4Bh call.
 Restore:MOV	BL,ES:[SI]		;   while ((c=*p) != 0)
@@ -1532,11 +1481,6 @@ Got:	MOV	BYTE PTR ES:[SI],' '	;   *p = ' ';
 	PUSH	CS
 	POP	ES
 
-	test	cs:[IFS_Flag], IS_IFS	;AN000;
-	jz	Got_Device_Com		;AN000;
-	mov	bx, IFS_CALL@		;AN000; offset from the start of IFSHEADER
-	call	CallIFS 		;AN000;
-	jmp	short End_Init_Call
 Got_Device_Com:
 	MOV	AX,CS:[ALLOCLIM]
 	MOV	WORD PTR CS:[BREAK_ADDR+2],AX
@@ -1561,41 +1505,13 @@ Got_Device_Com_Cont:			;AN017;
 	invoke	CALLDEV 		;   CallDev (SDevStrat);
 	MOV	BX,SDEVINT
 	invoke	CALLDEV 		;   CallDev (SDevInt);
-End_Init_Call:
 	RestoreReg  <SI,DS>
 	MOV	BYTE PTR [SI],0 	;   *p = 0;
 
 	PUSH	CS
 	POP	DS
 
-	test	[IFS_Flag], IS_IFS	;AN000;
-	jz	Was_Device_Com		;AN000;
-	cmp	[ifs_rh.IFSR_RETCODE], 0 ;AN000; Was a success ?
-	jne	Erase_Dev_do		;AN000;
-	pop	si			;AN000; restore es:si to clean up the
-	pop	es			;AN000; stack for Set_Break call.
-	mov	ax, word ptr [Entry_Point+2]	   ;AN000; Get the loaded segment
-	add	ax, word ptr [ifs_rh.IFSR_RESSIZE] ;AN000;
-	mov	word ptr [Break_addr], 0	   ;AN000;
-	mov	word ptr [Break_addr+2], ax	   ;AN000;
-	or	cs:[SetDevMarkFlag], FOR_DEVMARK       ;AN004;
-	invoke	Set_Break		;AN000; Will also check the memory size too.
-	push	es			;AN000; Save it again, in case, for Erase_Dev_Do.
-	push	si			;AN000;
-	jc	Erase_Dev_do		;AN000;
-Link_IFS:				;AN000;
-	les	di, cs:[dosinfo]	;AN000;
-	mov	cx, word ptr es:[di.SYSI_IFS]	;AN000; save old pointer
-	mov	dx, word ptr es:[di.SYSI_IFS+2] ;AN000;
-	lds	si, cs:[Entry_Point]		;AN000;
-	mov	word ptr es:[di.SYSI_IFS],si	;AN000;
-	mov	word ptr es:[di.SYSI_IFS+2], ds ;AN000;
-	mov	word ptr ds:[si], cx		;AN000; We don't permit multiple IFSs.
-	mov	word ptr ds:[si+2], dx		;AN000;
-	pop	si			;AN000; Restore es:si for the next command.
-	pop	es			;AN000;
-;	 mov	 cs:[IFS_Flag], HAD_IFS  ;AN014; Set the flag.
-	jmp	COFF			;AN000;
+	jmp	Was_Device_Com
 
 ERASE_DEV_do:				;AC000;; Modified to show message "Error in CONFIG.SYS..."
 	pop	si
@@ -2740,32 +2656,6 @@ SLN_Last:				;AN000;
 ShowLineNum	endp			;AN000;
 
 
-CallIFS proc	near			;AN000;
-;*******************************************************************************
-; Function: Interface to IFS call. This procedure will call IFS_CALL@	       *
-;									       *
-; Input :								       *
-;	    Entry_Point - Segment:Offset of loaded IFS. 		       *
-;	    BX = IFS_CALL@ (offset of IFS_CALL@ from the IFS header)	       *
-;	    ES = Segment of IFS request header				       *
-;	    IFS_Packet - IFS Request packet				       *
-;									       *
-; Output:   Nothing							       *
-;*******************************************************************************
-	push	ax				;AN000;
-	mov	ds, word ptr cs:[Entry_Point+2] ;AN000;
-	add	bx, word ptr cs:[Entry_Point]	;AN000; DS:[BX] = Real IFS_CALL@ addr.
-	mov	ax, ds:[bx]			;AN000; save it
-	push	word ptr cs:[Entry_Point]	;AN000; save Entry point offset
-	mov	word ptr cs:[Entry_Point], ax	;AN000; set for the call
-	mov	bx, offset IFS_RH		;AN000; Now, ES:BX -> Request packet
-	call	cs:[Entry_Point]		;AN000; Far call
-	pop	word ptr cs:[Entry_Point]	;AN000; Restore Entry point offset
-	pop	ax				;AN000;
-	ret					;AN000;
-CallIFS endp					;AN000;
-
-
 ; AX = file size in paragraphs. On success move the provisional device
 ; mark to the grant and use the normal overlay loader and break handling.
 StartDriverUmb PROC NEAR
@@ -2838,7 +2728,6 @@ Set_DevMark	proc	near			;AN004;
 ;	    [MEMHI] = address to set up DEVMARK.			       *
 ;	    [MEMLO] = 0 						       *
 ;	    ES:SI -> pointer to [drive][path]filename,0 		       *
-;	    [IFS_Flag] = IS_IFS bit set if IFS= command.		       *
 ;									       *
 ; Output:   DEVMARK_ID, DEVMARK_FILENAME set				       *
 ;	    cs:[DevMark_addr] set.					       *
@@ -2853,13 +2742,7 @@ Set_DevMark	proc	near			;AN004;
 	mov	ds, di			;AN004;
 	assume	ds:nothing		;AN004;
 	mov	[DevMark_Addr], di	;AN004; save the DEVMARK address for the future.
-	test	[IFS_Flag], IS_IFS	;AN004;
-	jnz	SDVMK_IFS		;AN004;
-	mov	al, DEVMARK_DEVICE	;AN004; ='D'
-	jmp	short SDVMK_ID		;AN004;
-SDVMK_IFS:
-	mov	al, DEVMARK_IFS 	;AN004; ='I'
-SDVMK_ID:				;AN004;
+	mov	al, DEVMARK_DEVICE
 	mov	ds:[DEVMARK_ID], al	;AN004;
 	inc	di			;AN008;
 	mov	ds:[DEVMARK_SEG], di	;AN008;

@@ -198,8 +198,6 @@ ASSUME	CS:SYSINITSEG,DS:NOTHING,ES:NOTHING,SS:NOTHING
 	public ShowCount
 	public Buffer_LineNum
 	public DoNotShowNum
-	public IFS_Flag
-	public IFS_RH
 	public H_Buffers
 	public Buffer_Slash_X			;AN023;
 	public ConfigMsgFlag			;AN014;
@@ -352,15 +350,6 @@ INSTEXE EXEC0 <0,Ldexec_Line,Ldexec_FCB,Ldexec_FCB>  ;AN000;
 ;
 ;;Extended attribute value
 ;EA_INSTALLABLE 	 equ	 4	 ;AN008;Value for Installable file
-
-;------------------------------------------------------------------
-;J.K. 5/15/87  ;Request header, variables for IFS= command.
-
-IFS_Flag	dw	0			;AN000; Set to 1 if it is an IFS.
-   IS_IFS	  equ	00000001b		;IFS command?
-   NOT_IFS	  equ	11111110b
-
-IFS_RH	IFSRH <LENGTH_INIT, IFSINIT,,,,>	;AN000; IFS initialization request packet
 
 ;------------------------------------------------------------------
 ;Variables for Comment=
@@ -661,8 +650,6 @@ NODRVSET:
 	CALL	DOCONF			;DO THE CONFIG STUFF
 	inc	cs:Multi_Pass_Id	;AN027;
 	call	Multi_Pass		;AN027;
-	inc	cs:Multi_Pass_Id	;AN024;
-	call	Multi_Pass		;AN024;
 	CALL	FindUmbProvider		; CONFIG.SYS device drivers are installed
 	call	EndFile
 	test	Install_Flag, HAVE_INSTALL_CMD		;AN019;
