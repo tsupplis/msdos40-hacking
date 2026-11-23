@@ -97,7 +97,7 @@ The survey compares the commands shipped here with the command syntax and option
 | *`doskey`* | *won't implement* |  | *Command history, editing and named macros through DOSKEY.COM.* |
 | *`dosshell`* | *won't implement* |  | *DOS Shell file manager and task switcher, including its DOSSWAP component.* |
 | `echo` | No known gaps |  |  |
-| `edit` | Missing command |  | MS-DOS Editor and its QBASIC runtime. |
+| *`edit`* | *won't implement* | *`vi` provides screen editing on the full floppy.* |  |
 | `edlin` | No known gaps |  |  |
 | `emm386` | Missing command |  | The EMM386.EXE command interface for querying and changing expanded-memory operation. The full floppy ships EMM386.SYS. |
 | `exe2bin` | No known gaps |  |  |
@@ -121,7 +121,7 @@ The survey compares the commands shipped here with the command syntax and option
 | `label` | No known gaps |  |  |
 | `loadfix` | No known gaps | Run a DOS executable above the first 64 KiB and return its exit code. |  |
 | `loadhigh` (`lh`) | No known gaps | Run an external program in upper memory when it fits. |  |
-| `mbasic.com` | Project extra | BASIC interpreter on the full floppy. |  |
+| `mbasic` | Project extra | BASIC interpreter on the full floppy. |  |
 | `md` (`mkdir`) | No known gaps |  |  |
 | `mem` | Gaps identified | Show total, used, and free memory by pool and the largest usable blocks. `/C` (`/CLASSIFY`) groups modules by memory usage. Combine `/P` with `/C` or `/D` (`/DEBUG`) to page console output. Alone, `/P` pages the summary. | `/PROGRAM` lists loaded programs. |
 | `mirror` | Missing command |  | Save disk recovery information and track deletions. |
@@ -134,7 +134,7 @@ The survey compares the commands shipped here with the command syntax and option
 | `print` | No known gaps |  |  |
 | `printfix` | Missing command |  | Suppress printer status checks for printers that cannot answer them. |
 | `prompt` | No known gaps |  |  |
-| `qbasic` | Missing command |  | Run and edit programs in the QBasic environment. |
+| *`qbasic`* | *won't implement* | *`mbasic` provides BASIC on the full floppy.* |  |
 | `rd` (`rmdir`) | No known gaps |  |  |
 | `recover` | No known gaps |  |  |
 | `rem` | No known gaps |  |  |
@@ -158,7 +158,7 @@ The survey compares the commands shipped here with the command syntax and option
 | *`unformat`* | *won't implement* |  | *Recover a formatted volume using saved or reconstructed disk information.* |
 | `ver` | No known gaps | Displays the project version as `4.01N`. |  |
 | `verify` | No known gaps |  |  |
-| `vi.exe` | Project extra | Screen editor on the full floppy. |  |
+| `vi` | Project extra | Screen editor on the full floppy. |  |
 | `vol` | No known gaps |  |  |
 | `xcopy` | No known gaps | `XCOPYCMD` presets XCOPY switches. Explicit switches take precedence. For example, `SET XCOPYCMD=/S /E` includes empty subdirectories and `XCOPY source dest /-S /-E` copies only the top level. |  |
 | Batch syntax | No known gaps in surveyed syntax |  |  |
