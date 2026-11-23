@@ -540,9 +540,6 @@ exec_get_addr:
 exec_set_PDBJ:
 	JMP	exec_set_PDB
 
-exec_no_memj:
-	JMP	exec_no_mem
-
 ;
 ; we have a .COM file.	First, determine if we are merely loading an overlay.
 ;
@@ -563,13 +560,22 @@ exec_alloc_com_file:
 	invoke	SFFromHandle
 	JNC	exec_com_size
 	JMP	exec_bomb
+exec_no_memj:
+	JMP	exec_no_mem
 exec_com_size:
+	CMP	WORD PTR ES:[DI].sf_size+2,0
+	JNE	exec_no_memj
 	MOV	AX,WORD PTR ES:[DI].sf_size
+	CMP	AX,0FEFEh		; 64K less PSP and initial stack word
+	JA	exec_no_memj
+	ADD	AX,11h			; stack word plus paragraph rounding
 	MOV	CL,4
 	SHR	AX,CL
-	ADD	AX,11h			; PSP and room past EOF for the read check
+	ADD	AX,10h			; PSP
+	PUSH	AX
 	invoke	ExecLargest
-	CMP	BX,11h			; PSP plus space for code and stack
+	POP	AX
+	CMP	BX,AX
 	JB	exec_no_memj
 	MOV	exec_size,BX		; save size of allocation block
 	PUSH	BX
