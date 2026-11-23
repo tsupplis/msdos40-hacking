@@ -26,7 +26,7 @@ COMMAND = $(ROOT)/commands/command/command.com
 # Listed explicitly: a wildcard would be empty on a clean tree.
 CMDS = append assign attrib backup chkdsk comp debug diskcomp diskcopy edlin \
        exe2bin fastopen fc fdisk find format graftabl graphics \
-       join keyb label loadfix mem mode more nlsfunc print recover replace restore \
+       join keyb label deltree move loadfix mem mode more nlsfunc print recover replace restore \
        share sort subst sys tree xcopy
 CMD_FILES = $(foreach c,$(CMDS),$(firstword $(wildcard $(ROOT)/commands/$(c)/$(c).com $(ROOT)/commands/$(c)/$(c).exe) $(ROOT)/commands/$(c)/$(c).exe))
 

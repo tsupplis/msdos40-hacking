@@ -88,10 +88,12 @@ The survey compares the commands shipped here with the command syntax and option
 | `help` | Missing command |  | Display the command index and command-specific help. |
 | `if` | No known gaps | `IF [NOT] DIREXIST path command` tests for a directory. Wildcards match directories only. |  |
 | `keyb` | Gaps identified |  | `/E` explicitly selects an enhanced keyboard. |
+| `deltree` | Project extra | Delete files and directory trees, including protected files. Use `/Y` to skip confirmation. |  |
 | `loadfix` | No known gaps | Run a DOS executable above the first 64 KiB and return its exit code. |  |
 | `loadhigh` (`lh`) | No known gaps | Run an external program in upper memory when it fits. |  |
 | `mbasic` | Project extra | BASIC interpreter on the full floppy. |  |
 | `mem` | Gaps identified | Show total, used, and free memory by pool and the largest usable blocks. `/C` (`/CLASSIFY`) groups modules by memory usage. Combine `/P` with `/C` or `/D` (`/DEBUG`) to page console output. Alone, `/P` pages the summary. | `/PROGRAM` lists loaded programs. |
+| `move` | Project extra | Move files within or between drives, or rename a directory in its parent. |  |
 | `more [filename]` | No known gaps | Page a file by name. |  |
 | `printfix` | Missing command |  | Suppress printer status checks for printers that cannot answer them. |
 | `restore` | No known gaps | `/D` lists matching backup paths and preserves destination files. |  |

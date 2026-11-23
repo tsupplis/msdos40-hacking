@@ -1,0 +1,12 @@
+:util MOVE
+:class 1
+:class 2
+:class A
+:def 1 "MOVE [/Y | /-Y] source[,source...] destination",CR,LF
+:def 2 "Invalid parameter or path",CR,LF
+:def 3 "Cannot move %1",CR,LF
+:def 4 "Create directory %1 (Y/N)? "
+:def 5 "Overwrite %1 (Y/N)? "
+:def 6 "Original destination saved as %1",CR,LF
+:def 7 "%1 -> %2",CR,LF
+:end

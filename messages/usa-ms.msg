@@ -1230,3 +1230,17 @@ LOADFIX  db35 0004
 0002 U 0000 "Program not found",CR,LF,"$"
 0003 U 0000 "Insufficient memory",CR,LF,"$"
 0004 U 0000 "Cannot load program",CR,LF,"$"
+MOVE     dc03 0007
+0001 U 0000 "MOVE [/Y | /-Y] source[,source...] destination",CR,LF
+0002 U 0000 "Invalid parameter or path",CR,LF
+0003 U 0000 "Cannot move %1",CR,LF
+0004 U 0000 "Create directory %1 (Y/N)? "
+0005 U 0000 "Overwrite %1 (Y/N)? "
+0006 U 0000 "Original destination saved as %1",CR,LF
+0007 U 0000 "%1 -> %2",CR,LF
+DELTREE  dd51 0005
+0001 U 0000 "DELTREE [/Y] path [path...]",CR,LF
+0002 U 0000 "Invalid parameter or path",CR,LF
+0003 U 0000 "Cannot delete %1",CR,LF
+0004 U 0000 "Delete %1 and all its contents (Y/N)? "
+0006 U 0000 "Deleting %1",CR,LF
