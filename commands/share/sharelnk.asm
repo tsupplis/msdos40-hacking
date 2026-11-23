@@ -19,9 +19,8 @@ include dosseg.asm
 code    SEGMENT BYTE PUBLIC 'code'
         ASSUME  CS:dosgroup
 
-        PUBLIC  IRETT, SWAP_AREA_LEN, Hash_Temp
+        PUBLIC  IRETT, Hash_Temp
 IRETT   DW      0
-SWAP_AREA_LEN  DW  0
 Hash_Temp   DW  0
 
 procedure   LCRITDEVICE,FAR
@@ -181,10 +180,6 @@ procedure   FETCHI_TAG,FAR
         NOP
 endproc     FETCHI_TAG,FAR
 
-procedure   IFS_DOSCALL,FAR
-        NOP
-endproc     IFS_DOSCALL,FAR
-
 procedure   KILNEW,FAR
         NOP
 endproc     KILNEW,FAR
@@ -193,21 +188,7 @@ procedure   PACKET_TEMP,FAR
         NOP
 endproc     PACKET_TEMP,FAR
 
-procedure   Swap_in_DOS_Len,FAR
-        NOP
-endproc     Swap_in_DOS_Len,FAR
 
-procedure   swap_always_area,far
-        NOP
-endproc     swap_always_area,FAR
-
-procedure   swap_always_area_len,FAR
-        NOP
-endproc     swap_always_area_len,FAR
-
-procedure   swap_in_dos,FAR
-        NOP
-endproc     swap_in_dos,FAR
 
 code    ENDS
     END

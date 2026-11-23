@@ -54,7 +54,15 @@ EXTRA_FILES  = $(ROOT)/commands/graphics/graphics.pro $(SELECT_FILES) \
 
 FULL_FILES = $(ROOT)/extra/mbasic.com $(ROOT)/extra/vi.exe
 
-IMAGES = msdos40_base.img msdos40_dist.img msdos40_full.img
+SDK = $(ROOT)/sdk
+DEV_BIN = $(addprefix $(SDK)/bin/,cl.exe c1.exe c2.exe c3.exe cl.err c1.err c23.err \
+          masm.exe link.exe lib.exe nmake.exe tools.ini) \
+          $(ROOT)/commands/debug/debug.com $(ROOT)/commands/exe2bin/exe2bin.exe $(FULL_FILES)
+DEV_LIB = $(addprefix $(SDK)/lib/,slibce.lib slibfp.lib em.lib)
+DEV_HEADERS = $(wildcard $(SDK)/include/*.h $(SDK)/include/sys/*.h)
+DEV_EXAMPLES = $(addprefix $(SDK)/examples/,c/Makefile c/hello.c asm/Makefile asm/hello.asm)
+
+IMAGES = msdos40_base.img msdos40_dist.img msdos40_full.img msdos40_dev.img
 
 # Names expected on the finished full image (used by "make check")
 EXPECTED = IO.SYS MSDOS.SYS COMMAND.COM CONFIG.SYS AUTOEXEC.BAT \
@@ -143,3 +151,24 @@ check: msdos40_full.img
 
 clean:
 	rm -f *.img ../disks.zip ../disks.zip.tmp .listing.tmp crlf.tmp
+
+msdos40_dev.img: Makefile $(SDK)/env.bat $(DEV_BIN) $(DEV_LIB) $(DEV_HEADERS) $(DEV_EXAMPLES)
+	rm -f $@.tmp
+	mformat -C -f 1440 -v MSDOS40DEV -i $@.tmp ::
+	mmd -i $@.tmp ::BIN ::LIB ::INCLUDE ::INCLUDE/SYS ::EXAMPLES ::EXAMPLES/C ::EXAMPLES/ASM
+	mcopy -t -i $@.tmp $(SDK)/env.bat ::ENV.BAT
+	@set -e; for group in BIN LIB INCLUDE; do \
+	  case $$group in BIN) files="$(DEV_BIN)";; LIB) files="$(DEV_LIB)";; \
+	    INCLUDE) files="$(DEV_HEADERS)";; esac; \
+	  for f in $$files; do \
+	    n=`basename "$$f" | tr 'a-z' 'A-Z'`; dir=$$group; \
+	    case $$f in */include/sys/*) dir=INCLUDE/SYS;; esac; \
+	    mcopy -i $@.tmp "$$f" ::$$dir/$$n; \
+	  done; \
+	done
+	@set -e; for f in $(DEV_EXAMPLES); do \
+	  n=`basename "$$f" | tr 'a-z' 'A-Z'`; \
+	  case $$f in */examples/c/*) dir=C;; *) dir=ASM;; esac; \
+	  mcopy -i $@.tmp "$$f" ::EXAMPLES/$$dir/$$n; \
+	done
+	mv $@.tmp $@

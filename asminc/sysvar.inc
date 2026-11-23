@@ -20,7 +20,7 @@ SYSI_INTER	    DW	    ?		; null device interrupt entry point
 SYSI_NAME	    DB	 8 DUP(?)	; null device name
 SYSI_SPLICE	    DB	    0		; TRUE -> splicees being done
 SYSI_IBMDOS_SIZE    DW	    ?		; DOS size in paragraphs
-SYSI_IFS_DOSCALL@   DD	    ?		; IFS DOS service rountine entry
+SYSI_IFS_DOSCALL@   DD	    ?		; Reserved null pointer (former IFS DOS callback)
 SYSI_IFS	    DD	    ?		; IFS header chain
 SYSI_BUFFERS	    DW	    ?,0 	; BUFFERS= values (m,n)
 SYSI_BOOT_DRIVE     DB	    ?		; boot drive A=1 B=2,..

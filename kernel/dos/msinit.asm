@@ -33,21 +33,13 @@ include fastopen.inc
 	I_need	FastOpenTable,BYTE	 ; table for FASTOPEN
 	I_need	FETCHI_TAG,WORD 	 ; TAG CHECK
 	I_need	Special_Entries,WORD	 ; address of special entries ;AN007;
-	I_need	IFS_DOS_CALL,DWORD	 ; IFS IBMDOS CALL entry      ;AN000;
 	I_need	HASHINITVAR,WORD	 ; hash table variables       ;AN000;
 	I_need	Packet_Temp,WORD	 ; used for initial Hash table;AN000;
 	I_need	BUF_HASH_PTR,DWORD	 ; used for initial Hash table;AN000;
-	I_need	SWAP_ALWAYS_AREA,DWORD	 ; swap always area addr    ;AN000;
-	I_need	SWAP_ALWAYS_AREA_LEN,WORD; swap always area length  ;AN000;
-	I_need	SWAP_IN_DOS,DWORD	 ; swap in dos area	    ;AN000;
-	I_need	SWAP_IN_DOS_LEN,WORD	 ; swap in dos area length  ;AN000;
-	I_need	SWAP_AREA_LEN,WORD	 ; swap area length	    ;AN000;
-	I_need	SWAP_START,BYTE 	 ; swap start addr	    ;AN000;
-	I_need	SWAP_ALWAYS,BYTE	 ; swap always addr	    ;AN000;
 	I_need	Hash_Temp,WORD		 ; temporary Hash table     ;AN000;
 
 CODE		SEGMENT BYTE PUBLIC 'CODE'
-	Extrn	IRETT:NEAR,INT2F:NEAR,CALL_ENTRY:NEAR,QUIT:NEAR,IFS_DOSCALL:FAR
+	Extrn	IRETT:NEAR,INT2F:NEAR,CALL_ENTRY:NEAR,QUIT:NEAR
 	Extrn	COMMAND:NEAR,ABSDRD:NEAR,ABSDWRT:NEAR
 CODE		ENDS
 
@@ -566,35 +558,6 @@ OUTDONE:
 	MOV	WORD PTR ES:[SI.FASTOPEN_NAME_CACHING + 2],ES
 	MOV	ES:[FETCHI_TAG],22642	  ; TAG for IBM,
 					  ; Fetchi's serial # = 822642
-	MOV	WORD PTR ES:[IFS_DOS_CALL+2],ES   ;IFS. 			;AN000;
-	MOV	SI,OFFSET DOSGROUP:IFS_DOSCALL	  ;IFS. 			;AN000;
-	MOV	WORD PTR ES:[IFS_DOS_CALL],SI	  ;IFS. 			;AN000;
-
-	MOV	DI,OFFSET DOSGROUP:SWAP_START	  ;IFS. 			;AN000;
-	MOV	CX,OFFSET DOSGROUP:SWAP_END	  ;IFS. 			;AN000;
-	MOV	DX,OFFSET DOSGroup:Swap_Always	  ;IFS. 			;AN000;
-	MOV	BP,CX			;IFS.					;AN000;
-	SUB	BP,DI			;IFS.					;AN000;
-	SHR	BP,1			;IFS. div by 2, remainder in carry	;AN000;
-	ADC	BP,0			;IFS. div by 2 + round up		;AN000;
-	SHL	BP,1			;IFS. round up to 2 boundary.		;AN000;
-	MOV	ES:[SWAP_AREA_LEN],BP	;IFS.					;AN000;
-
-	SUB	CX,DX			;IFS.					;AN000;
-	SUB	DX,DI			;IFS.					;AN000;
-	SHR	CX,1			;IFS. div by 2, remainder in carry	;AN000;
-	ADC	CX,0			;IFS. div by 2 + round up		;AN000;
-	SHL	CX,1			;IFS. round up to 2 boundary.		;AN000;
-	MOV	ES:[SWAP_IN_DOS_LEN],CX 	    ;IFS.			;AN000;
-	MOV	WORD PTR ES:[SWAP_ALWAYS_AREA],DI   ;IFS.			;AN000;
-	MOV	WORD PTR ES:[SWAP_ALWAYS_AREA+2],ES ;IFS.			;AN000;
-	OR	DX,8000H			    ;IFS.			;AN000;
-	MOV	ES:[SWAP_ALWAYS_AREA_LEN],DX	    ;IFS.			;AN000;
-	MOV	DI,OFFSET DOSGroup:Swap_Always	    ;IFS.			;AN000;
-	MOV	WORD PTR ES:[SWAP_IN_DOS],DI	    ;IFS.			;AN000;
-	MOV	WORD PTR ES:[SWAP_IN_DOS+2],ES	    ;IFS.			;AN000;
-
-
 
 ;F.C Modification end	 DOS 3.3
 

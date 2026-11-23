@@ -688,17 +688,6 @@ SEQ_SECTOR     label  DWORD                                                     
 NO_NAME_ID       label byte                                                           ;AN000;
                  db   'NO NAME    '              ; null media id                      ;AN000;
 
-          PUBLIC SWAP_AREA_TABLE                                                      ;AN000;
-SWAP_AREA_TABLE  label byte                                                           ;AN000;
-        I_am    NUM_SWAP_AREA,WORD,<2>           ; number of swap areas               ;AN000;
-        I_am    SWAP_IN_DOS,DWORD                ; swap in dos area                   ;AN000;
-        I_am    SWAP_IN_DOS_LEN,WORD             ; swap in dos area length            ;AN000;
-        I_am    SWAP_ALWAYS_AREA,DWORD           ; swap always area                   ;AN000;
-        I_am    SWAP_ALWAYS_AREA_LEN,WORD        ; swap always area length            ;AN000;
-        I_am    IFSFUNC_SWAP_IN_DOS,DWORD        ; ifsfunc swap in dos area           ;AN000;
-        I_am    IFSFUNC_SWAP_IN_DOS_LEN,WORD     ; ifsfunc swap in dos area length    ;AN000;
-
-        I_am    SWAP_AREA_LEN,WORD               ; swap area length                   ;AN000;
         I_am    FIRST_BUFF_ADDR,WORD             ; first buffer address               ;AN000;
         I_am    SPECIAL_VERSION,WORD,<0>         ;AN006; used by INT 2F 47H
         I_am    FAKE_COUNT,<255>                 ;AN008; fake version count

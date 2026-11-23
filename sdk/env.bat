@@ -1,0 +1,6 @@
+@ECHO OFF
+REM Change B: to the drive containing the development floppy.
+SET DEVDRIVE=B:
+SET PATH=%DEVDRIVE%\BIN;%PATH%
+SET INCLUDE=%DEVDRIVE%\INCLUDE
+SET LIB=%DEVDRIVE%\LIB

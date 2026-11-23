@@ -51,7 +51,6 @@ macro2.obj +
 file.obj +
 lock.obj +
 share.obj +
-extattr.obj +
-ifs.obj
+extattr.obj
 msdos.exe
 msdos.map /M;

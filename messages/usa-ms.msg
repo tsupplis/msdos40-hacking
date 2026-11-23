@@ -527,8 +527,6 @@ SHARE    54e6 0000
 NLSFUNC  54fa 0000
 ANSI     550e 0001
 0010 U 0000 "Invalid parameter - %1",CR,LF
-IFSFUNC  554e 0001
-0004 U 0001 "Invalid configuration",CR,LF
 MSBIO    558d 0020
 0003 U 0000 13,10,"Unrecognized command in CONFIG.SYS"
 0004 U 0000 13,10,"$"
@@ -1062,14 +1060,6 @@ XMA2EMS  b031 0030
 0028 U 0000 "    "," KB OK","$"
 0029 U 0000 "     ",CR,LF,"$"
 0030 U 0000 "$"
-FILESYS  b678 0007
-0010 U 0003  "  PAUSED  %1   %2   %3",CR,LF
-0011 U 0001  "          %1   %2   %3",CR,LF
-0012 U 0001  "          Local   IFS",CR,LF
-0013 U 0001  "  Status  Device  Name        Parameters",CR,LF
-0014 U 0001  "  ______  ______  _________   ___________________",CR,LF,CR,LF
-0015 U 0003  "No entries found",CR,LF
-0016 U 0003  "  ERROR   %1   %2   %3",CR,LF
 FDISK    b7f3 0123
 0004 U 0000 "Cannot FDISK with network loaded",CR,LF
 0005 U 0000 "No fixed disks present",CR,LF

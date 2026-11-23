@@ -22,7 +22,7 @@ DOS_OBJS = msdisp.obj mscode.obj time.obj getset.obj parse.obj misc.obj misc2.ob
            close.obj dircall.obj disk.obj disk2.obj disk3.obj dir.obj dir2.obj dev.obj \
            mknode.obj rom.obj fcb.obj msctrlc.obj fat.obj buf.obj proc.obj alloc.obj \
            srvcall.obj util.obj handle.obj macro.obj macro2.obj file.obj lock.obj share.obj \
-           extattr.obj ifs.obj
+           extattr.obj
 
 COMMON_PREREQS = $(COMMON)/nibdos.obj $(COMMON)/const2.obj $(COMMON)/msdata.obj \
                  $(COMMON)/mstable.obj $(COMMON)/msdosme.obj

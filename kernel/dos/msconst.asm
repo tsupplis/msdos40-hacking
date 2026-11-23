@@ -84,7 +84,7 @@ SYSINITVAR  LABEL   WORD		; [SYSTEM]
 	DB	"NUL     "              ; [SYSTEM] Name of null device
 	I_am	Splices,BYTE,<0>	; [SYSTEM] TRUE => splices being done
 	I_am	Special_Entries,WORD,<0>; [SYSTEM] address of specail entries	;AN000;
-	I_am	IFS_DOS_CALL,DWORD	; [SYSTEM] entry for IFS DOS service	;AN000;
+	I_am	IFS_DOS_CALL,DWORD,<0,0> ; Reserved null pointer in the DOS system variables
 	I_am	IFS_HEADER,DWORD	; [SYSTEM] IFS header chain		;AN000;
 	I_am	BUFFERS_PARM1,WORD,<0>	; [SYSTEM] value of BUFFERS= ,m 	;AN000;
 	I_am	BUFFERS_PARM2,WORD,<0>	; [SYSTEM] value of BUFFERS= ,n 	;AN000;

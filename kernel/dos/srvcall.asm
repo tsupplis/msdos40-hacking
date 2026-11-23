@@ -48,10 +48,6 @@ Installed = TRUE
 	I_Need	ExtErrPt,DWORD
 	I_Need	EXTERR_LOCUS,BYTE	; Extended Error Locus
 	i_need	JShare,DWORD
-	i_need	SWAP_AREA_TABLE,BYTE
-	i_need	SWAP_ALWAYS_AREA,DWORD
-	i_need	SWAP_ALWAYS_AREA_LEN,WORD
-	i_need	SWAP_AREA_LEN,WORD
 
 BREAK <ServerCall -- Server DOS call>
 
@@ -101,8 +97,6 @@ TABLE	ENDS
 ;	AL=8	Set truncate flag
 ;	AL=9	Close all spool files
 ;	AL=10	SetExtendedError
-;	AL=11	DOS4.00 Get DOS data area
-;		    DS:SI -> swap table
 
 	procedure   $ServerCall,NEAR
 ASSUME	DS:NOTHING,ES:NOTHING
@@ -110,15 +104,8 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	JB	SET_STUFF
 	CMP	AL,9
 	JBE	NO_SET_ID		; No DPL on calls 7,8,9
-	CMP	AL,11				   ;IFS.			;AN000;
-	JNZ	SET_STUFF			   ;IFS.			;AN000;
-	MOV	DI,OFFSET DOSGROUP:SWAP_AREA_TABLE ;IFS.			;AN000;
-	PUSH	SS				   ;IFS.			;AN000;
-	POP	ES				   ;IFS.			;AN000;
-	invoke	GET_USER_STACK			   ;IFS.			;AN000;
-	MOV	[SI.user_DS],ES 		   ;IFS.   ds:si -> swap tab	;AN000;
-	MOV	[SI.user_SI],DI 		   ;IFS.			;AN000;
-	transfer SYS_RET_OK			   ;IFS.			;AN000;
+	CMP	AL,0Bh
+	JE	BadServerCall		; Retired DOS 4 swap-table query has no DPL.
 SET_STUFF:
 	MOV	SI,DX			; Point to DPL with DS:SI
 	MOV	BX,[SI.DPL_UID]
@@ -130,6 +117,7 @@ NO_SET_ID:
 	PUSH	ServerTab		; push table address
 	PUSH	AX
 	Invoke	TableDispatch
+BadServerCall:
 	MOV	EXTERR_LOCUS,errLoc_Unk ; Extended Error Locus
 	error	error_invalid_function
 ServerReturn:
@@ -258,10 +246,15 @@ ASSUME	DS:NOTHING,ES:NOTHING
 
 GET_DOS_DATA:
 ASSUME	DS:NOTHING,ES:NOTHING
-	LES	DI,[SWAP_ALWAYS_AREA]	     ;IFS. get beginning addr of swap ;AC000;
-	MOV	DX,[SWAP_ALWAYS_AREA_LEN]    ;IFS. get swap always area len   ;AC000;
-	AND	DX,7FFFH		     ;IFS. clear high bit	      ;AC000;
-	MOV	CX,[SWAP_AREA_LEN]	     ;IFS. get swap len 	      ;AC000;
+	PUSH	SS
+	POP	ES			; DOSGROUP segment
+	MOV	DI,OFFSET DOSGROUP:SWAP_START
+	MOV	DX,OFFSET DOSGROUP:SWAP_ALWAYS
+	SUB	DX,DI
+	MOV	CX,OFFSET DOSGROUP:SWAP_END
+	SUB	CX,DI
+	INC	CX
+	AND	CX,0FFFEh		; Report the total rounded up to a word.
 	invoke	GET_USER_STACK
 	MOV	[SI.user_DS],ES 	     ;	set user regs
 	MOV	[SI.user_SI],DI 	     ;
