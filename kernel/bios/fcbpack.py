@@ -19,7 +19,7 @@ end = symbols["hmaioend"]
 native = image[start:end]
 upper = bytearray(native)
 base = 0x100
-entries = [15, 16, 19, 20, 21, 22, 23, 33, 34, 35, 36, 39, 40]
+entries = [15, 16, 19, 20, 21, 22, 23, 33, 34, 35, 36, 39, 40, 78, 79]
 backs = {}
 segments = []
 low_relative = []
@@ -94,9 +94,14 @@ selectors = {symbols[n] for n in ("dos_open", "dos_create", "dos_read", "dos_wri
 for name, origin in [
     ("fcbio", start),
     ("fcbio2", symbols["getrr"]),
+    ("search", symbols["$find_first"]),
+    ("create", symbols["hma_create"]),
+    ("open", symbols["hma_open"]),
     ("disk", symbols["hma_read"]),
     ("disk2", symbols["setup"]),
     ("disk3", symbols["diskwrite"]),
+    ("dir2", symbols["hma_getpath"]),
+    ("fcb", symbols["hma_makefcb"]),
 ]:
     for within, relative in object_fixups(dos / (name + ".obj")):
         address = origin + within
@@ -122,7 +127,8 @@ for name, origin in [
                 upper[off : off + 2] = word(base + symbols[body] - start)
             else:
                 upper[off : off + 2] = word(base + bridge(value))
-table = [0] * 43
+vectors = ("read", "write", "open", "create", "getpath", "getpathnoset", "makefcb", "nametrans", "packname")
+table = [0] * (max(entries) + 1)
 lowentries = []
 for fn in entries:
     pos = symbols["dispatch"] + 2 * fn
@@ -130,9 +136,11 @@ for fn in entries:
     assert 0 <= target < len(native)
     lowentries.extend([pos, target])
     table[fn] = target
-table[41] = symbols["hma_read"] - start
-table[42] = symbols["hma_write"] - start
-for fn in entries + [41, 42]:
+lowvectors = []
+for fn, name in enumerate(vectors, 41):
+    table[fn] = symbols["hma_" + name] - start
+    lowvectors.extend([symbols[name + "_vector"], table[fn]])
+for fn in entries + list(range(41, 41 + len(vectors))):
     target = table[fn]
     table[fn] = len(upper) + base
     upper.extend(b"\xe8" + word(target - len(upper) - 3) + b"\xcb")
@@ -158,6 +166,7 @@ out += export("FcbNative", "BYTE", native)
 out += "        ALIGN 16\n" + export("FcbUpper", "BYTE", upper)
 out += export("FcbRelative", "WORD", low_relative + [65535])
 out += export("FcbSegments", "WORD", segments + [65535])
+out += export("FcbVectors", "WORD", lowvectors)
 out += export("FcbEntries", "WORD", lowentries + [65535])
 out += "SYSINITSEG ENDS\nEND\n"
 bios = root / "kernel/bios"
@@ -169,10 +178,6 @@ sizes = (
             "FcbHiLength": len(upper),
             "FcbLinked": start,
             "FcbGatePtr": symbols["fcb_gate"],
-            "ReadBody": symbols["hma_read"] - start,
-            "WriteBody": symbols["hma_write"] - start,
-            "ReadVector": symbols["read_vector"],
-            "WriteVector": symbols["write_vector"],
             "FcbEntryIP": symbols["fcb_entry"],
             "LowReturn": symbols["fcbreturn"],
         }.items()

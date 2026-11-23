@@ -3,7 +3,7 @@ SYSINITSEG SEGMENT PUBLIC 'SYSTEM_INIT'
         ASSUME  CS:SYSINITSEG,DS:SYSINITSEG
         INCLUDE fcbsizes.inc
         EXTRN   FcbNative:BYTE,FcbUpper:BYTE
-        EXTRN   FcbRelative:WORD,FcbSegments:WORD,FcbEntries:WORD
+        EXTRN   FcbRelative:WORD,FcbSegments:WORD,FcbEntries:WORD,FcbVectors:WORD
         EXTRN   ROUND:NEAR
         EXTRN   FINAL_DOS_LOCATION:WORD,MEMHI:WORD,HMA_REQUESTED:BYTE
         PUBLIC  InitFcbCode,PlaceFcbCode,GateBody,GateStart,GateXms
@@ -103,24 +103,16 @@ PlaceFix:
         ADD     ES:[DI],BX
         JMP     PlaceFix
 PlaceSlots:
-        MOV     SI,OFFSET FcbEntries
+        MOV     SI,OFFSET FcbVectors       ; followed by FcbEntries
 PlaceSlot:
         LODSW
         CMP     AX,-1
-        JE      PlaceVectors
+        JE      PlaceDone
         MOV     DI,AX
         LODSW
         ADD     AX,DX
         MOV     ES:[DI],AX
         JMP     PlaceSlot
-        ; Near vectors for the handle and device entry points.
-PlaceVectors:
-        MOV     AX,ReadBody
-        ADD     AX,DX
-        MOV     ES:[ReadVector],AX
-        MOV     AX,WriteBody
-        ADD     AX,DX
-        MOV     ES:[WriteVector],AX
 PlaceDone:
         RET
 PlaceFarLow:
@@ -197,8 +189,19 @@ GateStart:
         MOV     [BP-2],AX
         POP     BX
         POP     AX
+        CMP     AH,45                   ; pathname calls return the DPB in ES:BP
         MOV     AX,[BP+2]               ; original AX before gate selection
+        JB      GateCall
+        PUSH    CS
+        CALL    GatePath
+        PUSH    SI
+        MOV     SI,SP
+        MOV     SS:[SI+6],BP            ; return the pathname routine's BP
+        POP     SI
+        JMP     SHORT GateResult
+GateCall:
         CALL    DWORD PTR [BP-4]
+GateResult:
         POP     BP
         POP     BP
         POP     BP
@@ -211,6 +214,11 @@ GateStart:
         MOV     [BP+4],SS
         POP     AX
         POP     BP
+        RETF
+GatePath:
+        PUSH    WORD PTR [BP-2]
+        PUSH    WORD PTR [BP-4]
+        MOV     BP,[BP]                 ; original BP on device paths
         RETF
 GateBack:
         ; A low call can switch stacks to abort or restart the operation.

@@ -185,12 +185,51 @@ nomore:
 ENDIF
 
 LOCAL_OPEN:
+	JMP	WORD PTR CS:[OPEN_VECTOR]
+OpenFar:
+	PUSH	AX
+	MOV	AH,43
+	JMP	FCB_SELECTED
+
+	EXTRN	FCB_SELECTED:NEAR
+	PUBLIC	OPEN_VECTOR
+OPEN_VECTOR	DW OFFSET DOSGROUP:OpenFar
+
+;
+; Finish SFT initialization for new reference.	Set the correct mode.
+;
+;   Inputs:
+;	ThisSFT points to SFT
+;
+;   Outputs:
+;	Carry clear
+;   Registers modified: AX.
+
+	entry	SET_SFT_MODE
+	DOSAssume   CS,<DS>,"Set_SFT_Mode"
+	ASSUME	ES:NOTHING
+
+	LES	DI,ThisSFT
+	invoke	DEV_OPEN_SFT
+	TEST	ES:[DI.sf_mode],sf_isfcb; Clears carry
+	retz				; sf_mode correct
+	MOV	AX,[CurrentPDB]
+	MOV	ES:[DI.sf_PID],AX	; For FCB sf_PID=PID
+
+Clear_FastOpen:
+	return			       ;;;;; DOS 3.3
+
+EndProc DOS_Open
+CODE	ENDS
+
+LAST	SEGMENT PARA PUBLIC 'LAST'
+	procedure HMA_OPEN,NEAR
 	EnterCrit   critDisk
 
 ; DOS 3.3 FastOPen 6/16/86
 
 	OR	[FastOpenFlg],FastOpen_Set+Special_Fill_Set   ;  only open can
-	invoke	GetPath
+	invoke	HMA_GETPATH
 
 
 ; DOS 3.3 FastOPen 6/16/86
@@ -202,10 +241,10 @@ LOCAL_OPEN:
 OpenFNF:
 	MOV	AX,error_file_not_found
 OpenBadRet:
-	AND	BYTE PTR CS:[FastOpenFlg],Fast_yes    ;; DOS 3.3
+	AND	BYTE PTR SS:[FastOpenFlg],Fast_yes    ;; DOS 3.3
 	STC
 	LeaveCrit   critDisk
-	JMP	Clear_FastOpen
+	RET
 
 bad_path:
 	MOV	AX,error_path_not_found
@@ -287,20 +326,16 @@ NORM0:
 
 ;;; File Tagging DOS 4.00
 	invoke	DOOPEN			; Fill in SFT
-	AND	BYTE PTR CS:[FastOpenFlg],Fast_yes    ;; DOS 3.3
+	AND	BYTE PTR SS:[FastOpenFlg],Fast_yes    ;; DOS 3.3
 	CALL	DO_SHARE_CHECK		;
 	JNC	Share_Ok
 	LeaveCrit   critDisk
-	JMP	Clear_FastOPen
+	RET
 
 SHARE_OK:
 	MOV	AX,3
 	LES	DI,ThisSFT
-if installed
-	call	JShare + 14 * 4
-else
-	Call	ShSU
-endif
+	invoke	Share_Update_SFT
 ;; DOS 4.00 10/27/86
 	LES	DI,ThisSFT			   ; if this is a newly 	;AN000;
 	CMP	ES:[DI.sf_firclus],0		   ; created file then		;AN000;
@@ -315,31 +350,22 @@ no_fastseek:
 
 	LeaveCrit   critDisk
 
-;
-; Finish SFT initialization for new reference.	Set the correct mode.
-;
-;   Inputs:
-;	ThisSFT points to SFT
-;
-;   Outputs:
-;	Carry clear
-;   Registers modified: AX.
+	transfer SET_SFT_MODE
+EndProc HMA_OPEN
+LAST	ENDS
 
-	entry	SET_SFT_MODE
-	DOSAssume   CS,<DS>,"Set_SFT_Mode"
-	ASSUME	ES:NOTHING
+CODE	SEGMENT BYTE PUBLIC 'CODE'
 
-	LES	DI,ThisSFT
-	invoke	DEV_OPEN_SFT
-	TEST	ES:[DI.sf_mode],sf_isfcb; Clears carry
-	retz				; sf_mode correct
-	MOV	AX,[CurrentPDB]
-	MOV	ES:[DI.sf_PID],AX	; For FCB sf_PID=PID
 
-Clear_FastOpen:
-	return			       ;;;;; DOS 3.3
-
-EndProc DOS_Open
+; Enter the sharer from resident code with the HMA reference released.
+procedure Share_Update_SFT,NEAR
+if installed
+	call	JShare + 14 * 4
+else
+	Call	ShSU
+endif
+	RET
+EndProc Share_Update_SFT
 
 ; Called on sharing violations. ES:DI points to SFT. AX has error code
 ; If SFT is FCB or compatibility mode gens INT 24 error.

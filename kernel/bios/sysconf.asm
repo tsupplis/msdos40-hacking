@@ -829,6 +829,14 @@ DosPass3:			;AN026;
 	JNE	CheckInstall
 	XOR     BX,BX
 DosOption:
+        CMP     BYTE PTR ES:[SI],' '
+        JE      DosSkipSpace
+        CMP     BYTE PTR ES:[SI],9
+        JNE     DosKeyword
+DosSkipSpace:
+        INC     SI
+        JMP     SHORT DosOption
+DosKeyword:
         CMP     WORD PTR ES:[SI],'IH'
         JNE     DosUmb
         CMP     WORD PTR ES:[SI+2],'HG'

@@ -203,6 +203,20 @@ NORMFCB8:
 
 EndProc $DIR_SEARCH_NEXT
 
+	EXTRN	FCB_SELECTED:NEAR
+	PUBLIC	PACKNAME_VECTOR
+PACKNAME_VECTOR DW OFFSET DOSGROUP:PackNameFar
+
+	procedure PackName,NEAR
+	JMP	WORD PTR CS:[PACKNAME_VECTOR]
+PackNameFar:
+	PUSH	AX
+	MOV	AH,49
+	JMP	FCB_SELECTED
+EndProc PackName
+CODE	ENDS
+
+LAST	SEGMENT PARA PUBLIC 'LAST'
 ;   Assembler usage:
 ;	    MOV AH, FindFirst
 ;	    LDS DX, name
@@ -252,14 +266,14 @@ FindSet:
 	POP	SI			; Point back to dir_name
  IF  DBCS									;AN000;
 	PUSH	DI			; XXXX save dest name 2/13/KK		;AN000;
-	CALL	PackName							;AN000;
+	CALL	HMA_PACKNAME							;AN000;
 	POP	DI			; XXXX Recover dest name 2/13/KK	;AN000;
 	CMP	BYTE PTR ES:[DI],05H	; XXXX Need fix?	 2/13/KK	;AN000;
 	JNZ	FNXXX			; XXXX No		 2/13/KK	;AN000;
 	MOV	BYTE PTR ES:[DI],0E5H	; XXXX Yes, Fix 	 2/13/KK	;AN000;
 FNXXX:					; 2/13/KK				;AN000;
  ELSE										;AN000;
-	CALL	PackName
+	CALL	HMA_PACKNAME
  ENDIF
 	transfer    Sys_Ret_OK		; bye with no errors
 EndProc $FIND_FIRST
@@ -302,7 +316,7 @@ Break	<PackName - convert file names from FCB to ASCIZ>
 ;		ES:DI points to a destination area (13 bytes)
 ;   Output:	Above pointers advanced
 ;   Registers modified: SI,DI,CX,AL
-	Procedure PackName,NEAR
+	Procedure HMA_PACKNAME,NEAR
 	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	MOV	CX,8			; Pack the name
 	REP	MOVSB			; Move all of it
@@ -332,7 +346,10 @@ find_done:
 	XOR	AX,AX
 	STOSB				; NUL terminate
 	return
-EndProc PackName
+EndProc HMA_PACKNAME
+LAST	ENDS
+
+CODE	SEGMENT BYTE PUBLIC 'CODE'
 
 	procedure   GET_FAST_SEARCH,NEAR
 	ASSUME	DS:NOTHING,ES:NOTHING

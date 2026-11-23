@@ -50,7 +50,31 @@ include doscntry.inc			;AN000; 	2/12/KK
 	i_need	DrvErr,BYTE		;AN000; 	2/12/KK
 	i_need	DOS34_FLAG,WORD 	;AN000; 	2/12/KK
 
-	procedure   MakeFcb,NEAR
+	EXTRN	FCB_SELECTED:NEAR
+
+	PUBLIC	MAKEFCB_VECTOR
+MAKEFCB_VECTOR DW OFFSET DOSGROUP:MakeFcbFar
+	procedure MakeFcb,NEAR
+	JMP	WORD PTR CS:[MAKEFCB_VECTOR]
+MakeFcbFar:
+	PUSH	AX
+	MOV	AH,47
+	JMP	FCB_SELECTED
+EndProc MakeFcb
+
+	PUBLIC	NAMETRANS_VECTOR
+NAMETRANS_VECTOR DW OFFSET DOSGROUP:NameTransFar
+	procedure NameTrans,NEAR
+	JMP	WORD PTR CS:[NAMETRANS_VECTOR]
+NameTransFar:
+	PUSH	AX
+	MOV	AH,48
+	JMP	FCB_SELECTED
+EndProc NameTrans
+CODE	ENDS
+
+LAST	SEGMENT PARA PUBLIC 'LAST'
+	procedure   HMA_MAKEFCB,NEAR
 ScanSeparator	=   1
 DRVBIT	EQU	2
 NAMBIT	EQU	4
@@ -119,7 +143,13 @@ NODRV:
 	DEC	SI		; Back up
 	INC	DI		; Skip drive byte
 
-	entry	NORMSCAN
+	JMP	NORMSCAN
+EndProc HMA_MAKEFCB
+LAST	ENDS
+
+; Keep the scan loop with GETLET so each character is handled in DOSGROUP.
+CODE	SEGMENT BYTE PUBLIC 'CODE'
+	procedure NORMSCAN,NEAR
 
 	MOV	CX,8
 	CALL	GETWORD 	; Get 8-letter file name
@@ -227,7 +257,10 @@ SCANB:
  ENDIF				;AN000;
 	DEC	SI
 	return
-EndProc MakeFCB
+EndProc NORMSCAN
+CODE	ENDS
+
+LAST	SEGMENT PARA PUBLIC 'LAST'
 
 ;
 ; NameTrans is used by FindPath to scan off an element of a path.  We must
@@ -238,7 +271,7 @@ EndProc MakeFCB
 ;		ES = DOSGroup
 ;		DS:SI advanced after name
 ;   Registers modified: DI,AX,DX,CX
-procedure   NameTrans,near
+procedure   HMA_NAMETRANS,near
 	ASSUME	DS:NOTHING,ES:NOTHING
 	MOV	BYTE PTR [SpaceFlag],1
 	context ES
@@ -262,11 +295,18 @@ IF DBCS 			;AN000;;KK.
 notdbcs:			;AN000;
 ENDIF				;AN000;
 	CMP	[NAME1],0E5H
-	retnz
+	JE	TranslateDeleted
+	RET
+TranslateDeleted:
 	MOV	[NAME1],5	; Magic name translation
 	return
 
-EndProc nametrans
+EndProc HMA_NAMETRANS
+	PUBLIC	HmaIoEnd
+HmaIoEnd LABEL BYTE
+LAST	ENDS
+
+CODE	SEGMENT BYTE PUBLIC 'CODE'
 
 Break	<GETLET, DELIM -- CHECK CHARACTERS AND CONVERT>
 

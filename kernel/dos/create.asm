@@ -164,15 +164,15 @@ nomore:
 ENDIF
 
 LOCAL_CREATE:
-	CALL	Set_EXT_mode	       ;AN000;EO. set mode if from extended open
-	JC	setdone 	       ;AN000;EO.
-	OR	ES:[DI].sf_mode,sharing_compat+open_for_both
-setdone:
-	EnterCrit   critDisk
-	invoke	MakeNode
-	JNC	Create_ok
-	mov	[VOLCHNG_FLAG],-1	; indicate no change in volume label
-	LeaveCrit   critDisk
+	JMP	WORD PTR CS:[CREATE_VECTOR]
+CreateFar:
+	PUSH	AX
+	MOV	AH,44
+	JMP	FCB_SELECTED
+
+	EXTRN	FCB_SELECTED:NEAR
+	PUBLIC	CREATE_VECTOR
+CREATE_VECTOR	DW OFFSET DOSGROUP:CreateFar
 
 	entry	SET_MKND_ERR
 	DOSAssume   CS,<DS>,"Set_MkNd_Err"
@@ -200,6 +200,23 @@ CRTERRTAB LABEL BYTE		; Lookup table for MakeNode returns
 	DB	error_file_not_found	; MakeNode error 7
 CREAT001E  label byte
 TABLE	ENDS
+
+EndProc DOS_Create
+CODE	ENDS
+
+LAST	SEGMENT PARA PUBLIC 'LAST'
+	procedure HMA_CREATE,NEAR
+	CALL	Set_EXT_mode	       ;AN000;EO. set mode if from extended open
+	JC	setdone 	       ;AN000;EO.
+	OR	ES:[DI].sf_mode,sharing_compat+open_for_both
+setdone:
+	EnterCrit   critDisk
+	invoke	MakeNode
+	JNC	Create_ok
+	mov	[VOLCHNG_FLAG],-1	; indicate no change in volume label
+	LeaveCrit   critDisk
+
+	transfer SET_MKND_ERR
 
 ;
 ; We have just created a new file.  This results in the truncation of old
@@ -229,15 +246,15 @@ Create_ok:
 NoVolLabel:
 	MOV	ax,2
 	LES	DI,ThisSFT
-if installed
-	call	JShare + 14 * 4
-else
-	Call	ShSU
-endif
+	invoke	Share_Update_SFT
 	LeaveCrit   critDisk
 	transfer SET_SFT_MODE
 
-EndProc DOS_Create
+EndProc HMA_CREATE
+LAST	ENDS
+
+CODE	SEGMENT BYTE PUBLIC 'CODE'
+
 
 ; Inputs:
 ;	[WFP_START] Points to WFP string ("d:/" must be first 3 chars, NUL

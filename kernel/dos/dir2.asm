@@ -70,6 +70,35 @@ asmvar	Kanji
 	I_need	DOS34_FLAG,WORD 	  ;AN000;>32mb
 
 
+	EXTRN	FCB_SELECTED:NEAR
+	PUBLIC	GETPATH_VECTOR,GETPATHNOSET_VECTOR
+GETPATH_VECTOR	DW OFFSET DOSGROUP:PathFar
+GETPATHNOSET_VECTOR DW OFFSET DOSGROUP:PathNoSetFar
+
+	procedure GETPATH,NEAR
+	JMP	WORD PTR CS:[GETPATH_VECTOR]
+PathFar:
+	PUSH	AX
+	MOV	AH,45
+	JMP	FCB_SELECTED
+EndProc GETPATH
+
+	procedure GetPathNoSet,NEAR
+	JMP	WORD PTR CS:[GETPATHNOSET_VECTOR]
+PathNoSetFar:
+	PUSH	AX
+	MOV	AH,46
+	JMP	FCB_SELECTED
+EndProc GetPathNoSet
+
+; Enter the installed FASTOPEN callback from the resident kernel.
+	procedure PathLookup,NEAR
+	CALL	DWORD PTR [BX.FASTOPEN_NAME_CACHING]
+	RET
+EndProc PathLookup
+CODE	ENDS
+
+LAST	SEGMENT PARA PUBLIC 'LAST'
 Break	<GETPATH -- PARSE A WFP>
 
 ; Inputs:
@@ -126,14 +155,14 @@ Break	<GETPATH -- PARSE A WFP>
 ;	      which case [NXTCLUSNUM] and [SECCLUSPOS] need not be valid)
 ; DS preserved, Others destroyed
 
-	procedure   GETPATH,near
+	procedure   HMA_GETPATH,near
 	DOSAssume   CS,<DS>,"GetPath"
 	ASSUME	ES:NOTHING
 
 	MOV	WORD PTR [CREATING],0E500H  ; Not Creating, not DEL *.*
 
 ;Same as GetPath only CREATING and DELALL already set
-	entry	GetPathNoSet
+	entry	HMA_GETPATHNOSET
 	MOV	[EXTERR_LOCUS],errLOC_Disk
 	MOV	WORD PTR CurBuf,-1	; initial setting
 ;
@@ -254,7 +283,7 @@ LOOK_SING:
 	MOV	AL,FONC_look_up
 	PUSH	DS
 	POP	ES
-	CALL	DWORD PTR [BX.FASTOPEN_NAME_CACHING]
+	CALL	PathLookup
 	JC	GO_Chk_end1			;fastopen not installed, or wrong drive. Go to Got_Srch_cluster
 	CMP	BYTE PTR [SI],0 		;fastopen has current dir info?
 	JE	GO_Chk_end			;yes. Go to got_serch_cluster
@@ -296,7 +325,7 @@ SETFERR:
 	STC
 	Return
 
-EndProc GETPATH
+EndProc HMA_GETPATH
 
 ; Check to see if the name at DS:DI is a device.  Returns carry set if not a
 ;   device.
@@ -760,6 +789,9 @@ BADPRET:
 	STC
 	return
 EndProc ROOTPATH
+LAST	ENDS
+
+CODE	SEGMENT BYTE PUBLIC 'CODE'
 
 Break	<STARTSRCH -- INITIATE DIRECTORY SEARCH>
 

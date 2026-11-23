@@ -14,7 +14,12 @@ work.mkdir(exist_ok=True)
 with tempfile.TemporaryDirectory(dir=work) as temp:
     folder = Path(temp)
     image = folder / "hma.img"
-    shutil.copyfile(root / "media/msdos40_full.img", image)
+    source_image = Path(os.environ.get("IMG", root / "media/msdos40_full.img"))
+    shutil.copyfile(source_image, image)
+    for binary in (root / "kernel/bios/io.sys", root / "kernel/dos/msdos.sys"):
+        embedded = subprocess.check_output(["mtype", "-i", image, "::" + binary.name])
+        if embedded != binary.read_bytes():
+            raise SystemExit(f"{source_image}: {binary.name} differs from {binary}")
     shutil.copyfile(root / "test/hmaio.asm", folder / "hmaio.asm")
 
     def map_symbols(path):
@@ -28,6 +33,7 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
     dos = map_symbols(root / "kernel/dos/msdos.map")
     bios = map_symbols(root / "kernel/bios/msbio.map")
     (folder / "hma.inc").write_text(
+        f"ShareTable EQU {dos['JShare']}\n"
         f"OpenSlot EQU {dos['DISPATCH'] + 30}\nEntryIP EQU {dos['FCB_ENTRY']}\n"
         f"GateSeg EQU {dos['FCB_GATE'] + 2}\nBodyOff EQU {bios['GateBody'] - bios['GateStart']}\n"
     )
@@ -50,15 +56,20 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
     batch = folder / "io.bat"
 
     for layout, config in (
-        ("high", "dos=high\ndevice=himem.sys"),
+        ("high", "dos=high, umb\ndevice=himem.sys"),
         ("near fallback", "dos=high"),
         ("far fallback", "device=ramdrive.sys 80"),
     ):
-        batch.write_text(f"hmaio {layout[0]}\n")
+        commands = [f"hmaio {layout[0]}"]
+        if layout == "high":
+            commands = ["share", *commands, "hmaio s"]
+        batch.write_text("\n".join(commands) + "\n")
         batch.with_suffix(".cfg").write_text(config + "\n")
         output = subprocess.check_output(
             [root / "test/run_tests", batch], env=dict(os.environ, IMG=str(image))
         )
-        if b"HMA I/O PASS" not in output or b"ENDTEST" not in output.splitlines():
+        lines = output.splitlines()
+        expected = sum(cmd.startswith("hmaio ") for cmd in commands)
+        if lines.count(b"HMA I/O PASS") != expected or b"ENDTEST" not in lines:
             raise RuntimeError(f"{layout}: {output.decode('cp437')}")
         print("PASS", layout, flush=True)

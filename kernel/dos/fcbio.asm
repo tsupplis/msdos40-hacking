@@ -483,11 +483,7 @@ SaveShare:
 ;
 ;----- In share support -----
 ;
-if installed
-	Call	JShare + 10 * 4
-else
-	Call	ShSave
-endif
+	invoke	Share_Save_FCB
 ;
 ;----- end in share support -----
 ;
@@ -1023,11 +1019,7 @@ Procedure   CheckFCB,NEAR
 ;
 ;----- In share support -----
 ;
-if installed
-	Call	JShare + 11 * 4
-else
-	Call	ShChk
-endif
+	invoke	Share_Check_FCB
 	JC	BadSFT
 	JMP	SHORT CheckD
 ;
@@ -1184,4 +1176,25 @@ EndProc FCBHardErr
         PUBLIC  FcbFirstEnd
 FcbFirstEnd LABEL BYTE
 LAST ENDS
+
+; Release the HMA reference before entering the installed sharer.
+CODE	SEGMENT BYTE PUBLIC 'CODE'
+procedure Share_Save_FCB,NEAR
+if installed
+	Call	JShare + 10 * 4
+else
+	Call	ShSave
+endif
+	RET
+EndProc Share_Save_FCB
+
+procedure Share_Check_FCB,NEAR
+if installed
+	Call	JShare + 11 * 4
+else
+	Call	ShChk
+endif
+	RET
+EndProc Share_Check_FCB
+CODE	ENDS
 END

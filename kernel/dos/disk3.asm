@@ -46,7 +46,7 @@ Installed = TRUE
 	i_need	ValSec,WORD		  ;F.C. >32mb	       ;AN000;
 	i_need	GrowCnt,DWORD
 	i_need	ALLOWED,BYTE
-	I_need	JShare,DWORD
+
 	I_need	FSeek_drive,BYTE	  ; DOS 4.00	       ;AN000;
 	I_need	FSeek_firclus,WORD	  ; DOS 4.00	       ;AN000;
 	I_need	FSeek_logclus,WORD	  ; DOS 4.00	       ;AN000;
@@ -415,11 +415,7 @@ Update_size:
 ; Make sure that all other SFT's see this growth also.
 ;
 	MOV	AX,1
-if installed
-	call	JShare + 14 * 4
-else
-	Call	ShSU
-endif
+	invoke	Share_Update_SFT
 SAMSIZ:
 	transfer SETCLUS		  ; ES:DI already points to SFT
 
@@ -463,11 +459,7 @@ UPDATE:
 ; Make sure that all other SFT's see this growth also.
 ;
 	MOV	AX,2
-if installed
-	Call	JShare + 14 * 4
-else
-	Call	ShSU
-endif
+	invoke	Share_Update_SFT
 	XOR	CX,CX
 	transfer ADDREC
 
@@ -518,8 +510,6 @@ KILLFIL:
 UpDateJ:
 	JMP	UPDATE
 EndProc DISKWRITE
-	PUBLIC	HmaIoEnd
-HmaIoEnd LABEL BYTE
 LAST	ENDS
 
 CODE	SEGMENT BYTE PUBLIC  'CODE'
