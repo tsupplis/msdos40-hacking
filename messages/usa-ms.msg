@@ -527,7 +527,7 @@ SHARE    54e6 0000
 NLSFUNC  54fa 0000
 ANSI     550e 0001
 0010 U 0000 "Invalid parameter - %1",CR,LF
-MSBIO    558d 0020
+MSBIO    554e 0020
 0003 U 0000 13,10,"Unrecognized command in CONFIG.SYS"
 0004 U 0000 13,10,"$"
 0005 U 0000 13,10,"Sector size too large in file $"
@@ -549,15 +549,15 @@ MSBIO    558d 0020
 0022 U 0000 13,10,"Bad command or parameters - $"
 0023 U 0002 "WARNING! SHARE should be loaded for large media",13,10,"$"
 0024 U 0000 13,10,"DOS: A20 error. Restart required.",13,10,0
-BOOT     5a03 0001
+BOOT     59c4 0001
 0001 U 0000 13,10,"Non-System disk or disk error",13,10
 	"Replace and press any key when ready",13,10,0
-DBCSDOS  5a81 0000
-MSDOS    5a95 0003
+DBCSDOS  5a42 0000
+MSDOS    5a56 0003
 0001 U 0001 13,10,"Divide overflow",13,10
 0002 U 0002 "y"
 0003 U 0002 "n"
-PSPRINT  5af6 0007
+PSPRINT  5ab7 0007
 0002 U 0000 " error reading file",CR,LF,FORMFD,BELL,"$"
 0003 U 0000 CR,LF,LF,"File canceled by operator",CR,FORMFD,BELL
 0004 U 0000 "File allocation table bad drive "
@@ -565,7 +565,7 @@ PSPRINT  5af6 0007
 0006 U 0000 "List output is not assigned to a device",CR,LF
 0007 U 0000 "PSPRINT is allready installed",CR,LF
 0008 U 0000 "PSPRINT/PRINT conflict",CR,LF
-BACKUP   5c6c 0023
+BACKUP   5c2d 0023
 0002 U 0000 CR,LF,"Insufficient memory",CR,LF
 0006 U 0000 CR,LF,"Invalid drive specification",CR,LF
 0014 U 0000 CR,LF,"Source and target drives are the same",CR,LF
@@ -591,9 +591,9 @@ BACKUP   5c6c 0023
 0032 U 0000 CR,LF,"Disk full error writing to BACKUP Log File",CR,LF
 0034 U 0000 CR,LF
 0035 U 0001 CR,LF,"Cannot FORMAT nonremovable drive %1:",CR,LF
-BASIC    61fd 0001
+BASIC    61be 0001
 0001 U 0001 "Cannot exec BASICA.COM"
-COMP     6237 0014
+COMP     61f8 0014
 0004 U 0000 "10 Mismatches - ending compare",CR,LF
 0006 U 0000 "Compare error at OFFSET %1",CR,LF
 0007 U 0000 "File 1 = %1",CR,LF
@@ -608,7 +608,7 @@ COMP     6237 0014
 0020 U 0000 CR,LF
 0023 U 0000 "Files compare OK",CR,LF
 0025 U 0000 "Compare error at LINE %1",CR,LF
-DISKCOMP 6496 0016
+DISKCOMP 6457 0016
 0004 U 0000 "Do not specify filename(s)",CR,LF
 	"Command format: DISKCOMP d: d: [/1][/8]",LF,CR
 0005 U 0000 CR,LF,"Invalid drive specification",CR,LF
@@ -633,7 +633,7 @@ DISKCOMP 6496 0016
 0020 U 0000 CR,LF,"Compare process ended",CR,LF
 0021 U 0000 CR,LF,"Compare OK",CR,LF
 0022 U 0000 CR,LF
-DISKCOPY 6928 0018
+DISKCOPY 68e9 0018
 0002 U 0000 CR,LF
 0004 U 0000 "Do not specify filename(s)",CR,LF
 	"Command Format: DISKCOPY d: d: [/1]",CR,LF
@@ -661,9 +661,9 @@ DISKCOPY 6928 0018
 0021 U 0000 CR,LF,"Copy process ended",CR,LF
 0022 U 0000 CR,LF,"SOURCE diskette bad or incompatible"
 0023 U 0000 CR,LF,"TARGET diskette bad or incompatible"
-LABL     6e34 0001
+LABL     6df5 0001
 0009 U 0003 CR,LF,"Delete current volume label (Y/N)? "
-MODE     6e81 0068
+MODE     6e42 0068
 0003 U 0000 CR,LF,"Must specify COM1, COM2, COM3 or COM4",CR,LF
 0004 U 0000 CR,LF,"Resident portion of MODE loaded",CR,LF
 0005 U 0000 CR,LF,"Illegal device name",CR,LF
@@ -732,7 +732,7 @@ MODE     6e81 0068
 0071 U 0002 "write of font file to device",0
 0072 U 0002 "selected",0
 0073 U 0002 "system",0
-RESTORE  7a9b 0021
+RESTORE  7a5c 0021
 0002 U 0000 CR,LF,"Source and target drives are the same",CR,LF
 0003 U 0000 CR,LF,"Invalid number of parameters",CR,LF
 0006 U 0000 CR,LF,"Invalid drive specification",CR,LF
@@ -759,7 +759,7 @@ RESTORE  7a9b 0021
 0023 U 0000 "Diskette: %1",CR,LF
 0025 U 0000 07
 0032 U 0000 CR,LF,"Listing backup files from drive %1:",CR,LF
-SELECT   7fe2 0016
+SELECT   7fa3 0016
 0004 U 0000 "Invalid SELECT boot media",CR,LF,CR,LF
 	"Insert INSTALL diskette in drive A:, then retry"
 0005 U 0000 "Invalid disk/diskette media",cr,lf,cr,lf
@@ -794,12 +794,12 @@ SELECT   7fe2 0016
 	"Press Enter to continue, or Esc to exit SELECT.",CR,LF
 0019 U 0001 "Insert the INSTALL Diskette in drive A:",CR,LF,CR,LF
 	"Press Enter to continue.",CR,LF
-TREE     86fd 0004
+TREE     86be 0004
 0002 U 0000 "Directory PATH listing for Volume %1",CR,LF
 0003 U 0000 "Directory PATH listing",CR,LF
 0004 U 0000 "No sub-directories exist",CR,LF,LF
 0007 U 0000 "읕처"
-REPLACE  87bc 0009
+REPLACE  877d 0009
 0003 U 0000 CR,LF,"No files replaced",CR,LF
 0004 U 0000 CR,LF,"No files added",CR,LF
 0013 U 0000 CR,LF,"Replacing %1",CR,LF
@@ -809,7 +809,7 @@ REPLACE  87bc 0009
 0017 U 0000 CR,LF,"No files found - %1",CR,LF
 0022 U 0000 CR,LF,"Replace %1? (Y/N)"
 0023 U 0000 CR,LF,"Add %1? (Y/N)"
-XCOPY    8948 0018
+XCOPY    8909 0018
 0004 U 0000 "Does %1 specify a file name",CR,LF
 	"or directory name on the target",CR,LF
 	"(F = file, D = directory)?"
@@ -830,7 +830,7 @@ XCOPY    8948 0018
 0032 U 0000 "%1",CR,LF
 0033 U 0000 "%1%2 (Y/N)?"
 0034 U 0000 "%1\%2 (Y/N)?"
-VDISK    8c54 0013
+VDISK    8c15 0013
 0002 U 0000 "Insufficient memory",CR,LF
 0003 U 0000 "MS-DOS Version 4.00, VDISK virtual disk %1",CR,LF
 0004 U 0000 "   Buffer size adjusted",CR,LF
@@ -845,7 +845,7 @@ VDISK    8c54 0013
 0013 U 0000 "VDISK not installed - "
 0014 U 0000 "   Extender Card switches",CR,LF
 	"do not match system memory size",CR,LF,CR,LF
-GRAFTABL 8efa 0009
+GRAFTABL 8ebb 0009
 0002 U 0000 "Active Code Page: %1",CR,LF
 0003 U 0000 "Previous Code Page: %1",CR,LF
 0004 U 0000 "None",NULL
@@ -859,7 +859,7 @@ GRAFTABL 8efa 0009
 	"    860  - Portuguese Graphic Character Set",CR,LF
 0010 U 0002 "    863  - Canadian French Graphic Character Set",CR,LF
 	"    865  - Nordic Graphic Character Set",CR,LF
-FASTOPEN 91af 0016
+FASTOPEN 9170 0016
 0004 U 0000 CR,LF,"FASTOPEN installed",CR,LF
 0005 U 0000 CR,LF,"FASTOPEN already installed",CR,LF
 0006 U 0000 CR,LF,"Incorrect parameter",CR,LF
@@ -876,7 +876,7 @@ FASTOPEN 91af 0016
 0017 U 0000 CR,LF,"Cannot use FASTOPEN for drive %1",CR,LF
 0018 U 0000 CR,LF,"Too many extent entries",CR,LF
 0019 U 0000 CR,LF,"Too many file/directory entries",CR,LF
-APPEND   9531 0009
+APPEND   94f2 0009
 0001 U 0000 "Incorrect APPEND version",CR,LF
 0002 U 0000 "Invalid path",CR,LF
 0003 U 0000 "Invalid parameter",CR,LF
@@ -886,7 +886,7 @@ APPEND   9531 0009
 0007 U 0000 "APPEND / TopView Conflict",CR,LF
 0008 U 0000 "Incorrect DOS version",CR,LF
 0009 U 0000 "APPEND already installed",CR,LF
-GRAPHICS 96c8 0012
+GRAPHICS 9689 0012
 0005 U 0000 "Invalid parameter:  %1",CR,LF
 0007 U 0000 "Duplicate parameters not allowed",CR,LF
 0009 U 0000 "Cannot find GRAPHICS profile",CR,LF
@@ -899,14 +899,14 @@ GRAPHICS 96c8 0012
 0016 U 0000 "Printer type not in GRAPHICS profile",CR,LF
 0017 U 0000 "/B invalid with a black and white printer",CR,LF
 0018 U 0000 "Unable to reload with profile supplied",CR,LF
-DISPLAY  998c 0003
+DISPLAY  994d 0003
 0002 U 0000 "%1 code page driver cannot be initialized",CR,LF,BELL
 0008 U 0000 "Insufficient memory",CR,LF,BELL
 0012 U 0000 "Invalid syntax on DISPLAY.SYS code page driver",CR,LF,BELL
-PRINTER  9a5b 0002
+PRINTER  9a1c 0002
 0002 U 0000 "%1 code page driver cannot be initialized",CR,LF,BELL
 0012 U 0000 "Invalid syntax on PRINTER.SYS code page driver",CR,LF,BELL
-KEYB     9afc 0016
+KEYB     9abd 0016
 0002 U 0000 "Current keyboard code: %1"
 0003 U 0000 "Current keyboard ID: %1"
 0004 U 0000 "  code page: %1",CR,LF
@@ -923,8 +923,8 @@ KEYB     9afc 0016
 0015 U 0000 "Code page specified is inconsistent with the selected code page",CR,LF
 0016 U 0001 "Keyboard ID specified is inconsistent with the selected keyboard layout",CR,LF
 0017 U 0000 "Unable to create KEYB table in resident memory",CR,LF
-REDIRSYS 9ed7 0000
-MEM      9eeb 0073
+REDIRSYS 9e98 0000
+MEM      9eac 0073
 0010 U 0000  CR,LF
 0011 U 0000  "  Address     Name          Size       Type ",CR,LF
 0012 U 0000  "  컴컴컴�     컴컴컴컴     컴컴컴     컴컴컴",CR,LF
@@ -998,7 +998,7 @@ MEM      9eeb 0073
 0080 U 0000 "Insufficient memory for classification",0
 0081 U 0000 "SYSTEM",0
 0082 U 0000 "bytes",0
-REDIR    a9b3 0029
+REDIR    a974 0029
 0004 U 0000 "Network has not been started",CR,LF
 0050 U 0000 "NET809: Network request not supported",CR,LF,0
 0051 U 0000 "NET801: Remote computer not listening",CR,LF,0
@@ -1028,7 +1028,7 @@ REDIR    a9b3 0029
 0084 U 0004 "NET819: Network name limit exceeded",CR,LF,0
 0085 U 0004 "NET802: Duplicate name on network",CR,LF,0
 0088 U 0000 "NET825: Network data fault",CR,LF,0
-XMA2EMS  b031 0030
+XMA2EMS  aff2 0030
 0001 U 0000 CR,LF,"$"
 0002 U 0000 "XMA2EMS: Expanded Memory Manager",CR,LF
 	"(c)Copyright Microsoft Corporation 1988                     All rights reserved",CR,LF,"$"
@@ -1060,7 +1060,7 @@ XMA2EMS  b031 0030
 0028 U 0000 "    "," KB OK","$"
 0029 U 0000 "     ",CR,LF,"$"
 0030 U 0000 "$"
-FDISK    b7f3 0123
+FDISK    b639 0123
 0004 U 0000 "Cannot FDISK with network loaded",CR,LF
 0005 U 0000 "No fixed disks present",CR,LF
 0006 U 0000 "Error reading fixed disk",CR,LF
@@ -1184,7 +1184,7 @@ FDISK    b7f3 0123
 1114 U 0001 "Invalid partition table",0
 1115 U 0001 "Error loading operating system",0
 1116 U 0001 "Missing operating system",0
-XMAEM    d44c 0006
+XMAEM    d292 0006
 0001 U 0000 "80386 XMA Emulator Version 1.10",CR,LF
 	"         (C) Copyright IBM Corporation 1987, 1988  All rights reserved",CR,LF,CR,LF,"$"
 0002 U 0000 "80386 XMA Emulator installed",CR,LF,"$"
@@ -1196,7 +1196,7 @@ XMAEM    d44c 0006
 	"     Parameter value must specify 64 pages or greater",CR,LF,"$"
 0006 U 0000 "80386 XMA Emulator not installed",CR,LF
 	"     Insufficient memory for requested parameter value",CR,LF,"$"
-UPDATE   d705 0013
+UPDATE   d54b 0013
 0100 U 0000 CR,LF,"- Enter your keyboard code: "
 0110 U 0000 "US"                    ;DEFAULT KEYBOARD CODE
 0120 U 0000 CR,LF,"- Enter the drive which contains files to be",CR,LF
@@ -1215,12 +1215,12 @@ UPDATE   d705 0013
 	"  Prepare system to be restarted",CR,LF
 	"  Press any key to restart system . . ."
 0220 U 0000 CR,LF,"Invalid keyboard code specified",CR,LF
-LOADFIX  db35 0004
+LOADFIX  d97b 0004
 0001 U 0000 "LOADFIX program [arguments]",CR,LF,"$"
 0002 U 0000 "Program not found",CR,LF,"$"
 0003 U 0000 "Insufficient memory",CR,LF,"$"
 0004 U 0000 "Cannot load program",CR,LF,"$"
-MOVE     dc03 0007
+MOVE     da49 0007
 0001 U 0000 "MOVE [/Y | /-Y] source[,source...] destination",CR,LF
 0002 U 0000 "Invalid parameter or path",CR,LF
 0003 U 0000 "Cannot move %1",CR,LF
@@ -1228,9 +1228,14 @@ MOVE     dc03 0007
 0005 U 0000 "Overwrite %1 (Y/N)? "
 0006 U 0000 "Original destination saved as %1",CR,LF
 0007 U 0000 "%1 -> %2",CR,LF
-DELTREE  dd51 0005
+DELTREE  db97 0005
 0001 U 0000 "DELTREE [/Y] path [path...]",CR,LF
 0002 U 0000 "Invalid parameter or path",CR,LF
 0003 U 0000 "Cannot delete %1",CR,LF
 0004 U 0000 "Delete %1 and all its contents (Y/N)? "
 0006 U 0000 "Deleting %1",CR,LF
+HELP     dc88 0004
+0001 U 0000 "Usage: HELP [topic]",CR,LF,0
+0002 U 0000 "Unknown help topic. Type HELP for the topic list.",CR,LF,0
+0003 U 0000 "DOSHELP.HLP is missing or cannot be opened.",CR,LF,0
+0004 U 0000 "Cannot read DOSHELP.HLP or the file is too large.",CR,LF,0

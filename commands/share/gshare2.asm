@@ -1841,7 +1841,7 @@ INT2F  PROC FAR
 ;			    - reset skip_check
 ;			    - return 0F0h - end init
 ;
-;      40h its IFSFUNC	    - return 0FFh - loaded
+;      40h retired IFSFUNC probe - pass to the previous handler
 ;
 ;      00h its anyone else  - clear skip_check
 ;			    - return 0FFh - loaded
@@ -1881,8 +1881,7 @@ $$EN30:
        JMP SHORT $$EN29
 $$IF29:
 	   cmp	al,40h			; is it IFSFUNC?		       ;AN010;
-;	   $if	ne			; if it is not			       ;AN010;
-	   JE $$IF39
+	   je   ContJ
 
 	       or   al,al		;    loop it any other value caus'     ;AC010;
 Freeze:
@@ -1895,8 +1894,6 @@ Freeze:
 $$IF40:
 	       mov  skip_check,0	;    and believe it !		       ;AN011;
 
-;	   $endif			;				       ;AN010;
-$$IF39:
 	   mov	al,0FFH 		;  else - say we are here	       ;AN010;
 ;      $endif				;				       ;AN010;
 $$EN29:

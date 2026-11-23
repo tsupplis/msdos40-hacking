@@ -16,6 +16,7 @@ BUILDMSG = $(EMU2) $(SDKBIN)/buildmsg.exe
 COUNTRY  = usa-ms
 
 OBJS     = gshare.obj gshare2.obj sharesr.obj sharelnk.obj
+COMMON_PREREQS = $(COMMON)/nibdos.obj $(COMMON)/const2.obj $(COMMON)/msdata.obj $(COMMON)/msdosme.obj
 MSGS     = share.ctl
 
 .PHONY: all clean
@@ -28,10 +29,17 @@ $(MSGS): share.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 $(OBJS): %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-$(COMMON)/%.obj:
-	$(MAKE) -C $(COMMON) $*.obj
+# Let common check its assembly includes even when the objects already exist.
+.PHONY: check-common
+check-common: | $(MSGDIR)/$(COUNTRY).idx
+	$(MAKE) -C $(COMMON) $(notdir $(COMMON_PREREQS))
 
-share.exe: $(OBJS) share.lnk $(COMMON)/nibdos.obj $(COMMON)/const2.obj $(COMMON)/msdata.obj $(COMMON)/msdosme.obj
+$(COMMON_PREREQS): check-common ;
+
+$(MSGDIR)/$(COUNTRY).idx: $(MSGDIR)/$(COUNTRY).msg
+	$(MAKE) -C $(MSGDIR) $(COUNTRY).idx
+
+share.exe: $(OBJS) share.lnk $(COMMON_PREREQS)
 	$(LINK) @share.lnk
 
 clean:

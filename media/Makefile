@@ -65,7 +65,7 @@ DEV_EXAMPLES = $(addprefix $(SDK)/examples/,c/Makefile c/hello.c asm/Makefile as
 IMAGES = msdos40_base.img msdos40_dist.img msdos40_full.img msdos40_dev.img
 
 # Names expected on the finished full image (used by "make check")
-EXPECTED = IO.SYS MSDOS.SYS COMMAND.COM CONFIG.SYS AUTOEXEC.BAT \
+EXPECTED = DOSHELP.HLP IO.SYS MSDOS.SYS COMMAND.COM CONFIG.SYS AUTOEXEC.BAT \
            $(shell echo $(notdir $(CMD_FILES) $(EXTRA_FILES) $(FULL_FILES)) | tr 'a-z' 'A-Z')
 
 .PHONY: all clean check dist force-images
@@ -84,7 +84,7 @@ endif
 	mv $@.tmp $@
 
 # FAT names are upper case: mcopy keeps the host name, so upper-case it explicitly.
-msdos40_base.img: $(BOOTSEC) $(IO_SYS) $(MSDOS) $(COMMAND) $(CMD_FILES)
+msdos40_base.img: $(BOOTSEC) $(IO_SYS) $(MSDOS) $(COMMAND) $(CMD_FILES) $(ROOT)/doshelp/doshelp.hlp Makefile
 	rm -f $@
 	mformat -f 1440 -C -B $(BOOTSEC) -i $@ ::
 	mcopy -i $@ $(IO_SYS) ::IO.SYS
@@ -99,6 +99,7 @@ msdos40_base.img: $(BOOTSEC) $(IO_SYS) $(MSDOS) $(COMMAND) $(CMD_FILES)
 	  n=`basename $$f | tr 'a-z' 'A-Z'`; \
 	  mcopy -i $@ $$f ::$$n || exit 1; \
 	done
+	mcopy -t -i $@ $(ROOT)/doshelp/doshelp.hlp ::DOSHELP.HLP
 	mdir -i $@ -a ::
 
 # cp keeps the hidden/system attributes and the boot sector of the base image.

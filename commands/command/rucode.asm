@@ -225,23 +225,12 @@ SetStyle:
 GotStyle:
 	MOV	[ERRCD_24],DI
 	cmp	di,error_handle_disk_full-error_write_protect  ;AC026;
-						; If the error message is unknown
-	jbe	NormalError			;  redirector, continue.  Otherwise,
+	jbe	NormalError
 ;
-; We do not know how to handle this error.  Ask IFSFUNC if she knows
-; how to handle things
-;
-
-;input to IFSFUNC:    AL=1
-;		      BX=extended error number
-
-;output from IFSFUNC: AL=error type (0 or 1)
-;			 0=<message> error (read/writ)ing (drive/device) xxx
-;			   Abort, Retry, Ignore
-;			 1=<message>
-;			   Abort, Retry, Ignore
-;		      ES:DI=pointer to message text
-;		      carry set=>no message
+; Ask the redirector for text for an unknown extended critical error.
+; INT 2Fh/0500h checks availability. For 0501h, BX is the error number.
+; On success ES:DI points to the text and AL selects the display style.
+; An absent provider or carry set from 0501h selects the standard fallback.
 
 	MOV	DI,AX				; retrieve correct extended error...
 	mov	ax,0500h			; Is the redir there?

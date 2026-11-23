@@ -31,8 +31,15 @@ COMMON_PREREQS = $(COMMON)/nibdos.obj $(COMMON)/const2.obj $(COMMON)/msdata.obj 
 
 all: msdos.sys
 
-$(COMMON)/%.obj:
-	$(MAKE) -C $(COMMON) $*.obj
+# Let common check its assembly includes even when the objects already exist.
+.PHONY: check-common
+check-common: | msdos.cl1
+	$(MAKE) -C $(COMMON) $(notdir $(COMMON_PREREQS))
+
+$(COMMON_PREREQS): check-common ;
+
+$(MSGDIR)/$(COUNTRY).idx: $(MSGDIR)/$(COUNTRY).msg
+	$(MAKE) -C $(MSGDIR) $(COUNTRY).idx
 
 msdos.cl1 msdos.cl3: msdos.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 	$(NOSRVBLD) msdos.skl 'C:\messages\$(COUNTRY).msg' > /dev/null

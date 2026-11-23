@@ -1,20 +1,20 @@
 CD        CD [drive:][path] - Show or change the current directory.
-COPY      COPY source [destination] - Copy one or more files.
-DEL       DEL [drive:][path]filename - Delete files.
+COPY      COPY source [destination] [/Y | /-Y] - COPYCMD presets overwrite behavior. The last explicit overwrite switch wins.
+DEL       DEL [drive:][path]filename [/P] [/Q] - /Q skips bulk confirmation and /P prompts for each file.
 DELTREE   DELTREE [/Y] path [path...] - Delete a directory tree. /Y skips confirmation.
-DIR       DIR [drive:][path] [options] - List files. /P pauses and /W uses wide columns.
-FORMAT    FORMAT drive: [options] - Prepare a disk for use with DOS.
+DIR       DIR [path] [/A[:attrs]] [/B] [/L] [/O[:order]] [/P] [/S] [/W] - DIRCMD sets defaults. /- cancels a preset switch.
+FORMAT    FORMAT drive: [options] - /Q performs a quick format.
 HELP      HELP [command] - List topics or display a command summary. Use HELP | MORE to page.
 MD        MD [drive:]path - Create a directory.
-MEM       MEM [/C | /D] [/P] - Display memory usage.
+MEM       MEM [/C | /CLASSIFY | /D | /DEBUG] [/P] - Show memory usage, optionally with paging.
 MORE      MORE [filename] - Page a text file or piped input.
 MOVE      MOVE [/Y | /-Y] source[,source...] destination - Move files or rename a directory. /-Y asks before overwriting.
 RD        RD [drive:]path - Remove an empty directory.
 REN       REN [drive:][path]oldname newname - Rename files.
 TYPE      TYPE [drive:][path]filename - Display a text file.
-XCOPY     XCOPY source [destination] [options] - Copy files. /S includes subdirectories and /E includes empty ones with /S.
+XCOPY     XCOPY source [destination] [options] - /S includes subdirectories and /E includes empty ones with /S. XCOPYCMD sets defaults. /-S and /-E cancel those presets.
 CHDIR     CD [drive:][path] - Show or change the current directory.
-ERASE     DEL [drive:][path]filename - Delete files.
+ERASE     Alias for DEL. /Q skips bulk confirmation and /P prompts for each file.
 MKDIR     MD [drive:]path - Create a directory.
 RMDIR     RD [drive:]path - Remove an empty directory.
 RENAME    REN [drive:][path]oldname newname - Rename files.
@@ -34,3 +34,85 @@ XMAEM.SYS    XMA emulation driver.
 XMA2EMS.SYS  Provide EMS services using XMA memory.
 COUNTRY.SYS  Country data selected by the CONFIG.SYS COUNTRY= directive.
 KEYBOARD.SYS Keyboard layout data used by KEYB.
+
+Additional commands
+APPEND     Set the search path for data files.
+ASSIGN     Redirect drive letters.
+ATTRIB     Display or change file attributes.
+BACKUP     Back up files for later use with RESTORE.
+BREAK      BREAK [ON|OFF] - Control extended Ctrl+C checking.
+CALL       CALL batchfile [arguments] - Run a nested batch file.
+CHCP       CHCP [codepage] - Display or change the active code page.
+CHKDSK     Check disk allocation and report errors.
+CLS        Clear the display.
+COMMAND    Start another command interpreter.
+COMP       Compare files. /D shows decimal bytes, /A characters, /L line numbers, /N=n limits lines, /C ignores ASCII case.
+CTTY       CTTY device - Change the command interpreter console.
+DATE       DATE [date] - Display or set the date.
+DEBUG      Inspect and modify memory and run machine-code programs.
+DISKCOMP   Compare two floppy disks.
+DISKCOPY   Copy a floppy disk. /V verifies destination tracks.
+ECHO       ECHO [ON|OFF|message] - Control batch echoing or print a message.
+EDLIN      Edit text one line at a time.
+EXE2BIN    Convert an eligible EXE image to binary form.
+EXIT       Leave the current command interpreter.
+FASTOPEN   Cache information about frequently opened files.
+FC         Compare files and report differences.
+FDISK      Manage fixed-disk partitions. /STATUS reports disk usage and /MBR restores master boot code.
+FIND       Search for text in files or input. /I ignores case.
+FOR        Run a command for each item in a set.
+GOTO       GOTO label - Continue a batch file at the named label.
+GRAFTABL   Load an extended character table for graphics modes.
+GRAPHICS   Enable graphics screen printing.
+IF         Execute a batch command conditionally. IF [NOT] DIREXIST path command tests for a directory.
+JOIN       Make a drive accessible through an existing directory.
+KEYB       Configure the keyboard layout.
+LABEL      Display, set, or remove a disk volume label.
+LH         Run an external program in upper memory when available.
+LOADFIX    LOADFIX program [arguments] - Run a program above the first 64 KiB.
+LOADHIGH   Run an external program in upper memory when available.
+MBASIC     Start the BASIC interpreter.
+MODE       Configure a display or communications or printer device.
+NLSFUNC    Load national-language support.
+PATH       Display or set the executable search path.
+PAUSE      Suspend batch execution until a key is pressed.
+PRINT      Queue text files for background printing.
+PROMPT     Change the command prompt.
+RECOVER    Recover readable data from a file or disk.
+REM        Add a comment to a batch file.
+REPLACE    Replace files in a destination directory.
+RESTORE    Restore BACKUP files. /D lists matching backup paths.
+SELECT     Run the DOS setup utility.
+SET        Display or change environment variables.
+SHARE      Install file-sharing and locking support.
+SHIFT      Shift the batch positional arguments.
+SORT       Sort input lines.
+SUBST      Associate a drive letter with a directory.
+SYS        Transfer DOS system files to a disk.
+TIME       TIME [time] - Display or set the time.
+TREE       Display the directory tree.
+TRUENAME   Display the canonical path for a file or directory.
+VER        Display the DOS version.
+VERIFY     VERIFY [ON|OFF] - Control verification of disk writes.
+VI         Start the screen editor.
+VOL        Display the disk volume label.
+
+CONFIG.SYS directives
+BREAK=     Enable or disable extended Ctrl+C checking.
+BUFFERS=   Set the number of disk buffers.
+COMMENT=   Change the CONFIG.SYS comment character.
+COUNTRY=   Select country and code-page information.
+CPSW=      Configure code-page switching.
+DEVICE=    Load a device driver with optional arguments.
+DEVICEHIGH= Try loading a driver in upper memory, with conventional memory as fallback.
+DOS=       HIGH moves selected DOS routines into the HMA. UMB enables upper memory. Both can be combined.
+DRIVPARM=  Override drive parameters. The geometry table supports format codes through /F:7.
+FCBS=      FCBS=n,m sets the FCB count and protected count.
+FILES=     Set the maximum number of open files.
+INSTALL=   Run an executable during configuration.
+LASTDRIVE= Set the highest drive letter.
+MULTITRACK= Configure multitrack disk I/O.
+SHELL=     Select the command interpreter and its arguments.
+SHELLHIGH= Try placing the interpreter and permanent environment in upper memory.
+STACKS=    STACKS=n,size sets the number and size of interrupt stacks.
+SWITCHES=  /K selects conventional keyboard handling.
