@@ -3,6 +3,7 @@ _TEXT	SEGMENT BYTE PUBLIC 'CODE'
 	PUBLIC	_XmsPool
 
 ; Caller supplies three zeroed DWORDs: total, free and largest free KB.
+; Return 0 for no XMS, 1 for free-space data, 2 for a table-based total.
 _XmsPool PROC NEAR
 	PUSH	BP
 	MOV	BP,SP
@@ -12,6 +13,7 @@ _XmsPool PROC NEAR
 	INT	2Fh
 	CMP	AL,80h
 	JE	XmsPresent
+	XOR	AX,AX
 	JMP	XmsDone
 XmsPresent:
 	MOV	AX,4310h
@@ -35,12 +37,12 @@ XmsPresent:
 	MOV	AX,4309h
 	INT	2Fh
 	CMP	AL,43h
-	JNE	XmsScan
+	JNE	XmsFreeOnly
 	CMP	WORD PTR ES:[BX],0A01h
-	JNE	XmsScan
+	JNE	XmsFreeOnly
 	MOV	CX,ES:[BX+2]
 	LES	SI,ES:[BX+4]
-	JCXZ	XmsExit
+	JCXZ	XmsTotal
 XmsTable:
 	CMP	BYTE PTR ES:[SI],2
 	JNE	XmsNext
@@ -51,26 +53,11 @@ XmsTable:
 XmsNext:
 	ADD	SI,10
 	LOOP	XmsTable
+XmsTotal:
+	MOV	AX,2
 	JMP	SHORT XmsExit
-
-; Other XMS 2 managers expose block sizes through function 0Eh.
-; Handles are opaque 16-bit values; gaps do not indicate the end.
-XmsScan:
-	XOR	SI,SI
-XmsHandle:
-	INC	SI
-	JZ	XmsExit
-	MOV	DX,SI
-	MOV	AH,0Eh
-	CALL	DWORD PTR [BP-8]
-	OR	AX,AX
-	JZ	XmsInvalid
-	ADD	[DI],DX
-	ADC	WORD PTR [DI+2],0
-	JMP	SHORT XmsHandle
-XmsInvalid:
-	CMP	BL,80h			; handle information unsupported
-	JNE	XmsHandle
+XmsFreeOnly:
+	MOV	AX,1
 XmsExit:
 	ADD	SP,4
 XmsDone:

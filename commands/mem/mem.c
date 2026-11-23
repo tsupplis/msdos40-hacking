@@ -225,7 +225,7 @@ void     ReadExpandedPool(void);                                                
 void     DisplayEMSDetail(void);                                                                                                 /* ;an000; */
                                                                                                                                  /* ;an000; */
 void     ReadConventionalPool(void);                                                                                               /* ;an000; */
-void XmsPool(unsigned long *);
+unsigned XmsPool(unsigned long *);
 void     ReadMemoryPools(void);
 void     ReadExtendedPool(void);                                                                                           /* ;an000; */
 void     DisplayExpandedSummary(void);                                                                                           /* ;an000; */
@@ -1084,6 +1084,7 @@ void ReadMemoryPools(void)
     unsigned far *head;
     unsigned segment, next;
     unsigned long xms[3];
+    unsigned xmsStatus;
     unsigned long umbTotal = 0;
     unsigned long block, freeBytes = 0, largestBytes = 0;
     unsigned linked, psp, firstFree = 0;
@@ -1131,14 +1132,18 @@ void ReadMemoryPools(void)
     upper.available = freeBytes;
     upper.largest = largestBytes;
     xms[0] = xms[1] = xms[2] = 0;
-    XmsPool(xms);
-    if (xms[0]) {
-        hasXms = 1;
+    xmsStatus = XmsPool(xms);
+    hasXms = xmsStatus != 0;
+    if (xmsStatus == 2) {
         extended.total = xms[0] * 1024UL;
+    } else {
+        ReadExtendedPool();          /* DOS records extended memory at boot. */
+    }
+    if (hasXms) {
         extended.available = xms[1] * 1024UL;
         extended.largest = xms[2] * 1024UL;
-    } else {
-        ReadExtendedPool();
+        if (extended.total < extended.available)
+            extended.total = extended.available;
     }
 }
 
