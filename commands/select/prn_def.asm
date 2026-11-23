@@ -260,6 +260,10 @@ SELECT_VALUE  LABEL	BYTE	 ;AN000;
 	      DB   1		    ;AN000;
 	      DW   OFFSET SELECT_STR;AN000;
 
+EXTRN S_AUTO_FDISK:WORD
+RESTART_LINE DB 'SELECT FDISK',13,10
+RESTART_LEN EQU $-RESTART_LINE
+LAST_BATCH_BYTE DB ?
 SELECT_STR    DB   'SELECT',0;AN000;
 ALLOC_FLAG    DB   0
 ALLOCATED     EQU  80H
@@ -1432,7 +1436,7 @@ AUTO_OK:		  ;AN000;
     ;**********************************************************************
     CALL ALLOCATE_MEMORY			 ;AN000; Allocate the memory needed
     .IF < C >					 ;AN000; Was there an error?
-	 JMP  AUTO_EXIT_ERROR			 ;AN000; Yes!  Exit the subroutine
+	 JMP  AUTO_EXIT			 ;AN000; Yes!  Exit the subroutine
     .ENDIF					 ;AN000;
     MOV  BUFFER_START, 0			 ;AN000; Save the offset of the start of the buffer
     COPY_WORD BUFFER_SIZE, SEGMENT_SIZE 	 ;AN000; Save the size of the buffer
@@ -1446,9 +1450,25 @@ AUTO_OK:		  ;AN000;
     ADD  DX, 2					 ;AN000; Adjust for length word
     MOV  AX, 3D02H				 ;AN000; DOS Fn. for opening a file for reading and writing
     DOSCALL					 ;AN000; Open the file
-    .IF < C >					 ;AN000; Was there an error?
-	 JMP  AUTO_EXIT_ERROR			 ;AN000; Exit the subroutine
-    .ENDIF					 ;AN000;
+    .IF < C >
+         ; Distribution media may have no AUTOEXEC. Only the writable
+         ; SELECT COPY needs a startup command for the partition reboot.
+         cmp ax,2
+         jne auto_open_failed
+         cmp APPEND_POINTER,offset S_AUTO_FDISK
+         je create_restart
+         jmp AUTO_EXIT_CLEAR
+create_restart:
+         xor cx,cx
+         mov ah,5bh                     ; create only if still absent
+         DOSCALL
+         jc auto_open_failed
+         mov FILE_HANDLE,ax
+         jmp write_restart
+auto_open_failed:
+         stc
+         jmp AUTO_EXIT
+    .ENDIF
     MOV  FILE_HANDLE, AX			 ;AN000; Save the file handle
     ;**********************************************************************
     ; Set the file pointer
@@ -1521,7 +1541,10 @@ PARSE_FOR_SELECT:				 ;AN000; Here to parse the line
 	 ;*****************************************************************
 	 ; Close the file.
 	 ;*****************************************************************
-	 CALL RELEASE_PRINTER_INFO_ROUTINE	 ;AN000; Close the original autoexec file
+         jnc rewritten
+         jmp AUTO_EXIT_ERROR
+rewritten:
+         jmp auto_close
     .ELSE			     ;AN000;
 	 ;*****************************************************************
 	 ; Parse the next line.
@@ -1529,23 +1552,84 @@ PARSE_FOR_SELECT:				 ;AN000; Here to parse the line
 	 MOV  DI, START_NEXT_LINE		 ;AN000; Get the address of the next line
 	 MOV  CURRENT_PARSE_LOC, DI		 ;AN000; Save this as the current parse location
 	 .IF < CURRENT_PARSE_LOC EQ 0 > 	 ;AN000; If this is zero, then there is no more data
-	      JMP  AUTO_EXIT_CLEAR		 ;AN000; Exit the subroutine - No errors
+              ; No SELECT line on this working copy. MENU needs no
+              ; change. FDISK needs a command to resume on reboot.
+              cmp APPEND_POINTER,offset S_AUTO_FDISK
+              je append_restart
+              jmp auto_close
 	 .ENDIF 				 ;AN000;
 	 JMP  PARSE_FOR_SELECT			 ;AN000; Parse the next line
     .ENDIF					 ;AN000;
     JMP  AUTO_EXIT_CLEAR			 ;AN000; Exit the subroutine - No errors
 
-AUTO_EXIT_ERROR:				 ;AN000; Here if there was an error
-    CALL RELEASE_PRINTER_INFO_ROUTINE		 ;AN000; Close the original file
-    STC 					 ;AN000; Indicate that there was an error
-    JMP  AUTO_EXIT				 ;AN000; Exit the subroutine
+append_restart:
+    mov bx,FILE_HANDLE
+    xor cx,cx
+    xor dx,dx
+    mov ax,4202h
+    DOSCALL
+    jc AUTO_EXIT_ERROR
+    or ax,dx
+    jz write_restart
+    ; Text-mode media copies can end with DOS EOF (1Ah). The batch
+    ; interpreter stops there, so place the restart line before it.
+    mov cx,-1
+    mov dx,-1
+    mov ax,4201h
+    DOSCALL
+    jc AUTO_EXIT_ERROR
+    mov cx,1
+    mov dx,offset LAST_BATCH_BYTE
+    mov ah,3fh
+    DOSCALL
+    jc AUTO_EXIT_ERROR
+    cmp ax,1
+    jne AUTO_EXIT_ERROR
+    cmp LAST_BATCH_BYTE,1ah
+    jne restart_separator
+    mov cx,-1
+    mov dx,-1
+    mov ax,4201h
+    DOSCALL
+    jc AUTO_EXIT_ERROR
+restart_separator:
+    mov dx,offset W_CR_LF
+    mov cx,E_SIZE_CR_LF
+    mov ah,40h
+    DOSCALL
+    jc AUTO_EXIT_ERROR
+    cmp ax,cx
+    jne AUTO_EXIT_ERROR
+write_restart:
+    mov bx,FILE_HANDLE
+    mov dx,offset RESTART_LINE
+    mov cx,RESTART_LEN
+    mov ah,40h
+    DOSCALL
+    jc AUTO_EXIT_ERROR
+    cmp ax,cx
+    jne AUTO_EXIT_ERROR
+auto_close:
+    mov bx,FILE_HANDLE
+    mov ah,3eh
+    DOSCALL
+    jmp AUTO_EXIT
+
+AUTO_EXIT_ERROR:
+    mov bx,FILE_HANDLE
+    mov ah,3eh
+    DOSCALL
+    stc
+    jmp AUTO_EXIT
 
 AUTO_EXIT_CLEAR:				 ;AN000; Exit here if NO errors.
     CLC 					 ;AN000; Indicate there were no errors
-AUTO_EXIT:					 ;AN000; Here to exit
+AUTO_EXIT:
+    pushf                               ; cleanup must preserve the DOS result
     CALL DEALLOCATE_MEMORY
-    POP  ES					 ;AN000; Restore the extra segment
-    CALL RESTORE_INT_24;AN000;
+    CALL RESTORE_INT_24
+    popf
+    POP ES
 AUTO_EXIT_RO:	 ;AN000;
     RET 					 ;AN000;
 

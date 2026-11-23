@@ -639,7 +639,11 @@ RMDIR        Remove an empty directory.
    path            Empty directory to remove.
 SELECT       Run the DOS setup utility.
 
- SELECT
+ SELECT MENU
+
+   MENU            Start interactive installation from drive A.
+
+ Choose the option to omit MS-DOS Shell when using the project disk images.
 SET          Display or change environment variables.
 
  SET [name=[value]]

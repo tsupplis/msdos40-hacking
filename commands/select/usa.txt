@@ -327,6 +327,17 @@ support, FASTOPEN, and SHARE.&
 When you change a selection from NO to YES, it increases
 the amount of memory DOS uses.&
 &
+To use upper memory after installation, edit CONFIG.SYS.
+For example, if you installed DOS in C:\DOS, use:&
+&
+DOS=UMB&
+DEVICE=C:\DOS\UMBS.SYS start-end&
+&
+Replace start-end with unused RAM mapped on your machine.
+Use hexadecimal segment addresses. The end is the first
+segment outside the range. Load UMBS.SYS before drivers
+that use DEVICEHIGH. Leave it out if the range is unknown.&
+&
 Refer to the "MS-DOS 4.0 Users Guide" book for additional
 information.@
 .HELPTEND.

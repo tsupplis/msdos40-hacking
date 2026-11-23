@@ -278,7 +278,7 @@ MAKE_BACKUP_DISKETTE:						;AN000;
 		   GOTO 		 PROCESS_ESC_F3 	;AN002;GHG    exit to DOS command line
 		.ENDIF						;AN002;GHG
 								;
-		FIND_FILE	     S_AUTO_REBOOT, E_FILE_ATTR ;AN000;DT Look for AUTOEXEC.BAT (INSTALL diskette)
+		FIND_FILE            S_DOS_SEL_360, E_FILE_ATTR ; SELECT.EXE identifies INSTALL media
 		   .LEAVE < nc >				;AN000;DT
 		   HANDLE_ERROR 	ERR_DOS_DISK, E_RETURN	;AN000;DT
 								;
