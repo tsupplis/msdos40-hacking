@@ -3,7 +3,7 @@
 #
 #   test/run_tests --list               list the test cases
 #   test/run_tests <case>               run one case, e.g.  test/run_tests c_keyb
-#   test/run_tests --all                run the batch cases, IFS checks and FAT16 allocation check
+#   test/run_tests --all                run the batch cases, IFS, FAT16 allocation and 32 MiB directory/file checks
 #   test/run_tests path/to/file.bat     run any batch file
 #
 # A case is test/cases/<name>.bat, optionally with <name>.cfg (extra CONFIG.SYS lines).
@@ -37,6 +37,7 @@ case "${1:-}" in
     done
     "$PWD/test/check_ifs" || status=1
     "$PWD/test/check_fat16" || status=1
+    "$PWD/test/check_dir32" || status=1
     exit "$status" ;;
 esac
 
