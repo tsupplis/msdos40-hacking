@@ -483,9 +483,16 @@ LOADHIGH     Run an external program in upper memory when available.
    program         External command to load and execute.
 MBASIC       Start the BASIC interpreter.
 
- MBASIC [filename]
+ MBASIC [filename] [/NOB[ANNER]] [/NOR[UN]] [/M:n] [/F:n] [/S:n]
 
-   filename        BASIC program to load.
+   filename        Load and run one BASIC program.
+   /NOB[ANNER]     Suppress the startup banner and the "Bytes free" line.
+   /NOR[UN]        Load the program and stay at the Ok prompt.
+   /M:n            Limit the data segment to n bytes (decimal or &H hex).
+   /F:n, /S:n      Accepted for compatibility and ignored.
+
+   Options are case-insensitive and may precede or follow the filename.
+   Example: MBASIC /NOB DEMO.BAS /NOR
 MD           Create a directory.
 
  MD [drive:]path
@@ -764,7 +771,7 @@ VERIFY       Control verification of disk writes.
  VERIFY [ON|OFF]
 
    ON, OFF         Enable or disable verification of disk writes.
-VI           Start the screen editor.
+VI           Start the STevie-based screen editor.
 
  VI [filename]
 

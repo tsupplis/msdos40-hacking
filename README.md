@@ -109,7 +109,7 @@ The survey compares the commands shipped here with the command syntax and option
 | `setver` | Missing command |  | Display or edit the per-program DOS version table. |
 | `sys` | Gaps identified |  | *won't implement — Transfer `COMMAND.COM`, recognize both IBM and Microsoft system-file names when replacing an installation, and allow the first three contiguous sectors of `IO.SYS` to reside later in the data area. The placement change also requires boot-loader support.* |
 | `ver` | No known gaps | Displays the project version as `4.01N`. |  |
-| `vi` | Project extra | Screen editor on the full floppy. |  |
+| `vi` | Project extra | STevie-based screen editor on the full floppy. |  |
 | `xcopy` | No known gaps | `XCOPYCMD` presets XCOPY switches. Explicit switches take precedence. For example, `SET XCOPYCMD=/S /E` includes empty subdirectories and `XCOPY source dest /-S /-E` copies only the top level. |  |
 
 | Status | Commands |
