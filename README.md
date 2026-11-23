@@ -77,7 +77,7 @@ The survey compares the commands shipped here with the command syntax and option
 | `backup` | Gaps identified |  | *won't implement — The 2.88 MB disk size for `/F` (including `/F:2880`).* |
 | `comp` | No known gaps | `/D` reports decimal bytes, `/A` shows characters, `/L` reports line numbers, `/N=n` limits comparison to the first *n* lines, and `/C` ignores ASCII letter case. |  |
 | `copy` | No known gaps | `/Y` allows overwriting. `/-Y` prompts before overwriting. `COPYCMD` presets either switch. The last explicit overwrite switch wins. |  |
-| `debug` | Gaps identified |  | The interactive `?` command that lists debugger commands. |
+| `debug` | No known gaps | Type `?` at the debugger prompt for a one-screen command reference, including the EMS commands in the shipped build. |  |
 | `del` (`erase`) | No known gaps | `/Q` skips the bulk-delete confirmation. An explicit `/P` still prompts for each file. |  |
 | `dir` | No known gaps | `/B` prints bare names, one per line. `/L` displays ASCII letters in filenames in lowercase. `/A[:]` filters by D, R, H, S, or A. `/O[:]` orders by N (name), E (extension), S (size), D (date), or G (directories first). Prefix a letter with `-` to exclude an attribute or reverse a key. `/P` pages console output. `DIRCMD` presets switches, and `/-` disables a preset switch on the command line. `/S` lists matching entries in subdirectories. With `/B`, it prints full paths. |  |
 | `diskcopy` | No known gaps | `/V` asks the disk driver to verify each destination track after writing it. |  |
@@ -85,7 +85,7 @@ The survey compares the commands shipped here with the command syntax and option
 | `fdisk` | No known gaps | `/STATUS` reports disk usage and DOS volumes. `/MBR` restores the master boot code on the first fixed disk. It preserves partition entries when the boot signature is present and installs an empty table when it is absent. |  |
 | `find` | No known gaps | `/I` ignores case when matching and preserves the spelling of displayed lines. |  |
 | `format` | Gaps identified | `/Q` quick format. | *won't implement — Recoverable formatting, `/U`, and `/F` for 2.88 MB media.* |
-| `help [command]` | Project extra | Display a text index or a command summary. Use `HELP \| MORE` to page the index. |  |
+| `help [command]` | Project extra | With no argument, HELP pages the topic index on the console. Specify a topic for a one-screen reference. |  |
 | `if` | No known gaps | `IF [NOT] DIREXIST path command` tests for a directory. Wildcards match directories only. |  |
 | `keyb` | Gaps identified |  | `/E` explicitly selects an enhanced keyboard. |
 | `deltree` | Project extra | Delete files and directory trees, including protected files. Use `/Y` to skip confirmation. |  |
@@ -97,7 +97,7 @@ The survey compares the commands shipped here with the command syntax and option
 | `more [filename]` | No known gaps | Page a file by name. |  |
 | `printfix` | Missing command |  | Suppress printer status checks for printers that cannot answer them. |
 | `restore` | No known gaps | `/D` lists matching backup paths and preserves destination files. |  |
-| `select` | No same-name DOS 5.0 utility |  |  |
+| `select` | No same-name DOS 5.0 utility | `SELECT MENU` installs DOS from the distribution or full floppy. Both install `UMBS.SYS` for optional configuration. The full floppy also installs `MBASIC.COM` and `VI.EXE`. |  |
 | `setver` | Missing command |  | Display or edit the per-program DOS version table. |
 | `sys` | Gaps identified |  | *won't implement — Transfer `COMMAND.COM`, recognize both IBM and Microsoft system-file names when replacing an installation, and allow the first three contiguous sectors of `IO.SYS` to reside later in the data area. The placement change also requires boot-loader support.* |
 | `ver` | No known gaps | Displays the project version as `4.01N`. |  |
