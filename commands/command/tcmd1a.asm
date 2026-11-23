@@ -961,6 +961,25 @@ tree_spec_copy:
 
 shoname:
 	mov	di,offset trangroup:charbuf
+        test    bits,SwitchW
+        jz      dir_fcb_field
+        test    [si].dir_attr,attr_directory
+        jz      dir_fcb_field
+        mov     al,'['
+        stosb
+        invoke  fcb_to_ascz
+        mov     byte ptr [di-1],']'     ; Replace the name terminator.
+        ; The existing tab advances to column 16 once eight bytes are printed.
+        mov     al,' '
+dir_wide_pad:
+        cmp     di,offset trangroup:charbuf+8
+        jae     dir_wide_done
+        stosb
+        jmp     dir_wide_pad
+dir_wide_done:
+        mov     byte ptr [di],0
+        jmp     short dir_print_name
+dir_fcb_field:
 	mov	cx,8
 	rep	movsb
 	mov	al,' '
