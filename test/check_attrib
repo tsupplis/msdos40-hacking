@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+"""Check ATTRIB selection, display, and the resulting FAT attributes."""
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+work = root / "test/work"
+work.mkdir(exist_ok=True)
+with tempfile.TemporaryDirectory(dir=work) as tmp:
+    batch = Path(tmp) / "flags.bat"
+    batch.write_text(r"""B:
+MD SUB
+ECHO x>FLAGS.TXT
+ECHO x>OTHER.TXT
+ECHO x>SUB\CHILD.TXT
+A:\ATTRIB +h +s +r -a FLAGS.TXT
+IF ERRORLEVEL 1 ECHO FAIL setting flags
+A:\ATTRIB FLAGS.TXT
+A:\ATTRIB +S +H -R FLAGS.TXT
+IF NOT ERRORLEVEL 1 ECHO FAIL kept protection
+A:\ATTRIB -H FLAGS.TXT
+IF NOT ERRORLEVEL 1 ECHO FAIL protected file
+A:\ATTRIB +R +A *.TXT /S
+IF NOT ERRORLEVEL 1 ECHO FAIL protected wildcard
+A:\ATTRIB FLAGS.TXT
+A:\ATTRIB FLAGS.TXT -s -h -r +a
+IF ERRORLEVEL 1 ECHO FAIL clearing flags
+A:\ATTRIB +S FLAGS.TXT -H +s
+IF NOT ERRORLEVEL 1 ECHO FAIL duplicate
+A:\ATTRIB +H FLAGS.TXT -H
+IF NOT ERRORLEVEL 1 ECHO FAIL conflict
+A:\ATTRIB +H *.TXT /S
+IF ERRORLEVEL 1 ECHO FAIL recursion
+A:\ATTRIB *.TXT /S
+""")
+    output = subprocess.check_output([root / "test/run_tests", batch]).decode("cp437")
+    if "FAIL " in output or sum(line.strip() == r"SHR     B:\FLAGS.TXT" for line in output.splitlines()) != 2:
+        raise SystemExit(output)
+    for name, expected in (("FLAGS.TXT", "AH"), ("OTHER.TXT", "AHR"), ("SUB/CHILD.TXT", "AHR")):
+        row = subprocess.check_output(["mattrib", "-i", work / "b.img", "::"+name]).decode()
+        flags = set(row.split("::")[0].strip().replace(" ", ""))
+        if flags != set(expected):
+            raise SystemExit(f"{name}: expected {expected}, got {row}\n{output}")
+print("PASS ATTRIB hidden/system, wildcard and recursive selection, and protected files")

@@ -34,10 +34,13 @@ ASSIGN       Redirect drive letters.
  Run ASSIGN without arguments to remove all assignments.
 ATTRIB       Display or change file attributes.
 
- ATTRIB [+R|-R] [+A|-A] [path] [/S]
+ ATTRIB [+R|-R] [+A|-A] [+H|-H] [+S|-S] [path] [/S]
 
    +R, -R          Set or clear the read-only attribute.
    +A, -A          Set or clear the archive attribute.
+   +H, -H          Set or clear the hidden attribute.
+   +S, -S          Set or clear the system attribute.
+                   Clear existing hidden and system bits to change other flags.
    path            File or pattern to inspect or change.
    /S              Include matching files in subdirectories.
 BACKUP       Back up files to another disk.

@@ -171,10 +171,7 @@ struct spl_list specials[MAX_SPL] = {  /*;AN000;*/
 union eav_union ext_attr_value;        /*;AN000; result value union */
 
 struct p_result_blk  pos1_buff;        /*;AN000; result buffer for -+A,-+R   */
-struct p_result_blk  pos2_buff;        /*;AN000; result buffer for -+A,-+R   */
 struct p_result_blk  pos3_buff;        /*;AN000; result buffer for filespec  */
-struct p_result_blk  pos4_buff;        /*;AN000; result buffer for -+A,-+R   */
-struct p_result_blk  pos5_buff;        /*;AN000; result buffer for -+A,-+R   */
 struct p_result_blk  pos6_buff;        /*;AN000; result buffer for id        */
 struct p_result_blk  pos6b_buff;       /*;AN000; result buffer for id        */
 struct p_result_blk  sw_buff;          /*;AN000; result buffer for /S        */
@@ -196,7 +193,7 @@ struct ps_valist_blk vals1 =           /*;AN000; +A-A+R-R value list         */
      { p_nval_string,                  /*;AN000;  string value list type     */
        0,                              /*;AN000;  number of ranges           */
        0,                              /*;AN000;  number of numbers          */
-       4,                              /*;AN000;  number of strings          */
+       8,                              /*;AN000;  number of strings          */
        0x20,                           /*;AN000;  item tag                   */
        (WORD)plusa,                    /*;AN000;  address of string          */
        0x20,                           /*;AN000;  item tag                   */
@@ -204,7 +201,11 @@ struct ps_valist_blk vals1 =           /*;AN000; +A-A+R-R value list         */
        0x01,                           /*;AN000;  item tag                   */
        (WORD)plusr,                    /*;AN000;  address of string          */
        0x01,                           /*;AN000;  item tag                   */
-       (WORD)minusr };                 /*;AN000;  address of string          */
+       (WORD)minusr,
+       HIDDEN, (WORD)"+H",
+       HIDDEN, (WORD)"-H",
+       SYSTEM, (WORD)"+S",
+       SYSTEM, (WORD)"-S" };
 
 struct p_control_blk p_con1 =          /*;AN000; describes +-A or +-R        */
      { 0x2001,                         /*;AN000;  Simple string,optional     */
@@ -214,35 +215,11 @@ struct p_control_blk p_con1 =          /*;AN000; describes +-A or +-R        */
        0,                              /*;AN000;*/
        0 };                            /*;AN000;*/
 
-struct p_control_blk p_con2 =          /*;AN000; describes +-A or +-R (2nd occurrance) */
-     { 0x2001,                         /*;AN000;  Simple string,optional     */
-       0x0002,                         /*;AN000;  Cap result by char table   */
-       (WORD)&pos2_buff,               /*;AN000;*/
-       (WORD)&vals1,                   /*;AN000;*/
-       0,                              /*;AN000;*/
-       0 };                            /*;AN000;*/
-
 struct p_control_blk p_con3 =          /*;AN000; describes filespec          */
      { 0x0200,                         /*;AN000;  File spec required         */
        0x0001,                         /*;AN000;  Cap result by file table   */
        (WORD)&pos3_buff,               /*;AN000;*/
        (WORD)&noval,                   /*;AN000;*/
-       0,                              /*;AN000;*/
-       0 };                            /*;AN000;*/
-
-struct p_control_blk p_con4 =          /*;AN000; describes +-A or +-R        */
-     { 0x2001,                         /*;AN000;  Simple string,optional     */
-       0x0002,                         /*;AN000;  Cap result by char table   */
-       (WORD)&pos4_buff,               /*;AN000;*/
-       (WORD)&vals1,                   /*;AN000;*/
-       0,                              /*;AN000;*/
-       0 };                            /*;AN000;*/
-
-struct p_control_blk p_con5 =          /*;AN000; describes +-A or +-R (2nd occurrance) */
-     { 0x2001,                         /*;AN000;  Simple string,optional     */
-       0x0002,                         /*;AN000;  Cap result by char table   */
-       (WORD)&pos5_buff,               /*;AN000;*/
-       (WORD)&vals1,                   /*;AN000;*/
        0,                              /*;AN000;*/
        0 };                            /*;AN000;*/
 
@@ -282,10 +259,10 @@ struct p_parmsx p_px1 =                /*;AN000; Parser Control definition for P
      { 1,                              /*;AN000;  positionals */
        6,                              /*;AN000;*/
        &p_con1,                        /*;AN000;*/
-       &p_con2,                        /*;AN000;*/
+       &p_con1,                        /*;AN000;*/
        &p_con3,                        /*;AN000;*/
-       &p_con4,                        /*;AN000;*/
-       &p_con5,                        /*;AN000;*/
+       &p_con1,                        /*;AN000;*/
+       &p_con1,                        /*;AN000;*/
        &p_con6,                        /*;AN000;*/
        1,                              /*;AN000;  switches */
        &p_swi1,                        /*;AN000;*/
@@ -420,6 +397,7 @@ DWORD            old_int24_off;        /*;AN000;*/
 
 WORD             descending;           /*;AN000;*/
 WORD             append_x_status;      /*;AN000;*/
+WORD             protected_skipped;
 WORD             did_attrib_ok;        /*;AN000;*/
 WORD             set_reg_attr,         /*;AN000;*/
                  set_ext_attr;         /*;AN000;*/
@@ -433,7 +411,7 @@ BYTE             bits[8] = { 0x80,0x40,0x20,0x10,0x08,0x04,0x02,0x01 }; /*;AN000
 BYTE             pmask,                /*;AN000;*/
                  mmask;                /*;AN000;*/
 
-char             as[8] = { ' ',' ','A',' ',' ',' ',' ','R' };           /*;AN000;*/
+char             as[8] = { ' ',' ','A',' ',' ','S','H','R' };           /*;AN000;*/
 char             fix_es_reg[1];        /*;AN000;*/
 char             ext_attr[MAX_KEYWORD];        /*;AN000;*/
 char             error_file_name[256]; /*;AN005;*/

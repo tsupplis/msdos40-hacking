@@ -95,6 +95,7 @@ inmain(line)                                                           /*;AN000;
    char *line;                                                         /*;AN000;*/
 {                                                                      /*;AN000;*/
    main(line);                                                         /*;AN000;*/
+   return NOERROR;  /* XCMAIN passes AL directly to DOS. */
 }                                                                      /*;AN000;*/
 
 
@@ -137,6 +138,7 @@ main(line)                                                             /*;AN000;
    status = NOERROR;                                                   /*;AN000;*/
    descending = FALSE;                                                 /*;AN000;*/
    set_reg_attr = FALSE;                                               /*;AN000;*/
+   protected_skipped = FALSE;
    pmask = mmask = 0x0;                                                /*;AN000;*/
    ext_attr[0] = BLANK;                                                /*;AN000;*/
    file[0] = '\0';                                                     /*;AN000;*/
@@ -174,7 +176,9 @@ main(line)                                                             /*;AN000;
       did_attrib_ok = FALSE;  /* needed if file not found and no */    /*;AN000;*/
                               /* error detected in Attrib().     */
       status = Do_dir(fspec,file);                                     /*;AN000;*/
-      if (status == NOERROR && did_attrib_ok == FALSE)                 /*;AN000;*/
+      if (status == NOERROR && protected_skipped)
+         status = 5; /* Access denied; other wildcard matches were processed. */
+      else if (status == NOERROR && did_attrib_ok == FALSE)                 /*;AN000;*/
          status = FILENOTFOUND;                                        /*;AN000;*/
       }                                                                /*;AN000;*/
 
@@ -562,24 +566,13 @@ Copy_far_ptr(p1_addr, p2_addr)                                         /*;AN000;
 WORD Parse_it(line)                                                    /*;AN000;*/
    char *line;                                                         /*;AN000;*/
 {                                                                      /*;AN000;*/
-   WORD  i;                                                            /*;AN000;*/
    WORD  status;                                                       /*;AN000;*/
    WORD  no_value;                                                     /*;AN000;*/
    WORD  got_fn;         /* got filename - required parameter */       /*;AN000;*/
-   WORD  pa,                                                           /*;AN000;*/
-         ma,                                                           /*;AN000;*/
-         pr,                                                           /*;AN000;*/
-         mr;                                                           /*;AN000;*/
-   char far *cptr;                                                     /*;AN000;*/
    char *ptr;                                                          /*;AN000;*/
-   BYTE  p_mask[4],                                                    /*;AN000;*/
-         m_mask[4];                                                    /*;AN000;*/
    char  string[129];                                                  /*;AN000;*/
 
    /* do setup for parser */
-   for (i=0; i<4; i++) {                                               /*;AN000;*/
-      p_mask[i] = m_mask[i] = 0;                                       /*;AN000;*/
-      }                                                                /*;AN000;*/
    do_reg_attr = TRUE;                                                 /*;AN000;*/
    do_ext_attr = FALSE;                                                /*;AN000;*/
    set_reg_attr = FALSE;                                               /*;AN000;*/
@@ -600,29 +593,19 @@ WORD Parse_it(line)                                                    /*;AN000;
       /* check for errors, continue if none */
       if (status == p_no_error) {                                      /*;AN000;*/
 
-         /* check if first positional */
-         if (outregs.x.dx == (WORD)&pos1_buff) {                       /*;AN000;*/
-            if (*(char *)pos1_buff.p_result_buff[0] == '+')  {         /*;AN000;*/
-               p_mask[0] |= pos1_buff.p_item_tag;                      /*;AN000;*/
-               }                                                       /*;AN000;*/
-            else {                                                     /*;AN000;*/
-               m_mask[0] |= pos1_buff.p_item_tag;                      /*;AN000;*/
-               }                                                       /*;AN000;*/
-            set_reg_attr = TRUE;                                       /*;AN000;*/
-            do_reg_attr = FALSE;                                       /*;AN000;*/
-            }                                                          /*;AN000;*/
-
-         /* check if second positional */
-         if (outregs.x.dx == (WORD)&pos2_buff) {                       /*;AN000;*/
-            if (*(char *)pos2_buff.p_result_buff[0] == '+') {          /*;AN000;*/
-               p_mask[1] |= pos2_buff.p_item_tag;                      /*;AN000;*/
-               }                                                       /*;AN000;*/
-            else {                                                     /*;AN000;*/
-               m_mask[1] |= pos2_buff.p_item_tag;                      /*;AN000;*/
-               }                                                       /*;AN000;*/
-            set_reg_attr = TRUE;                                       /*;AN000;*/
-            do_reg_attr = FALSE;                                       /*;AN000;*/
-            }                                                          /*;AN000;*/
+         /* The same modifier can occur before or after the filespec. Keep
+          * its ordinal open for the next modifier, and reject repeated bits. */
+         if (outregs.x.dx == (WORD)&pos1_buff) {
+            if ((pmask | mmask) & pos1_buff.p_item_tag)
+               status = p_syntax;
+            else if (*(char *)pos1_buff.p_result_buff[0] == '+')
+               pmask |= pos1_buff.p_item_tag;
+            else
+               mmask |= pos1_buff.p_item_tag;
+            set_reg_attr = TRUE;
+            do_reg_attr = FALSE;
+            outregs.x.cx = got_fn ? 3 : 0;
+         }
 
          /* check if third positional */
          if (outregs.x.dx == (WORD)&pos3_buff) {                       /*;AN000;*/
@@ -630,30 +613,6 @@ WORD Parse_it(line)                                                    /*;AN000;
             /* copy filename from far string to data segment string */
             Get_far_str(fspec,pos3_buff.p_result_buff,0);              /*;AN000;*/
             got_fn = TRUE;                                             /*;AN000;*/
-            }                                                          /*;AN000;*/
-
-         /* check if fourth positional */
-         if (outregs.x.dx == (WORD)&pos4_buff) {                       /*;AN000;*/
-            if (*(char *)pos4_buff.p_result_buff[0] == '+')  {         /*;AN000;*/
-               p_mask[2] |= pos4_buff.p_item_tag;                      /*;AN000;*/
-               }                                                       /*;AN000;*/
-            else {                                                     /*;AN000;*/
-               m_mask[2] |= pos4_buff.p_item_tag;                      /*;AN000;*/
-               }                                                       /*;AN000;*/
-            set_reg_attr = TRUE;                                       /*;AN000;*/
-            do_reg_attr = FALSE;                                       /*;AN000;*/
-            }                                                          /*;AN000;*/
-
-         /* check if fifth positional */
-         if (outregs.x.dx == (WORD)&pos5_buff) {                       /*;AN000;*/
-            if (*(char *)pos5_buff.p_result_buff[0] == '+') {          /*;AN000;*/
-               p_mask[3] |= pos5_buff.p_item_tag;                      /*;AN000;*/
-               }                                                       /*;AN000;*/
-            else {                                                     /*;AN000;*/
-               m_mask[3] |= pos5_buff.p_item_tag;                      /*;AN000;*/
-               }                                                       /*;AN000;*/
-            set_reg_attr = TRUE;                                       /*;AN000;*/
-            do_reg_attr = FALSE;                                       /*;AN000;*/
             }                                                          /*;AN000;*/
 
          /* check if sixth positional */
@@ -757,31 +716,6 @@ WORD Parse_it(line)                                                    /*;AN000;
       status = p_syntax;                                               /*;AN000;*/
       }                                                                /*;AN000;*/
 
-   /* check for duplicate +R +R or +A +A or -A -A or -R -R */
-   for (pr=0,mr=0,pa=0,ma=0,i=0; i<4; i++) {                           /*;AN000;*/
-      if (p_mask[i] & READONLY)                                        /*;AN000;*/
-         pr++;                                                         /*;AN000;*/
-      if (m_mask[i] & READONLY)                                        /*;AN000;*/
-         mr++;                                                         /*;AN000;*/
-      if (p_mask[i] & ARCHIVE)                                         /*;AN000;*/
-         pa++;                                                         /*;AN000;*/
-      if (m_mask[i] & ARCHIVE)                                         /*;AN000;*/
-         ma++;                                                         /*;AN000;*/
-      }                                                                /*;AN000;*/
-   if ((pr > 1) || (mr > 1) || (pa > 1) || (ma > 1)) {                 /*;AN000;*/
-      status = p_syntax;                                               /*;AN000;*/
-      }                                                                /*;AN000;*/
-   else {                                                              /*;AN000;*/
-      for (pmask=0,mmask=0,i=0; i<4; i++) {                            /*;AN000;*/
-         pmask |= p_mask[i];                  /* combine masks */      /*;AN000;*/
-         mmask |= m_mask[i];                                           /*;AN000;*/
-         }                                                             /*;AN000;*/
-      }                                                                /*;AN000;*/
-
-   /* check for duplicate -R +R or -A +A */
-   if ((pmask & mmask & READONLY) || (pmask & mmask & ARCHIVE)) {      /*;AN000;*/
-      status = p_syntax;                                               /*;AN000;*/
-      }                                                                /*;AN000;*/
    return(status);                                                     /*;AN000;*/
 }                                                                      /*;AN000;*/
 
@@ -1855,7 +1789,7 @@ WORD Regular_attrib(fspec)                                             /*;AN000;
 {                                                                      /*;AN000;*/
    WORD status;                                                        /*;AN000;*/
    WORD i;                                                             /*;AN000;*/
-   char string[16];                                                    /*;AN000;*/
+   char string[17];                                                    /*;AN000;*/
 
    /* get attributes */
    if ((status = Get_reg_attrib(fspec,&attr)) != NOERROR) {            /*;AN000;*/
@@ -1864,6 +1798,12 @@ WORD Regular_attrib(fspec)                                             /*;AN000;
 
    /* Check whether to display values or set new ones */
    if (set_reg_attr) {                                                 /*;AN000;*/
+      /* Before changing other bits, clear every active protection bit. */
+      if ((attr & (HIDDEN | SYSTEM) & ~mmask) &&
+          ((attr & mmask) || (pmask & ~attr))) {
+         protected_skipped = TRUE;
+         return NOERROR;
+      }
       attr = (attr & (~mmask)) | pmask;                                /*;AN000;*/
       status = Set_reg_attrib(fspec,attr);                             /*;AN000;*/
       }                                                                /*;AN000;*/
@@ -2290,16 +2230,11 @@ WORD Do_dir(path,file)
       strcpy(subdirectory,path);
       strcat(subdirectory,file);
 
-      search_attrib = SUBDIR;                                          /*;AN000;*/
+      search_attrib = HIDDEN | SYSTEM;                                          /*;AN000;*/
       status = Find_first(subdirectory,next,&search_attrib);
       while(status == NOERROR) {
 
-         /* Check that this file is not a directory, system file, */
-         /* or a hidden file.                                     */
-         if (  (next[0] != '.') &&
-               ((search_attrib & SUBDIR) == 0) &&
-               ((search_attrib & SYSTEM) == 0) &&
-               ((search_attrib & HIDDEN) == 0) )  {
+         if (!(search_attrib & SUBDIR)) {
             status = Attrib(path,next);
             }
 

@@ -81,7 +81,7 @@ The survey compares the commands shipped here with the command syntax and option
 
 | Command | MS-DOS 5.0 comparison | Enhancement | Missing MS-DOS 5.0 features |
 |---|---|---|---|
-| `attrib` | Gaps identified |  | `+H` / `-H` set or clear hidden, and `+S` / `-S` set or clear system. File selection must include files that already have these attributes. |
+| `attrib` | No known flag gaps | `+H` / `-H` and `+S` / `-S` set or clear hidden and system file attributes. |  |
 | `backup` | Gaps identified |  | *won't implement — The 2.88 MB disk size for `/F` (including `/F:2880`).* |
 | `comp` | No known gaps | `/D` reports decimal bytes, `/A` shows characters, `/L` reports line numbers, `/N=n` limits comparison to the first *n* lines, and `/C` ignores ASCII letter case. |  |
 | `copy` | No known gaps | `/Y` allows overwriting. `/-Y` prompts before overwriting. `COPYCMD` presets either switch. The last explicit overwrite switch wins. |  |

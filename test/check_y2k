@@ -27,13 +27,17 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
         "if not exist b:\\copies\\later.y2k echo FAIL XCOPY cutoff",
         "xcopy *.y2k b:\\copies /d:01-01-99 <cr.txt",
         "if not errorlevel 1 echo FAIL XCOPY short year",
+        "date 01-01-2000 <cr.txt", "echo edge>jan.y2k",
+        "date 03-01-2000 <cr.txt", "echo edge>mar.y2k",
         "backup a:\\*.y2k b: /d:01-01-99 <cr.txt",
         "if not errorlevel 1 echo FAIL BACKUP short year",
         "backup a:\\*.y2k b: /d:01-01-2000 <cr.txt",
         "if errorlevel 1 echo FAIL BACKUP cutoff",
         "restore b: a:\\*.y2k /d /a:01-01-99 <cr.txt",
         "if not errorlevel 1 echo FAIL RESTORE short year",
-        "restore b: a:\\*.y2k /d /a:01-01-2000 /b:02-29-2000 <cr.txt >listing.out",
+        "restore b: a:\\*.y2k /d <cr.txt >archive.out",
+        "if errorlevel 1 echo FAIL RESTORE list",
+        "restore b: a:\\*.y2k /d /a:02-29-2000 /b:02-29-2000 <cr.txt >listing.out",
         "if errorlevel 1 echo FAIL RESTORE cutoff",
         "date 01-01-1980 <cr.txt", "echo min>min.y2k",
         "date 12-31-2099 <cr.txt", "echo max>max.y2k",
@@ -48,10 +52,15 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
     require(out.count("Enter new date (mm-dd-yyyy)") == 8, "prompt or rejection count")
     rows = re.findall(r"^LATER +Y2K +\d+ (.*)$", out, re.M)
     require(len(rows) == 4 and rows[0] == rows[3] and rows[1] == rows[2]
+            and rows[0].startswith("02-29-2000 ") and rows[1].startswith("02-29-00 ")
             and rows[0].replace("2000", "00") == rows[1], "DIR layout or presets")
     image = work / "boot.img"
     listing = subprocess.check_output(["mtype", "-i", image, "::listing.out"]).upper()
-    require(b"LATER.Y2K" in listing and b"EARLY.Y2K" not in listing, "archive selection")
+    archive = subprocess.check_output(["mtype", "-i", image, "::archive.out"]).upper()
+    require(b"EARLY.Y2K" not in archive and all(name in archive for name in
+            (b"JAN.Y2K", b"LATER.Y2K", b"MAR.Y2K")), "BACKUP selection")
+    require(b"LATER.Y2K" in listing and b"JAN.Y2K" not in listing
+            and b"MAR.Y2K" not in listing, "RESTORE date bounds")
     raw = image.read_bytes()
     def word(pos):
         return int.from_bytes(raw[pos:pos + 2], "little")
