@@ -49,16 +49,15 @@ CODE SEGMENT PARA PUBLIC 'CODE'
 		fpRequestHeader			dd		0
 
 Interrupt2FhHandler:
-		cmp		ah, 43h
+		cmp		ax, 4300h
+		je		ReturnHandlerExists
+		cmp		ax, 4310h
 		je		RequestIsForMe
 
 		db		0EAh					; Far jump opcode
 fpOldInterrupt2FhHandler	dd		0						; Pointer filled in during initialization
 
 RequestIsForMe:
-		cmp		al, 10h
-		jne		ReturnHandlerExists
-
 		mov		bx, OFFSET UMBController
 		push	cs
 		pop		es
@@ -321,6 +320,8 @@ ParameterError:
 		jmp		SHORT StoreBreakPointer
 
 EndOfLineEncountered:
+		call	CheckRanges
+		jc		ParameterError
 		test	ah, ah
 		jz		ParameterError	; No parameters at all
 
@@ -394,6 +395,37 @@ StoreBreakPointer:
 		pop		cx
 		jmp		Return
 
+
+; Check each range against earlier ranges before initializing any memory.
+CheckRanges:
+		push	si
+		push	di
+		mov		di, cs:[FreeListOperand]
+NextRange:
+		cmp		di, bx
+		jae		RangesChecked
+		mov		si, cs:[FreeListOperand]
+EarlierRange:
+		cmp		si, di
+		je		RangeChecked
+		mov		dx, cs:[si]
+		add		dx, cs:[si+2]
+		cmp		dx, cs:[di]
+		jbe		Disjoint
+		mov		dx, cs:[di]
+		add		dx, cs:[di+2]
+		cmp		cs:[si], dx
+		jb		RangesChecked			; Carry set on overlap
+Disjoint:
+		add		si, 4
+		jmp		SHORT EarlierRange
+RangeChecked:
+		add		di, 4
+		jmp		SHORT NextRange
+RangesChecked:
+		pop		di
+		pop		si
+		ret
 
 s$XMMfound		db			'UMBS: Found XMS manager.',0Dh,0Ah,'$'
 s$Installed		db			'$' ; UMBS: V2.3 installed',0Dh,0Ah,'$'

@@ -482,12 +482,13 @@ AllocOperSet:
 EndProc $AllocOper
 
 ; EXEC sizes its image from the largest block before allocating it. With
-; high-first selected, size against upper memory before conventional memory.
+; high-first selected, prefer an upper block meeting the minimum in AX.
 procedure ExecLargest,NEAR
 	TEST	[AllocMethod],ALLOC_HIGH_FIRST
 	JZ	ExecLargestAny
 	CMP	[UMB_LINKED],0
 	JE	ExecLargestAny
+	PUSH	AX
 	MOV	AL,[AllocMethod]
 	PUSH	AX
 	OR	[AllocMethod],ALLOC_HIGH_ONLY
@@ -495,11 +496,14 @@ procedure ExecLargest,NEAR
 	invoke	$ALLOC
 	POP	AX
 	MOV	[AllocMethod],AL
-	OR	BX,BX
-	retnz
+	POP	AX
+	CMP	BX,AX
+	JAE	ExecLargestDone
 ExecLargestAny:
 	MOV	BX,0FFFFh
 	transfer $ALLOC
+ExecLargestDone:
+	return
 EndProc ExecLargest
 
 CODE    ENDS

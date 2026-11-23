@@ -331,11 +331,7 @@ exec_save_start:
 	MOV	exec_dma,AX
 	MOV	AX,ES:[DI].exec3_reloc_fac
 	MOV	exec_rel_fac,AX
-IF DEBUG
 	JMP	exec_find_res
-ELSE
-	JMP	SHORT exec_find_res
-ENDIF
 
 exec_no_mem:
 	MOV	AL,error_not_enough_memory
@@ -356,23 +352,28 @@ exec_bomb:
 
 exec_allocate:
 	DOSAssume   CS,<DS>,"EXEC/exec_allocate"
+	ADD	AX,10h			; room for PSP
+	JC	exec_no_mem
+	TEST	exec_load_high,-1
+	JNZ	exec_min_ready
+	ADD	AX,exec_min_BSS
+	JC	exec_no_mem
+exec_min_ready:
+	CMP	AX,11h
+	JAE	exec_query_size
+	MOV	AX,11h
+exec_query_size:
 	PUSH	AX
 	PUSH	DS
-	invoke	ExecLargest			; should have carry set and BX has max
+	invoke	ExecLargest
 	POP	DS
 	POP	AX
-	ADD	AX,10h			; room for header
-	CMP	BX,11h			; enough room for a header
-	JB	exec_no_mem
-	CMP	AX,BX			; is there enough for bare image?
+	CMP	AX,BX
 	JA	exec_no_mem
-	TEST	exec_load_high,-1	; if load high, use max
-	JNZ	exec_BX_max		; use max
-	ADD	AX,exec_min_BSS 	; go for min allocation
-	JC	exec_no_mem		; oops! carry
-	CMP	AX,BX			; enough space?
-	JA	exec_no_mem		; nope...
-	SUB	AX,exec_min_BSS
+	TEST	exec_load_high,-1
+	JNZ	exec_BX_max
+	MOV	AX,exec_res_len_para
+	ADD	AX,10h
 	ADD	AX,exec_max_BSS 	; go for the MAX
 	JC	exec_BX_max
 	CMP	AX,BX
@@ -558,6 +559,15 @@ exec_com_file:
 ; CS=DS=ES=SS=PDB pointer, IP=100, SP=max size of block.
 ;
 exec_alloc_com_file:
+	MOV	BX,exec_fh
+	invoke	SFFromHandle
+	JNC	exec_com_size
+	JMP	exec_bomb
+exec_com_size:
+	MOV	AX,WORD PTR ES:[DI].sf_size
+	MOV	CL,4
+	SHR	AX,CL
+	ADD	AX,11h			; PSP and room past EOF for the read check
 	invoke	ExecLargest
 	CMP	BX,11h			; PSP plus space for code and stack
 	JB	exec_no_memj
