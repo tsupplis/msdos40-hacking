@@ -57,8 +57,8 @@ RunIO:  CALL    CheckParse
         INT     21h
         Check   JNC
         MOV     BX,AX
-        MOV     CX,4
-        MOV     DX,OFFSET Payload
+        MOV     CX,1                    ; distinct pre-commit size and data
+        MOV     DX,OFFSET Payload+1
         CALL    WriteFile
         CALL    Close
         MOV     DX,OFFSET NameB
@@ -95,6 +95,9 @@ RunIO:  CALL    CheckParse
         MOV     AH,68h
         INT     21h
         Check   JNC
+        PUSH    BX
+        CALL    CheckCommitted
+        POP     BX
         CALL    Close                   ; original handle remains open
         POP     BX
         ; Overwrite from byte three across sector and cluster boundaries.
@@ -510,6 +513,65 @@ FcbCall:
         OR      AL,AL
         Check   JZ
         RET
+; Read the test runner's 1.44 MB FAT12 B: directly while both handles
+; are open. Root sectors 19..32 precede one-sector clusters at LBA 33.
+CheckCommitted:
+        MOV     DX,19
+CheckRootSector:
+        CALL    ReadSector
+        MOV     SI,OFFSET Cache
+        MOV     CX,16                    ; 32-byte entries per sector
+CheckRootEntry:
+        CMP     BYTE PTR [SI],0
+        Check   JNE
+        PUSH    CX
+        PUSH    SI
+        PUSH    DS
+        POP     ES
+        MOV     DI,OFFSET DiskName
+        MOV     CX,11
+        CLD
+        REPE    CMPSB
+        POP     SI
+        POP     CX
+        JE      CheckDiskSize
+        ADD     SI,32
+        LOOP    CheckRootEntry
+        INC     DX
+        CMP     DX,33
+        JB      CheckRootSector
+        JMP     Failed
+CheckDiskSize:
+        CMP     WORD PTR [SI+28],4
+        Check   JE
+        CMP     WORD PTR [SI+30],0
+        Check   JE
+        MOV     DX,[SI+26]
+        CMP     DX,2
+        Check   JAE
+        CMP     DX,2848                  ; last data cluster on the fixture
+        Check   JBE
+        ADD     DX,33-2
+        CALL    ReadSector
+        MOV     SI,OFFSET Cache
+        MOV     DI,OFFSET Payload
+        PUSH    DS
+        POP     ES
+        MOV     CX,4
+        CLD
+        REPE    CMPSB
+        Check   JE
+        RET
+ReadSector:
+        PUSH    DX
+        MOV     AL,1                     ; B:
+        MOV     CX,1
+        MOV     BX,OFFSET Cache
+        INT     25h
+        POP     CX                       ; INT 25h leaves FLAGS on the stack
+        POP     DX
+        Check   JNC
+        RET
 Seek:   XOR     CX,CX
         MOV     AX,4200h
         INT     21h
@@ -548,6 +610,7 @@ PathDir DB      '\HMAPATH',0
 Leaf    DB      'LEAF.TMP',0
 FullPath DB     '\HMAPATH\LEAF.TMP',0
 BadPath DB      '\MISSING\LEAF.TMP',0
+DiskName DB     'FULL    TMP'
 NameB   DB      'B:FULL.TMP',0
 NullDev DB      'NUL',0
 Payload DB      'ABCD'
