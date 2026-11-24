@@ -12,7 +12,8 @@ work.mkdir(exist_ok=True)
 with tempfile.TemporaryDirectory(dir=work) as tmp:
     folder = Path(tmp)
     boot = folder / "comp.img"
-    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), boot)
+    # Two 60 KiB comparison fixtures need the free space on the base image.
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_base.img"), boot)
     def install(path, name):
         subprocess.run(["mcopy", "-o", "-i", boot, path, "::" + name], check=True)
 

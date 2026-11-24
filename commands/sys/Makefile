@@ -28,6 +28,8 @@ $(MSGS): sys.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
+# SYSSR must be the final CODE contribution. SYS rounds its Data_Space
+# label up to a paragraph to locate DATA at startup.
 sys.com: helptest.obj $(OBJS) sys.lnk
 	$(LINK) @sys.lnk
 	$(EXE2BIN) sys.exe sys.com

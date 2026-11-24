@@ -100,7 +100,7 @@ if ! completed; then
   exit 1
 fi
 
-# c_move reports individual filesystem assertions over the serial console.
-if [ "$BAT" = "$CASES/c_move.bat" ] && grep -q '^FAILED ' "$WORK/ser1.out"; then
+# Batch cases report failed assertions over the serial console.
+if grep -q '^FAILED ' "$WORK/ser1.out"; then
   exit 1
 fi

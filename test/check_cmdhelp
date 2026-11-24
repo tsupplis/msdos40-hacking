@@ -36,6 +36,9 @@ with tempfile.TemporaryDirectory() as work:
         assert expected[0] == 0 and expected[1], topic
         return expected
 
+    # A valid SYS operand must reach drive validation after the help check.
+    # The temporary C: is the default drive, so SYS rejects it before writing.
+    assert run("sys.com", "C:")[2] == b"Cannot specify default drive\r\n"
     for program in external:
         assert run(program, "/?") == page(Path(program).stem.upper()), program
     # DEBUG forwards the tail after the filename to the debuggee's PSP.
