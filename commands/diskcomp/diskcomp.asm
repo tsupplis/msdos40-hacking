@@ -527,6 +527,8 @@ DISKCOMP_BEGIN	     LABEL BYTE
 
 ;  $salut (4,4,10,36)		   ;						;AN000;
 BEGIN PROC NEAR
+        extrn _check_help:near
+        call _check_help
    PUBLIC BEGIN 		   ;						;AN000;
 ;OUTPUT - "EXITFL" HAS ERRORLEVEL RETURN CODE
 

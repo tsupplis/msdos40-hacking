@@ -1,5 +1,5 @@
 /DOSSEG /MAP /E+
 E2BINIT.obj+
-DISPLAY.obj
+DISPLAY.obj+helptest.obj
 EXE2BIN.EXE, EXE2BIN.MAP;
 

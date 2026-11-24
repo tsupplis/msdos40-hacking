@@ -233,6 +233,8 @@ START:
 HEADER	DB	"Vers 2.40"
 
 DSTRT:
+        extrn _check_help:near
+        call _check_help
 ;=========================================================================
 ; invoke PRE_LOAD_MESSAGE here.  If the messages were not loaded we will
 ; exit with an appropriate error message.

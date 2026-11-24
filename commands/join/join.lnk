@@ -4,7 +4,7 @@ C:\common\sysvar.obj+
 C:\common\cds.obj+
 C:\common\dpb.obj+
 _msgret.obj+
-_parse.obj
+_parse.obj+helptest.obj
 JOIN
 NUL
 C:\sdk\lib\comsubs.lib+

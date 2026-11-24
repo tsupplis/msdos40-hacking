@@ -148,6 +148,7 @@ INFO		DB	?
 BUF		DB	DIRSTRLEN + 20 DUP (?)
 VARSTRUC	ENDS
 
+fHelpAlone      equ     00000100b       ; preserve literal text or nested commands
 fCheckDrive	equ	00000001b
 fSwitchAllowed	equ	00000010b
 

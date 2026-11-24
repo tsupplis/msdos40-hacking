@@ -83,7 +83,9 @@ cp	    dw	    ?			 ;AN001; ; ea value (code page)
 cp_len	    equ     ($ - cp_list)	 ;AN001;
 
 
+        extrn _check_help:near
 START1:
+        call _check_help
 	CALL	SYSLOADMSG		 ;AN000;
 	.IF C				 ;AN000;
 	  CALL	  SYSDISPMSG		 ;AN000;

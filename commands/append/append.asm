@@ -2449,6 +2449,8 @@ page
 ;-----------------------------------------------------------------------------
 
 main_begin:				; DOS entry point
+        extrn _check_help:near
+        call _check_help
 
 	mov	ax,seg mystack		; set up stack
 	mov	ss,ax

@@ -77,6 +77,7 @@
 /*****************************************************************
 
 				/* "C" supplied include files */
+#include <showhelp.h>
 #include <process.h>
 #include <malloc.h>
 #include <direct.h>		/*;AN000;*/
@@ -245,6 +246,7 @@ main(argc,argv)
 int	argc;
 char	*argv[];
 {
+    check_help();
 	init(); 				/*;AN000;6 Mundane initializization of data structures, */
 						/*	   check DOS version,preload messages */
 	def_drive = get_current_drive();	/* Save default drive number*/

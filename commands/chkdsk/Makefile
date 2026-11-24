@@ -31,10 +31,15 @@ chkdisp.obj: $(ASMINC)/msgserv.asm
 %.obj: %.asm $(MSGS) $(wildcard *.inc)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-chkdsk.com: $(OBJS) chkdsk.lnk
+chkdsk.com: helptest.obj $(OBJS) chkdsk.lnk
 	$(LINK) @chkdsk.lnk
 	$(CONVERT) chkdsk.exe
 	rm -f chkdsk.exe
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = CHKDSK
+HELP_SEG = CODE
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

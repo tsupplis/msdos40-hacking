@@ -100,6 +100,7 @@
 /*                                                                        */
 /**************************************************************************/
 
+#include <showhelp.h>
 #include "comsub.h"                                                            /* ;AN000;P DBCS functions */
 #include "dos.h"                                                               /* ;AN000;M Used for the REGS union */
 #include "replacep.h"                                                          /* ;AN000;P Parser structures */
@@ -401,6 +402,7 @@ char *argv[] ;
 
 /************************ BEGIN ***********************************************/
 
+  check_help();
   load_msg() ;                                                                 /* ;AN000;M Point to msgs & chk DOS ver */
   for (index = 1; index <= argc; index++)                                      /* ;AN000;P Form string for parser */
   {                                                                            /* ;AN000;P */

@@ -471,6 +471,8 @@ L_CTRL_TAB	EQU	$-RPL_K8							;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 						    ;;
 KEYB_COMMAND  PROC NEAR 			    ;;
+        extrn _check_help:near
+        call _check_help
 						    ;;
 	CALL  SYSLOADMSG			    ;AN000;load messages		 ;AN000
 	JNC   VERSION_OK			    ;AN000;if no carry then version ok	 ;AN000

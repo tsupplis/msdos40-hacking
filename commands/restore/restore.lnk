@@ -12,6 +12,6 @@ rtnew1	   +
 rtfile	   +
 rtfile1    +
 _parse	   +
-_msgret
+_msgret+helptest.obj
 restore.exe,,C:\mapper\mapper + C:\sdk\lib\comsubs;
 

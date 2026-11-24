@@ -27,8 +27,13 @@ $(MSGS): exe2bin.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-exe2bin.exe: $(OBJS) exe2bin.lnk
+exe2bin.exe: helptest.obj $(OBJS) exe2bin.lnk
 	$(LINK) @exe2bin.lnk
 
 clean:
 	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = EXE2BIN
+HELP_SEG = CODE
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

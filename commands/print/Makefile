@@ -28,10 +28,14 @@ $(MSGS): print.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-print.com: $(OBJS) print.lnk
+print.com: helptest.obj $(OBJS) print.lnk
 	$(LINK) @print.lnk
 	$(CONVERT) print.exe
 	rm -f print.exe
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = PRINT
+HELP_SEG = Code
+include $(ROOT)/common/helptest.mk

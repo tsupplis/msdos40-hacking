@@ -111,7 +111,9 @@ public	exitpgm 								;an026;bgb
 ;	ENDIF
 ;	Exit program
 ;*****************************************************************************
+        extrn _check_help:near
 procedure Main_Init			;;AN000;
+        call _check_help
 	xor	bp,bp
 	Set_Data_Segment		;Set DS,ES to Data segment	;AN000;bgb
 	call	get_psp

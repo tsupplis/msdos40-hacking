@@ -1,4 +1,4 @@
 LABEL+
-LABELM
+LABELM+helptest.obj
 label.EXE;
 

@@ -28,10 +28,15 @@ $(MSGS): comp.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-comp.com: $(OBJS) comp.lnk
+comp.com: helptest.obj $(OBJS) comp.lnk
 	$(LINK) @comp.lnk
 	$(EXE2BIN) comp.exe comp.com
 	rm -f comp.exe
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = COMP
+HELP_SEG = CSEG
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

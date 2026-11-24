@@ -26,11 +26,12 @@ skip_space:
         jne prepare
         cmp cx,2
         jne prepare
-        mov dx,offset syntax
-        mov ah,9
+        mov bx,(stack_top-start+100h+15)/16
+        mov ah,4ah
         int 21h
-        mov ax,4c00h
-        int 21h
+        mov ax,offset help_topic
+        push ax
+        call _show_help          ; terminal request, propagates child status
 usage:
         mov dx,offset syntax
         jmp error
@@ -288,6 +289,8 @@ exe_ext db '.EXE',0
 CR equ 13
 LF equ 10
 include loadfix.cl1
+help_topic db 'LOADFIX',0
+include showhelp.inc
 strategy dw ?
 explicit_path db 0
 extension db 0

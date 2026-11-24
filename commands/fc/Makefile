@@ -27,8 +27,13 @@ $(C_OBJS): %.obj: %.c $(wildcard *.h)
 $(COMMON)/%.obj:
 	$(MAKE) -C $(COMMON) $*.obj
 
-fc.exe: $(C_OBJS) $(ASM_OBJS) $(COMMON)/kstring.obj fc.lnk
+fc.exe: helptest.obj $(C_OBJS) $(ASM_OBJS) $(COMMON)/kstring.obj fc.lnk
 	$(LINK) @fc.lnk -- LIB='C:\sdk\lib'
 
 clean:
 	rm -f *.obj *.exe *.map *.lst
+
+HELP_TOPIC = FC
+HELP_SEG = _TEXT
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

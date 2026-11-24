@@ -29,10 +29,15 @@ $(MSGS): keyb.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-keyb.com: $(OBJS) keyb.lnk
+keyb.com: helptest.obj $(OBJS) keyb.lnk
 	$(LINK) @keyb.lnk
 	$(EXE2BIN) keyb.exe keyb.com
 	rm -f keyb.exe
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = KEYB
+HELP_SEG = CODE
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

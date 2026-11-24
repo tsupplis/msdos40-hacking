@@ -28,10 +28,14 @@ $(MSGS): labl.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-label.com: $(OBJS) label.lnk
+label.com: helptest.obj $(OBJS) label.lnk
 	$(LINK) @label.lnk
 	$(EXE2BIN) label.exe label.com
 	rm -f label.exe
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = LABEL
+HELP_SEG = CSEG
+include $(ROOT)/common/helptest.mk

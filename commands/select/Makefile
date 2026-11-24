@@ -68,12 +68,12 @@ services.lib: $(SVC_OBJS)
 	rm -f services.lbr
 
 # /NOE: symbols defined in the sources supersede library routines
-select.exe: $(ASM_OBJS) $(C_OBJS) bootrec.obj services.lib select.lnk
+select.exe: helptest.obj $(ASM_OBJS) $(C_OBJS) bootrec.obj services.lib select.lnk
 	$(LINK) /NOE @select.lnk -- LIB='C:\sdk\lib'
 
 # --- select.com (stub) --------------------------------------------------------
-select.com: sstub.obj
-	$(LINK) 'sstub;'
+select.com: sstub.obj helptest.obj
+	$(LINK) 'sstub+helptest,sstub;'
 	$(EXE2BIN) sstub.exe select.com
 	rm -f sstub.exe
 
@@ -100,3 +100,8 @@ select.hlp: usa.txt
 clean:
 	rm -f *.obj *.exe *.com *.lib *.lbr *.lst *.bak *.map *.ctl *.cl* \
 	      sel-pan.dat select.dat select.hlp panel.inf
+
+HELP_TOPIC = SELECT
+HELP_SEG = CODE
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

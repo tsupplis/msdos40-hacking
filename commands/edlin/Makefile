@@ -28,10 +28,14 @@ $(MSGS): edlin.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-edlin.com: $(OBJS) edlin.lnk
+edlin.com: helptest.obj $(OBJS) edlin.lnk
 	$(LINK) @edlin.lnk
 	$(CONVERT) edlin.exe
 	rm -f edlin.exe
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = EDLIN
+HELP_SEG = CODE
+include $(ROOT)/common/helptest.mk

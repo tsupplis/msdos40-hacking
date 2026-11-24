@@ -87,6 +87,7 @@ DATARES 	SEGMENT PUBLIC BYTE	;AC000;
 	EXTRN	resmsgend:word		;AN000;
 	EXTRN	RSWITCHAR:BYTE
 	EXTRN	SINGLECOM:WORD
+	EXTRN HelpExit:BYTE
 	EXTRN	SUM:WORD
 	EXTRN	TRNSEG:WORD
 	EXTRN	TrnMvFlg:BYTE
@@ -445,6 +446,20 @@ ASSUME	DS:RESGROUP,ES:RESGROUP 		;AN000;
 ;
 	ADD	DI,AX				;AC000; go to end of command line
 	MOV	BYTE PTR [DI],0Dh		;AC000; insert a carriage return
+        push si
+        mov dl,1
+        call help_argument
+        pop si
+        jnc normal_startup
+        mov HelpExit,1
+        mov di,81h
+        mov si,offset resgroup:command_help_line
+        mov cx,command_help_size
+        rep movsb
+        mov byte ptr ds:[80h],command_help_size-1
+        mov si,81h
+        jmp SetSSwitch
+normal_startup:
 	xor	cx,cx				;AC000; clear cx
 	mov	num_positionals,cx		;AC000; initialize positionals
 ;
@@ -1679,6 +1694,10 @@ MSG_UTILNAME <COMMAND>				;AN000; define utility name
 MSG_SERVICES <COMR,NEARmsg,LOADmsg,NOCHECKSTDIN,NOCHECKSTDOUT>	;AC026; include message services macro
 
 include msgdcl.inc
+
+command_help_line db 'HELP.COM COMMAND',13
+command_help_size equ $-command_help_line
+include helparg.inc
 
 INIT	ENDS
 

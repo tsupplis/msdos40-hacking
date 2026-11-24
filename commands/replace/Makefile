@@ -32,8 +32,13 @@ $(ASM_OBJS): %.obj: %.asm $(MSGS)
 replace.obj: replace.c replacep.h $(MSGS)
 	$(CL) -c -AS -Os -Zp -I. -I'C:\include' -Fo$@ $< -- INCLUDE='C:\sdk\include' PATH='C:\sdk\bin'
 
-replace.exe: replace.obj $(ASM_OBJS) replace.lnk $(MAPPER)/mapper.lib
+replace.exe: helptest.obj replace.obj $(ASM_OBJS) replace.lnk $(MAPPER)/mapper.lib
 	$(LINK) @replace.lnk -- LIB='C:\sdk\lib'
 
 clean:
 	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = REPLACE
+HELP_SEG = _TEXT
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

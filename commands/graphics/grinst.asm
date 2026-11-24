@@ -294,6 +294,8 @@ PAGE										;AN000;
 ;;										;AN000;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;					;AN000;
 GRAPHICS_INSTALL     PROC NEAR		;					;AN000;
+        extrn _check_help:near
+        call _check_help
 										;AN000;
 ;-------------------------------------------------------------------------------;AN000;
 ; Load the error messages							;AN000;

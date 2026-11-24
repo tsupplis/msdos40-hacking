@@ -28,10 +28,14 @@ $(MSGS): sys.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-sys.com: $(OBJS) sys.lnk
+sys.com: helptest.obj $(OBJS) sys.lnk
 	$(LINK) @sys.lnk
 	$(EXE2BIN) sys.exe sys.com
 	rm -f sys.exe
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = SYS
+HELP_SEG = CODE
+include $(ROOT)/common/helptest.mk

@@ -4,7 +4,8 @@
 
    topic           Command, driver or CONFIG.SYS directive to look up.
 
- Omit the topic to browse the index.
+ Omit the topic to browse the index. Use /? on supported commands
+ to display the same help page.
 ANSI.SYS     Add ANSI console support.
 
  DEVICE=ANSI.SYS [/X] [/L] [/K]
@@ -115,10 +116,17 @@ CLS          Clear the display.
  CLS
 COMMAND      Start another command interpreter.
 
- COMMAND [drive:][path] [/P] [/C command]
+ COMMAND [drive:][path] [device] [/E:size] [/P [/MSG]] [/D] [/F] [/C command]
 
-   /P              Start a permanent command interpreter.
-   /C command      Run the command and exit.
+   [drive:][path]  Directory containing COMMAND.COM.
+   device          Character device to use as the console.
+   /E:size         Set the environment size in bytes (160 to 32768).
+                   DOS rounds up to a multiple of 16.
+   /P              Start a permanent interpreter. EXIT cannot close it.
+   /MSG            With /P, keep extended error messages in memory.
+   /D              Skip the startup date and time prompts.
+   /F              Return Fail automatically on critical errors.
+   /C command      Run the remaining command line and exit.
 COMMENT=     Change the CONFIG.SYS comment character.
 
  COMMENT=character
@@ -237,6 +245,9 @@ DISKCOMP     Compare two floppy disks.
    drive1, drive2  Drives containing the disks to compare.
    /1              Compare only the first side.
    /8              Compare only the first eight sectors of each track.
+
+ An omitted drive defaults to the current drive.
+ With one drive, insert each disk when prompted.
 DISKCOPY     Copy a floppy disk.
 
  DISKCOPY [drive1:] [drive2:] [/1] [/V]
@@ -245,6 +256,9 @@ DISKCOPY     Copy a floppy disk.
    drive2          Drive containing the destination disk.
    /1              Copy only the first side.
    /V              Verify the destination tracks.
+
+ An omitted drive defaults to the current drive.
+ Copying overwrites the destination disk. Swap disks when prompted.
 DISPLAY.SYS  Install display code-page support.
 
  DEVICE=DISPLAY.SYS CON[:]=(type[,hwcp[,n]])
@@ -398,10 +412,14 @@ GOTO         Continue a batch file at the named label.
                    with :.
 GRAFTABL     Load or identify a graphics character table.
 
- GRAFTABL [codepage | /STATUS | /STA]
+ GRAFTABL [codepage | /STATUS | /STA | ?]
 
-   codepage        Load the graphics character table for this code page.
+   codepage        Select a character table. The default is 437.
+                     437  USA               850  Multilingual
+                     860  Portuguese        863  Canadian French
+                     865  Nordic
    /STATUS, /STA   Display the currently loaded table.
+   ?               List the supported parameters and code pages.
 GRAPHICS     Enable printing of graphics screens.
 
  GRAPHICS [type] [/R] [/B] [/LCD] [/PRINTBOX:name | /PB:name]
@@ -417,7 +435,8 @@ HELP         List help topics or read about one topic.
 
    topic           Command, driver or CONFIG.SYS directive to look up.
 
- Omit the topic to browse the index.
+ Omit the topic to browse the index. Use /? on supported commands
+ to display the same help page.
 IF           Run a batch command when a condition is true.
 
  IF [NOT] ERRORLEVEL number command
@@ -466,7 +485,7 @@ LASTDRIVE=   Set the highest drive letter.
  LASTDRIVE=letter
 
    letter          Highest drive letter DOS should allocate.
-LH           Run an external program in upper memory when available.
+LH           Alias for LOADHIGH. Run a program in upper memory when available.
 
  LH program [arguments]
 
@@ -479,6 +498,7 @@ LOADFIX      Run a program above the first 64 KiB.
 LOADHIGH     Run an external program in upper memory when available.
 
  LOADHIGH program [arguments]
+ LH program [arguments]
 
    program         External command to load and execute.
 MBASIC       Start the BASIC interpreter.
@@ -510,14 +530,28 @@ MKDIR        Create a directory.
  MKDIR [drive:]path
 
    path            Name of the directory to create.
-MODE         Configure devices or display their status.
+MODE         Configure the console, serial ports, printers and code pages.
 
- MODE [device] [/STATUS | /STAT | /STA]
+ MODE [device] /STATUS     Show status. /STAT and /STA are short forms.
+ MODE                      Show status for all devices.
+ MODE CON [COLS=c] [LINES=n] [RATE=r] [DELAY=d]
+   Screen: 40 or 80 columns and 25, 43 or 50 lines, depending on the adapter.
+   Keyboard: repeat rate 1 (slow) to 32 (fast), delay 1 to 4 quarter-seconds.
+ MODE {40|80|BW40|BW80|CO40|CO80|MONO} [,L|R][,T]
+   Select a display mode. L or R shifts the image; T tests the adjustment.
 
-   device          Display, serial port or printer to inspect.
-   /STATUS         Show device status. /STAT and /STA are short forms.
-
- Other MODE forms set display modes, configure ports and manage code pages.
+ MODE COMn [BAUD=b] [PARITY=p] [DATA=d] [STOP=s] [RETRY=r]
+   COM1-COM4. Example: MODE COM1:9600,N,8,1 sets 9600 baud, no parity,
+   8 data bits and 1 stop bit. M/S parity and 19200 baud depend on hardware.
+ MODE LPTn [COLS=c] [LINES=n] [RETRY=r]
+   LPT1-LPT3: 80 or 132 columns, 6 or 8 lines per inch. Example: MODE LPT1:80,6
+ MODE LPTn:=COMm           Send printer output to a serial port.
+ MODE LPTn:                Cancel printer redirection.
+ MODE device CP PREP=((pages) filename)   Load code pages from a CPI file.
+ MODE device CP SEL=page                  Activate a prepared code page.
+ MODE device CP REFRESH                   Reload the active code page.
+ MODE device CP /STATUS                   List code-page information.
+   Use CON or a printer with a code-page driver. Example: MODE CON CP SEL=850
 MORE         Page a text file or piped input.
 
  MORE [filename]
@@ -658,6 +692,9 @@ SELECT       Run the DOS setup utility.
  SELECT MENU
 
    MENU            Start interactive installation from drive A.
+
+ SELECT.COM prompts for the installation disk and starts SELECT.EXE.
+ SELECT.EXE MENU starts the installer directly.
 
  Choose the option to omit MS-DOS Shell when using the project disk images.
 SET          Display or change environment variables.

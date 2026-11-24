@@ -30,11 +30,16 @@ $(MSGS): move.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 $(ASM_OBJS): %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-move.obj: move.c $(MSGS)
+move.obj: move.c $(ROOT)/include/showhelp.h $(MSGS)
 	$(CL) -c -AS -Os -Zp -I. -I'C:\include' -Fo$@ $< -- INCLUDE='C:\sdk\include' PATH='C:\sdk\bin'
 
-move.exe: move.obj $(ASM_OBJS) move.lnk
+move.exe: showhelp.obj move.obj $(ASM_OBJS) move.lnk
 	$(LINK) @move.lnk -- LIB='C:\sdk\lib'
 
 clean:
 	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*
+
+include $(ROOT)/common/showhelp.mk
+
+showhelp.obj: $(ROOT)/common/showhelp.asm $(ROOT)/common/showhelp.inc showhelp.cl1
+	@echo | $(MASM) -Mx -t -I. -I'C:\common' 'C:\common\showhelp.asm,showhelp.obj;'

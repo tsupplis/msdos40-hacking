@@ -28,10 +28,14 @@ $(MSGS): assign.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-assign.com: $(OBJS)
-	$(LINK) 'assgmain.obj+assgparm.obj,assign.exe;'
+assign.com: helptest.obj $(OBJS)
+	$(LINK) 'assgmain.obj+assgparm.obj+helptest.obj,assign.exe;'
 	$(EXE2BIN) assign.exe assign.com
 	rm -f assign.exe
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = ASSIGN
+HELP_SEG = code
+include $(ROOT)/common/helptest.mk

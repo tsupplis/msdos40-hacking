@@ -31,9 +31,13 @@ sort.obj: sort.asm $(MSGS)
 sortmes.obj: sortmes.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' 'sortmes.asm,sortmes.obj;'
 
-sort.exe: $(OBJS)
-	$(LINK) 'sort.obj+sortmes.obj,sort.exe;'
+sort.exe: helptest.obj $(OBJS)
+	$(LINK) 'sort.obj+sortmes.obj+helptest.obj,sort.exe;'
 	$(EXEFIX) sort.exe 1 1
 
 clean:
 	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = SORT
+HELP_SEG = CODE
+include $(ROOT)/common/helptest.mk

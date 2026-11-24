@@ -38,6 +38,8 @@ stck_beg DB	 0		 ;AN000;
 A0:				 ;AN000;
 	 MOV	SP,OFFSET stck_beg ;AN000;setup local stack
 
+         extrn _check_help:near
+         call _check_help              ; before prompting for installation media
 	 CALL	LOAD_MSG	   ;AN000;
 	 MOV	AX,10		 ;AN000;insert SELECT diskette in drive A:
 	 CALL	DISPLAY_MSG	 ;AN000;

@@ -27,8 +27,12 @@ $(MSGS): find.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-find.exe: $(OBJS)
-	$(LINK) 'find.obj+findmes.obj,find.exe;'
+find.exe: helptest.obj $(OBJS)
+	$(LINK) 'find.obj+findmes.obj+helptest.obj,find.exe;'
 
 clean:
 	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = FIND
+HELP_SEG = code
+include $(ROOT)/common/helptest.mk

@@ -7,6 +7,6 @@
 	GRTABSM+
 	GRTABPAR+
 	GRTABP+
-	GRTAB
+	GRTAB+helptest.obj
 	GRAFTABL.EXE;
 

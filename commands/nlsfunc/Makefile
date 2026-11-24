@@ -27,8 +27,13 @@ $(MSGS): nlsfunc.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 $(OBJS): %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-nlsfunc.exe: $(OBJS)
-	$(LINK) 'nlsfunc.obj+nlsparm.obj,nlsfunc.exe;'
+nlsfunc.exe: helptest.obj $(OBJS)
+	$(LINK) 'nlsfunc.obj+nlsparm.obj+helptest.obj,nlsfunc.exe;'
 
 clean:
 	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = NLSFUNC
+HELP_SEG = NLS_INIT_CODE
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

@@ -411,6 +411,8 @@ qlist_ea ea	<EAISBINARY,EASYSTEM,?,2,2,"CP",?> ;AN001; ;return code page in this
 ;	 the DOS version
 ;-----------------------------------------------------------------------------
 init	proc	near			;AC000;
+        extrn _check_help:near
+        call _check_help
 	public	init			;AN000;
 
 	mov	sp,offset End_Stack_Area ;Big Stack

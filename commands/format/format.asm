@@ -512,6 +512,8 @@ PSP_Environ	equ	2ch			;an011; dms;location of
 Fbig	equ	0ffh				;an000; dms;flag for big FAT
 
 START:
+        extrn _check_help:near
+        call _check_help
 	xor	bx,bx				;				;AN000;
 	push	bx				;				;AN000;
 	Set_Data_Segment			;				;AC000;

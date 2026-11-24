@@ -35,8 +35,13 @@ $(MSGS): subst.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 subst.obj: subst.c $(MSGS)
 	$(CL) -c -AS -Os -Zp -I. -I'C:\include' -Fo$@ $< -- INCLUDE='C:\sdk\include' PATH='C:\sdk\bin'
 
-subst.exe: $(OBJS) subst.lnk $(COMMON)/errtst.obj $(COMMON)/sysvar.obj $(COMMON)/cds.obj $(COMMON)/dpb.obj $(MAPPER)/mapper.lib
+subst.exe: helptest.obj $(OBJS) subst.lnk $(COMMON)/errtst.obj $(COMMON)/sysvar.obj $(COMMON)/cds.obj $(COMMON)/dpb.obj $(MAPPER)/mapper.lib
 	$(LINK) @subst.lnk -- LIB='C:\sdk\lib'
 
 clean:
 	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = SUBST
+HELP_SEG = _TEXT
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

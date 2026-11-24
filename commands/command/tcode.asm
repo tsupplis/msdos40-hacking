@@ -409,6 +409,7 @@ HighCopy:
 
 NOPIPEPROC:
 	MOV	[LOADHIGH_FLAG],0
+public ParseProgram
 ParseProgram:
 	invoke	parseline
 	jnc	OkParse 			; user error?  or maybe we goofed?

@@ -44,6 +44,7 @@
 
 /*컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�*/
 
+#include <showhelp.h>
 #include "ctype.h"                                                                                           /* ;an000; */
 #include "conio.h"                      /* need for kbhit prototype */                                       /* ;an000; */
 #include "stdio.h"                                                                                           /* ;an000; */
@@ -278,6 +279,7 @@ char     *argv[];                                                               
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
+        check_help();
         sysloadmsg(&InRegs,&OutRegs);                                                                                            /* ;an000; */
         if ((OutRegs.x.cflag & CarryFlag) == CarryFlag)                                                                          /* ;an000; */
                 {                                                                                                                /* ;an000; */

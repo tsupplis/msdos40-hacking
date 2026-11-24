@@ -1,7 +1,7 @@
 REPLACE.obj+
 _REPLACE.OBJ+
 _MSGRET.OBJ+
-_PARSE.OBJ
+_PARSE.OBJ+helptest.obj
 REPLACE
 NUL
 C:\mapper\mapper.lib+

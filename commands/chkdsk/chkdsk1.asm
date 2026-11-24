@@ -34,6 +34,8 @@ public PRINTID, FIGREC, Main_Routine, checkit
 
 	pathlabl chkdsk1
 CHKDSK:
+        extrn _check_help:near
+        call _check_help
 ; find out if we have enough memory to do the job
     mov     cs:save_drive,al		;save drive validity
 ;;;;int     12h 			;1k blocks (640k = 280h)		;an054;bgb;an050;bgb

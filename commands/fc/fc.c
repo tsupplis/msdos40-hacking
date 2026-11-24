@@ -207,6 +207,7 @@ WARNING:
  */
 
 
+#include <showhelp.h>
 #include "tools.h"
 #include "fc.h"
 
@@ -275,6 +276,7 @@ byte *v[];
 
 
       /* Issue error message if DOS version is not within valid range. */
+    check_help();
         version = ((word)_osmajor << 8) + (word)_osminor;
         if (( LOWVERSION >  version) || (version >  HIGHVERSION))
         {

@@ -33,8 +33,8 @@ $(ASM_OBJS): %.obj: %.asm $(MSGS)
 backup.obj: backup.c backpars.h backup.h $(MSGS)
 	$(CL) -c -AS -Od -Zp -I. -I'C:\include' -Fo$@ $< -- INCLUDE='C:\sdk\include' PATH='C:\sdk\bin'
 
-backup.com: backup.obj $(ASM_OBJS) $(MAPPER)/mapper.lib
-	$(LINK) '/NOE backup+_parse+_msgret,backup,nul,C:\mapper\mapper+C:\sdk\lib\comsubs;' -- LIB='C:\sdk\lib'
+backup.com: helptest.obj backup.obj $(ASM_OBJS) $(MAPPER)/mapper.lib
+	$(LINK) '/NOE backup+_parse+_msgret+helptest.obj,backup,nul,C:\mapper\mapper+C:\sdk\lib\comsubs;' -- LIB='C:\sdk\lib'
 	$(CONVERT) backup.exe backup.com
 	rm -f backup.exe
 
@@ -42,3 +42,8 @@ _parse.obj: $(ROOT)/asminc/parse.asm
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = BACKUP
+HELP_SEG = _TEXT
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

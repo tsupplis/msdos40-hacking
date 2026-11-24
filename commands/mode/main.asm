@@ -123,7 +123,9 @@ MSG_SERVICES <mode.cla,mode.clb,mode.cl1,mode.cl2>    ;class B is for messages >
 ;;RPS  MSG_SERVICES <mode.cl1,mode.cl2>
 
 
+        extrn _check_help:near
 main  PROC  NEAR
+        call _check_help
 
 CALL  SYSLOADMSG		    ;load the message text
 .IF NC THEN			    ;IF messages loaded successfully THEN

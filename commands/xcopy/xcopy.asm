@@ -657,6 +657,18 @@ SAV_INT24_SEG DW 0
 	ASSUME	DS:NOTHING		;AN000;
 	ASSUME	ES:NOTHING		;AN000;
 MAIN	PROC	FAR
+        push ax
+        mov si,81h
+        xor dl,dl
+        call help_argument
+        pop ax
+        jnc normal_xcopy
+        push cs
+        pop ds
+        mov ax,offset xcopy_topic
+        push ax
+        call _show_help
+normal_xcopy:
 	PUSH	AX			;AN000;PRESERVE FOR INIT DRV VALIDITY
 	MOV	BX,DGROUP
 	MOV	ES,BX			;AN000;SET UP ADDRESS OF DSEG IN ES
@@ -3858,6 +3870,10 @@ INT24_ABORT_CNT DB 0
 ;
 include msgdcl.inc
 
+include helparg.inc
+        assume ds:CSEG
+xcopy_topic db 'XCOPY',0
+include showhelp.inc
 CSEG	ENDS
 DSEG_INIT SEGMENT PARA PUBLIC		;AN000;
 DSEG_INIT ENDS				;AN000;

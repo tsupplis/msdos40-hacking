@@ -1,6 +1,6 @@
 recdisp+
 RECINIT+
 RECproc+
-RECover
+RECover+helptest.obj
 RECOVER.EXE,RECOVER.MAP ;
 

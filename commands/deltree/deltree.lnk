@@ -1,5 +1,5 @@
 deltree.obj+
-_msgret.obj
+_msgret.obj+helptest.obj
 deltree
 NUL
 C:\sdk\lib\comsubs.lib /STACK:16384;

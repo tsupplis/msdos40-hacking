@@ -27,8 +27,13 @@ $(MSGS): fastopen.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-fastopen.exe: $(OBJS) fastopen.lnk
+fastopen.exe: helptest.obj $(OBJS) fastopen.lnk
 	$(LINK) @fastopen.lnk
 
 clean:
 	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = FASTOPEN
+HELP_SEG = CSEG_INIT
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

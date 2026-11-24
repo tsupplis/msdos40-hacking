@@ -822,6 +822,8 @@ Value_sw1     label   byte   ; switch parameter value expected					   ;AN000;
 ;-----------------------------------------------------------------------------
 
 START:
+        extrn _check_help:near
+        call _check_help
 					; on entry DS and ES -->PSP				   ;AN000;
 	push	cs			; DS-->Cseg_Init					   ;AN000;
 	pop	ds										   ;AN000;

@@ -33,8 +33,13 @@ $(ASM_OBJS): %.obj: %.asm $(MSGS)
 deltree.obj: deltree.c $(MSGS)
 	$(CL) -c -AS -Os -Zp -I. -I'C:\include' -Fo$@ $< -- INCLUDE='C:\sdk\include' PATH='C:\sdk\bin'
 
-deltree.exe: deltree.obj $(ASM_OBJS) deltree.lnk
+deltree.exe: helptest.obj deltree.obj $(ASM_OBJS) deltree.lnk
 	$(LINK) @deltree.lnk -- LIB='C:\sdk\lib'
 
 clean:
 	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = DELTREE
+HELP_SEG = _TEXT
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

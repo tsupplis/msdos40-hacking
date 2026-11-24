@@ -1,4 +1,4 @@
-move.obj+
+move.obj+showhelp.obj+
 _msgret.obj
 move
 NUL

@@ -10,6 +10,6 @@ GRPARSE+
 grparms+
 GRLOAD+
 GRLOAD2+
-GRLOAD3
+GRLOAD3+helptest.obj
 GRAPHICS.EXE;
 

@@ -8,6 +8,7 @@ typedef unsigned short WORD;
 #include <msgret.h>
 #include <stdlib.h>
 #include <string.h>
+#include <showhelp.h>
 
 #include <stddef.h>
 #define PATHLEN 128
@@ -260,6 +261,9 @@ int main(int argc, char **argv)
     unsigned attr, length = 0;
     struct source *s;
 
+    for (i = 1; i < argc; ++i)
+        if (!strcmp(argv[i], "/?")) show_help("MOVE");
+    i = 1;
     load_messages();
     while (i < argc && argv[i][0] == '/') {
         if (!stricmp(argv[i], "/Y")) {

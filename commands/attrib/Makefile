@@ -32,8 +32,13 @@ $(ASM_OBJS): %.obj: %.asm $(MSGS)
 attrib.obj: attrib.c attrib.h parse.h msgret.h $(MSGS)
 	$(CL) -c -AS -Os -Zp -I. -I'C:\include' -Fo$@ $< -- INCLUDE='C:\sdk\include' PATH='C:\sdk\bin'
 
-attrib.exe: attrib.obj $(ASM_OBJS) attrib.lnk
+attrib.exe: helptest.obj attrib.obj $(ASM_OBJS) attrib.lnk
 	$(LINK) @attrib.lnk -- LIB='C:\sdk\lib'
 
 clean:
 	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = ATTRIB
+HELP_SEG = _text
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

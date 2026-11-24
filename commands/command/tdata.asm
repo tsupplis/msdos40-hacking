@@ -285,11 +285,11 @@ IFTAB	LABEL	BYTE				; Table of IF conditionals
 ; Table for internal command names
 COMTAB	DB	3,"DIR",fSwitchAllowed+fCheckDrive
 	DW	OFFSET TRANGROUP:CATALOG	; In TCMD1.ASM
-	DB	8,"LOADHIGH",fSwitchAllowed
+	DB	8,"LOADHIGH",fSwitchAllowed+fHelpAlone
 	DW	OFFSET TRANGROUP:LoadHigh
-	DB	2,"LH",fSwitchAllowed
+	DB	2,"LH",fSwitchAllowed+fHelpAlone
 	DW	OFFSET TRANGROUP:LoadHigh
-	DB	4,"CALL",fSwitchAllowed
+	DB	4,"CALL",fSwitchAllowed+fHelpAlone
 	DW	OFFSET TRANGROUP:$CALL		; In TBATCH2.ASM
 	DB	4,"CHCP",fSwitchAllowed
 	DW	OFFSET TRANGROUP:CHCP		; In TCMD2B.ASM
@@ -303,7 +303,7 @@ COMTAB	DB	3,"DIR",fSwitchAllowed+fCheckDrive
 	DW	OFFSET TRANGROUP:ERASE		; In TCMD1.ASM
 	DB	4,"TYPE",fSwitchAllowed+fCheckDrive  ;AC018; P3903
 	DW	OFFSET TRANGROUP:TYPEFIL	; In TCMD1.ASM
-	DB	3,"REM",fSwitchAllowed
+	DB	3,"REM",fSwitchAllowed+fHelpAlone
 	DW	OFFSET TRANGROUP:TCOMMAND	; In TCODE.ASM
 	DB	4,"COPY",fSwitchAllowed+fCheckDrive
 	DW	OFFSET TRANGROUP:COPY		; In COPY.ASM
@@ -333,25 +333,25 @@ COMTAB	DB	3,"DIR",fSwitchAllowed+fCheckDrive
 	DW	OFFSET TRANGROUP:CNTRLC 	; In TUCODE.ASM
 	DB	6,"VERIFY",fSwitchAllowed       ;AC018; P3903
 	DW	OFFSET TRANGROUP:VERIFY 	; In TUCODE.ASM
-	DB	3,"SET",fSwitchAllowed
+	DB	3,"SET",fSwitchAllowed+fHelpAlone
 	DW	OFFSET TRANGROUP:ADD_NAME_TO_ENVIRONMENT; In TENV.ASM
-	DB	6,"PROMPT",fSwitchAllowed
+	DB	6,"PROMPT",fSwitchAllowed+fHelpAlone
 	DW	OFFSET TRANGROUP:ADD_PROMPT	; In TENV.ASM
-	DB	4,"PATH",fSwitchAllowed
+	DB	4,"PATH",fSwitchAllowed+fHelpAlone
 	DW	OFFSET TRANGROUP:PATH		; In TCMD2.ASM
 	DB	4,"EXIT",0
 	DW	OFFSET TRANGROUP:$EXIT		; In TCMD2.ASM
 	DB	4,"CTTY",fCheckDrive+fSwitchAllowed
 	DW	OFFSET TRANGROUP:CTTY		; In TCMD2.ASM
-	DB	4,"ECHO",fSwitchAllowed
+	DB	4,"ECHO",fSwitchAllowed+fHelpAlone
 	DW	OFFSET TRANGROUP:ECHO		; In TUCODE.ASM
-	DB	4,"GOTO",fSwitchAllowed
+	DB	4,"GOTO",fSwitchAllowed+fHelpAlone
 	DW	OFFSET TRANGROUP:GOTO		; In TBATCH.ASM
 	DB	5,"SHIFT",fSwitchAllowed
 	DW	OFFSET TRANGROUP:SHIFT		; In TBATCH.ASM
-	DB	2,"IF",fSwitchAllowed
+	DB	2,"IF",fSwitchAllowed+fHelpAlone
 	DW	OFFSET TRANGROUP:$IF		; In TBATCH.ASM
-	DB	3,"FOR",fSwitchAllowed
+	DB	3,"FOR",fSwitchAllowed+fHelpAlone
 	DW	OFFSET TRANGROUP:$FOR		; In TBATCH.ASM
 	DB	3,"CLS",0
 	DW	OFFSET TRANGROUP:CLS		; In TCMD2.ASM

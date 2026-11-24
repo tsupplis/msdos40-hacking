@@ -6,7 +6,7 @@ chkfat+
 CHKINIT+
 CHKPRMT+
 CHKPROC2+
-CHKPROC
+CHKPROC+helptest.obj
 CHKDSK.EXE,CHKDSK.MAP ;
 ;chkexec+									;an038;bgb
 

@@ -118,6 +118,8 @@ _text	   segment PARA public 'CODE'
 	   assume ss:stack		;<--emk
 
 XCMAIN	   proc  far
+        extrn _check_help:near
+        call _check_help
 
 	   mov	 ax,dgroup
 	   mov	 ds,ax			;initialize ds and ss

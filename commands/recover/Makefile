@@ -30,10 +30,15 @@ $(MSGS): recover.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-recover.com: $(OBJS) recover.lnk
+recover.com: helptest.obj $(OBJS) recover.lnk
 	$(LINK) @recover.lnk
 	$(CONVERT) recover.exe
 	rm -f recover.exe
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = RECOVER
+HELP_SEG = code
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

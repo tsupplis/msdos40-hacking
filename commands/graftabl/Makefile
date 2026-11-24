@@ -29,10 +29,14 @@ $(MSGS): graftabl.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-graftabl.com: $(OBJS) graftabl.lnk
+graftabl.com: helptest.obj $(OBJS) graftabl.lnk
 	$(LINK) @graftabl.lnk
 	$(EXE2BIN) graftabl.exe graftabl.com
 	rm -f graftabl.exe
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = GRAFTABL
+HELP_SEG = CSEG
+include $(ROOT)/common/helptest.mk

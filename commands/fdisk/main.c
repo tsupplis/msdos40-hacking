@@ -53,6 +53,7 @@
 /*        Hope this doesn't mess you up too much - MT 5/20/86  */
 /******************** END OF SPECIFICATIONS ********************/
 
+#include <showhelp.h>
 #include <dos.h>                                                        /* AN000 */
 #include <fdisk.h>                                                      /* AN000 */
 #include <subtype.h>                                                    /* AN000 */
@@ -161,6 +162,7 @@ BEGIN
     char       temp;                                                    /* AN000 */
     unsigned   input;
 
+    check_help();
     /* DISABLE CNTL-BREAK HERE */
     /* Gets defines from signal.h */
     signal( (int) SIGINT, SIG_IGN );                                    /* AN000 */

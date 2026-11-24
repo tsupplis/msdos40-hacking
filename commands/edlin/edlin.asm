@@ -346,6 +346,8 @@ NONAME:
 	JMP	XERROR
 
 SIMPED:
+        extrn _check_help:near
+        call _check_help
 	mov	org_ds,DS
 	push	ax			;ac000;save for drive compare
 

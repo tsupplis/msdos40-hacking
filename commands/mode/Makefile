@@ -30,10 +30,14 @@ $(MSGS): mode.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 $(OBJS): %.obj: %.asm $(MSGS) $(wildcard *.inc *.stc)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-mode.com: $(OBJS) mode.lnk
+mode.com: helptest.obj $(OBJS) mode.lnk
 	$(LINK) @mode.lnk
 	$(EXE2BIN) mode.exe mode.com
 	rm -f mode.exe
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = MODE
+HELP_SEG = PRINTF_CODE
+include $(ROOT)/common/helptest.mk

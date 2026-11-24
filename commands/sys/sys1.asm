@@ -371,7 +371,9 @@ EOS			EQU  BYTE PTR $
 
 public			Begin
 
+        extrn _check_help:near
 BEGIN			PROC NEAR
+        call _check_help
 
 ;  $SALUT (4,4,9,41)
 

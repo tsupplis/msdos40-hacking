@@ -1379,7 +1379,9 @@ page
 
 
 
+        extrn _check_help:near
 MAIN		PROC	FAR
+        call _check_help
 
 		mov	ax,NLS_DATA		;set up data segment
 		mov	ds,ax

@@ -1131,6 +1131,8 @@ INCLUDE ASSGMSG.INC				;AN000;
 assume	cs:code, ds:code, ss:code, es:code
 
 INITIALIZATION:
+        extrn _check_help:near
+        call _check_help
 
 	push	ax				;an000; save ax
 	mov	ax,ds				;an000; get the current ds

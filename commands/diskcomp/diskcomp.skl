@@ -8,7 +8,7 @@
 :use 3 PARSE10             ;AN000;"Invalid parameter"
 ;
 :def 4 "Do not specify filename(s)",CR,LF                                       ;AN000;
-"Command format: DISKCOMP d: d: [/1][/8]",LF,CR                                 ;AN000;
+"Command format: DISKCOMP [drive1:] [drive2:] [/1] [/8]",LF,CR                                 ;AN000;
 ;
 :def 5 CR,LF,"Invalid drive specification",CR,LF                                ;AN000;
 "Specified drive does not exist",CR,LF                                          ;AN000;

@@ -35,8 +35,13 @@ $(MSGS): join.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 join.obj: join.c $(MSGS)
 	$(CL) -c -AS -Os -Zp -I. -I'C:\include' -Fo$@ $< -- INCLUDE='C:\sdk\include' PATH='C:\sdk\bin'
 
-join.exe: $(OBJS) join.lnk $(COMMON)/errtst.obj $(COMMON)/sysvar.obj $(COMMON)/cds.obj $(COMMON)/dpb.obj $(MAPPER)/mapper.lib
+join.exe: helptest.obj $(OBJS) join.lnk $(COMMON)/errtst.obj $(COMMON)/sysvar.obj $(COMMON)/cds.obj $(COMMON)/dpb.obj $(MAPPER)/mapper.lib
 	$(LINK) @join.lnk -- LIB='C:\sdk\lib'
 
 clean:
 	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = JOIN
+HELP_SEG = _TEXT
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

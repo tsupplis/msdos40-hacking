@@ -1,3 +1,4 @@
+#include <showhelp.h>
 #include <dos.h>
 #include <io.h>
 #include <direct.h>
@@ -156,6 +157,7 @@ int main(int argc, char **argv)
 {
     int i = 1, rc = 0;
     char pattern[PATHLEN], *name;
+    check_help();
     load_messages();
     while (i < argc && argv[i][0] == '/') {
         if (stricmp(argv[i], "/Y")) { message(stderr, bad, NULL, NULL); return 1; }

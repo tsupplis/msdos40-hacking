@@ -243,6 +243,8 @@ Parm_Area	   label byte
 
 		   org	100h
 Start:				   ;DOS ENTRY POINT
+        extrn _check_help:near
+        call _check_help
 		   jmp	Main_Begin ;SKIP CONSTANTS
 		   HEADER <DATA AREAS - STACK, BUFFERS, FCB'S, MESSAGE SUBLISTS>
 		   EVEN

@@ -474,6 +474,8 @@ crlf            db      CR,LF   ;AN000;
         MSG_SERVICES <FIND.ctl,FIND.cla,FIND.cl1,FIND.cl2>      ;AN000;
         MSG_SERVICES <DISPLAYmsg,LOADmsg,CHARmsg,NOCHECKSTDIN>  ;AN003; Make retriever services available
 START:
+        extrn _check_help:near
+        call _check_help
 
         mov     ax,cs                   ;load ES to the right area,
         mov     es,ax                   ;

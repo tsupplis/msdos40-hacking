@@ -41,6 +41,7 @@ DATARES SEGMENT PUBLIC BYTE
 	EXTRN	RDIRCHAR:BYTE
 	EXTRN	RES_TPA:WORD
 	EXTRN	RETCODE:WORD
+	EXTRN HelpExit:BYTE
 	EXTRN	rsrc_xa_seg:word	;AN030;
 	EXTRN	RSWITCHAR:BYTE
 	EXTRN	SAVE_PDB:WORD
@@ -162,6 +163,10 @@ FATALRET2:
 	MOV	AX,WORD PTR OldTerm+2
 	MOV	WORD PTR CS:[PDB_Exit+2],AX
 	MOV	AX,(EXIT SHL 8) 	; Return to lower level
+	cmp cs:[HelpExit],0
+	je normal_exit
+	mov al,byte ptr cs:[RETCODE]
+normal_exit:
 	INT	int_command
 
 RET_2E:

@@ -2309,7 +2309,9 @@ $$DO56:
 ;
 ;******************* END OF SPECIFICATIONS *************************************
 
+        extrn _check_help:near
    Procedure SHAREINIT,NEAR
+        call _check_help
 
    ASSUME CS:SHARE,DS:NOTHING,ES:NOTHING,SS:STACK
 

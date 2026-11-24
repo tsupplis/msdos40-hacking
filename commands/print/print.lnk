@@ -1,2 +1,2 @@
-PRINT_RM+PRINT_R+PRINT_T+PRINT_TM,print,print.map /m;
+PRINT_RM+PRINT_R+PRINT_T+PRINT_TM+helptest.obj,print,print.map /m;
 

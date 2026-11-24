@@ -34,7 +34,7 @@ $(MSGS): command.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 tprintf.obj: $(ASMINC)/msgserv.asm
 
 %.obj: %.asm $(MSGS)
-	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
+	@echo | $(MASM) -Mx -t -I. -I'C:\common' -I'C:\asminc' '$<,$@;'
 
 tdata.obj: tranmsg.asm
 
@@ -47,3 +47,7 @@ tparse.obj: $(ROOT)/asminc/parse.asm
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+include $(ROOT)/common/showhelp.mk
+tmisc1.obj: showhelp.cl1 $(ASMINC)/helparg.inc
+init.obj: $(ASMINC)/helparg.inc

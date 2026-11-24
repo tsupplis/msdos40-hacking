@@ -29,10 +29,15 @@ $(MSGS): debug.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 $(OBJS): %.obj: %.asm $(MSGS) $(wildcard *.inc *.asm)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-debug.com: $(OBJS) debug.lnk
+debug.com: helptest.obj $(OBJS) debug.lnk
 	$(LINK) @debug.lnk
 	$(CONVERT) debug.exe
 	rm -f debug.exe
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = DEBUG
+HELP_SEG = CODE
+HELP_FLAGS = -Dhelpalone
+include $(ROOT)/common/helptest.mk

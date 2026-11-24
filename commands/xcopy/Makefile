@@ -25,7 +25,7 @@ $(MSGS): xcopy.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 	$(BUILDMSG) 'C:\messages\$(COUNTRY)' xcopy.skl > /dev/null
 
 %.obj: %.asm $(MSGS)
-	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
+	@echo | $(MASM) -Mx -t -I. -I'C:\common' -I'C:\asminc' '$<,$@;'
 
 xcopy.exe: $(OBJS) xcopy.lnk
 	$(LINK) @xcopy.lnk
@@ -34,3 +34,7 @@ xcopypar.obj: $(ROOT)/asminc/parse.asm
 
 clean:
 	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*
+
+include $(ROOT)/common/showhelp.mk
+xcopy.obj: showhelp.cl1 $(ASMINC)/helparg.inc
+xcopy.obj: $(ROOT)/common/showhelp.inc

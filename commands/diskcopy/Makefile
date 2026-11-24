@@ -28,10 +28,15 @@ $(MSGS): diskcopy.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-diskcopy.com: $(OBJS) diskcopy.lnk
+diskcopy.com: helptest.obj $(OBJS) diskcopy.lnk
 	$(LINK) @diskcopy.lnk
 	$(EXE2BIN) diskcopy.exe diskcopy.com
 	rm -f diskcopy.exe
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = DISKCOPY
+HELP_SEG = CSEG
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

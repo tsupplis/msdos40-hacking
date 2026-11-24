@@ -38,10 +38,15 @@ $(MSGS): format.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 
 msfor.obj: boot.cl1 $(ASMINC)/boot.inc
 
-format.com: $(OBJS) format.lnk
+format.com: helptest.obj $(OBJS) format.lnk
 	$(LINK) @format.lnk
 	$(CONVERT) format.exe
 	rm -f format.exe
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = FORMAT
+HELP_SEG = code
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

@@ -93,6 +93,7 @@
 /*                                                                        */
 /**************************************************************************/
 
+#include <showhelp.h>
 #include "cds.h"
 #include "ctype.h"
 #include "dos.h"
@@ -220,6 +221,7 @@ char *v[] ;
 
 /************************ BEGIN ***********************************************/
 
+    check_help();
   load_msg() ;                                                                 /* ;AN000;M Point to msgs & chks DOS ver */
 
   for (index = 1; index <= c; index++)                                         /* ;AN000;P Loop through end of cmd line */

@@ -170,7 +170,7 @@ MSG_UTILNAME <SORT>                     ;AN000;
 SUBTTL  Segments used in load order
 
 
-CODE    SEGMENT
+CODE    SEGMENT PUBLIC
 CODE    ENDS
 
 CONST   SEGMENT PUBLIC BYTE
@@ -196,7 +196,7 @@ DG      GROUP   CODE,CONST,CSTACK
 ;-------------------------------
 ;---    Code Segment
 ;-------------------------------
-CODE    SEGMENT
+CODE    SEGMENT PUBLIC
 ASSUME  CS:DG,DS:DG,ES:NOTHING,SS:CSTACK
 
 ;-------------------------------
@@ -362,7 +362,9 @@ sb_value_extra  dw      ?               ;AN000; UNUSED SPACE FOR VALUE
         mov     ax,cs                   ;AN003; ;load ES to the right area,
         mov     es,ax                   ;AN003;
         mov     ds,ax                   ;AN003;
+        extrn _check_help:near
 SORT:
+        call _check_help
         call    sysloadmsg              ;AN000;  Preload messages, Check DOS Version.
                                         ;If Inc DOS Ver or error loading messages,
                                         ;SYSLOADMSG will show msg and terminate for us

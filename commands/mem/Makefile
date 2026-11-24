@@ -30,8 +30,13 @@ $(ASM_OBJS): %.obj: %.asm $(MSGS)
 mem.obj: mem.c msgdef.h $(MSGS)
 	$(CL) -c -AS -Os -Zp -I. -I'C:\include' -Fo$@ $< -- INCLUDE='C:\sdk\include' PATH='C:\sdk\bin'
 
-mem.exe: mem.obj $(ASM_OBJS)
-	$(LINK) 'mem+_msgret+_parse+xms,mem,nul,C:\sdk\lib\mem;' -- LIB='C:\sdk\lib'
+mem.exe: helptest.obj mem.obj $(ASM_OBJS)
+	$(LINK) 'mem+_msgret+_parse+xms+helptest.obj,mem,nul,C:\sdk\lib\mem;' -- LIB='C:\sdk\lib'
 
 clean:
 	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = MEM
+HELP_SEG = _TEXT
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

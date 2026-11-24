@@ -198,6 +198,8 @@ MSG_SERVICES <EXE2BIN.CTL>						;AN000;
 ;*****************************************************************************
 
 procedure Main_Init near		;				;AN000;
+        extrn _check_help:near
+        call _check_help
 
 	ASSUME	DS:NOTHING		; THIS IS WHAT dos GIVES YOU	;AN000;
 	ASSUME	ES:NOTHING						;AN000;

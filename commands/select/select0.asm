@@ -209,6 +209,13 @@ SUBTTL	select0.asm						;AN000;
 ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 CODE	  SEGMENT PARA PUBLIC 'CODE'                            ;AN000; Segment for CASS libraries
+        assume cs:CODE
+        extrn _check_help:near
+; The installer enters in SELECT. The shared launcher uses near calls in CODE.
+select_help proc far
+        call _check_help
+        ret
+select_help endp
 CODE	  ENDS							;AN000;
 								;
 CODE_FAR  SEGMENT PARA PUBLIC 'CODE'                            ;AN000; Segment for miscellaneous routines
@@ -302,6 +309,7 @@ INSTALL PROC	FAR						;AN000;
 								;
 	MOV	AX,DATA 					;AN000;
 	MOV	DS,AX						;AN000;
+        call select_help
 	JMP	INITIALIZATION					;AN000;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;

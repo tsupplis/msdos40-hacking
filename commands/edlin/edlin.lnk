@@ -2,5 +2,5 @@ edlin.obj +
 edlcmd1.obj +
 edlcmd2.obj +
 edlmes.obj +
-edlparse.obj
+edlparse.obj+helptest.obj
 edlin.exe;

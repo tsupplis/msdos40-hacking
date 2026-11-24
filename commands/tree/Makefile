@@ -28,10 +28,15 @@ $(MSGS): tree.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-tree.com: $(OBJS) tree.lnk
+tree.com: helptest.obj $(OBJS) tree.lnk
 	$(LINK) @tree.lnk
 	$(EXE2BIN) tree.exe tree.com
 	rm -f tree.exe
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = TREE
+HELP_SEG = CSEG
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

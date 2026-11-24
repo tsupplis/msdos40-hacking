@@ -34,7 +34,7 @@ $(ASM_OBJS): %.obj: %.asm $(MSGS)
 $(C_OBJS): %.obj: %.c $(wildcard *.h)
 	$(CL) -c -AS -Os -Zp -I. -I'C:\include' -Fo$@ $< -- INCLUDE='C:\sdk\include' PATH='C:\sdk\bin'
 
-restore.com: $(C_OBJS) $(ASM_OBJS) restore.lnk $(MAPPER)/mapper.lib
+restore.com: helptest.obj $(C_OBJS) $(ASM_OBJS) restore.lnk $(MAPPER)/mapper.lib
 	$(LINK) @restore.lnk -- LIB='C:\sdk\lib'
 	$(CONVERT) restore.exe restore.com
 	rm -f restore.exe
@@ -43,3 +43,8 @@ _parse.obj: $(ROOT)/asminc/parse.asm
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = RESTORE
+HELP_SEG = _TEXT
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

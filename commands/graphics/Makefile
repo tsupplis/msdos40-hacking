@@ -29,10 +29,15 @@ $(MSGS): graphics.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS) $(wildcard *.ext *.str *.equ)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-graphics.com: $(OBJS) graphics.lnk
+graphics.com: helptest.obj $(OBJS) graphics.lnk
 	$(LINK) @graphics.lnk
 	$(EXE2BIN) graphics.exe graphics.com
 	rm -f graphics.exe
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = GRAPHICS
+HELP_SEG = CODE
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

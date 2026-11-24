@@ -28,10 +28,15 @@ $(MSGS): diskcomp.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-diskcomp.com: $(OBJS) diskcomp.lnk
+diskcomp.com: helptest.obj $(OBJS) diskcomp.lnk
 	$(LINK) @diskcomp.lnk
 	$(EXE2BIN) diskcomp.exe diskcomp.com
 	rm -f diskcomp.exe
 
 clean:
 	rm -f *.obj *.com *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = DISKCOMP
+HELP_SEG = CSEG
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk

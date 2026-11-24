@@ -579,7 +579,9 @@ Code			Segment public para
 
 ;  $SALUT (4,4,9,41)
 
+        extrn _check_help:near
 TRANSIENT:
+        call _check_help
 					;-------------------------------------
 					; Install Print
 					;-------------------------------------

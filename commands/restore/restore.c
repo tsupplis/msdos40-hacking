@@ -92,6 +92,7 @@
 /*		;AN005;   Replace COM_STRRCHR dbcs routine, fixes p5029
 /*****************  END OF SPECIFICATION    *********************************/
 
+#include <showhelp.h>
 #include "rt.h"
 #include "rt1.h"
 #include "rt2.h"
@@ -170,6 +171,7 @@ void main(argc,argv)  /* wrw! */
 /**********************************/
 /**	PRELOAD MESSAGES	 **/
 /**********************************/
+   check_help();
    sysloadmsg(&inregs,&outregs);				      /*;AN000;6 Preload messages */
    if (outregs.x.cflag & CARRY) 				      /*;AN000;6 If there was an error */
     {								      /*;AN000;6*/

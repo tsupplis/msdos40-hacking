@@ -456,6 +456,8 @@ MEMSIZ		DW	?
 SUM		DW	?
 EXTCOM		DB	1			; For init, pretend just did an external
 RETCODE 	DW	?
+	PUBLIC HelpExit
+HelpExit DB 0			; single-command help returns the viewer status
 CRIT_ERR_INFO	DB	?			;G hold critical error flags for R,I,F
 rsrc_xa_seg	DW	-1			;AN030; holds segment of xa copy buffer
 

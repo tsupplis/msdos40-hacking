@@ -23,7 +23,7 @@
  global.obj     +
  _parse.obj     +
  _msgret.obj    +
- fdiskm.obj
+ fdiskm.obj+helptest.obj
 fdisk.exe,
 fdisk.map,
 C:\mapper\mapper.lib +

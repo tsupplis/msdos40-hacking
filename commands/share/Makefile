@@ -39,8 +39,13 @@ $(COMMON_PREREQS): check-common ;
 $(MSGDIR)/$(COUNTRY).idx: $(MSGDIR)/$(COUNTRY).msg
 	$(MAKE) -C $(MSGDIR) $(COUNTRY).idx
 
-share.exe: $(OBJS) share.lnk $(COMMON_PREREQS)
+share.exe: helptest.obj $(OBJS) share.lnk $(COMMON_PREREQS)
 	$(LINK) @share.lnk
 
 clean:
 	rm -f *.obj *.exe *.map *.lst *.ctl *.cl*
+
+HELP_TOPIC = SHARE
+HELP_SEG = Share
+HELP_CLASS = -Dshareclass
+include $(ROOT)/common/helptest.mk

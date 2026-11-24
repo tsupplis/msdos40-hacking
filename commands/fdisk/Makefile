@@ -60,8 +60,13 @@ bootrec.obj: bootrec.asm fdboot.inc
 $(C_OBJS): %.obj: %.c $(wildcard *.h) fdiskm.c
 	$(CL) -c -AS -Os -Zp -I. -I'C:\include' -Fo$@ $< -- INCLUDE='C:\sdk\include' PATH='C:\sdk\bin'
 
-fdisk.exe: $(C_OBJS) $(ASM_OBJS) fdisk.lnk $(MAPPER)/mapper.lib
+fdisk.exe: helptest.obj $(C_OBJS) $(ASM_OBJS) fdisk.lnk $(MAPPER)/mapper.lib
 	$(LINK) @fdisk.lnk -- LIB='C:\sdk\lib'
 
 clean:
 	rm -f *.obj *.exe *.bin *.map *.lst *.ctl *.cl* fdboot.inc fdiskm.c
+
+HELP_TOPIC = FDISK
+HELP_SEG = _TEXT
+HELP_CLASS = -Dnamedclass
+include $(ROOT)/common/helptest.mk
