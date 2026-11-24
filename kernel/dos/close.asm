@@ -51,6 +51,32 @@ endif
 
         EXTRN FCB_SELECTED:NEAR
 
+        DosCodeEntry DOS_Close,75
+        DosCodeEntry DOS_Commit,76
+        DosCodeEntry FREE_SFT,109
+
+; External hooks can run user code. Invoke them in the resident segment.
+CloseNetwork PROC NEAR
+        CallInstall Net_Close,multnet,6
+        RET
+CloseNetwork ENDP
+CommitNetwork PROC NEAR
+        CallInstall NET_COMMIT,multNET,7
+        RET
+CommitNetwork ENDP
+StampSharedSFT PROC NEAR
+        ASSUME DS:DOSGROUP
+IF Installed
+        CALL JShare + 14 * 4
+ELSE
+        invoke ShSU
+ENDIF
+        RET
+StampSharedSFT ENDP
+CODE ENDS
+
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
 Break <DOS_CLOSE -- CLOSE FILE from SFT>
 
 ; Inputs:
@@ -64,8 +90,8 @@ Break <DOS_CLOSE -- CLOSE FILE from SFT>
 ;	    AX has error code
 ; DS preserved, others destroyed
 
-	procedure   DOS_CLOSE,NEAR
-	DOSAssume   CS,<DS>,"DOS_Close"
+	procedure   CloseSFT,NEAR
+	DOSAssume   SS,<DS>,"DOS_Close"
 	ASSUME	ES:NOTHING
 
 	LES	DI,[THISSFT]
@@ -83,7 +109,7 @@ Break <DOS_CLOSE -- CLOSE FILE from SFT>
 ;	CALL	SetSFTTimes		    ;IFS. set time for all SFT		;AN000;
 ;	LeaveCrit   critDisk		    ;IFS.				;AN000;
 noshare:
-	CallInstall Net_Close,multnet,6
+	CallResident CloseNetwork,DS
 ;	JC	nomore			    ;IFS. error 			;AN000;
 ;	invoke	OWN_SHARE		    ;IFS. IFS owns share ?		;AN000;
 ;	JZ	nomore			    ;IFS. yes				;AN000;
@@ -99,21 +125,9 @@ nomore:
 ; No commit decrements the ref count.
 ;
 LocalClose:
-        JMP WORD PTR CS:[LocalClose_VECTOR]
-        PUBLIC LocalClose_VECTOR
-LocalClose_VECTOR DW OFFSET DOSGROUP:LocalCloseFar
-LocalCloseFar:
-        PUSH AX
-        MOV AH,75
-        JMP FCB_SELECTED
-EndProc DOS_Close
-CODE ENDS
-
-LAST SEGMENT PARA PUBLIC 'LAST'
-        procedure HMA_LocalClose,NEAR
-	EnterCrit   critDisk
+	CallResident ECritDisk
 	CALL	SetSFTTimes
-	CALL	Free_SFT		; dec ref count or mark as busy
+	CALL	ReleaseSFT		; dec ref count or mark as busy
 
 	TEST	BX,devid_device        ;FS. device ?				;AN000;
 	JNZ	nofastsk	       ;FS. yes 				;AN000;
@@ -122,11 +136,11 @@ LAST SEGMENT PARA PUBLIC 'LAST'
 	JZ	nofastsk	       ;FS. yes, dont do it			;AN000;
 	LDS	SI,ES:[DI.sf_devptr]   ;FS.					;AN000;
 	MOV	DL,[SI.dpb_drive]      ;FS. dl= drive				;AN000;
-	invoke	FastSeek_Close	       ;FS. invoke fastseek			;AN000;
+	CallResident FastSeek_Close	       ;FS. invoke fastseek			;AN000;
 nofastsk:
 	Context DS
 	SaveReg <AX,BX>
-	invoke	ShareEnd
+	CallResident ShareEnd
 	RestoreReg  <BX,AX>
 ;
 ; Commit enters here.  AX from commit MUST be <> 1, BX is flags word
@@ -160,13 +174,13 @@ clook:
 ; ES:DI point to directory entry
 ; DS:SI point to unpacked name
 ;
-	invoke	XCHGP
+	CallResident XCHGP
 ;
 ; ES:DI point to unpacked name
 ; DS:SI point to directory entry
 ;
-	invoke	HMA_MetaCompare
-	invoke	XCHGP
+	CallResident MetaCompare
+	CallResident XCHGP
 	RestoreReg  <SI,DI>
 	JZ	CLOSE_GO		; Name OK
 Bye:	MOV	DI,SI
@@ -184,7 +198,7 @@ CLOSE_GO:
 	MOV	CH,ES:[DI].dir_attr
 	MOV	AL,[SI].sf_attr
 	MOV	Attrib,AL
-	invoke	HMA_MatchAttributes
+	CallResident MatchAttributes
 	JNZ	Bye			; attributes do not match
 	JMP	SHORT setattr		;FT.
 nofcb:
@@ -217,7 +231,7 @@ setattr:
 ;; File Tagging
 	TEST	ES:[BX.buf_flags],buf_dirty  ;LB. if already dirty		;AN000;
 	JNZ	yesdirty		  ;LB.	  don't increment dirty count   ;AN000;
-	invoke	INC_DIRTY_COUNT 	  ;LB.					;AN000;
+	invoke	IncrementDirtyCount 	  ;LB.					;AN000;
 	OR	ES:[BX.buf_flags],buf_dirty ;Buffer dirty
 yesdirty:
 	SaveReg  <DS,SI>
@@ -241,11 +255,11 @@ do_update2:				;AN011;F.O.
 	MOV	CX,[OLD_FIRSTCLUS]	;AN011;F.O.
 do_update:				  ;AN005;
 	Context DS
-	invoke	FastOpen_Update 	; invoke fastopen
+	CallResident FastOpen_Update 	; invoke fastopen
 	POP	DX
 
 ;;; 10/1/86  update fastopen cache
-	invoke	FLUSHBUF		; flush all relevant buffers
+	invoke	FlushBuffers		; flush all relevant buffers
 	RestoreReg  <DI,ES>
 	MOV	AL,error_access_denied
 	JC	CloseFinish
@@ -257,7 +271,7 @@ CloseFinish:
 ;
 ;;;; 7/21/86
 	PUSHF				; save flag from DirFromSFT
-	invoke	Dev_Close_SFT
+	CallResident Dev_Close_SFT
 	POPF
 ;;;; 7/21/86
 ;
@@ -273,12 +287,10 @@ CloseFinish:
 	Assert	ISSFT,<ES,DI>,"DOS_FREE_SFT"
 	MOV	ES:[DI].sf_ref_Count,CX
 NoFree:
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 	POPF
 	return
-EndProc HMA_LocalClose
-LAST ENDS
-CODE SEGMENT BYTE PUBLIC 'CODE'
+EndProc CloseSFT
 
 ;
 ; ES:DI -> SFT. Decs sft_ref_count.  If the count goes to 0, mark it as busy.
@@ -286,8 +298,8 @@ CODE SEGMENT BYTE PUBLIC 'CODE'
 ;
 ; Note that busy is indicated by the SFT ref count being -1.
 ;
-Procedure   FREE_SFT,NEAR
-	DOSAssume   CS,<DS>,"Free_SFT"
+Procedure   ReleaseSFT,NEAR
+	DOSAssume   SS,<DS>,"Free_SFT"
 	ASSUME	ES:NOTHING
 
 	PUSHF		; Save carry state
@@ -300,7 +312,7 @@ SetCount:
 	POPF
 	return
 
-EndProc Free_SFT
+EndProc ReleaseSFT
 
 ;
 ;   DirFromSFT - locate a directory entry given an SFT.
@@ -318,8 +330,6 @@ EndProc Free_SFT
 ;		    registers trashified
 ;   Registers modified: ALL
 
-CODE ENDS
-LAST SEGMENT PARA PUBLIC 'LAST'
 Procedure   DirFromSFT,NEAR
 	ASSUME	DS:DOSGroup,ES:NOTHING
 
@@ -331,14 +341,14 @@ Procedure   DirFromSFT,NEAR
 
 	PUSH	[HIGH_SECTOR]			 ;F.C. >32mb
 	PUSH	DX
-	invoke	FATREAD_SFT		; ES:BP points to DPB, [THISDRV] set
+	CallResident FATREAD_SFT		; ES:BP points to DPB, [THISDRV] set
 					; [THISDPB] set
 	POP	DX
 	POP	[HIGH_SECTOR]			 ;F.C. >32mb
 	JC	PopDone
 	XOR	AL,AL			; Pre read
 	MOV	[ALLOWED],allowed_FAIL + allowed_RETRY
-	invoke	GETBUFFR
+	invoke	ReadBuffer
 	JC	PopDone
 	RestoreReg  <SI,DS>		; Get back SFT pointer
 	ASSUME	DS:NOTHING
@@ -355,8 +365,6 @@ PopDone:
 	RestoreReg  <DI,ES>
 	return
 EndProc DirFromSFT
-LAST ENDS
-CODE SEGMENT BYTE PUBLIC 'CODE'
 
 Break	<DOS_Commit - update directory entries>
 
@@ -368,8 +376,8 @@ Break	<DOS_Commit - update directory entries>
 ;	Same as DOS_CLOSE except ref_count field is not altered
 ; DS preserved, others destroyed
 
-	procedure   DOS_COMMIT,NEAR
-	DOSAssume   CS,<DS>,"DOS_Commit"
+	procedure   CommitSFT,NEAR
+	DOSAssume   SS,<DS>,"DOS_Commit"
 	ASSUME	ES:NOTHING
 
 	LES	DI,[THISSFT]
@@ -380,13 +388,8 @@ Break	<DOS_Commit - update directory entries>
 CommitDirty:
 	TEST	BX,sf_isnet
 	JZ	LOCAL_COMMIT
-IF NOT Installed
-	transfer NET_COMMIT
-ELSE
-	MOV	AX,(multNET SHL 8) OR 7
-	INT	2FH
-	return
-ENDIF
+        CallResident CommitNetwork,DS
+        RET
 
 ;
 ; Perform local commit operation by doing a close but not releaseing the SFT.
@@ -399,32 +402,18 @@ ENDIF
 ; decrement and after the share information release.
 ;
 LOCAL_COMMIT:
-        JMP WORD PTR CS:[LocalCommit_VECTOR]
-        PUBLIC LocalCommit_VECTOR
-LocalCommit_VECTOR DW OFFSET DOSGROUP:LocalCommitFar
-LocalCommitFar:
-        PUSH AX
-        MOV AH,76
-        JMP FCB_SELECTED
-EndProc DOS_COMMIT
-CODE ENDS
-
-LAST SEGMENT PARA PUBLIC 'LAST'
-        procedure HMA_LocalCommit,NEAR
-	EnterCrit   critDisk
-	EnterCrit   critDisk		;PTM.					;AN000;
+	CallResident ECritDisk
+	CallResident ECritDisk		;PTM.					;AN000;
 	call	SetSFTTimes
 	MOV	AX,-1
 	call	CloseEntry
 	PUSHF				;PTM.					;AN000;
-	invoke	DEV_OPEN_SFT		;PTM.  increment device count		;AN000;
+	CallResident DEV_OPEN_SFT		;PTM.  increment device count		;AN000;
 	POPF				;PTM.					;AN000;
-	LeaveCrit CritDisk		;PTM.					;AN000;
+	CallResident LCritDisk		;PTM.					;AN000;
 	return
 
-EndProc HMA_LocalCommit
-LAST ENDS
-CODE SEGMENT BYTE PUBLIC 'CODE'
+EndProc CommitSFT
 
 Break	<SetSFTTimes - signal a change in the times for an SFT>
 
@@ -451,19 +440,24 @@ Procedure   SetSFTTimes,NEAR
 	TEST	BX,sf_close_nodate
 	jnz     SftTimeDone				; nodate => no timestamp
 	SaveReg <AX,BX>
-	invoke	DATE16			; Date/Time to AX/DX
+	CallResident DATE16			; Date/Time to AX/DX
 	MOV	ES:[DI.sf_date],AX
 	MOV	ES:[DI.sf_time],DX
 	XOR	AX,AX
-if installed
-	call	JShare + 14 * 4
-else
-	call	ShSU
-endif
+        CallResident StampSharedSFT
 	RestoreReg  <BX,AX>
 SftTimeDone:
 	return
 EndProc SetSFTTimes
 
-CODE	ENDS
+DOSCODE ENDS
+
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC CloseEntries
+CloseEntries LABEL WORD
+        DW OFFSET DOSGROUP:DOS_Close_VECTOR, OFFSET DOSGROUP:CloseSFT
+        DW OFFSET DOSGROUP:DOS_Commit_VECTOR, OFFSET DOSGROUP:CommitSFT
+        DW OFFSET DOSGROUP:FREE_SFT_VECTOR, OFFSET DOSGROUP:ReleaseSFT
+        DW 0
+DOSEND ENDS
     END

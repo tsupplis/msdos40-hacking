@@ -259,6 +259,57 @@ FCB_SELECTED:
 FcbReturn:
         RETF
 
+; Linked DOSCODE callers run on the DOS stack. The far callback consumes
+; the inline resident offset and resumes at the following instruction.
+        PUBLIC DosCallbackPtr,DosCallbackLow
+DosCallbackPtr DD 0
+DosCallbackLow PROC FAR
+        PUSH    BP
+        MOV     BP,SP
+        PUSH    AX
+        PUSH    BX
+        MOV     BX,[BP+2]               ; native caller shares our CS
+        MOV     AX,CS:[BX]
+        LEA     BX,[BX+2]
+        MOV     [BP+2],BX
+        MOV     BX,[BP]
+        MOV     WORD PTR [BP],OFFSET DOSGROUP:FcbReturn
+        XCHG    AX,[BP-2]               ; target IP above FcbReturn
+        MOV     BP,BX
+        POP     BX
+        RETN
+DosCallbackLow ENDP
+
+CODE ENDS
+
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+; Report the placement recorded by SYSINIT to the private MEM query.
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+        i_need HMA_ACTIVE,BYTE
+        procedure QueryDosResidency,NEAR
+        XOR     AX,AX
+        MOV     AL,SS:[HMA_ACTIVE]
+        RET
+EndProc QueryDosResidency
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+; Only the bytes preceding this marker are copied at boot.
+        PUBLIC DosCodeEnd
+DosCodeEnd LABEL BYTE
+
+        EXTRN ProcEntries:WORD,AllocEntries:WORD,CloseEntries:WORD,BufEntries:WORD
+        PUBLIC DosCodeModules
+DosCodeModules LABEL WORD
+        DW OFFSET DOSGROUP:ProcEntries
+        DW OFFSET DOSGROUP:AllocEntries
+        DW OFFSET DOSGROUP:CloseEntries
+        DW OFFSET DOSGROUP:BufEntries
+        DW 0
+DOSEND ENDS
+
+CODE SEGMENT BYTE PUBLIC 'CODE'
+        ASSUME CS:DOSGROUP,SS:DOSGROUP
+
 ; Redirectors may call user code while handling the multiplex interrupt.
         procedure HMA_MULTIPLEX,NEAR
         INT     2Fh

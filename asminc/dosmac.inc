@@ -273,7 +273,7 @@ endm
 .xcref  return
 
 ; Near callers can use either the native body or the boot-selected far gateway.
-HmaEntry MACRO routine,selector
+DosCodeEntry MACRO routine,selector
     LOCAL farEntry
     PUBLIC routine&_VECTOR,routine
 routine&_VECTOR DW OFFSET DOSGROUP:farEntry
@@ -284,6 +284,25 @@ farEntry:
     MOV AH,selector
     JMP FCB_SELECTED
 routine ENDP
+ENDM
+
+; Existing modules use the original gateway macro name.
+HmaEntry EQU <DosCodeEntry>
+
+; Call a resident near routine from DOSCODE. The boot-bound callback consumes
+; the linked target word and preserves the service's arguments and results.
+CallResident MACRO service,kseg
+        IF2
+            IFNDEF DosCallbackPtr
+                EXTRN DosCallbackPtr:DWORD
+            ENDIF
+        ENDIF
+        IFB <kseg>
+            CALL DWORD PTR SS:[DosCallbackPtr]
+        ELSE
+            CALL DWORD PTR kseg:[DosCallbackPtr]
+        ENDIF
+        short_addr service
 ENDM
 
 BREAK <CONDRET - conditional return>

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Verify fragmented FAT16 reads and allocation above cluster 4095 in all layouts."""
 from pathlib import Path
+import argparse
 import os
 import shutil
 import struct
@@ -8,6 +9,12 @@ import subprocess
 import tempfile
 
 from hmaprobe import install_probe
+
+layouts = [("high", "dos=high,umb\ndevice=himem.sys"),
+                           ("near", "dos=high"), ("far", "device=ramdrive.sys 80")]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("layout", nargs="?", choices=[row[0] for row in layouts])
+selected = parser.parse_args().layout
 
 root = Path(__file__).resolve().parents[1]
 work = root / "test/work"
@@ -72,8 +79,9 @@ with tempfile.TemporaryDirectory(dir=work) as name:
                  "md C:\\DEST\nmove C:\\GROW\\F33.TXT C:\\DEST\\MOVED.TXT\n"
                  "ren C:\\GROW\\F3?.TXT F3?.BIN\n"
                  "ren C:\\GROW\\F01.TXT F02.TXT\n")
-    for layout, config in [("high", "dos=high,umb\ndevice=himem.sys"),
-                           ("near", "dos=high"), ("far", "device=ramdrive.sys 80")]:
+    for layout, config in layouts:
+        if selected and layout != selected:
+            continue
         batch.write_text(f"hmaio {layout[0]}!\n" + workload)
         batch.with_suffix(".cfg").write_text(config + "\n")
         disk = tmp / (layout + ".pimg")

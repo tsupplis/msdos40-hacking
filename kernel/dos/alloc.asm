@@ -47,7 +47,6 @@ PAGE
 	i_need  BestArena,WORD          ; best free block found
 	i_need  LastArena,WORD          ; last free block found
 	i_need	UMB_TOTAL,WORD
-	i_need  HMA_ACTIVE,BYTE
 	i_need	UMB_HEAD,WORD
 	i_need	UMB_BRIDGE,WORD
 	i_need	UMB_LINKED,BYTE
@@ -63,15 +62,15 @@ ALLOC_HIGH_FIRST EQU 80h
 ; output:   free all blocks allocated to that PID
 ;
         EXTRN FCB_SELECTED:NEAR
-        HmaEntry arena_free_process,96
-        HmaEntry $ALLOC,97
-        HmaEntry $SETBLOCK,98
-        HmaEntry $DEALLOC,99
-        HmaEntry $AllocOper,100
-        HmaEntry ExecLargest,101
+        DosCodeEntry arena_free_process,96
+        DosCodeEntry $ALLOC,97
+        DosCodeEntry $SETBLOCK,98
+        DosCodeEntry $DEALLOC,99
+        DosCodeEntry $AllocOper,100
 CODE ENDS
-LAST SEGMENT PARA PUBLIC 'LAST'
-	procedure   HMA_arena_free_process,NEAR
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+	procedure   FreeProcessBlocks,NEAR
 	ASSUME  DS:NOTHING,ES:NOTHING
 	MOV     DI,arena_signature
 	MOV     AX,[arena_head]
@@ -101,7 +100,7 @@ FreeFollowing:
 	CALL    arena_next              ; next item in ES/AX carry set if trash
 	JMP     arena_free_process_loop
 
-EndProc HMA_arena_free_process
+EndProc FreeProcessBlocks
 
 ;
 ; arena_next
@@ -165,7 +164,7 @@ coalesce_check:
 	JMP     coalesce                ; try again
 EndProc Coalesce
 
-SUBTTL HMA_$Alloc - allocate space in memory
+SUBTTL AllocateBlock - allocate space in memory
 PAGE
 ;
 ;   Assembler usage:
@@ -183,10 +182,10 @@ PAGE
 ;           AX = error_not_enough_memory
 ;              = error_arena_trashed
 ;
-	procedure   HMA_$ALLOC,NEAR
+	procedure   AllocateBlock,NEAR
 	ASSUME  DS:NOTHING,ES:NOTHING
 
-	EnterCrit   critMem
+	CallResident ECritMem
 	XOR     AX,AX
 	MOV     DI,AX
 
@@ -229,8 +228,9 @@ alloc_err:
 	POP     AX
 
 alloc_trashed:
-	LeaveCrit   critMem
-	error   error_arena_trashed
+	CallResident LCritMem
+	MOV     AL,error_arena_trashed
+	JMP     AllocError
 
 alloc_end:
 	CMP     [FirstArena],0
@@ -250,11 +250,12 @@ NoFitThisArena:
 	MOV     AX,[arena_head]
 	JMP     ScanStart
 alloc_fail:
-	invoke  get_user_stack
+	CallResident get_user_stack
 	POP     BX
 	MOV     [SI].user_BX,BX
-	LeaveCrit   critMem
-	error   error_not_enough_memory
+	CallResident LCritMem
+	MOV     AL,error_not_enough_memory
+	JMP     AllocError
 
 alloc_free:
 	CALL    coalesce                ; add following free block to current
@@ -269,7 +270,7 @@ alloc_free:
 alloc_test:
 	PUSH    DX
 	CMP     BX,CX                   ; IF BX > size of current block THEN
-	JA      alloc_next              ;   GOTO next
+	JA      alloc_continue          ;   GOTO next
 
 	CMP     [FirstArena],0
 	JNZ     alloc_best
@@ -286,6 +287,7 @@ alloc_make_best:
 	MOV     [BestArena],DS          ; assign best
 alloc_last:
 	MOV     [LastArena],DS          ; assign last
+alloc_continue:
 	JMP     alloc_next
 
 ;
@@ -341,13 +343,13 @@ alloc_set_owner:
 	MOV     AX,DS
 	INC     AX
 	POP     BX
-	LeaveCrit   critMem
-	transfer    SYS_RET_OK
+	CallResident LCritMem
+	JMP     AllocSuccess
 
-EndProc HMA_$alloc
+EndProc AllocateBlock
 
 
-SUBTTL HMA_$SETBLOCK - change size of an allocated block (if possible)
+SUBTTL ResizeBlock - change size of an allocated block (if possible)
 PAGE
 ;
 ;   Assembler usage:
@@ -363,9 +365,9 @@ PAGE
 ;              = error_not_enough_memory
 ;              = error_invalid_function
 ;
-	procedure   HMA_$SETBLOCK,NEAR
+	procedure   ResizeBlock,NEAR
 	ASSUME  DS:NOTHING,ES:NOTHING
-	EnterCrit   critMem
+	CallResident ECritMem
 	MOV     DI,arena_signature
 	MOV     AX,ES
 	DEC     AX
@@ -384,9 +386,9 @@ setblock_grab:
 	CMP     BX,CX
 	JBE     alloc_get_size
 	JMP     alloc_fail
-EndProc HMA_$setblock
+EndProc ResizeBlock
 
-SUBTTL HMA_$DEALLOC - free previously allocated piece of memory
+SUBTTL FreeBlock - free previously allocated piece of memory
 PAGE
 ;
 ;   Assembler usage:
@@ -398,24 +400,25 @@ PAGE
 ;           AX = error_invalid_block
 ;              = error_arena_trashed
 ;
-	procedure   HMA_$DEALLOC,NEAR
+	procedure   FreeBlock,NEAR
 	ASSUME  DS:NOTHING,ES:NOTHING
-	EnterCrit   critMem
+	CallResident ECritMem
 	MOV     DI,arena_signature
 	MOV     AX,ES
 	DEC     AX
 	CALL    check_signature
 	JC      dealloc_err
 	MOV     ES:[arena_owner],DI
-	LeaveCrit   critMem
-	transfer    SYS_RET_OK
+	CallResident LCritMem
+	JMP     AllocSuccess
 
 dealloc_err:
-	LeaveCrit   critMem
-	error   error_invalid_block
-EndProc HMA_$DEALLOC
+	CallResident LCritMem
+	MOV     AL,error_invalid_block
+	JMP     AllocError
+EndProc FreeBlock
 
-SUBTTL HMA_$AllocOper - get/set allocation mechanism
+SUBTTL AllocationControl - get/set allocation mechanism
 PAGE
 ;
 ;   Assembler usage:
@@ -427,18 +430,17 @@ PAGE
 ;   Error return:
 ;           AX = error_invalid_function
 ;
-	procedure   HMA_$AllocOper,NEAR
+	procedure   AllocationControl,NEAR
 	ASSUME  DS:NOTHING,ES:NOTHING
-	CMP     AL,0FEh         ; private DOS HMA residency query
+	CMP     AL,0FEh         ; private MEM residency query
 	JNE     CheckUmbSize
-	XOR     AX,AX
-	MOV     AL,[HMA_ACTIVE]
-	transfer SYS_RET_OK
+	invoke  QueryDosResidency
+	JMP     AllocSuccess
 CheckUmbSize:
 	CMP     AL,0FFh		; DOS UMB pool size in paragraphs
 	JNE     CheckAllocOp
 	MOV     AX,[UMB_TOTAL]
-	transfer SYS_RET_OK
+	JMP     AllocSuccess
 CheckAllocOp:
 	CMP     AL,1
 	JB      AllocOperGet
@@ -475,18 +477,19 @@ StoreLink:
 	MOV     [UMB_LINKED],BL
 AllocOpDone:
 	MOV     AX,5803h
-	transfer	SYS_RET_OK
+	JMP     AllocSuccess
 GetUmbLink:
 	XOR     AX,AX
 	MOV     AL,[UMB_LINKED]
-	transfer	SYS_RET_OK
+	JMP     AllocSuccess
 InvalidAllocOp:
 	MOV     EXTERR_LOCUS,errLoc_mem ; Extended Error Locus
-	error   error_invalid_function
+	MOV     AL,error_invalid_function
+	JMP     AllocError
 AllocOperGet:
 	MOV     AL,BYTE PTR [AllocMethod]
 	XOR     AH,AH
-	transfer    SYS_RET_OK
+	JMP     AllocSuccess
 AllocOperSet:
 	MOV     AX,BX
 	AND     AX,NOT (ALLOC_HIGH_ONLY OR ALLOC_HIGH_FIRST)
@@ -494,12 +497,12 @@ AllocOperSet:
 	JA      InvalidAllocOp
 	MOV     AX,5801h
 	MOV     [AllocMethod],BL
-	transfer    SYS_RET_OK
-EndProc HMA_$AllocOper
+	JMP     AllocSuccess
+EndProc AllocationControl
 
 ; EXEC sizes its image from the largest block before allocating it. With
 ; high-first selected, prefer an upper block meeting the minimum in AX.
-procedure HMA_ExecLargest,NEAR
+procedure ExecLargest,NEAR
 	TEST	[AllocMethod],ALLOC_HIGH_FIRST
 	JZ	ExecLargestAny
 	CMP	[UMB_LINKED],0
@@ -509,7 +512,7 @@ procedure HMA_ExecLargest,NEAR
 	PUSH	AX
 	OR	[AllocMethod],ALLOC_HIGH_ONLY
 	MOV	BX,0FFFFh
-	invoke	HMA_$ALLOC
+	CALL	AllocateBlock
 	POP	AX
 	MOV	[AllocMethod],AL
 	POP	AX
@@ -517,13 +520,27 @@ procedure HMA_ExecLargest,NEAR
 	JAE	ExecLargestDone
 ExecLargestAny:
 	MOV	BX,0FFFFh
-	transfer HMA_$ALLOC
+	JMP     AllocateBlock
 ExecLargestDone:
 	return
-EndProc HMA_ExecLargest
-LAST ENDS
-CODE SEGMENT BYTE PUBLIC 'CODE'
+EndProc ExecLargest
 
+AllocSuccess:
+        CallResident SYS_RET_OK
+        RET
+AllocError:
+        CallResident SYS_RET_ERR
+        RET
+DOSCODE ENDS
 
-CODE    ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC AllocEntries
+AllocEntries LABEL WORD
+        DW OFFSET DOSGROUP:arena_free_process_VECTOR, OFFSET DOSGROUP:FreeProcessBlocks
+        DW OFFSET DOSGROUP:$ALLOC_VECTOR, OFFSET DOSGROUP:AllocateBlock
+        DW OFFSET DOSGROUP:$SETBLOCK_VECTOR, OFFSET DOSGROUP:ResizeBlock
+        DW OFFSET DOSGROUP:$DEALLOC_VECTOR, OFFSET DOSGROUP:FreeBlock
+        DW OFFSET DOSGROUP:$AllocOper_VECTOR, OFFSET DOSGROUP:AllocationControl
+        DW 0
+DOSEND ENDS
     END

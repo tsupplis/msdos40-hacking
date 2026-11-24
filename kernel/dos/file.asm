@@ -878,8 +878,6 @@ extexit:
 	transfer SYS_RET_ERR		;AN000;EO.
 
 EndProc HMA_$Extended_Open			;AN000;
-        PUBLIC HmaIoEnd
-HmaIoEnd LABEL BYTE
 LAST ENDS
 CODE SEGMENT BYTE PUBLIC 'CODE'
 

@@ -88,10 +88,6 @@ include version.inc
 	I_Need	   Special_Version,WORD      ;AN007;special version number
 	I_Need	   Fake_Count,BYTE	     ;AN008;fake version count
 
-IF	BUFFERFLAG
-	extrn	restore_user_map:near
-ENDIF
-
 TABLE	SEGMENT
 
 exec_init_SP	    DW	?
@@ -129,7 +125,7 @@ TABLE	ENDS
 
 .sall
 
-procedure   $Exec,NEAR
+procedure   LoadProgram,NEAR
 	ASSUME	DS:NOTHING, ES:NOTHING
 PUBLIC EXEC001S,EXEC001E
 EXEC001S:
@@ -160,7 +156,8 @@ exec_bad_fun:
 
 exec_ret_err:
 	Leave
-	transfer    SYS_RET_ERR
+	CallResident SYS_RET_ERR
+	RET
 
 exec_check_2:
 	CMP	AL,2
@@ -176,12 +173,12 @@ exec_check_2:
 	MOV	execNameL,DX
 	MOV	execNameH,DS
 	MOV	SI,DX			; move pointer to convenient place
-	invoke	DStrLen
+	CallResident	DStrLen
 	MOV	ExecNameLen,CX		; save length
 
 	XOR	AL,AL			; open for reading
 	PUSH	BP
-	invoke	$OPEN			; is the file there?
+	CallResident	$OPEN			; is the file there?
 	POP	BP
 	JC	exec_ret_err
 ;File Type Checking
@@ -210,7 +207,7 @@ exec_check_2:
 	MOV	exec_fh,AX
 	MOV	BX,AX
 	XOR	AL,AL
-	invoke	$IOCTL
+	CallResident	$IOCTL
 	JC	Exec_bombJ
 	TEST	DL,devid_ISDEV
 	JZ	exec_check_environ
@@ -259,7 +256,7 @@ exec_get_environ_len:
 	MOV	CL,4
 	SHR	BX,CL			; number of paragraphs needed
 	PUSH	ES
-	invoke	$ALLOC			; can we get the space?
+	invoke	AllocateBlock			; can we get the space?
 	POP	DS
 	POP	CX
 	JNC	exec_save_environ
@@ -344,14 +341,14 @@ exec_bomb:
 	ASSUME	DS:NOTHING,ES:NOTHING
 	MOV	BX,exec_fh
 	CALL	exec_dealloc
-	LeaveCrit   CritMem
+	CallResident LCritMem
 	SaveReg <AX,BP>
-	invoke	$CLOSE
+	CallResident	$CLOSE
 	RestoreReg  <BP,AX>
 	JMP	Exec_Ret_Err
 
 exec_allocate:
-	DOSAssume   CS,<DS>,"EXEC/exec_allocate"
+	ASSUME      DS:DOSGROUP
 	ADD	AX,10h			; room for PSP
 	JC	exec_no_mem
 	TEST	exec_load_high,-1
@@ -386,7 +383,7 @@ exec_got_block:
 	PUSH	DS
 	MOV	BX,AX
 	MOV	exec_size,BX
-	invoke	$ALLOC			; get the space
+	invoke	AllocateBlock			; get the space
 	POP	DS
 	JC	exec_no_mem
 	MOV	exec_load_block,AX
@@ -419,7 +416,7 @@ exec_find_res:
 	MOV	BX,exec_fh
 	PUSH	DS
 	XOR	AL,AL
-	invoke	$LSEEK			; seek to resident
+	CALL	SeekExecFile			; seek to resident
 	POP	DS
 	jnc	exec_big_read
 	jmp	exec_bomb
@@ -445,7 +442,7 @@ exec_read_ok:
 	POP	CX			; get old count to verify
 	POP	DS
 	JC	exec_bad_fileJ
-	DOSAssume   CS,<DS>,"EXEC/exec_read_ok"
+	ASSUME      DS:DOSGROUP
 	CMP	CX,AX			; did we read enough?
 	POP	BX			; get paragraph count back
 	JZ	execCheckEnd		; and do reloc if no more to read
@@ -492,7 +489,7 @@ exec_com_file:
 ;
 exec_alloc_com_file:
 	MOV	BX,exec_fh
-	invoke	SFFromHandle
+	CallResident	SFFromHandle
 	JNC	exec_com_size
 	JMP	exec_bomb
 exec_no_memj:
@@ -514,7 +511,7 @@ exec_com_size:
 	JB	exec_no_memj
 	MOV	exec_size,BX		; save size of allocation block
 	PUSH	BX
-	invoke	$ALLOC			; largest piece available as error
+	invoke	AllocateBlock			; largest piece available as error
 	POP	BX			; get size of block...
 	MOV	exec_load_block,AX
 	ADD	AX,10h			; increment for header
@@ -533,7 +530,7 @@ exec_read_block:
 	XOR	CX,CX			; but seek to 0:0
 	MOV	DX,CX
 	XOR	AX,AX			; seek relative to beginning
-	invoke	$LSEEK			; back to beginning of file
+	CALL	SeekExecFile			; back to beginning of file
 	POP	CX			; number to read
 	MOV	DS,exec_dma
 	XOR	DX,DX
@@ -564,7 +561,7 @@ exec_set_PDB:
 	MOV	BX,exec_fh		; we are finished with the file.
 	CALL	exec_dealloc
 	PUSH	BP
-	invoke	$CLOSE			; release the jfn
+	CallResident	$CLOSE			; release the jfn
 	POP	BP
 	CALL	exec_alloc
 	TEST	BYTE PTR exec_func,exec_func_overlay
@@ -572,7 +569,8 @@ exec_set_PDB:
 	CALL	Scan_Execname		;MS.;AN007;
 	CALL	Scan_Special_Entries	;MS.;AN007;
 	Leave
-	transfer    SYS_RET_OK		; overlay load -> done
+	CallResident SYS_RET_OK		; overlay load -> done
+	RET
 
 exec_build_header:
 	MOV	DX,exec_load_block
@@ -623,7 +621,7 @@ fill8:					;AN000;
 	PUSH	DX
 	MOV	SI,exec_size
 	ADD	SI,DX
-	invoke	$Dup_PDB		; ES is now PDB
+	CallResident	$Dup_PDB		; ES is now PDB
 	POP	DX
 
 	PUSH	exec_environ
@@ -681,17 +679,17 @@ fill8:					;AN000;
 	DEC	CL			; get 0FFh in CL
 	MOV	AL,BH
 	XOR	BH,BH
-	invoke	GetVisDrv
+	CallResident	GetVisDrv
 	JNC	exec_BL
 	MOV	BH,CL
 exec_BL:
 	MOV	AL,BL
 	XOR	BL,BL
-	invoke	GetVisDrv
+	CallResident	GetVisDrv
 	JNC	exec_Set_Return
 	MOV	BL,CL
 exec_set_return:
-	invoke	get_user_stack		; get his return address
+	CallResident	get_user_stack		; get his return address
 	PUSH	[SI.user_CS]		; suck out the CS and IP
 	PUSH	[SI.user_IP]
 	PUSH	[SI.user_CS]		; suck out the CS and IP
@@ -722,7 +720,8 @@ exec_set_return:
 
 	MOV	ES:[DI].exec1_IP,AX
 	Leave
-	transfer    SYS_RET_OK
+	CallResident SYS_RET_OK
+	RET
 
 exec_go:
 	LDS	SI,DWORD PTR exec_init_IP   ; get entry point
@@ -734,34 +733,17 @@ exec_go:
 ; DX has PDB pointer
 ; BX has initial AX value
 ;
-	CLI
-	MOV	BYTE PTR INDOS,0
-	ASSUME	SS:NOTHING
-	MOV	SS,AX			; set up user's stack
-	MOV	SP,DI			; and SP
-	STI
-	PUSH	DS			; fake long call to entry
-	PUSH	SI
-	MOV	ES,DX			; set up proper seg registers
-	MOV	DS,DX
-	MOV	AX,BX			; set up proper AX
-procedure   exec_long_ret,FAR
+        CallResident StartChild         ; switches to the child stack, never returns
 
-IF	BUFFERFLAG
-	invoke	restore_user_map
-ENDIF
 
-	RET
-EndProc exec_long_ret
+EndProc LoadProgram
 
-EndProc $Exec
-
-        EXTRN FCB_SELECTED:NEAR
-        HmaEntry RelocateExe,102
-CODE ENDS
-LAST SEGMENT PARA PUBLIC 'LAST'
+SeekExecFile PROC NEAR
+        CallResident $LSEEK
+        RET
+SeekExecFile ENDP
 ; BP points at the conventional EXEC frame. Return carry on a seek/read error.
-procedure HMA_RelocateExe,NEAR
+procedure RelocateExe,NEAR
         ASSUME SS:DOSGROUP,DS:NOTHING,ES:NOTHING
 	MOV	CX,exec_rel_fac
 	MOV	AX,exec_SS		; get initial SS
@@ -782,7 +764,7 @@ procedure HMA_RelocateExe,NEAR
 	MOV	BX,exec_fh
 	PUSH	DS
 	XOR	AX,AX
-	invoke	$LSEEK
+	CALL	SeekExecFile
 	POP	DS
 
 	JNC	exec_get_entries
@@ -836,16 +818,14 @@ exec_get_addr:
 reloc_done:
         CLC
         RET
-EndProc HMA_RelocateExe
-LAST ENDS
-CODE SEGMENT BYTE PUBLIC 'CODE'
+EndProc RelocateExe
         ASSUME SS:DOSGROUP,DS:NOTHING,ES:NOTHING
 
 Procedure   ExecRead,NEAR
 	CALL	exec_dealloc
 	MOV	bx,exec_fh
 	PUSH	BP
-	invoke	$READ
+	CallResident	$READ
 	POP	BP
 	CALL	exec_alloc
 	return
@@ -855,7 +835,7 @@ procedure   exec_dealloc,near
 	ASSUME	    DS:NOTHING,ES:NOTHING
 	PUSH	    BX
 	MOV	    BX,arena_owner_system
-	EnterCrit   CritMEM
+	CallResident ECritMem
 	CALL	    ChangeOwners
 	POP	    BX
 	return
@@ -865,7 +845,7 @@ procedure   exec_alloc,near
 	PUSH	    BX
 	MOV	    BX,CurrentPDB
 	CALL	    ChangeOwners
-	LeaveCrit   CritMEM
+	CallResident LCritMem
 	POP	    BX
 	return
 EndProc exec_alloc
@@ -916,15 +896,15 @@ EndProc Scan_Execname			;AN000;;MS.
 Procedure    Scan_Special_Entries,near	;AN000;MS.
 
 	DEC    CX			;AN007;MS. cx= name length
-	MOV    DI,CS:[Special_Entries]	;AN007;MS. es:di -> addr of special entries
-	CALL   Reset_Version		;AN008;MS.
-	PUSH   CS			;AN007;MS.
+	MOV    DI,SS:[Special_Entries]	;AN007;MS. es:di -> addr of special entries
+	CALL   ResetExecVersion		;AN008;MS.
+	PUSH   SS			;AN007;MS.
 	POP    ES			;AN007;MS.
 Getentries:				;AN007;MS.
 	MOV    AL,ES:[DI]		;AN007;MS. end of list
 	OR     AL,AL			;AN007;MS.
 	JZ     end_list 		;AN007;MS. yes
-	MOV    CS:[Temp_Var2],DI	;AN007;MS. save di
+	MOV    SS:[Temp_Var2],DI	;AN007;MS. save di
 	CMP    AL,CL			;AN007;MS. same length ?
 	JNZ    skipone			;AN007;MS. no
 	INC    DI			;AN007;MS. es:di -> special name
@@ -933,9 +913,9 @@ Getentries:				;AN007;MS.
 	REPZ   CMPSB			;AN007;MS. same name ?
 	JNZ    not_matched		;AN007;MS. no
 	MOV    AX,ES:[DI]		;AN007;MS. get special version
-	MOV    CS:[Special_Version],AX	;AN007;MS. save it
+	MOV    SS:[Special_Version],AX	;AN007;MS. save it
 	MOV    AL,ES:[DI+2]		;AN008;MS. get fake count
-	MOV    CS:[Fake_Count],AL	;AN007;MS. save it
+	MOV    SS:[Fake_Count],AL	;AN007;MS. save it
 	POP    SI			;AN007;MS.
 	POP    CX			;AN007;MS.
 	JMP    SHORT end_list		;AN007;MS.
@@ -943,7 +923,7 @@ not_matched:				;AN007;MS.
 	POP    SI			;AN007;MS. restore si,cx
 	POP    CX			;AN007;MS.
 skipone:				;AN007;MS.
-	MOV    DI,CS:[Temp_Var2]	;AN007;MS. restore old di
+	MOV    DI,SS:[Temp_Var2]	;AN007;MS. restore old di
 	XOR    AH,AH			;AN007;MS. position to next entry
 	ADD    DI,AX			;AN007;MS.
 	ADD    DI,4			;AN007;MS.
@@ -954,12 +934,13 @@ end_list:				;AN007;MS.
 	return
 EndProc Scan_Special_Entries		;AN000;;MS.
 
-Procedure    Reset_Version,near 	;AN008;MS.
+Procedure    ResetExecVersion,near 	;AN008;MS.
 
-	CMP    CS:[Fake_Count],0FFH	;AN008;MS.
+	CMP    SS:[Fake_Count],0FFH	;AN008;MS.
 	JNZ    dont_reset		;AN008;MS.
-	MOV    CS:[Special_Version],0	;AN008;MS. reset to current version
+	MOV    SS:[Special_Version],0	;AN008;MS. reset to current version
 dont_reset:
 	return
-EndProc Reset_Version,near		;AN008;;MS.
+EndProc ResetExecVersion
+
 

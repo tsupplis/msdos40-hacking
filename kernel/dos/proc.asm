@@ -47,6 +47,58 @@ SAVEXIT 	EQU	10
     i_need  OpenBuf,128
     I_need  EXTERR_LOCUS,BYTE		; Extended Error Locus
 
+IF	BUFFERFLAG
+	extrn	restore_user_map:near
+ENDIF
+
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry $Exec,102
+        DosCodeEntry Reset_Version,103
+        DosCodeEntry $WAIT,104
+        DosCodeEntry $Keep_Process,105
+        DosCodeEntry $EXIT,106
+        DosCodeEntry $ABORT,107
+        DosCodeEntry exit_inner,108
+
+; DS:SI = child entry, AX:DI = child stack, DX = PSP, BX = initial AX.
+; The resident callback has returned control to the kernel segment.
+procedure StartChild,NEAR
+	CLI
+	MOV	BYTE PTR INDOS,0
+	ASSUME	SS:NOTHING
+	MOV	SS,AX			; set up user's stack
+	MOV	SP,DI			; and SP
+	STI
+	PUSH	DS			; fake long call to entry
+	PUSH	SI
+	MOV	ES,DX			; set up proper seg registers
+	MOV	DS,DX
+	MOV	AX,BX			; set up proper AX
+
+
+IF	BUFFERFLAG
+	invoke	restore_user_map
+ENDIF
+
+	RETF
+EndProc StartChild
+
+	procedure   Stay_resident,NEAR
+	ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
+	MOV	AX,(Keep_process SHL 8) + 0 ; Lower part is return code
+	ADD	DX,15
+	RCR	DX,1
+	MOV	CL,3
+	SHR	DX,CL
+
+	transfer    COMMAND
+EndProc Stay_resident
+
+CODE ENDS
+
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+
 SUBTTL $WAIT - return previous process error code
 PAGE
 ;
@@ -59,12 +111,13 @@ PAGE
 ;	    MOV     AH, WaitProcess
 ;	    INT     int_command
 ;	  AX has the exit code
-	procedure   $WAIT,NEAR
+	procedure   GetExitStatus,NEAR
 	ASSUME	DS:NOTHING,ES:NOTHING
 	XOR	AX,AX
 	XCHG	AX,exit_code
-	transfer    SYS_RET_OK
-EndProc $WAIT
+	CallResident SYS_RET_OK
+	RET
+EndProc GetExitStatus
 
 include exec.asm
 
@@ -78,7 +131,7 @@ PAGE
 ;	    paragraphs long.  An exit is simulated via resetting CurrentPDB
 ;	    and restoring the vectors.
 ;
-	procedure   $Keep_process,NEAR
+	procedure   KeepProcess,NEAR
 	ASSUME DS:NOTHING,ES:NOTHING,SS:DOSGROUP
 
 	PUSH	AX			; keep exit code around
@@ -91,7 +144,7 @@ keep_shrink:
 	MOV	BX,DX
 	PUSH	BX
 	PUSH	ES
-	invoke	$SETBLOCK		; ignore return codes.
+	invoke  ResizeBlock		; ignore return codes.
 	POP	DS
 	POP	BX
 	JC	keep_done		; failed on modification
@@ -101,20 +154,9 @@ keep_shrink:
 
 keep_done:
 	POP	AX
-	JMP	SHORT exit_inner	; and let abort take care of the rest
+	JMP	SHORT FinishProcess	; and let abort take care of the rest
 
-EndProc $Keep_process
-
-	procedure   Stay_resident,NEAR
-	ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
-	MOV	AX,(Keep_process SHL 8) + 0 ; Lower part is return code
-	ADD	DX,15
-	RCR	DX,1
-	MOV	CL,3
-	SHR	DX,CL
-
-	transfer    COMMAND
-EndProc Stay_resident
+EndProc KeepProcess
 
 SUBTTL $EXIT - return to parent process
 PAGE
@@ -126,22 +168,22 @@ PAGE
 ;   Error return:
 ;	    None.
 ;
-	procedure   $EXIT,NEAR
+	procedure   ExitProcess,NEAR
 	ASSUME	DS:NOTHING,ES:NOTHING,SS:DOSGROUP
 	XOR	AH,AH
 	XCHG	AH,BYTE PTR [DidCTRLC]
 	OR	AH,AH
 	MOV	BYTE PTR [Exit_type],exit_terminate
-	JZ	exit_inner
+	JZ	FinishProcess
 	MOV	BYTE PTR [Exit_type],exit_ctrl_c
 
-	entry	Exit_inner
+	entry	FinishProcess
 
-	invoke	get_user_stack
+	CallResident get_user_stack
 	PUSH	[CurrentPDB]
 	POP	[SI.user_CS]
 	JMP	SHORT abort_inner
-EndProc $EXIT
+EndProc ExitProcess
 
 BREAK <$ABORT -- Terminate a process>
 
@@ -153,7 +195,7 @@ BREAK <$ABORT -- Terminate a process>
 ; Returns:
 ;	TO THE TERMINATE ADDRESS
 
-	procedure   $ABORT,NEAR
+	procedure   AbortProcess,NEAR
 ASSUME	DS:NOTHING,ES:NOTHING
 
 	XOR	AL,AL
@@ -168,7 +210,7 @@ ASSUME	DS:NOTHING,ES:NOTHING
 
 	MOV	AH,[exit_type]
 	MOV	[exit_code],AX
-	invoke	Get_user_stack
+	CallResident get_user_stack
 	MOV	DS,[SI.user_CS] 	; set up old interrupts
 	XOR	AX,AX
 	MOV	ES,AX
@@ -180,8 +222,22 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	MOVSW
 	MOVSW
 	MOVSW
-	transfer    reset_environment
-EndProc $ABORT
+	CallResident reset_environment	; restores the parent stack and IRETs
+EndProc AbortProcess
 
-CODE	ENDS
+DOSCODE ENDS
+
+; Initialization reads pairs of resident vectors and linked service offsets.
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC ProcEntries
+ProcEntries LABEL WORD
+        DW OFFSET DOSGROUP:$Exec_VECTOR, OFFSET DOSGROUP:LoadProgram
+        DW OFFSET DOSGROUP:Reset_Version_VECTOR, OFFSET DOSGROUP:ResetExecVersion
+        DW OFFSET DOSGROUP:$WAIT_VECTOR, OFFSET DOSGROUP:GetExitStatus
+        DW OFFSET DOSGROUP:$Keep_Process_VECTOR, OFFSET DOSGROUP:KeepProcess
+        DW OFFSET DOSGROUP:$EXIT_VECTOR, OFFSET DOSGROUP:ExitProcess
+        DW OFFSET DOSGROUP:$ABORT_VECTOR, OFFSET DOSGROUP:AbortProcess
+        DW OFFSET DOSGROUP:exit_inner_VECTOR, OFFSET DOSGROUP:FinishProcess
+        DW 0
+DOSEND ENDS
     END

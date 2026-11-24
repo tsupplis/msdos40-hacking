@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise shared FCB, handle and device I/O on three scratch boot layouts."""
 
+import argparse
 import os
 from pathlib import Path
 import shutil
@@ -8,7 +9,11 @@ import struct
 import subprocess
 import tempfile
 
-from hmaprobe import install_probe
+from hmaprobe import install_asm_probe, install_probe
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("layout", nargs="?", choices=("high", "near", "far"))
+selected = parser.parse_args().layout
 
 root = Path(__file__).resolve().parents[1]
 work = root / "test/work"
@@ -23,15 +28,30 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
         if embedded != binary.read_bytes():
             raise SystemExit(f"{source_image}: {binary.name} differs from {binary}")
     install_probe(root, folder, image)
+    install_asm_probe(root, folder, image, "umbcheck")
     subprocess.run(["mcopy", "-o", "-i", image, root / "extra/pcehimem.sys", "::HIMEM.SYS"], check=True)
-    service_probe = folder / "hmasvc.com"
-    subprocess.run(["nasm", "-f", "bin", root / "test/hmasvc.asm", "-o", service_probe], check=True)
-    subprocess.run(["mcopy", "-i", image, service_probe, "::HMASVC.COM"], check=True)
-    # One relocation at 0000:0000 adds the load segment to the word 7.
+    for name in ("hmasvc", "procabrt"):
+        probe = folder / (name + ".com")
+        subprocess.run(["nasm", "-f", "bin", root / "test" / (name + ".asm"), "-o", probe], check=True)
+        subprocess.run(["mcopy", "-i", image, probe, "::" + probe.name], check=True)
+    # 128 distinct entries span two EXEC relocation-buffer reads.
     overlay = folder / "svcovl.exe"
-    overlay.write_bytes(struct.pack("<14H", 0x5a4d, 34, 1, 1, 2, 0, 0,
-                                    0, 0, 0, 0, 0, 28, 0) + bytes(4) + b"\x07\x00")
+    count = 128
+    table = b"".join(struct.pack("<HH", 2 * i, 0) for i in range(count))
+    header_size = (28 + len(table) + 15) & ~15
+    payload = struct.pack("<128H", *range(count))
+    length = header_size + len(payload)
+    header = struct.pack("<14H", 0x5a4d, length % 512, (length + 511) // 512,
+                         count, header_size // 16, 0, 0, 0, 0, 0, 0, 0, 28, 0)
+    overlay.write_bytes((header + table).ljust(header_size, b"\0") + payload)
     subprocess.run(["mcopy", "-i", image, overlay, "::SVCOVL.EXE"], check=True)
+    # Both EXEC modes run this MZ child and return its distinctive exit code.
+    child = folder / "svcchild.exe"
+    code = bytes.fromhex("b8 37 4c cd 21")
+    header = struct.pack("<14H", 0x5a4d, 32 + len(code), 1, 0, 2, 16, 16,
+                         0, 0x100, 0, 0, 0, 28, 0)
+    child.write_bytes(header.ljust(32, b"\0") + code)
+    subprocess.run(["mcopy", "-i", image, child, "::SVCCHILD.EXE"], check=True)
     batch = folder / "io.bat"
 
     for layout, config in (
@@ -39,9 +59,11 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
         ("near fallback", "dos=high"),
         ("far fallback", "device=ramdrive.sys 80"),
     ):
+        if selected and layout.split()[0] != selected:
+            continue
         commands = [f"hmaio {layout[0]}"]
         if layout == "high":
-            commands = ["share", *commands, "hmaio s"]
+            commands = ["share", *commands, "hmaio s", "umbcheck", "umbcheck"]
         commands.append("hmasvc")
         # Wildcard rename resumes the search through its own near entry.
         commands.extend([
@@ -69,8 +91,18 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
             [root / "test/run_tests", batch], env=dict(os.environ, IMG=str(image))
         )
         lines = output.splitlines()
+        if layout == "high":
+            upper = [line for line in lines if line.endswith(b" UMB PASS")]
+            if len(upper) != 2 or upper[0] != upper[1]:
+                raise RuntimeError(f"child failed to release its UMB allocations: {lines!r}")
         expected = sum(cmd.startswith("hmaio ") for cmd in commands)
         required = (b"HMA SERVICES PASS", b"RENAME PASS", b"DIRECTORY PASS", b"ENDTEST")
         if lines.count(b"HMA I/O PASS") != expected or any(line not in lines for line in required):
+            raise RuntimeError(f"{layout}: {output.decode('cp437')}")
+        batch.write_text("REM @blank-b\nprocabrt\n")
+        output = subprocess.check_output(
+            [root / "test/run_tests", batch], env=dict(os.environ, IMG=str(image))
+        )
+        if b"PROC ABORT PASS" not in output.splitlines():
             raise RuntimeError(f"{layout}: {output.decode('cp437')}")
         print("PASS", layout, flush=True)

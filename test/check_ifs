@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 """Verify the retired IFS interfaces against the linked kernel and SHARE."""
 from pathlib import Path
+import argparse
 import os
 import re
 import shutil
 import subprocess
 import tempfile
+
+layouts = [("low", "", "share"), ("high", "dos=high,umb\ndevice=himem.sys\n", "share /nc")]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("layout", nargs="?", choices=[row[0] for row in layouts])
+selected = parser.parse_args().layout
 
 root = Path(__file__).resolve().parents[1]
 work = root / "test/work"
@@ -31,7 +37,9 @@ with tempfile.TemporaryDirectory(dir=work) as directory:
     for source, target in [(probe, "::IFSPROBE.COM"), (root / "extra/pcehimem.sys", "::HIMEM.SYS")]:
         subprocess.run(["mcopy", "-o", "-i", image, source, target], check=True)
     batch = folder / "ifs.bat"
-    for mode, config, share in [("low", "", "share"), ("high", "dos=high,umb\ndevice=himem.sys\n", "share /nc")]:
+    for mode, config, share in layouts:
+        if selected and mode != selected:
+            continue
         batch.write_text(f"ifsprobe install\n{share}\nifsprobe\n")
         batch.with_suffix(".cfg").write_text(config)
         output = subprocess.check_output([root / "test/run_tests", batch],

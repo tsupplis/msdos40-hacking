@@ -3,7 +3,7 @@
 #
 #   test/run_tests --list               list the test cases
 #   test/run_tests <case>               run one case, e.g.  test/run_tests c_keyb
-#   test/run_tests --all                run the batch cases, IFS, FAT16 allocation and 32 MiB directory/file checks
+#   test/run_tests --all                run regression jobs with up to ten concurrent jobs
 #   test/run_tests path/to/file.bat     run any batch file
 #
 # A case is test/cases/<name>.bat, optionally with <name>.cfg (extra CONFIG.SYS lines).
@@ -21,23 +21,51 @@
 set -e
 cd "$(dirname "$0")/.."
 CASES=test/cases
-WORK=test/work
+WORK=${PCE_TEST_WORK:-test/work}
 
 list_cases() { for f in "$CASES"/*.bat; do basename "$f" .bat; done; }
 
 case "${1:-}" in
   ""|-h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   --list) list_cases; exit 0 ;;
+  --regression-job)
+    suite=$2
+    job=$3
+    export PCE_TEST_WORK="$suite/$job"
+    mkdir "$PCE_TEST_WORK"
+    case "$job" in
+      check_*.*) set -- "$PWD/test/${job%.*}" "${job#*.}" ;;
+      *)   set -- "$PWD/test/run_tests" "$job" ;;
+    esac
+    printf "[runner] START %s\n" "$job"
+    if "$@" >"$PCE_TEST_WORK/output" 2>&1; then
+      touch "$PCE_TEST_WORK/passed"
+      printf "[runner] PASS %s\n" "$job"
+    else
+      printf "[runner] FAIL %s\n" "$job" >&2
+      exit 1
+    fi
+    exit 0 ;;
   --all)
+    mkdir -p test/work
+    suite=$(mktemp -d "$PWD/test/work/regression.XXXXXX")
+    # Schedule the independent disk layouts first; reboots within one layout
+    # share its disk and must observe the previous boot's writes.
+    set -- check_ems.active check_dir32.near check_dir32.high check_fat16.high check_fat16.near \
+      check_fat16.far check_ifs.low check_ifs.high $(list_cases)
     status=0
-    for c in $(list_cases); do
-      echo "##### $c"
-      "$0" "$c" || status=1
-      echo
+    printf '%s\n' "$@" | xargs -n 1 -P 10 "$PWD/test/run_tests" --regression-job "$suite" || status=1
+    for job do
+      echo "##### $job"
+      if [ -f "$suite/$job/output" ]; then cat "$suite/$job/output"; fi
+      if [ -f "$suite/$job/passed" ]; then
+        rm -rf "$suite/$job"
+      else
+        echo "[runner] FAILED $job; files in $suite/$job" >&2
+        status=1
+      fi
     done
-    "$PWD/test/check_ifs" || status=1
-    "$PWD/test/check_fat16" || status=1
-    "$PWD/test/check_dir32" || status=1
+    if [ "$status" -eq 0 ]; then rmdir "$suite"; fi
     exit "$status" ;;
 esac
 

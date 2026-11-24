@@ -31,6 +31,16 @@ CheckLayout:
         MOV     AL,'f'
 Placed: CMP     AL,Layout
         Check   JE
+        MOV     AX,58FEh                ; MEM's residency query agrees with the gateway
+        INT     21h
+        Check   JNC
+        CMP     Layout,'h'
+        JNE     ExpectLow
+        DEC     AX
+ExpectLow:
+        OR      AX,AX
+        Check   JZ
+        MOV     AL,Layout
         CMP     ProbeMode,'!'
         JNE     CheckIO
         MOV     DX,OFFSET LayoutOK
@@ -48,7 +58,8 @@ CheckIO: CMP     AL,'h'
         MOV     WORD PTR XmsEntry+2,ES
         CALL    SwapHooks
         MOV     Hooked,1
-RunIO:  CALL    CheckParse
+RunIO:  CALL    CheckMultiplex
+        CALL    CheckParse
         CALL    CheckPath
         CALL    CheckFind
         MOV     DX,OFFSET NameB
@@ -281,7 +292,7 @@ Print:  CMP     Hooked,0
         PUSH    DX
         CALL    SwapHooks
         POP     DX
-        CMP     Seen,15                 ; growth, truncation, FCB save and check
+        CMP     Seen,31                 ; growth, truncation, FCB save and check
         JNE     BadCallback
         CMP     CallbackA20,0
         JE      PrintResult
@@ -315,6 +326,11 @@ SwapHooks:
 ; The resident sharer must see A20 released on every callback.
 UpdateHook:
         PUSHF
+        OR      AX,AX                   ; close timestamps use SHARE slot 14 with AX=0
+        JNZ     UpdateSize
+        OR      CS:Seen,16
+        JMP     SHORT UpdateState
+UpdateSize:
         CMP     AX,1
         JNE     CheckShrink
         OR      CS:Seen,1
@@ -356,6 +372,104 @@ XmsEntry DD     0
 Hooked  DB      0
 Seen    DB      0
 CallbackA20 DB  0
+
+; These INT 2Fh interfaces also run on an application's stack.
+CheckMultiplex:
+        PUSH    DS
+        POP     ES
+        MOV     DI,OFFSET MockSft
+        MOV     AX,1208h                ; release one SFT reference
+        PUSH    AX
+        INT     2Fh
+        POP     BX
+        CMP     AX,1
+        Check   JE
+        CMP     MockSft,-1
+        Check   JE
+        CALL    CheckNetworkClose
+        MOV     SI,DI
+        MOV     AX,1214h                ; compare equal pointers, then unequal
+        PUSH    AX
+        INT     2Fh
+        POP     BX
+        Check   JE
+        INC     SI
+        MOV     AX,1214h
+        PUSH    AX
+        INT     2Fh
+        POP     BX
+        Check   JNE
+        MOV     DI,OFFSET MockBuffer
+        MOV     AX,1209h                ; clean buffer: invalidate without I/O
+        PUSH    AX
+        INT     2Fh
+        POP     BX
+        Check   JNC
+        CMP     BYTE PTR MockBuffer+4,0FFh
+        Check   JE
+        RET
+ ; Supply a synthetic remote SFT and intercept only the redirector close.
+ ; Restore the DOS pointer before calling DOS to remove the test hook.
+CheckNetworkClose:
+        PUSH    ES
+        PUSH    DI
+        MOV     AX,352Fh
+        INT     21h
+        MOV     WORD PTR OldMultiplex,BX
+        MOV     WORD PTR OldMultiplex+2,ES
+        MOV     DX,OFFSET NetworkHook
+        MOV     AX,252Fh
+        INT     21h
+        PUSH    DS
+        MOV     AX,1203h                ; obtain DOSGROUP in DS
+        PUSH    AX
+        INT     2Fh
+        POP     AX
+        PUSH    WORD PTR DS:[CurrentSFT]
+        PUSH    WORD PTR DS:[CurrentSFT+2]
+        MOV     WORD PTR DS:[CurrentSFT],OFFSET RemoteSFT
+        MOV     WORD PTR DS:[CurrentSFT+2],CS
+        MOV     AX,1201h
+        PUSH    AX
+        INT     2Fh
+        POP     BX
+        PUSHF
+        POP     CX
+        POP     WORD PTR DS:[CurrentSFT+2]
+        POP     WORD PTR DS:[CurrentSFT]
+        POP     DS
+        PUSH    AX
+        PUSH    CX
+        PUSH    DS
+        LDS     DX,OldMultiplex
+        MOV     AX,252Fh
+        INT     21h
+        POP     DS
+        POP     CX
+        POP     AX
+        POP     DI
+        POP     ES
+        TEST    CX,1
+        Check   JNZ
+        CMP     AX,1234h
+        Check   JE
+        RET
+NetworkHook:
+        PUSHF
+        CMP     AX,1106h
+        JE      ReturnClose
+        POPF
+        JMP     CS:OldMultiplex
+ReturnClose:
+        POPF
+        MOV     AX,1234h
+        STC
+        RETF    2
+OldMultiplex DD 0
+RemoteSFT DB 5 DUP (0)                 ; sf_flags at offset 5
+          DW 8000h
+MockSft DW 1
+MockBuffer DB 6 DUP (0)
 
 CheckParse:
         PUSH    DS

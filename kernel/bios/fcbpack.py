@@ -8,14 +8,23 @@ import sys
 root = Path(__file__).resolve().parents[2]
 dos = root / "kernel/dos"
 image = (dos / "msdos.sys").read_bytes()
+link_map = (dos / "msdos.map").read_text()
 symbols = {
     name.lower(): int(addr, 16)
     for addr, name in re.findall(
-        r"0000:([0-9A-F]{4}) +([^\s]+)", (dos / "msdos.map").read_text()
+        r"0000:([0-9A-F]{4}) +([^\s]+)", link_map
     )
 }
 start = symbols["$get_fcb_position"]
-end = symbols["hmaioend"]
+end = symbols["doscodeend"]
+# LINK supplies the placement-independent suffix shared by both boot layouts.
+segment = re.search(r"^ +([0-9A-F]+)H +[0-9A-F]+H +([0-9A-F]+)H +DOSCODE +DOSCODE", link_map, re.M)
+if not segment:
+    raise ValueError("missing DOSCODE segment")
+code_start, code_length = (int(value, 16) for value in segment.groups())
+if not start <= code_start or code_start + code_length != end:
+    raise ValueError("DOSCODE must end at DosCodeEnd")
+legacy_length = code_start - start
 native = image[start:end]
 upper = bytearray(native)
 base = 0x100
@@ -98,7 +107,6 @@ for name, origin in [
     ("rename", symbols["hma_localrename"]),
     ("create", symbols["hma_create"]),
     ("open", symbols["hma_open"]),
-    ("close", symbols["hma_localclose"]),
     ("dircall", symbols["hma_dos_mkdir"]),
     ("disk", symbols["hma_read"]),
     ("disk2", symbols["setup"]),
@@ -109,8 +117,6 @@ for name, origin in [
     ("mknode", symbols["hma_builddir"]),
     ("rom", symbols["fndclus"]),
     ("fcb", symbols["hma_makefcb"]),
-    ("proc", symbols["hma_relocateexe"]),
-    ("alloc", symbols["hma_arena_free_process"]),
     ("file", symbols["hma_$open"]),
     ("macro2", symbols["hma_transfcb"]),
     ("fat", symbols["hma_iseof"]),
@@ -143,17 +149,28 @@ vectors = ("read", "write", "open", "create", "getpath", "getpathnoset", "makefc
            "findentry", "srch", "nextent", "metacompare", "getentry", "getent",
            "setdirsrch", "startsrch", "matchattributes", "localfirst", "localnext", "rename_next",
            "iseof", "unpack", "pack", "allocate", "figrec",
-           "newdir", "setdotent", "makenode", "localrename", "doopen", "dos_mkdir", "dos_chdir", "dos_rmdir",
-           "localclose", "localcommit")
+           "newdir", "setdotent", "makenode", "localrename", "doopen", "dos_mkdir", "dos_chdir", "dos_rmdir")
 # 78 and 79 are DOS find-first/find-next entry points.
 extra_vectors = (
     "transfcb", "transpath", "transpathset", "transpathnoset", "skipback", "splice", "pathsepgotch",
     "$open", "$open2", "$creat", "$chmod", "$unlink", "$rename", "$createnewfile", "$createtempfile",
-    "$extended_open", "arena_free_process", "$alloc", "$setblock", "$dealloc", "$allocoper",
-    "execlargest", "relocateexe",
+    "$extended_open",
 )
-slots = list(enumerate(vectors, 41)) + list(enumerate(extra_vectors, 80))
-table = [0] * (1 + max(max(entries), slots[-1][0]))
+slots = [(fn, name, "hma_" + name)
+         for fn, name in (*enumerate(vectors, 41), *enumerate(extra_vectors, 80))]
+# Each module supplies its own zero-terminated list of (vector, body) pairs.
+module_pos = symbols["doscodemodules"]
+linked_slots = []
+while pos := struct.unpack_from("<H", image, module_pos)[0]:
+    while vector := struct.unpack_from("<H", image, pos)[0]:
+        body = struct.unpack_from("<H", image, pos + 2)[0]
+        stub = struct.unpack_from("<H", image, vector)[0]
+        if image[stub:stub + 2] != b"\x50\xb4" or not code_start <= body < end:
+            raise ValueError(f"invalid linked DOSCODE entry at {pos:x}")
+        linked_slots.append((image[stub + 2], vector, body - start))
+        pos += 4
+    module_pos += 2
+table = [0] * (1 + max(max(entries), slots[-1][0], *(fn for fn, _, _ in linked_slots)))
 lowentries = []
 for fn in entries:
     pos = symbols["dispatch"] + 2 * fn
@@ -162,8 +179,8 @@ for fn in entries:
     lowentries.extend([pos, target])
     table[fn] = target
 lowvectors = []
-for fn, name in slots:
-    table[fn] = symbols["hma_" + name] - start
+for fn, name, body in slots:
+    table[fn] = symbols[body] - start
     if not 0 <= table[fn] < len(native):
         raise ValueError(f"{name}: entry outside movable code")
     vector = symbols[name + "_vector"]
@@ -172,7 +189,13 @@ for fn, name in slots:
         if image[stub : stub + 3] != bytes((0x50, 0xb4, fn)):  # PUSH AX / MOV AH,selector
             raise ValueError(f"{name}: selector differs from HmaEntry")
     lowvectors.extend([vector, table[fn]])
-for fn in entries + [n for n, _ in slots]:
+for fn, vector, offset in linked_slots:
+    if fn in entries or any(fn == old for old, _, _ in slots):
+        raise ValueError(f"duplicate gateway selector {fn}")
+    lowvectors.extend([vector, offset])
+    table[fn] = offset
+    entries.append(fn)
+for fn in entries + [fn for fn, _, _ in slots]:
     target = table[fn]
     table[fn] = len(upper) + base
     upper.extend(b"\xe8" + word(target - len(upper) - 3) + b"\xcb")
@@ -194,8 +217,11 @@ def export(label, kind, vals):
 
 
 out = "SYSINITSEG SEGMENT PUBLIC 'SYSTEM_INIT'\n"
-out += export("FcbNative", "BYTE", native)
-out += "        ALIGN 16\n" + export("FcbUpper", "BYTE", upper)
+if upper[legacy_length:len(native)] != native[legacy_length:]:
+    raise ValueError("DOSCODE differs between placements")
+out += export("FcbNative", "BYTE", native[:legacy_length])
+out += export("FcbUpper", "BYTE", upper[:legacy_length])
+out += export("FcbBridges", "BYTE", upper[len(native):])
 out += export("FcbRelative", "WORD", low_relative + [65535])
 out += export("FcbSegments", "WORD", segments + [65535])
 out += export("FcbVectors", "WORD", lowvectors)
@@ -207,10 +233,13 @@ sizes = (
         f"{k} EQU {v}"
         for k, v in {
             "FcbLength": len(native),
+            "FcbLegacyLength": legacy_length,
             "FcbHiLength": len(upper),
             "FcbLinked": start,
             "FcbGatePtr": symbols["fcb_gate"],
             "FcbEntryIP": symbols["fcb_entry"],
+            "CallbackPtr": symbols["doscallbackptr"],
+            "NativeCallback": symbols["doscallbacklow"],
             "LowReturn": symbols["fcbreturn"],
         }.items()
     )

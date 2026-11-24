@@ -64,6 +64,10 @@ NOEXEC	EQU	FALSE
 	ENDIF
 
 DOSSIZE EQU	0A000H
+        INCLUDE fcbsizes.inc
+        IF FcbLinked+FcbLength GT DOSSIZE
+        .ERR    ; SYSIN must copy the complete linked DOSCODE
+        ENDIF
 ;dossize equ	 0C000H 	;J.K. for the debugging version of IBMDOS.
 
 .xlist
@@ -204,7 +208,7 @@ ASSUME	CS:SYSINITSEG,DS:NOTHING,ES:NOTHING,SS:NOTHING
 	public Do_Install_Exec			;AN019;
 	PUBLIC	FindUmbProvider,GetDriverUmb,StageUmb
 	PUBLIC	SHELL_HIGH,UMB_REQUESTED,HMA_REQUESTED
-        EXTRN   InitFcbCode:NEAR,PlaceFcbCode:NEAR
+        EXTRN   ReserveDosCode:NEAR,InitDosCode:NEAR,PlaceDosCode:NEAR
 	public Multi_Pass_Id			;AN024;
 
 
@@ -460,6 +464,7 @@ ASSUME	DS:SYSINITSEG
 	MOV	AX,OFFSET SYSSIZE
 	Call	ParaRound
 	DEC     CX                      ; leave top paragraph for the UMB bridge
+        CALL    ReserveDosCode
 	SUB	CX,AX			;Compute new sysinit location
 	MOV	ES,CX
 	MOV	CX,OFFSET SYSSIZE + 1
@@ -495,7 +500,7 @@ SYSIN:
 	MOV	CX,DOSSIZE/2
 	REP	MOVSW
 
-        CALL    InitFcbCode
+        CALL    InitDosCode
 	LDS	SI,[DEVICE_LIST]	; Set for call to DOSINIT
 	MOV	DX,[MEMORY_SIZE]	; Set for call to DOSINIT
 
@@ -986,7 +991,7 @@ MulTrk_Flag_Done:			    ;AN002;
 	PUSH	CS
 	POP	DS
 	INVOKE	ROUND
-	CALL    PlaceFcbCode
+	CALL    PlaceDosCode
 	JNC     FcbPlacementDone
 	LES     DI,[DOSINFO]
 	MOV     ES:[DI.SYSI_HMA_ACTIVE],1

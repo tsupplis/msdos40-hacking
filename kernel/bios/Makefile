@@ -53,4 +53,6 @@ $(ROOT)/kernel/dos/msdos.sys:
 fcbpack.asm fcbsizes.inc fcbtable.inc: $(ROOT)/kernel/dos/msdos.sys fcbpack.py
 	python3 fcbpack.py $@
 
+sysinit1.obj: fcbsizes.inc
+
 fcbload.obj: fcbsizes.inc fcbtable.inc
