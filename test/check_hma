@@ -4,6 +4,7 @@
 import os
 from pathlib import Path
 import shutil
+import struct
 import subprocess
 import tempfile
 
@@ -23,6 +24,14 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
             raise SystemExit(f"{source_image}: {binary.name} differs from {binary}")
     install_probe(root, folder, image)
     subprocess.run(["mcopy", "-o", "-i", image, root / "extra/pcehimem.sys", "::HIMEM.SYS"], check=True)
+    service_probe = folder / "hmasvc.com"
+    subprocess.run(["nasm", "-f", "bin", root / "test/hmasvc.asm", "-o", service_probe], check=True)
+    subprocess.run(["mcopy", "-i", image, service_probe, "::HMASVC.COM"], check=True)
+    # One relocation at 0000:0000 adds the load segment to the word 7.
+    overlay = folder / "svcovl.exe"
+    overlay.write_bytes(struct.pack("<14H", 0x5a4d, 34, 1, 1, 2, 0, 0,
+                                    0, 0, 0, 0, 0, 28, 0) + bytes(4) + b"\x07\x00")
+    subprocess.run(["mcopy", "-i", image, overlay, "::SVCOVL.EXE"], check=True)
     batch = folder / "io.bat"
 
     for layout, config in (
@@ -33,6 +42,7 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
         commands = [f"hmaio {layout[0]}"]
         if layout == "high":
             commands = ["share", *commands, "hmaio s"]
+        commands.append("hmasvc")
         # Wildcard rename resumes the search through its own near entry.
         commands.extend([
             "md A:\\RENTEST",
@@ -60,6 +70,7 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
         )
         lines = output.splitlines()
         expected = sum(cmd.startswith("hmaio ") for cmd in commands)
-        if lines.count(b"HMA I/O PASS") != expected or b"RENAME PASS" not in lines or b"DIRECTORY PASS" not in lines or b"ENDTEST" not in lines:
+        required = (b"HMA SERVICES PASS", b"RENAME PASS", b"DIRECTORY PASS", b"ENDTEST")
+        if lines.count(b"HMA I/O PASS") != expected or any(line not in lines for line in required):
             raise RuntimeError(f"{layout}: {output.decode('cp437')}")
         print("PASS", layout, flush=True)

@@ -467,83 +467,18 @@ ExecCheckEnd:
 ; The image has now been read in.  We must perform relocation to
 ; the current location.
 ;
-exec_do_reloc:
-	MOV	CX,exec_rel_fac
-	MOV	AX,exec_SS		; get initial SS
-	ADD	AX,CX			; and relocate him
-	MOV	exec_init_SS,AX
-
-	MOV	AX,exec_SP		; initial SP
-	MOV	exec_init_SP,AX
-
-	LES	AX,DWORD PTR exec_IP
-	MOV	exec_init_IP,AX
-	MOV	AX,ES
-	ADD	AX,CX			; relocated...
-	MOV	exec_init_CS,AX
-
-	XOR	CX,CX
-	MOV	DX,exec_rle_table
-	MOV	BX,exec_fh
-	PUSH	DS
-	XOR	AX,AX
-	invoke	$LSEEK
-	POP	DS
-
-	JNC	exec_get_entries
+        CALL RelocateExe
+        JNC exec_relocated
 exec_bad_filej:
-	JMP	exec_bad_file
-
-exec_get_entries:
-	MOV	DX,exec_rle_count	; Number of entries left
-
-exec_read_reloc:
-	ASSUME	DS:NOTHING
-	PUSH	DX
-	MOV	DX,OFFSET DOSGROUP:exec_internal_buffer
-	MOV	CX,((exec_internal_buffer_size)/4)*4
-	PUSH	DS
-	CALL	ExecRead
-	POP	ES
-	POP	DX
-	JC	exec_bad_filej
-	MOV	CX,(exec_internal_buffer_size)/4
-	MOV	DI,OFFSET DOSGROUP:exec_internal_buffer ; Pointer to byte location in header
-;
-; Relocate a single address
-;
-	MOV	SI,exec_rel_fac
-
-exec_reloc_one:
-	OR	DX,DX			; Any more entries?
-	JE	exec_set_PDBJ
-
-exec_get_addr:
-	LDS	BX,DWORD PTR ES:[DI]	; Get ra/sa of entry
-	MOV	AX,DS			; Relocate address of item
-	ADD	AX,SI
-	MOV	DS,AX
-	ADD	[BX],SI
-	ADD	DI,4
-	DEC	DX
-	LOOP	exec_reloc_one		; End of internal buffer?
-
-;
-; We've exhausted a single buffer's worth.  Read in the next piece
-; of the relocation table.
-;
-
-	PUSH	ES
-	POP	DS
-	JMP	exec_read_reloc
-
-exec_set_PDBJ:
-	JMP	exec_set_PDB
+        JMP exec_bad_file
+exec_relocated:
+        JMP exec_set_PDB
 
 ;
 ; we have a .COM file.	First, determine if we are merely loading an overlay.
 ;
 exec_com_file:
+        ASSUME DS:NOTHING               ; DS may identify the child image
 	TEST	BYTE PTR exec_func,exec_func_overlay
 	JZ	exec_alloc_com_file
 	LDS	SI,exec_blk		; get arg block
@@ -820,6 +755,91 @@ ENDIF
 EndProc exec_long_ret
 
 EndProc $Exec
+
+        EXTRN FCB_SELECTED:NEAR
+        HmaEntry RelocateExe,102
+CODE ENDS
+LAST SEGMENT PARA PUBLIC 'LAST'
+; BP points at the conventional EXEC frame. Return carry on a seek/read error.
+procedure HMA_RelocateExe,NEAR
+        ASSUME SS:DOSGROUP,DS:NOTHING,ES:NOTHING
+	MOV	CX,exec_rel_fac
+	MOV	AX,exec_SS		; get initial SS
+	ADD	AX,CX			; and relocate him
+	MOV	exec_init_SS,AX
+
+	MOV	AX,exec_SP		; initial SP
+	MOV	exec_init_SP,AX
+
+	LES	AX,DWORD PTR exec_IP
+	MOV	exec_init_IP,AX
+	MOV	AX,ES
+	ADD	AX,CX			; relocated...
+	MOV	exec_init_CS,AX
+
+	XOR	CX,CX
+	MOV	DX,exec_rle_table
+	MOV	BX,exec_fh
+	PUSH	DS
+	XOR	AX,AX
+	invoke	$LSEEK
+	POP	DS
+
+	JNC	exec_get_entries
+reloc_error:
+        STC
+        RET
+
+exec_get_entries:
+	MOV	DX,exec_rle_count	; Number of entries left
+
+exec_read_reloc:
+	ASSUME	DS:NOTHING
+	PUSH	DX
+	MOV	DX,OFFSET DOSGROUP:exec_internal_buffer
+	MOV	CX,((exec_internal_buffer_size)/4)*4
+	PUSH	DS
+	CALL	ExecRead
+	POP	ES
+	POP	DX
+	JC	reloc_error
+	MOV	CX,(exec_internal_buffer_size)/4
+	MOV	DI,OFFSET DOSGROUP:exec_internal_buffer ; Pointer to byte location in header
+;
+; Relocate a single address
+;
+	MOV	SI,exec_rel_fac
+
+exec_reloc_one:
+	OR	DX,DX			; Any more entries?
+	JE	reloc_done
+
+exec_get_addr:
+	LDS	BX,DWORD PTR ES:[DI]	; Get ra/sa of entry
+	MOV	AX,DS			; Relocate address of item
+	ADD	AX,SI
+	MOV	DS,AX
+	ADD	[BX],SI
+	ADD	DI,4
+	DEC	DX
+	LOOP	exec_reloc_one		; End of internal buffer?
+
+;
+; We've exhausted a single buffer's worth.  Read in the next piece
+; of the relocation table.
+;
+
+	PUSH	ES
+	POP	DS
+	JMP	exec_read_reloc
+
+reloc_done:
+        CLC
+        RET
+EndProc HMA_RelocateExe
+LAST ENDS
+CODE SEGMENT BYTE PUBLIC 'CODE'
+        ASSUME SS:DOSGROUP,DS:NOTHING,ES:NOTHING
 
 Procedure   ExecRead,NEAR
 	CALL	exec_dealloc

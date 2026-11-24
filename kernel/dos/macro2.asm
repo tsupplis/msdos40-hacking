@@ -142,7 +142,21 @@ BREAK <TransFCB - convert an FCB into a path, doing substitution>
 ;		    ExtFCB set if extended FCB found
 ;   Registers modified: most
 
-Procedure   TransFCB,NEAR
+        procedure PathSpoolCheck,NEAR
+        CallInstall NetSpoolCheck,multNet,35
+        return
+EndProc PathSpoolCheck
+        EXTRN FCB_SELECTED:NEAR
+        HmaEntry TransFCB,80
+        HmaEntry TransPath,81
+        HmaEntry TransPathSet,82
+        HmaEntry TransPathNoSet,83
+        HmaEntry SkipBack,84
+        HmaEntry Splice,85
+        HmaEntry PathSepGotCh,86
+CODE ENDS
+LAST SEGMENT PARA PUBLIC 'LAST'
+Procedure   HMA_TransFCB,NEAR
 	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 PUBLIC MACRO001S,MACRO001E
 MACRO001S:
@@ -233,7 +247,7 @@ NextCh: LOOP	FCBScan
 	CMP	BYTE PTR [BX],0
 	JZ	BadPack
 	SaveReg <BP>
-	CALL	TransPathSet		; convert the path
+	CALL	HMA_TransPathSet		; convert the path
 	RestoreReg  <BP>
 	JNC	FCBRet			; bye with transPath error code
 BadPack:
@@ -241,9 +255,9 @@ BadPack:
 	MOV	AL,error_path_not_found
 FCBRet: Leave
 	return
-EndProc TransFCB,NoCheck
+EndProc HMA_TransFCB,NoCheck
 
-BREAK <TransPath - copy a path, do string sub and put in current dir>
+BREAK <HMA_TransPath - copy a path, do string sub and put in current dir>
 
 ;
 ;   TransPath - copy a path from DS:SI to ES:DI, performing component string
@@ -305,16 +319,16 @@ BREAK <TransPath - copy a path, do string sub and put in current dir>
 ;		DS - DOSGroup
 ;   Registers modified: most
 
-Procedure   TransPath,NEAR
+Procedure   HMA_TransPath,NEAR
 	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	XOR	AL,AL
 	JMP	SHORT SetSplice
-	Entry	TransPathSet
+	Entry	HMA_TransPathSet
 	MOV	AL,-1
 SetSplice:
 	MOV	NoSetDir,AL		;   NoSetDir = !fExact;
 	MOV	AL,-1
-	Entry	TransPathNoSet
+	Entry	HMA_TransPathNoSet
 	MOV	WORD PTR [NO_FILTER_PATH],SI   ;AN000;;IFS. save old path for IFS
 	MOV	WORD PTR [NO_FILTER_PATH+2],DS ;AN000;;IFS.
 
@@ -347,7 +361,7 @@ SetSplice:
 	MOV	SI,wfp_Start		; point to name
 	TEST	fSplice,-1
 	JZ	NoServerSplice
-	CALL	Splice
+	CALL	HMA_Splice
 NoServerSplice:
 	Context DS			; for FATREAD
 	LES	DI,ThisCDS		; for fatread
@@ -364,7 +378,7 @@ NoPath:
 ;
 CheckUnc:
 	MOV	WORD PTR ThisCDS,-1	; NULL thisCDS
-	CallInstall NetSpoolCheck,multNet,35
+	invoke  PathSpoolCheck
 	JNC	UNCDone
 ;
 ; At this point the name is either a UNC-style name (prefixed with two leading
@@ -670,7 +684,7 @@ DoSplice:
 	XOR	CX,CX
 	TEST	fSplice,-1
 	JZ	SkipSplice
-	CALL	Splice			; replaces in place.
+	CALL	HMA_Splice			; replaces in place.
 SkipSplice:
 	ASSUME	DS:NOTHING
 ;
@@ -680,14 +694,14 @@ SkipSplice:
 	Context DS
 	LES	DI,ThisCDS		; point to correct drive
 	TEST	ES:[DI].curdir_flags,curdir_isnet
-	retnz				; net, no fatread necessary
+	jnz     Done                    ; net, no fatread necessary
 	JCXZ	Done
 	EnterCrit   critDisk
 	invoke	FatRead_CDS
 	LeaveCrit   critDisk
 	MOV	AL,error_path_not_found ; Set up for possible bad path error
 Done:	return				; any errors in carry flag.
-EndProc TransPath
+EndProc HMA_TransPath
 
 BREAK <Canonicalize - copy a path and remove . and .. entries>
 
@@ -814,7 +828,7 @@ DoComponent:				;	    }
 	CMP	WORD PTR ES:[DI],'..'
 	JNZ	CanonNormal
 	DEC	DI			;	    d--;
-Skip1:	CALL	SkipBack		;	    SkipBack ();
+Skip1:	CALL	HMA_SkipBack		;	    SkipBack ();
 	MOV	AL,error_path_not_found ; Set up for possible bad path error
 	retc
 	JMP	CanonPath		;	    }
@@ -864,14 +878,14 @@ BREAK <PathSep - determine if char is a path separator>
 Procedure   PathSep,NEAR
 	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	MOV	AL,[SI] 		; get the character
-	entry	PathSepGotCh		; already have character
+	entry	HMA_PathSepGotCh		; already have character
 	OR	AL,AL			; test for zero
 	retz				; return if equal to zero (NUL)
 	invoke	PathChrCmp		; check for path character
 	return				; and return HIS determination
 EndProc PathSep
 
-BREAK <SkipBack - move backwards to a path separator>
+BREAK <HMA_SkipBack - move backwards to a path separator>
 
 ;
 ;   SkipBack - look at ES:DI and backup until it points to a / \
@@ -883,7 +897,7 @@ BREAK <SkipBack - move backwards to a path separator>
 ;		Carry Clear if ok
 ;   Registers modified: DI,AL
 
-Procedure   SkipBack,NEAR
+Procedure   HMA_SkipBack,NEAR
 	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
  IF  DBCS		       ;AN000;
 ;-------------------------- Start of DBCS 2/13/KK
@@ -933,7 +947,7 @@ SkipBadP:			;AN000;
 	DEC	DI			;	    goto err;
 	MOV	AL,ES:[DI]		;	if (pathchr (*--d))
 	invoke	PathChrCmp		;	    break;
-	JNZ	SkipBack		;	}
+	JNZ	HMA_SkipBack		;	}
 	CLC				;   return (0);
 	return				;
  ENDIF					;AN000;
@@ -941,7 +955,7 @@ SkipBad:				;err:
 	MOV	AL,error_path_not_found ; bad path error
 	STC				;   return (-1);
 	return				;
-EndProc SkipBack
+EndProc HMA_SkipBack
 
 Break <CopyComponent - copy out a file path component>
 
@@ -1036,7 +1050,7 @@ CopyEnd:
 	return
 EndProc CopyComponent,NoCheck
 
-Break <Splice - pseudo mount by string substitution>
+Break <HMA_Splice - pseudo mount by string substitution>
 
 ;
 ;   Splice - take a string and substitute a prefix if one exists.  Change
@@ -1054,7 +1068,7 @@ Break <Splice - pseudo mount by string substitution>
 ;		ThisDPB points to proper DPB
 ;   Registers modified: DS:SI, ES:DI, BX,AX,CX
 
-Procedure   Splice,NEAR
+Procedure   HMA_Splice,NEAR
 	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	TEST	Splices,-1
 	JZ	AllDone
@@ -1111,7 +1125,10 @@ DoSet:
 	MOV	WORD PTR ThisDPB,DI
 	MOV	WORD PTR ThisDPB+2,ES
 	return
-EndProc Splice
+EndProc HMA_Splice
+LAST ENDS
+CODE SEGMENT BYTE PUBLIC 'CODE'
+
 
 Break <$NameTrans - partially process a name>
 
@@ -1162,23 +1179,24 @@ Procedure   DriveFromText,NEAR
 	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:NOTHING
 	XOR	AL,AL			;	drive = 0;
 	CMP	BYTE PTR [SI],0 	;	if (*s &&
-	retz
+	jz      DriveTextDone
 	CMP	BYTE PTR [SI+1],':'     ;           s[1] == ':') {
-	retnz
+	jnz     DriveTextDone
  IF  DBCS				;AN000;
 ;--------------------- Start of DBCS 2/18/KK
 	push	ax		       ;AN000;
 	mov	al,[si] 	       ;AN000;
 	invoke	testkanj	       ;AN000;
 	pop	ax		       ;AN000;
-	retnz			       ;AN000;
+	jnz     DriveTextDone			       ;AN000;
 ;--------------------- End of DBCS 2/18/KK
  ENDIF				       ;AN000;
 	LODSW				;	    drive = (*s | 020) - 'a'+1;
 	OR	AL,020h
 	SUB	AL,'a'-1                ;           s += 2;
-	retnz
+	jnz     DriveTextDone
 	MOV	AL,-1			; nuke AL...
+DriveTextDone:
 	return				;	    }
 EndProc DriveFromText
 

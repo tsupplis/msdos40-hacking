@@ -62,7 +62,16 @@ ALLOC_HIGH_FIRST EQU 80h
 ; input:    BX - PID of process
 ; output:   free all blocks allocated to that PID
 ;
-	procedure   arena_free_process,NEAR
+        EXTRN FCB_SELECTED:NEAR
+        HmaEntry arena_free_process,96
+        HmaEntry $ALLOC,97
+        HmaEntry $SETBLOCK,98
+        HmaEntry $DEALLOC,99
+        HmaEntry $AllocOper,100
+        HmaEntry ExecLargest,101
+CODE ENDS
+LAST SEGMENT PARA PUBLIC 'LAST'
+	procedure   HMA_arena_free_process,NEAR
 	ASSUME  DS:NOTHING,ES:NOTHING
 	MOV     DI,arena_signature
 	MOV     AX,[arena_head]
@@ -92,7 +101,7 @@ FreeFollowing:
 	CALL    arena_next              ; next item in ES/AX carry set if trash
 	JMP     arena_free_process_loop
 
-EndProc arena_free_process
+EndProc HMA_arena_free_process
 
 ;
 ; arena_next
@@ -156,7 +165,7 @@ coalesce_check:
 	JMP     coalesce                ; try again
 EndProc Coalesce
 
-SUBTTL $Alloc - allocate space in memory
+SUBTTL HMA_$Alloc - allocate space in memory
 PAGE
 ;
 ;   Assembler usage:
@@ -174,7 +183,7 @@ PAGE
 ;           AX = error_not_enough_memory
 ;              = error_arena_trashed
 ;
-	procedure   $ALLOC,NEAR
+	procedure   HMA_$ALLOC,NEAR
 	ASSUME  DS:NOTHING,ES:NOTHING
 
 	EnterCrit   critMem
@@ -335,10 +344,10 @@ alloc_set_owner:
 	LeaveCrit   critMem
 	transfer    SYS_RET_OK
 
-EndProc $alloc
+EndProc HMA_$alloc
 
 
-SUBTTL $SETBLOCK - change size of an allocated block (if possible)
+SUBTTL HMA_$SETBLOCK - change size of an allocated block (if possible)
 PAGE
 ;
 ;   Assembler usage:
@@ -354,7 +363,7 @@ PAGE
 ;              = error_not_enough_memory
 ;              = error_invalid_function
 ;
-	procedure   $SETBLOCK,NEAR
+	procedure   HMA_$SETBLOCK,NEAR
 	ASSUME  DS:NOTHING,ES:NOTHING
 	EnterCrit   critMem
 	MOV     DI,arena_signature
@@ -375,9 +384,9 @@ setblock_grab:
 	CMP     BX,CX
 	JBE     alloc_get_size
 	JMP     alloc_fail
-EndProc $setblock
+EndProc HMA_$setblock
 
-SUBTTL $DEALLOC - free previously allocated piece of memory
+SUBTTL HMA_$DEALLOC - free previously allocated piece of memory
 PAGE
 ;
 ;   Assembler usage:
@@ -389,7 +398,7 @@ PAGE
 ;           AX = error_invalid_block
 ;              = error_arena_trashed
 ;
-	procedure   $DEALLOC,NEAR
+	procedure   HMA_$DEALLOC,NEAR
 	ASSUME  DS:NOTHING,ES:NOTHING
 	EnterCrit   critMem
 	MOV     DI,arena_signature
@@ -404,9 +413,9 @@ PAGE
 dealloc_err:
 	LeaveCrit   critMem
 	error   error_invalid_block
-EndProc $DEALLOC
+EndProc HMA_$DEALLOC
 
-SUBTTL $AllocOper - get/set allocation mechanism
+SUBTTL HMA_$AllocOper - get/set allocation mechanism
 PAGE
 ;
 ;   Assembler usage:
@@ -418,7 +427,7 @@ PAGE
 ;   Error return:
 ;           AX = error_invalid_function
 ;
-	procedure   $AllocOper,NEAR
+	procedure   HMA_$AllocOper,NEAR
 	ASSUME  DS:NOTHING,ES:NOTHING
 	CMP     AL,0FEh         ; private DOS HMA residency query
 	JNE     CheckUmbSize
@@ -486,11 +495,11 @@ AllocOperSet:
 	MOV     AX,5801h
 	MOV     [AllocMethod],BL
 	transfer    SYS_RET_OK
-EndProc $AllocOper
+EndProc HMA_$AllocOper
 
 ; EXEC sizes its image from the largest block before allocating it. With
 ; high-first selected, prefer an upper block meeting the minimum in AX.
-procedure ExecLargest,NEAR
+procedure HMA_ExecLargest,NEAR
 	TEST	[AllocMethod],ALLOC_HIGH_FIRST
 	JZ	ExecLargestAny
 	CMP	[UMB_LINKED],0
@@ -500,7 +509,7 @@ procedure ExecLargest,NEAR
 	PUSH	AX
 	OR	[AllocMethod],ALLOC_HIGH_ONLY
 	MOV	BX,0FFFFh
-	invoke	$ALLOC
+	invoke	HMA_$ALLOC
 	POP	AX
 	MOV	[AllocMethod],AL
 	POP	AX
@@ -508,10 +517,13 @@ procedure ExecLargest,NEAR
 	JAE	ExecLargestDone
 ExecLargestAny:
 	MOV	BX,0FFFFh
-	transfer $ALLOC
+	transfer HMA_$ALLOC
 ExecLargestDone:
 	return
-EndProc ExecLargest
+EndProc HMA_ExecLargest
+LAST ENDS
+CODE SEGMENT BYTE PUBLIC 'CODE'
+
 
 CODE    ENDS
     END

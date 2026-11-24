@@ -109,6 +109,10 @@ for name, origin in [
     ("mknode", symbols["hma_builddir"]),
     ("rom", symbols["fndclus"]),
     ("fcb", symbols["hma_makefcb"]),
+    ("proc", symbols["hma_relocateexe"]),
+    ("alloc", symbols["hma_arena_free_process"]),
+    ("file", symbols["hma_$open"]),
+    ("macro2", symbols["hma_transfcb"]),
     ("fat", symbols["hma_iseof"]),
 ]:
     for within, relative in object_fixups(dos / (name + ".obj")):
@@ -141,7 +145,15 @@ vectors = ("read", "write", "open", "create", "getpath", "getpathnoset", "makefc
            "iseof", "unpack", "pack", "allocate", "figrec",
            "newdir", "setdotent", "makenode", "localrename", "doopen", "dos_mkdir", "dos_chdir", "dos_rmdir",
            "localclose", "localcommit")
-table = [0] * (max(entries) + 1)
+# 78 and 79 are DOS find-first/find-next entry points.
+extra_vectors = (
+    "transfcb", "transpath", "transpathset", "transpathnoset", "skipback", "splice", "pathsepgotch",
+    "$open", "$open2", "$creat", "$chmod", "$unlink", "$rename", "$createnewfile", "$createtempfile",
+    "$extended_open", "arena_free_process", "$alloc", "$setblock", "$dealloc", "$allocoper",
+    "execlargest", "relocateexe",
+)
+slots = list(enumerate(vectors, 41)) + list(enumerate(extra_vectors, 80))
+table = [0] * (1 + max(max(entries), slots[-1][0]))
 lowentries = []
 for fn in entries:
     pos = symbols["dispatch"] + 2 * fn
@@ -150,10 +162,17 @@ for fn in entries:
     lowentries.extend([pos, target])
     table[fn] = target
 lowvectors = []
-for fn, name in enumerate(vectors, 41):
+for fn, name in slots:
     table[fn] = symbols["hma_" + name] - start
-    lowvectors.extend([symbols[name + "_vector"], table[fn]])
-for fn in entries + list(range(41, 41 + len(vectors))):
+    if not 0 <= table[fn] < len(native):
+        raise ValueError(f"{name}: entry outside movable code")
+    vector = symbols[name + "_vector"]
+    if fn >= 80:
+        stub = int.from_bytes(image[vector : vector + 2], "little")
+        if image[stub : stub + 3] != bytes((0x50, 0xb4, fn)):  # PUSH AX / MOV AH,selector
+            raise ValueError(f"{name}: selector differs from HmaEntry")
+    lowvectors.extend([vector, table[fn]])
+for fn in entries + [n for n, _ in slots]:
     target = table[fn]
     table[fn] = len(upper) + base
     upper.extend(b"\xe8" + word(target - len(upper) - 3) + b"\xcb")

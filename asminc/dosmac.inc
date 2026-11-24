@@ -272,6 +272,20 @@ ret_l = a
 endm
 .xcref  return
 
+; Near callers can use either the native body or the boot-selected far gateway.
+HmaEntry MACRO routine,selector
+    LOCAL farEntry
+    PUBLIC routine&_VECTOR,routine
+routine&_VECTOR DW OFFSET DOSGROUP:farEntry
+routine PROC NEAR
+    JMP WORD PTR CS:[routine&_VECTOR]
+farEntry:
+    PUSH AX
+    MOV AH,selector
+    JMP FCB_SELECTED
+routine ENDP
+ENDM
+
 BREAK <CONDRET - conditional return>
 
 condret macro   cc,ncc
