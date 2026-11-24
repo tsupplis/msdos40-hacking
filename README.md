@@ -1,6 +1,6 @@
 # MS-DOS 4.01 rebuild
 
-MS-DOS 4.01 rebuilt on Unix with GNU make and the original tools under `emu2`. The goal is a usable replacement for DOS 3.3 and 5.5.
+MS-DOS 4.01 rebuilt on Unix with GNU make and the original tools under `emu2`. The goal is a usable replacement for DOS 3.3 and 5.5. This project will carry on iteratively, also reviewing/fixing the original code to be both robust and dependable.
 
 | Goal | Details |
 |---|---|
