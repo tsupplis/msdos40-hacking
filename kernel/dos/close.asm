@@ -49,6 +49,8 @@ if debug
 include bugtyp.asm
 endif
 
+        EXTRN FCB_SELECTED:NEAR
+
 Break <DOS_CLOSE -- CLOSE FILE from SFT>
 
 ; Inputs:
@@ -97,6 +99,18 @@ nomore:
 ; No commit decrements the ref count.
 ;
 LocalClose:
+        JMP WORD PTR CS:[LocalClose_VECTOR]
+        PUBLIC LocalClose_VECTOR
+LocalClose_VECTOR DW OFFSET DOSGROUP:LocalCloseFar
+LocalCloseFar:
+        PUSH AX
+        MOV AH,75
+        JMP FCB_SELECTED
+EndProc DOS_Close
+CODE ENDS
+
+LAST SEGMENT PARA PUBLIC 'LAST'
+        procedure HMA_LocalClose,NEAR
 	EnterCrit   critDisk
 	CALL	SetSFTTimes
 	CALL	Free_SFT		; dec ref count or mark as busy
@@ -151,7 +165,7 @@ clook:
 ; ES:DI point to unpacked name
 ; DS:SI point to directory entry
 ;
-	invoke	MetaCompare
+	invoke	HMA_MetaCompare
 	invoke	XCHGP
 	RestoreReg  <SI,DI>
 	JZ	CLOSE_GO		; Name OK
@@ -170,7 +184,7 @@ CLOSE_GO:
 	MOV	CH,ES:[DI].dir_attr
 	MOV	AL,[SI].sf_attr
 	MOV	Attrib,AL
-	invoke	MatchAttributes
+	invoke	HMA_MatchAttributes
 	JNZ	Bye			; attributes do not match
 	JMP	SHORT setattr		;FT.
 nofcb:
@@ -262,7 +276,9 @@ NoFree:
 	LeaveCrit   critDisk
 	POPF
 	return
-EndProc DOS_Close
+EndProc HMA_LocalClose
+LAST ENDS
+CODE SEGMENT BYTE PUBLIC 'CODE'
 
 ;
 ; ES:DI -> SFT. Decs sft_ref_count.  If the count goes to 0, mark it as busy.
@@ -302,6 +318,8 @@ EndProc Free_SFT
 ;		    registers trashified
 ;   Registers modified: ALL
 
+CODE ENDS
+LAST SEGMENT PARA PUBLIC 'LAST'
 Procedure   DirFromSFT,NEAR
 	ASSUME	DS:DOSGroup,ES:NOTHING
 
@@ -337,6 +355,8 @@ PopDone:
 	RestoreReg  <DI,ES>
 	return
 EndProc DirFromSFT
+LAST ENDS
+CODE SEGMENT BYTE PUBLIC 'CODE'
 
 Break	<DOS_Commit - update directory entries>
 
@@ -355,7 +375,9 @@ Break	<DOS_Commit - update directory entries>
 	LES	DI,[THISSFT]
 	MOV	BX,ES:[DI.sf_flags]
 	TEST	BX,devid_file_clean + devid_device	;Clears carry
-	retnz
+	jz      CommitDirty
+	ret
+CommitDirty:
 	TEST	BX,sf_isnet
 	JZ	LOCAL_COMMIT
 IF NOT Installed
@@ -377,6 +399,18 @@ ENDIF
 ; decrement and after the share information release.
 ;
 LOCAL_COMMIT:
+        JMP WORD PTR CS:[LocalCommit_VECTOR]
+        PUBLIC LocalCommit_VECTOR
+LocalCommit_VECTOR DW OFFSET DOSGROUP:LocalCommitFar
+LocalCommitFar:
+        PUSH AX
+        MOV AH,76
+        JMP FCB_SELECTED
+EndProc DOS_COMMIT
+CODE ENDS
+
+LAST SEGMENT PARA PUBLIC 'LAST'
+        procedure HMA_LocalCommit,NEAR
 	EnterCrit   critDisk
 	EnterCrit   critDisk		;PTM.					;AN000;
 	call	SetSFTTimes
@@ -388,7 +422,9 @@ LOCAL_COMMIT:
 	LeaveCrit CritDisk		;PTM.					;AN000;
 	return
 
-EndProc DOS_COMMIT
+EndProc HMA_LocalCommit
+LAST ENDS
+CODE SEGMENT BYTE PUBLIC 'CODE'
 
 Break	<SetSFTTimes - signal a change in the times for an SFT>
 
@@ -408,12 +444,12 @@ Procedure   SetSFTTimes,NEAR
 ; File clean or device does not get stamped nor disk looked at.
 ;
 	TEST	BX,devid_file_clean + devid_device
-	retnz				; clean or device => no timestamp
+	jnz     SftTimeDone				; clean or device => no timestamp
 ;
 ; file and dirty.  See if date is good
 ;
 	TEST	BX,sf_close_nodate
-	retnz				; nodate => no timestamp
+	jnz     SftTimeDone				; nodate => no timestamp
 	SaveReg <AX,BX>
 	invoke	DATE16			; Date/Time to AX/DX
 	MOV	ES:[DI.sf_date],AX
@@ -425,6 +461,7 @@ else
 	call	ShSU
 endif
 	RestoreReg  <BX,AX>
+SftTimeDone:
 	return
 EndProc SetSFTTimes
 

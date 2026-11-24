@@ -86,6 +86,17 @@ RunIO:  CALL    CheckParse
         CALL    WriteFile
         CMP     AX,CX
         Check   JE
+        ; Committing a dirty file must keep the shared SFT usable.
+        MOV     AH,45h                  ; duplicate the open handle
+        INT     21h
+        Check   JNC
+        PUSH    BX
+        MOV     BX,AX
+        MOV     AH,68h
+        INT     21h
+        Check   JNC
+        CALL    Close                   ; original handle remains open
+        POP     BX
         ; Overwrite from byte three across sector and cluster boundaries.
         MOV     DX,3
         CALL    Seek

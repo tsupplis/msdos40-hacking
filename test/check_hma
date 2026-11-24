@@ -43,6 +43,15 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
             "if not exist A:\\RENTEST\\ONE.NEW goto rendone",
             "if exist A:\\RENTEST\\TWO.NEW echo RENAME PASS",
             ":rendone",
+            r"cd A:\RENTEST",
+            "if not exist ONE.NEW goto dirdone",
+            "cd A:\\",
+            r"rd A:\RENTEST",
+            r"if not exist A:\RENTEST\ONE.NEW goto dirdone",
+            r"del A:\RENTEST\*.NEW",
+            r"rd A:\RENTEST",
+            r"if not direxist A:\RENTEST echo DIRECTORY PASS",
+            ":dirdone",
         ])
         batch.write_text("\n".join(commands) + "\n")
         batch.with_suffix(".cfg").write_text(config + "\n")
@@ -51,6 +60,6 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
         )
         lines = output.splitlines()
         expected = sum(cmd.startswith("hmaio ") for cmd in commands)
-        if lines.count(b"HMA I/O PASS") != expected or b"RENAME PASS" not in lines or b"ENDTEST" not in lines:
+        if lines.count(b"HMA I/O PASS") != expected or b"RENAME PASS" not in lines or b"DIRECTORY PASS" not in lines or b"ENDTEST" not in lines:
             raise RuntimeError(f"{layout}: {output.decode('cp437')}")
         print("PASS", layout, flush=True)

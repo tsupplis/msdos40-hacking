@@ -98,6 +98,8 @@ for name, origin in [
     ("rename", symbols["hma_localrename"]),
     ("create", symbols["hma_create"]),
     ("open", symbols["hma_open"]),
+    ("close", symbols["hma_localclose"]),
+    ("dircall", symbols["hma_dos_mkdir"]),
     ("disk", symbols["hma_read"]),
     ("disk2", symbols["setup"]),
     ("disk3", symbols["diskwrite"]),
@@ -137,7 +139,8 @@ vectors = ("read", "write", "open", "create", "getpath", "getpathnoset", "makefc
            "findentry", "srch", "nextent", "metacompare", "getentry", "getent",
            "setdirsrch", "startsrch", "matchattributes", "localfirst", "localnext", "rename_next",
            "iseof", "unpack", "pack", "allocate", "figrec",
-           "newdir", "setdotent", "makenode", "localrename", "doopen")
+           "newdir", "setdotent", "makenode", "localrename", "doopen", "dos_mkdir", "dos_chdir", "dos_rmdir",
+           "localclose", "localcommit")
 table = [0] * (max(entries) + 1)
 lowentries = []
 for fn in entries:

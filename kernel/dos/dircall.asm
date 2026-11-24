@@ -76,12 +76,13 @@ BREAK <DOS_MkDir - Make a directory entry>
 ;			Already exists, device name
 ; DS preserved, Others destroyed
 
+        EXTRN FCB_SELECTED:NEAR
 	procedure   DOS_MKDIR,NEAR
 	DOSAssume   CS,<DS>,"DOS_MkDir"
 	ASSUME	ES:NOTHING
 
 	Invoke	TestNet
-	JNC	local_mkdir
+	JNC     DispatchMKDIR
 IF NOT Installed
 	transfer NET_MKDIR
 ELSE
@@ -89,6 +90,66 @@ ELSE
 	INT	2FH
 	return
 ENDIF
+DispatchMKDIR:
+        JMP WORD PTR CS:[DOS_MKDIR_VECTOR]
+        PUBLIC DOS_MKDIR_VECTOR
+DOS_MKDIR_VECTOR DW OFFSET DOSGROUP:MKDIRFar
+MKDIRFar:
+        PUSH AX
+        MOV AH,72
+        JMP FCB_SELECTED
+EndProc DOS_MKDIR
+
+	procedure   DOS_CHDIR,NEAR
+	DOSAssume   CS,<DS>,"DOS_Chdir"
+	ASSUME	ES:NOTHING
+
+	Invoke	TestNet
+	JNC     DispatchCHDIR
+IF NOT Installed
+	transfer NET_CHDIR
+ELSE
+	MOV	AX,(multNET SHL 8) OR 5
+	INT	2FH
+	return
+ENDIF
+DispatchCHDIR:
+        JMP WORD PTR CS:[DOS_CHDIR_VECTOR]
+        PUBLIC DOS_CHDIR_VECTOR
+DOS_CHDIR_VECTOR DW OFFSET DOSGROUP:CHDIRFar
+CHDIRFar:
+        PUSH AX
+        MOV AH,73
+        JMP FCB_SELECTED
+EndProc DOS_CHDIR
+
+	procedure   DOS_RMDIR,NEAR
+	DOSAssume   CS,<DS>,"DOS_RmDir"
+	ASSUME	ES:NOTHING
+
+	Invoke	TestNet
+	JNC     DispatchRMDIR
+IF NOT Installed
+	transfer NET_RMDIR
+ELSE
+	MOV	AX,(multNET SHL 8) OR 1
+	INT	2FH
+	return
+ENDIF
+DispatchRMDIR:
+        JMP WORD PTR CS:[DOS_RMDIR_VECTOR]
+        PUBLIC DOS_RMDIR_VECTOR
+DOS_RMDIR_VECTOR DW OFFSET DOSGROUP:RMDIRFar
+RMDIRFar:
+        PUSH AX
+        MOV AH,74
+        JMP FCB_SELECTED
+EndProc DOS_RMDIR
+
+CODE ENDS
+LAST SEGMENT PARA PUBLIC 'LAST'
+	procedure   HMA_DOS_MKDIR,NEAR
+        JMP LOCAL_MKDIR
 
 NODEACCERRJ:
 	MOV	AX,error_access_denied
@@ -114,7 +175,7 @@ LOCAL_MKDIR:
 ;
 	MOV	WORD PTR RenBuf.sf_mft,0    ; make sure SHARER won't complain.
 	MOV	AL,attr_directory
-	invoke	MAKENODE
+	invoke	HMA_MAKENODE
 
 	JC	PATHNFJ
 	CMP	AX,3
@@ -131,9 +192,9 @@ ASSUME	DS:NOTHING
 	PUSH	[DIRSTART]	; Parent for .. entry
 	XOR	AX,AX
 	MOV	[DIRSTART],AX	; Null directory
-	invoke	NEWDIR
+	invoke	HMA_NEWDIR
 	JC	NODEEXISTSPOPDEL    ; No room
-	invoke	GETENT		; First entry
+	invoke	HMA_GETENT		; First entry
 	JC	NODEEXISTSPOPDEL    ; Screw up
 	LES	DI,[CURBUF]
 
@@ -145,10 +206,10 @@ yesdirty:
 	ADD	DI,BUFINSIZ	; Point at buffer
 	MOV	AX,202EH	; ". "
 	MOV	DX,[DIRSTART]	; Point at itself
-	invoke	SETDOTENT
+	invoke	HMA_SETDOTENT
 	MOV	AX,2E2EH	; ".."
 	POP	DX		; Parent
-	invoke	SETDOTENT
+	invoke	HMA_SETDOTENT
 	LES	BP,[THISDPB]
 	MOV	[ALLOWED],allowed_FAIL + allowed_RETRY
 	POP	DX		; Entry sector
@@ -205,7 +266,7 @@ NODEEXISTSP:
 	POP	SI		; Clean stack
 	JMP	NODEEXISTS
 
-EndProc DOS_MKDIR
+EndProc HMA_DOS_MKDIR
 
 BREAK <DOS_ChDir -- Verify a directory>
 
@@ -232,19 +293,7 @@ BREAK <DOS_ChDir -- Verify a directory>
 ;			device or file name
 ; DS preserved, Others destroyed
 
-	procedure   DOS_CHDIR,NEAR
-	DOSAssume   CS,<DS>,"DOS_Chdir"
-	ASSUME	ES:NOTHING
-
-	Invoke	TestNet
-	JNC	LOCAL_CHDIR
-IF NOT Installed
-	transfer NET_CHDIR
-ELSE
-	MOV	AX,(multNET SHL 8) OR 5
-	INT	2FH
-	return
-ENDIF
+	procedure   HMA_DOS_CHDIR,NEAR
 
 LOCAL_CHDIR:
 	EnterCrit   critDisk
@@ -258,7 +307,7 @@ nojoin:
 ; DOS 3.3  6/24/86 FastOpen
 
 	OR	[FastOpenFlg],FastOpen_Set	   ; set fastopen flag
-	invoke	GetPath
+	invoke	HMA_GetPath
 	PUSHF									;AN000;
 	AND	[FastOpenFlg],Fast_yes		   ; clear it all		;AC000;
 	POPF									;AN000;
@@ -272,7 +321,7 @@ ChDirDone:
 	LeaveCrit   critDisk
 	return
 
-EndProc DOS_CHDIR
+EndProc HMA_DOS_CHDIR
 
 BREAK <DOS_RmDir -- Remove a directory>
 
@@ -303,26 +352,14 @@ BREAK <DOS_RmDir -- Remove a directory>
 ;			Bad directory ('.' '..' messed up)
 ; DS preserved, Others destroyed
 
-	procedure   DOS_RMDIR,NEAR
-	DOSAssume   CS,<DS>,"DOS_RmDir"
-	ASSUME	ES:NOTHING
-
-	Invoke	TestNet
-	JNC	Local_RmDIR
-IF NOT Installed
-	transfer NET_RMDIR
-ELSE
-	MOV	AX,(multNET SHL 8) OR 1
-	INT	2FH
-	return
-ENDIF
+	procedure   HMA_DOS_RMDIR,NEAR
 
 LOCAL_RMDIR:
 	EnterCrit   critDisk
 	MOV	[NoSetDir],0
 	MOV	[SATTRIB],attr_directory+attr_system+attr_hidden
 				; Dir calls can find these
-	invoke	GetPath
+	invoke	HMA_GetPath
 	JC	NOPATH		; Path not found
 	JNZ	NOTDIRPATH	; Path not a DIR
 	MOV	DI,[DIRSTART]
@@ -357,8 +394,8 @@ ASSUME	DS:NOTHING
 	REP	STOSB
 	XOR	AL,AL
 	STOSB			; Nul terminate it
-	invoke	STARTSRCH	; Set search
-	invoke	GETENTRY	; Get start of directory
+	invoke	HMA_STARTSRCH	; Set search
+	invoke	HMA_GETENTRY	; Get start of directory
 	JC	NOTDIRPATHPOP	; Screw up
 	MOV	DS,WORD PTR [CURBUF+2]
 ASSUME	DS:NOTHING
@@ -372,10 +409,10 @@ ASSUME	DS:NOTHING
 	JNZ	NOTDIRPATHPOP		; Nope
 	context DS
 	MOV	[LASTENT],2		; Skip . and ..
-	invoke	GETENTRY		; Get next entry
+	invoke	HMA_GETENTRY		; Get next entry
 	JC	NOTDIRPATHPOP		; Screw up
 	MOV	[ATTRIB],attr_directory+attr_hidden+attr_system
-	invoke	SRCH			; Do a search
+	invoke	HMA_SRCH			; Do a search
 	JNC	NOTDIRPATHPOP		; Found another entry!
 	CMP	[FAILERR],0
 	JNZ	NOTDIRPATHPOP		; Failure of search due to I 24 FAIL
@@ -409,7 +446,7 @@ ASSUME	DS:NOTHING
 
 	JMP	DIRUP			; In MKDIR, dirty buffer and flush
 
-EndProc DOS_RMDIR
+EndProc HMA_DOS_RMDIR
 
-CODE	ENDS
+LAST	ENDS
     END
