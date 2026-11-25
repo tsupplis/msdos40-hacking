@@ -33,7 +33,9 @@ SetUpperOnly:
 	MOV	AX,5801h
 	MOV	BX,40h
 	INT	21h
-	JC	RestoreLink
+	JNC	UpperOnlyReady
+	JMP	RestoreLink
+UpperOnlyReady:
 	MOV	AH,48h
 	MOV	BX,64
 	INT	21h
@@ -60,9 +62,19 @@ SetUpperOnly:
 	JNE	RestoreStrategy
 	MOV	AX,BX
 	CALL	PrintHex
+TakeRegion:
 	MOV	AH,48h
 	INT	21h
 	JC	RestoreStrategy
+ ; Smaller regions can remain after the largest allocation.
+        MOV     BX,0FFFFh
+        MOV     AH,48h
+        INT     21h
+        JNC     RestoreStrategy
+        CMP     AX,8
+        JNE     RestoreStrategy
+        OR      BX,BX
+        JNZ     TakeRegion
 	MOV	AX,5801h
 	MOV	BX,80h
 	INT	21h

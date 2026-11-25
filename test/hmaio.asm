@@ -29,6 +29,11 @@ CheckLayout:
         MOV     AL,'h'
         CMP     WORD PTR ES:[BodyOff],0FFFFh
         JE      Placed
+        MOV     BX,ES:[BodyOff]
+        ADD     BX,10h                  ; first byte of body is at offset 100h
+        MOV     AL,'u'
+        CMP     BX,0A000h
+        JAE     Placed
         MOV     AL,'f'
 Placed: CMP     AL,Layout
         Check   JE

@@ -130,7 +130,7 @@ The batch comparison covers `CALL` with arguments, `ECHO` and leading `@`, `FOR 
 | `cpsw=` | Project's DOS 4.x directive |  |  |
 | `device=` | Driver availability gaps | `UMBS.SYS start-end [start-end ...]` supplies mapped RAM as UMBs. Ranges are hexadecimal segments with exclusive ends. | The DOS 5.0 SETVER.EXE version-table driver and EMM386.EXE memory manager. |
 | `devicehigh=` | Gaps identified | Try upper memory first and fall back to conventional memory. | `DEVICEHIGH SIZE=hexsize driver` specifies a minimum upper-memory block size. |
-| `dos=` | Gaps identified | `HIGH` moves selected kernel routines into the HMA. `UMB` enables upper memory from an XMS provider. The two options can be combined. | Explicit `LOW` and `NOUMB` keywords. |
+| `dos=` | Gaps identified | `HIGH` moves selected kernel routines into the HMA. `UMB` enables upper memory from an XMS provider. With `UMB`, DOSCODE uses one contiguous UMB if available. With both options, DOS tries HMA first, then UMB. Conventional memory is the fallback. | Explicit `LOW` and `NOUMB` keywords. |
 | `drivparm=` | Gaps identified |  | `/F:9` for a 2.88 MB floppy. The project's geometry table ends at `/F:7`. |
 | `fcbs=n,m` | No known syntax gaps | Place the FCB table in one UMB when it fits. |  |
 | `files=` | No known syntax gaps | Place the file table extension in one UMB when it fits. The first five entries stay in the kernel. |  |

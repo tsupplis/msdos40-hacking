@@ -203,7 +203,7 @@ ASSUME	CS:SYSINITSEG,DS:NOTHING,ES:NOTHING,SS:NOTHING
 	public Buffer_Slash_X			;AN023;
 	public ConfigMsgFlag			;AN014;
 	public Do_Install_Exec			;AN019;
-	PUBLIC	FindUmbProvider,GetDriverUmb,StageUmb
+	PUBLIC	FindUmbProvider,GetDriverUmb,StageUmb,ClaimDataUmb
 	PUBLIC	SHELL_HIGH,UMB_REQUESTED,HMA_REQUESTED
         EXTRN   ReserveDosCode:NEAR,InitDosCode:NEAR,PlaceDosCode:NEAR
 	public Multi_Pass_Id			;AN024;
@@ -2094,6 +2094,11 @@ GetDriverUmb ENDP
 ; Buffers and files need an exact, permanent slice of DX paragraphs.
 ; Return the same AX/BX success result as XMS request UMB.
 ClaimDataUmb PROC NEAR
+        XOR     AX,AX
+        CMP     WORD PTR CS:XMS_ENTRY+2,0
+        JNE     ClaimDataReady
+        RET                             ; DOS=UMB provider unavailable
+ClaimDataReady:
 	PUSH	DX
 	CALL	FindBootUmb
 	POP	AX

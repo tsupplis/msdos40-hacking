@@ -3,7 +3,7 @@ SYSINITSEG SEGMENT PUBLIC 'SYSTEM_INIT'
         ASSUME  CS:SYSINITSEG,DS:SYSINITSEG
         INCLUDE fcbsizes.inc
         EXTRN   FcbVectors:WORD
-        EXTRN   ROUND:NEAR
+        EXTRN   ROUND:NEAR,ClaimDataUmb:NEAR
         EXTRN   FINAL_DOS_LOCATION:WORD,MEMHI:WORD,HMA_REQUESTED:BYTE
         PUBLIC  InitDosCode,PlaceDosCode,GateBody,GateStart,GateXms
 
@@ -75,6 +75,14 @@ ReleaseHma:
         MOV     AH,2
         CALL    DWORD PTR [GateXms]
 PlaceLow:
+        MOV     DX,(FcbLength+15)/16
+        CALL    ClaimDataUmb
+        OR      AX,AX
+        JZ      PlaceConventional
+        MOV     AX,BX                   ; permanent grant starts at BX:0
+        SUB     AX,10h                  ; gateway enters the body at offset 100h
+        JMP     PlaceCopy
+PlaceConventional:
         MOV     AX,[MEMHI]
         SUB     AX,[KernelSeg]
         CMP     AX,1000h-((FcbLength+15)/16)
@@ -105,7 +113,7 @@ PlaceSlot:
         MOV     ES:[DI],AX
         JMP     PlaceSlot
 PlaceDone:
-        CLC                             ; conventional placement
+        CLC                             ; DOSCODE is below 1 MB
         RET
 PlaceFarLow:
         MOV     AX,[MEMHI]
@@ -151,7 +159,7 @@ PlaceA20Error:
         JMP     GateDisplay
 PlaceDosCode ENDP
 
-; Normalized at offset zero. Only the far and HMA layouts retain this code.
+; Normalized at offset zero. Only the far conventional, UMB and HMA layouts retain this code.
         ALIGN   16
 GateStart:
         PUSH    BP

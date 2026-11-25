@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise shared FCB, handle and device I/O on three scratch boot layouts."""
+"""Exercise shared FCB, handle and device I/O on scratch boot layouts."""
 
 import argparse
 import os
@@ -12,7 +12,7 @@ import tempfile
 from hmaprobe import install_asm_probe, install_probe
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("layout", nargs="?", choices=("high", "near", "far"))
+parser.add_argument("layout", nargs="?", choices=("high", "near", "far", "umb", "upperfallback", "fragmented"))
 selected = parser.parse_args().layout
 
 root = Path(__file__).resolve().parents[1]
@@ -56,14 +56,20 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
 
     for layout, config in (
         ("high", "dos=high, umb\ndevice=himem.sys"),
+        ("umb", "dos=umb\ndevice=himem.sys"),
+        ("upperfallback", "dos=high,umb\ndevice=umbs.sys ca00-e000"),
+        ("fragmented", "dos=high,umb\ndevice=umbs.sys ca00-cc00 ce00-d000 d200-d400 d600-d800"),
         ("near fallback", "dos=high"),
         ("far fallback", "device=ramdrive.sys 80"),
     ):
         if selected and layout.split()[0] != selected:
             continue
-        commands = [f"hmaio {layout[0]}"]
+        expected_layout = "n" if layout == "fragmented" else layout[0]
+        commands = [f"hmaio {expected_layout}"]
         if layout == "high":
-            commands = ["share", *commands, "hmaio s", "umbcheck", "umbcheck"]
+            commands = ["share", *commands, "hmaio s"]
+        if layout in ("high", "umb", "upperfallback", "fragmented"):
+            commands.extend(["umbcheck", "umbcheck"])
         commands.append("hmasvc")
         # Wildcard rename resumes the search through its own near entry.
         commands.extend([
@@ -91,7 +97,7 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
             [root / "test/run_tests", batch], env=dict(os.environ, IMG=str(image))
         )
         lines = output.splitlines()
-        if layout == "high":
+        if "umbcheck" in commands:
             upper = [line for line in lines if line.endswith(b" UMB PASS")]
             if len(upper) != 2 or upper[0] != upper[1]:
                 raise RuntimeError(f"child failed to release its UMB allocations: {lines!r}")
