@@ -49,9 +49,20 @@ INCLUDE DEVSYM.INC
 
     FOURYEARS = 3*365 + 366
 
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry $GET_DATE,196
+        DosCodeEntry $SET_DATE,197
+        DosCodeEntry $GET_TIME,198
+        DosCodeEntry $SET_TIME,199
+        DosCodeEntry DATE16,200
+CODE ENDS
+
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+
 SUBTTL DATE AND TIME - SYSTEM CALLS 42,43,44,45
 PAGE
-	procedure   $GET_DATE,NEAR
+	procedure   GetDate,NEAR
 ASSUME	DS:NOTHING,ES:NOTHING
 
 ; Inputs:
@@ -68,16 +79,16 @@ ASSUME	DS:NOTHING,ES:NOTHING
 ; WARNING!!!! DAY and MONTH must be adjacently allocated!
 ;
 	MOV	BX,WORD PTR [DAY]	; fetch both day and month
-	invoke	get_user_stack		;Get pointer to user registers
+	CallResident get_user_stack		;Get pointer to user registers
 ASSUME	DS:NOTHING
 	MOV	[SI.user_DX],BX 	;DH=month, DL=day
 	ADD	AX,1980 		;Put bias back
 	MOV	[SI.user_CX],AX 	;CX=year
 	MOV	AL,BYTE PTR [WEEKDAY]
 	return
-EndProc $GET_DATE
+EndProc GetDate
 
-	procedure   $SET_DATE,NEAR	;System call 43
+	procedure   SetDate,NEAR	;System call 43
 ASSUME	DS:NOTHING,ES:NOTHING
 
 ; Inputs:
@@ -101,9 +112,9 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	Context DS
 	invoke	DODATE
 RET24:	return
-EndProc $SET_DATE
+EndProc SetDate
 
-	procedure   $GET_TIME,NEAR	;System call 44
+	procedure   GetTime,NEAR	;System call 44
 ASSUME	DS:NOTHING,ES:NOTHING
 
 ; Inputs:
@@ -115,14 +126,14 @@ ASSUME	DS:NOTHING,ES:NOTHING
 
 	Context DS
 	CALL	READTIME
-	invoke	get_user_stack		;Get pointer to user registers
+	CallResident get_user_stack		;Get pointer to user registers
 	MOV	[SI.user_DX],DX
 	MOV	[SI.user_CX],CX
 	XOR	AL,AL
 RET26:	return
-EndProc $GET_TIME
+EndProc GetTime
 
-	procedure   $SET_TIME,NEAR	;System call 45
+	procedure   SetTime,NEAR	;System call 45
 ASSUME	DS:NOTHING,ES:NOTHING
 
 ; Inputs:
@@ -149,24 +160,24 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	XOR	DX,DX
 	MOV	AX,DX
 	PUSH	BX
-	invoke	SETREAD
-	DOSAssume   CS,<ES>,"TIME/SetRead"
+	CallResident SETREAD
+	DOSAssume   SS,<ES>,"TIME/SetRead"
 	PUSH	DS
 	LDS	SI,[BCLOCK]
 ASSUME	DS:NOTHING
-	invoke	DEVIOCALL2		;Get correct day count
+	CallResident DEVIOCALL2		;Get correct day count
 	POP	DS
-	DOSAssume   CS,<DS>,"TIME/DevIOCall2"
+	DOSAssume   SS,<DS>,"TIME/DevIOCall2"
 	POP	BX
-	invoke	SETWRITE
+	CallResident SETWRITE
 	POP	WORD PTR [TIMEBUF+4]
 	POP	WORD PTR [TIMEBUF+2]
 	LDS	SI,[BCLOCK]
 ASSUME	DS:NOTHING
-	invoke	DEVIOCALL2		;Set the time
+	CallResident DEVIOCALL2		;Set the time
 	XOR	AL,AL
 	return
-EndProc $SET_TIME
+EndProc SetTime
 
 SUBTTL DATE16, READTIME, DODATE -- GUTS OF TIME AND DATE
 PAGE
@@ -178,7 +189,7 @@ PAGE
 ;
 ; DS = DOSGROUP on output
 
-procedure   DATE16,NEAR
+procedure   PackDateTime,NEAR
 	Context DS
 	ASSUME	ES:NOTHING
 	PUSH	CX
@@ -203,13 +214,13 @@ procedure   DATE16,NEAR
 	POP	CX
 	OR	AL,[DAY]
 	return
-EndProc DATE16
+EndProc PackDateTime
 
 ;Gets time in CX:DX. Figures new date if it has changed.
 ;Uses AX, CX, DX.
 
 	procedure   READTIME,NEAR
-	DOSAssume   CS,<DS>,"ReadTime"
+	DOSAssume   SS,<DS>,"ReadTime"
 	ASSUME	ES:NOTHING
 
 	MOV	[DATE_FLAG],0		; reset date flag for CPMIO
@@ -219,13 +230,13 @@ EndProc DATE16
 	MOV	CX,6
 	XOR	DX,DX
 	MOV	AX,DX
-	invoke	SETREAD
+	CallResident SETREAD
 	PUSH	DS
 	LDS	SI,[BCLOCK]
 ASSUME	DS:NOTHING
-	invoke	DEVIOCALL2		;Get correct date and time
+	CallResident DEVIOCALL2		;Get correct date and time
 	POP	DS
-	DOSAssume   CS,<DS>,"ReadTime/DevIOCall2"
+	DOSAssume   SS,<DS>,"ReadTime/DevIOCall2"
 	POP	BX
 	POP	SI
 	MOV	AX,WORD PTR [TIMEBUF]
@@ -292,7 +303,7 @@ RET23:	return
 EndProc SETYEAR
 
 	procedure   DODATE,NEAR
-	DOSAssume   CS,<DS>,"DoDate"
+	DOSAssume   SS,<DS>,"DoDate"
 	ASSUME	ES:NOTHING
 	CALL	CHKYR			;Set Feb. up for new year
 	MOV	AL,DH
@@ -334,23 +345,23 @@ EndProc SETYEAR
 	XOR	DX,DX
 	MOV	AX,DX
 	PUSH	BX
-	invoke	SETREAD
-	DOSAssume   CS,<ES>,"DoDate/SetRead"
+	CallResident SETREAD
+	DOSAssume   SS,<ES>,"DoDate/SetRead"
 	PUSH	DS
 	LDS	SI,[BCLOCK]
 ASSUME	DS:NOTHING
-	invoke	DEVIOCALL2		;Get correct date and time
+	CallResident DEVIOCALL2		;Get correct date and time
 	POP	DS
 	POP	BX
-	DOSAssume   CS,<DS>,"DoDate/DevIOCall2"
-	invoke	SETWRITE
+	DOSAssume   SS,<DS>,"DoDate/DevIOCall2"
+	CallResident SETWRITE
 	POP	WORD PTR [TIMEBUF]
 	PUSH	DS
 	LDS	SI,[BCLOCK]
 ASSUME	DS:NOTHING
-	invoke	DEVIOCALL2		;Set the date
+	CallResident DEVIOCALL2		;Set the date
 	POP	DS
-	DOSAssume   CS,<DS>,"DoDate/DevIOCall2(second)"
+	DOSAssume   SS,<DS>,"DoDate/DevIOCall2(second)"
 	POP	BX
 	POP	SI
 WKDAY:
@@ -375,6 +386,17 @@ DSUM1:
 	return
 EndProc DSUM
 
-CODE	     ENDS
+DOSCODE ENDS
+
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC TimeEntries
+TimeEntries LABEL WORD
+        DW OFFSET DOSGROUP:$GET_DATE_VECTOR, OFFSET DOSGROUP:GetDate
+        DW OFFSET DOSGROUP:$SET_DATE_VECTOR, OFFSET DOSGROUP:SetDate
+        DW OFFSET DOSGROUP:$GET_TIME_VECTOR, OFFSET DOSGROUP:GetTime
+        DW OFFSET DOSGROUP:$SET_TIME_VECTOR, OFFSET DOSGROUP:SetTime
+        DW OFFSET DOSGROUP:DATE16_VECTOR, OFFSET DOSGROUP:PackDateTime
+        DW 0
+DOSEND ENDS
     END
 

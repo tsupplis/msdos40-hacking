@@ -23,12 +23,14 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
     prefix = b"x" * 4094 + b"\r\n" + b"z" * (61440 - 4096)
     for name, data in {"LEFT": prefix + b"A\r\n!", "RIGHT": prefix + b"b\r\n!",
                        "X": b"Aa\r\nz", "Y": b"AA\r\n!tail", "Z": b"AA\r\n!",
-                       "SAME": b"Aa\r\nz", "NO": b"N\r\n"}.items():
+                       "SAME": b"Aa\r\nz"}.items():
         path = folder / name
         path.write_bytes(data)
         install(path, name)
 
     cases = [
+        ("", ["COMP: Required parameters missing."]),
+        ("A:\\X", ["COMP: Required parameters missing."]),
         ("A:\\X A:\\SAME", ["Files compare OK"]),
         ("A:\\X A:\\Z", ["OFFSET 1", "File 1 = 61", "File 2 = 41", "OFFSET 4"]),
         ("/D A:\\X A:\\Z", ["File 1 = 97", "File 2 = 65"]),
@@ -42,7 +44,7 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
     ]
     batch = folder / "comp.bat"
     batch.write_text("b:\n" + "".join(
-        f"echo CASE{i}\na:\\comp {args} <a:\\no\n" for i, (args, _) in enumerate(cases)))
+        f"echo CASE{i}\na:\\comp {args}\n" for i, (args, _) in enumerate(cases)))
     output = subprocess.check_output([root / "test/run_tests", batch], text=True,
                                      env=dict(os.environ, IMG=str(boot)))
     blocks = output.split("CASE")[1:]

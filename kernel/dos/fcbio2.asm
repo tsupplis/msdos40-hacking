@@ -432,7 +432,7 @@ TryReturn:
 	TEST	FCBOP,FCBRead		;   if (!(FCBOP & FCBREAD)) {
 	JNZ	FCBSave
 	SaveReg <DS>			;	FCB->FDate = date;
-	CallResident Date16			;	FCB->FTime = time;
+	invoke PackDateTime			;	FCB->FTime = time;
 	RestoreReg  <DS>
 	MOV	[SI].FCB_FDate,AX
 	MOV	[SI].FCB_FTime,DX	;	}

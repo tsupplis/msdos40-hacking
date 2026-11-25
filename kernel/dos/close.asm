@@ -440,7 +440,7 @@ Procedure   SetSFTTimes,NEAR
 	TEST	BX,sf_close_nodate
 	jnz     SftTimeDone				; nodate => no timestamp
 	SaveReg <AX,BX>
-	CallResident DATE16			; Date/Time to AX/DX
+	invoke PackDateTime			; Date/Time to AX/DX
 	MOV	ES:[DI.sf_date],AX
 	MOV	ES:[DI.sf_time],DX
 	XOR	AX,AX

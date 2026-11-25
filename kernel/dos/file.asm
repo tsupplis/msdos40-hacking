@@ -611,7 +611,7 @@ SETENDPTR:
 CreateLoop:
 	Context DS			; let ReadTime see variables
 	SaveReg <BP>
-	CallResident ReadTime		; go get time
+	invoke READTIME		; go get time
 	RestoreReg  <BP>
 ;
 ; Time is in CX:DX.  Go drop it into the string.

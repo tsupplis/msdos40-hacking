@@ -62,6 +62,12 @@ CheckIO: CMP     AL,'h'
         INT     2Fh
         MOV     WORD PTR XmsEntry,BX
         MOV     WORD PTR XmsEntry+2,ES
+        MOV     CX,2000                 ; known leap day on this scratch boot
+        MOV     DX,021Dh
+        MOV     AH,2Bh
+        INT     21h
+        OR      AL,AL
+        Check   JZ
         CALL    SwapHooks
         MOV     Hooked,1
 RunIO:  CALL    CheckMultiplex
@@ -321,7 +327,7 @@ Print:  CMP     Hooked,0
         PUSH    DX
         CALL    SwapHooks
         POP     DX
-        CMP     Seen,31                 ; growth, truncation, FCB save and check
+        CMP     Seen,63                 ; growth, truncation, FCB save and check
         JNE     BadCallback
         CMP     CallbackA20,0
         JE      PrintResult
@@ -369,6 +375,23 @@ CheckShrink:
         JNE     UpdateDone
         OR      CS:Seen,2
 UpdateState:
+        ; A DOS callback supplies the kernel stack required by DATE16.
+        TEST    CS:Seen,32
+        JNZ     DateChecked
+        PUSH    AX
+        PUSH    DX
+        PUSH    DS
+        MOV     AX,120Dh
+        PUSH    AX
+        INT     2Fh
+        POP     DX
+        CMP     AX,285Dh                ; FAT date for 2000-02-29
+        POP     DS
+        POP     DX
+        POP     AX
+        JNE     DateChecked
+        OR      CS:Seen,32
+DateChecked:
         CALL    ObserveA20
 UpdateDone:
         POPF

@@ -552,7 +552,7 @@ NOTVOLID:
 ;; File Tagging for Create DOS 4.00
         XOR     AX,AX
         REP     STOSW           ; Zero pad
-        CallResident DATE16
+        invoke PackDateTime
         XCHG    AX,DX
         errnz   dir_time-(dir_attr+1+2*5)
         STOSW                   ; dir_time

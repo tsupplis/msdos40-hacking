@@ -940,7 +940,7 @@ BREAK <Build_device_ent - Make a Directory entry>
 ; Fill dir_pad
 ;
 	REP	STOSW			; Fill rest with zeros
-	CallResident DATE16
+	invoke PackDateTime
 	MOV	DI,OFFSET DOSGROUP:DEVFCB+dir_time
 	XCHG	AX,DX
 ;

@@ -183,7 +183,7 @@ no_sys_wait:
 
 	MOV	AX,0			; therefore, we save DEVCALL
 	CALL	Save_Restore_Packet	; save DEVCALL packet
-	CallResident READTIME		; readtime
+	invoke READTIME		; readtime
 	MOV	AX,1
 	CALL	Save_Restore_Packet	; restore DEVCALL packet
 

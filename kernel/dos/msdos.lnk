@@ -5,10 +5,10 @@ C:\common\mstable.obj +
 msdisp.obj +
 mscode.obj +
 C:\common\msdosme.obj +
-time.obj +
 misc.obj +
 getset.obj +
 parse.obj +
+time.obj +
 misc2.obj +
 crit.obj +
 cpmio.obj +
