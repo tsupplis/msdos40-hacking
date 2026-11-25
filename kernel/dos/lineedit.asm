@@ -1,6 +1,6 @@
 ; IBM SBCS extension to function 0Ah. DI is the insertion point in INBUF,
 ; DH is the complete line length. DS:SI and BX still describe the caller's
-; template. No history or additional line buffer is retained.
+; template. Up can also recall a nonblank line for the same PSP and buffer.
         i_need  BCON,DWORD
         i_need  ConSwap,BYTE
 
@@ -83,16 +83,99 @@ EditUp:
         mov     al,bh
         sub     si,ax                   ; rewind even after F4 or Delete
         xor     bh,bh
+        ; Prefer the caller's explicit template, including its validation.
+        cmp     [si-1],bl
+        jne     EditNext
+        cmp     byte ptr [bx+si],c_CR
+        jne     EditNext
+        push    si
+        mov     cl,bl
+        call    EditIsBlank
+        pop     si
+        jnz     EditTemplate
+        mov     ax,ss:[CurrentPDB]
+        cmp     ax,ss:EditOwner
+        jne     EditTemplate
+        mov     ax,ds
+        cmp     ax,word ptr ss:EditBuffer+2
+        jne     EditTemplate
+        cmp     si,word ptr ss:EditBuffer
+        jne     EditTemplate
+        mov     cl,ss:EditLength
+        cmp     cl,dl
+        ja      EditTemplate
+        push    ds
+        push    si
+        push    ss
+        pop     ds
+        mov     si,offset DOSGROUP:EditHistory
+        call    EditCopyRecall
+        pop     si
+        pop     ds
+        jmp     EditNext
+EditTemplate:
         mov     cl,bl
         jcxz    EditNext
+        call    EditCopyRecall
+        mov     bh,bl
+        jmp     EditNext
+EditCopyRecall:
 EditRecall:
         lodsb
         stosb
         invoke  PrintBufferCharacter
         inc     dh
-        inc     bh
         loop    EditRecall
-        jmp     short EditNext
+        ret
+
+; DS:SI, CX = text and length. ZF set if empty or entirely spaces/tabs.
+EditIsBlank:
+        or      cx,cx
+        jz      EditBlankDone
+EditBlankChar:
+        lodsb
+        cmp     al,' '
+        je      EditBlankNext
+        cmp     al,9
+        jne     EditBlankDone
+EditBlankNext:
+        loop    EditBlankChar
+EditBlankDone:
+        ret
+
+; DS:DI is the caller's text area. INBUF still holds the submitted text.
+EditRemember:
+        cmp     ss:EditActive,0
+        je      EditRememberDone
+        cmp     byte ptr ss:[ConSwap],0
+        jne     EditRememberDone
+        push    ds
+        push    di
+        push    cx
+        mov     ax,ds
+        push    ss
+        pop     ds
+        mov     si,offset DOSGROUP:INBUF
+        mov     cl,dh
+        push    ax
+        call    EditIsBlank
+        pop     ax
+        jz      EditRememberEnd
+        mov     word ptr ss:EditBuffer+2,ax
+        mov     word ptr ss:EditBuffer,di
+        mov     ax,ss:[CurrentPDB]
+        mov     ss:EditOwner,ax
+        mov     ss:EditLength,dh
+        mov     cl,dh
+        mov     si,offset DOSGROUP:INBUF
+        mov     di,offset DOSGROUP:EditHistory
+        rep     movsb
+EditRememberEnd:
+        pop     cx
+        pop     di
+        pop     ds
+EditRememberDone:
+        ret
 
 EditLimit:
         xor     ax,ax

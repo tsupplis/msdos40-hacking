@@ -178,6 +178,9 @@ ENDIF
         STOSB                           ; Put the CR in the buffer
         invoke  OutputChar                    ; Echo it
         POP     DI                      ; Get start of user buffer
+IF LINEEDIT
+        call    EditRemember
+ENDIF
         MOV     [DI-1],DH               ; Tell user how many bytes
         INC     DH                      ; DH is length including CR
 COPYNEW:

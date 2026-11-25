@@ -44,7 +44,7 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
                        ("link", "editbuf.obj,editbuf.exe,nul;")):
         run("emu2", root / f"sdk/bin/{tool}.exe", args, env=env)
     run("mcopy", "-i", image, "editbuf.exe", "::EDITBUF.EXE")
-    (folder / "auto.bat").write_bytes(f"@echo off\r\nprompt Q$G\r\n{setup}editbuf\r\necho on\r\n".encode())
+    (folder / "auto.bat").write_bytes(f"@echo off\r\nprompt Q$G\r\n{setup}editbuf\r\nif errorlevel 1 goto done\r\neditbuf\r\nif errorlevel 1 goto done\r\necho REPEAT PASS\r\n:done\r\necho on\r\n".encode())
     run("mcopy", "-o", "-i", image, "auto.bat", "::AUTOEXEC.BAT")
     write_config(folder)
     with (folder / "pce.log").open("wb") as log:
@@ -84,9 +84,9 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
             # The probe prints the next case letter after the last passing case.
             if layout:
                 expect("LAYOUT PASS", anywhere=True)
-            expect("EDIT PASS M", anywhere=True)
+            expect("REPEAT PASS", anywhere=True)
             expect("Q>")
-            print("PASS direct 0Ah buffer cases A-L", flush=True)
+            print("PASS direct 0Ah buffer cases A-M", flush=True)
             type_text("echo ac")
             key("Left")
             type_text("b")
@@ -94,6 +94,15 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
             expect("Q>echo abc")
             key("Return")
             expect("abc\n\nQ>")
+            key("Return")
+            type_text("   ")
+            key("Return")
+            key("Up")
+            expect("Q>echo abc")
+            type_text(" cancelled")
+            key("+Ctrl c -Ctrl")
+            expect("^C", anywhere=True)
+            key("Return")
             key("Up")
             expect("Q>echo abc")
             key("Home")

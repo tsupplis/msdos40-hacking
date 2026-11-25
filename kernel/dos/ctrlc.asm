@@ -665,6 +665,14 @@ NOSWAP2:
 	JZ	reset_return		; parentPDB = CurrentPDB
 	CMP	BX,CX
 	JNZ	reset_return		; CurrentPDB <> ThisPDB
+        include editsw.inc
+IF LINEEDIT
+        EXTRN EditOwner:WORD
+        CMP     BX,SS:[EditOwner]
+        JNE     EditOwnerDone
+        MOV     SS:[EditOwner],0
+EditOwnerDone:
+ENDIF
 	PUSH	AX			; save parent
 	CMP	BYTE PTR [exit_type],Exit_keep_process
 	JZ	reset_to_parent 	; keeping this process

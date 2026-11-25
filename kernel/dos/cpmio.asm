@@ -91,6 +91,12 @@ ELSE
 include editsw.inc
 IF LINEEDIT
 EditActive DB 0
+        i_need CurrentPDB,WORD
+        PUBLIC EditOwner
+EditOwner DW 0
+EditBuffer DD 0
+EditLength DB 0
+EditHistory DB 254 DUP (?)
 ENDIF
 ENDIF
 ConsoleIdle PROC NEAR

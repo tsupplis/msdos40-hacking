@@ -57,15 +57,18 @@ again:  lodsw                           ; capacity, template length
         jne failed
         inc caseid
         jmp again
-failed: mov dx,offset bad
+failed: mov bp,1
+        mov dx,offset bad
         jmp short report
-passed: mov dx,offset good
+passed: xor bp,bp
+        mov dx,offset good
 report: mov ah,9
         int 21h
         mov dl,caseid
         mov ah,2
         int 21h
-        mov ax,4c00h
+        mov ax,bp
+        mov ah,4ch
         int 21h
 
 leftkey equ 4b00h
@@ -77,6 +80,10 @@ downkey equ 5000h
 inskey equ 5200h
 delkey equ 5300h
 cases:
+        ; On the second invocation this PSP and buffer can have the same address.
+        db 255,0,13,2
+        dw upkey,13
+        db 0,13
         db 8,0,13,5
         dw 'a','b',leftkey,'x',13
         db 3,'axb',13
