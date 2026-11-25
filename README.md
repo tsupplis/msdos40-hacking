@@ -2,12 +2,19 @@
 
 MS-DOS 4.01 rebuilt on Unix with GNU make and the original tools under `emu2`. The goal is a usable replacement for DOS 3.3 and 5.5. This project will carry on iteratively, also reviewing/fixing the original code to be both robust and dependable.
 
+
 | Goal | Details |
 |---|---|
 | **Stability** | Apply the documented Microsoft and IBM fixes and regression-test the rebuilt system. |
-| **Memory** | Surpass DOS 3.3 and approach DOS 5.0, targeting 610 Kbytes free. UMB allocation and XMS reporting are available. Selected kernel services can run in the HMA. |
+| **Memory** | Surpass DOS 3.3 and approach DOS 5.0, targeting at least 610 Kbytes free. UMB allocation and XMS reporting are available. Selected kernel services can run in the HMA. |
 | **Usability** | Stay MS-DOS, smooth the angles. Command-line editing and recall, clearer memory diagnostics, BASIC (`mbasic.com`) and a screen editor (`vi.exe`) on the full floppy. |
 | **Compatibility** | Match closely or exceed DOS 5.0 commands and functionality. For example some 6.X DOS command have been reimplemented and Y2k has a stronger enforcement (4 digit dates are mandatory) |
+
+**Status Summary v1.5.0**: We already have HMA,UMB support for a large part of DOS and installed drivers and software (Up to 611KB of free application memory) and all common commands are in line with DOS 5.0 with a few DOS 6.22 commands added. Some deliverate choice are made no to close the following gaps (doskey replaced only by simple command line editing, undelete/unformat, 2.88MB floppy format). The remaining gaps are in the work:
+- himem.sys driver
+- completion of emm386 functionalities
+- setver
+- more to umb and data
 
 ![MS-DOS 4.01 running in PCE with upper memory enabled](images/mem.png)
 
