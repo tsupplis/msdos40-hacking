@@ -179,7 +179,7 @@
 :def 1044 "Invalid directory",CR,LF                     ;AC000;
 :def 1046 "Invalid path, not directory,",CR,LF,"or directory not empty",CR,LF ;AC000;
 :def 1047 "Must specify ON or OFF",CR,LF                ;AC000;
-:def 1048 "Directory of  %1",CR,LF                      ;AC000;
+:def 1048 "Directory of %1",CR,LF                      ;AC000;
 :def 1049 "No Path",CR,LF                               ;AC000;
 :def 1050 "Invalid drive in search path",CR,LF          ;AC000;
 :def 1051 "Invalid device",CR,LF                        ;AC000;
@@ -209,7 +209,7 @@
 :def 1077 " %1  %2"                             ;AC053;
 :def 1078 "Directory already exists",CR,LF      ;AC000;
 
-:def 1080 "%1 File(s) %2 bytes",CR,LF
+:def 1080 "%1 file(s) %2 bytes",CR,LF
 :def 1081 "Total files listed:",CR,LF
 :def 1079 "Overwrite %1 (Y/N)? "
 

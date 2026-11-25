@@ -36,11 +36,11 @@ with tempfile.TemporaryDirectory(dir=work) as scratch:
     ])
     assert "B:\\TOP\\A\\NEST\\ONE.TXT\nB:\\TOP\\Z\\TWO.TXT\n" in report, report
     assert report.count("File not found") == 2, report
-    for heading in [r"Directory of  B:\TOP\A\NEST", r"Directory of  B:\TOP\Z"]:
+    for heading in [r"Directory of B:\TOP\A\NEST", r"Directory of B:\TOP\Z"]:
         assert heading in report, report
     assert "[1]MiXeD\n0\nENDTEST" in report, report
     assert report.count("bytes free") == 1, report
-    assert re.search(r"Total files listed:\s+2 File\(s\)\s+15 bytes", report), report
+    assert re.search(r"Total files listed:\s+2 file\(s\)\s+15 bytes", report), report
     pages = []
     for i in range(12):
         pages.extend([fr"md b:\p{i}", fr"echo x>b:\p{i}\page.txt"])

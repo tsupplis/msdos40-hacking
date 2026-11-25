@@ -964,11 +964,16 @@ shoname:
         test    bits,SwitchW
         jz      dir_fcb_field
         test    [si].dir_attr,attr_directory
-        jz      dir_fcb_field
+        jz      dir_wide_file
         mov     al,'['
         stosb
         invoke  fcb_to_ascz
         mov     byte ptr [di-1],']'     ; Replace the name terminator.
+        jmp     short dir_wide_field
+dir_wide_file:
+        invoke  fcb_to_ascz
+        dec     di                      ; Overwrite the terminator with padding.
+dir_wide_field:
         ; The existing tab advances to column 16 once eight bytes are printed.
         mov     al,' '
 dir_wide_pad:

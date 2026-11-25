@@ -107,7 +107,7 @@ tree_stats_ptr dw 1080
         db 1,Right_Align+Unsgn_Bin_DWord,10,9,blank
         db parm_block_size,0
         dw offset trangroup:File_size_low,0
-        db 2,Right_Align+Unsgn_Bin_DWord,13,13,Grouped_Decimal_Pad
+        db 2,Right_Align+Unsgn_Bin_DWord,13,12,Grouped_Decimal_Pad
 
 ;  "%1 bytes free",13,10
 ;
@@ -119,8 +119,8 @@ BytMes_Ptr	dw	1020				;AN000;message number
 		dw	0				;AN000;segment of arg
 		db	1				;AN000;first subst
 		db	Right_Align+Unsgn_Bin_DWord	;AN000;long binary to decimal
-		db	31				;AN000;maximum width
-		db	31				;AN000;minimum width
+		db	30				;AN000;maximum width
+		db	30				;AN000;minimum width
 		db	Grouped_Decimal_Pad		;AN000;pad character
 
 ;  "Invalid drive specification",13,10
@@ -387,7 +387,7 @@ BadRmD_Ptr	dw	1046				;AN000;message number
 Bad_ON_OFF_Ptr	dw	1047				;AN000;message number
 		db	no_subst			;AN000;number of subst
 
-;  "Directory of  %1",13,10
+;  "Directory of %1",13,10
 ;
 DirHead_Ptr	dw	1048				;AN000;message number
 		db	1				;AN000;number of subst
