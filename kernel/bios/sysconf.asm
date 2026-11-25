@@ -227,7 +227,8 @@ Buf_Parmsx	label	byte	;AN000;
 	db	1,2		;AN000; Min 1, Max 2 positional
 	dw	Buf_Pos1	;AN000;
 	dw	Buf_Pos2	;AN000;
-	db	1		;AN000; 1 switch
+	db	2
+	dw	SW_L_Ctrl
 	dw	SW_X_Ctrl	;AN000;AN025; /X control
 	db	0		;AN000; no keywords
 
@@ -265,6 +266,16 @@ SW_X_Ctrl	label	word	;AN000;AN025;
 	db	1		;AN000; # of switches
 Switch_X	label	byte	;AN000;AN025;
 	db	'/X',0		;AN000;AN025;
+SW_L_Ctrl dw 0,0,Result_Val,NoVal
+        db 1
+Switch_L db '/L',0
+; Commit placement only after the entire directive parses successfully.
+P_Placement db 0                ; 0 = automatic, 1 = /L
+        public BufferPlacement, FilesLow, StacksLow, FcbsLow
+BufferPlacement db 0
+FilesLow db 0
+StacksLow db 0
+FcbsLow db 0
 ;local variables
 P_Buffers	dw     0	;AN000;
 P_H_Buffers	dw     0	;AN000;
@@ -383,7 +394,8 @@ Files_Parms	label	byte	;AN000;
 Files_Parmsx	label	byte	;AN000;
 	db	1,1		;AN000; Min 1, Max 1 positional
 	dw	Files_Pos	;AN000;
-	db	0		;AN000; no switches
+	db 1
+	dw SW_L_Ctrl
 	db	0		;AN000; no keywords
 
 Files_Pos	label	byte	;AN000;
@@ -415,7 +427,8 @@ FCBS_Parmsx	label	byte	;AN000;
 	db	2,2		;AN000; Min 2, Max 2 positional
 	dw	FCBS_Pos_1	;AN000;
 	dw	FCBS_Pos_2	;AN000;
-	db	0		;AN000; no switches
+	db 1
+	dw SW_L_Ctrl
 	db	0		;AN000; no keywords
 
 FCBS_Pos_1	label	byte	;AN000;
@@ -486,7 +499,8 @@ STKS_Parmsx	label	byte	;AN000;
 	db	2,2		;AN000; Min 2, Max 2 positional
 	dw	STKS_Pos_1	;AN000;
 	dw	STKS_Pos_2	;AN000;
-	db	0		;AN000; no switches
+	db 1
+	dw SW_L_Ctrl
 	db	0		;AN000; no keywords
 
 STKS_Pos_1	label	byte	;AN000;
@@ -1006,8 +1020,12 @@ Sysinit_Parse	endp
 
 TryB:
 	CMP	AH,'B'
-	JNZ	TryC
+	je ParseBuffers
+	jmp TryC
+ParseBuffers:
 	mov	P_Buffer_Slash_X, 0	;AN000;AN025;
+	mov P_Placement,0
+	mov P_H_Buffers,0
 	mov	di, offset Buf_Parms	;AN000;
 	xor	cx, cx			;AN000;
 	mov	dx, cx			;AN000;
@@ -1019,11 +1037,16 @@ $$DO4:
 	JNC $$IF4
 	    call   Badparm_p		;AN007;   and Show messages and end the search loop.
 ;	$ORELSE 			;AN000;
-	JMP SHORT $$SR4
+	JMP $$SR4
 $$IF4:
 	    cmp    ax, $P_RC_EOL	;AN000; End of Line?
 ;	$LEAVE	   E			;AN000;  then jmp to $Endloop for semantic check.
 	JE $$EN4
+        cmp Result_Val.$P_SYNONYM_PTR,offset Switch_L
+        jne BufValue
+        mov P_Placement,1
+        jmp $$DO4
+BufValue:
 	    cmp    Result_Val.$P_SYNONYM_PTR, offset Switch_X ;AN000;AN025;
 ;	    $IF    E					      ;AN000;
 	    JNE $$IF8
@@ -1058,7 +1081,9 @@ $$EN4:
 ;	    $ELSE			;AN000;
 	    JMP SHORT $$EN15
 $$IF15:
-		 mov	ax, P_Buffers	;AN000; We don't have any problem.
+		 mov al,P_Placement
+        mov BufferPlacement,al
+        mov	ax, P_Buffers	;AN000; We don't have any problem.
 		 mov	Buffers, ax	;AN000; Now, let's set it really.
 		 mov	ax, P_H_Buffers ;AN000;
 		 mov	H_Buffers, ax	;AN000;
@@ -2008,6 +2033,7 @@ TRYF:
 ;CoffJ5: JMP	 COFF
 ;TryFBad:JMP	 BadOp
 
+	mov P_Placement,0
 	mov	di, offset Files_Parms	;AN000;
 	xor	cx, cx			;AN000;
 	mov	dx, cx			;AN000;
@@ -2024,12 +2050,19 @@ $$IF64:
 	    cmp    ax, $P_RC_EOL	;AN000; End of Line?
 ;	$LEAVE	   E			;AN000;  then end the $ENDLOOP
 	JE $$EN64
+        cmp Result_Val.$P_SYNONYM_PTR,offset Switch_L
+        jne FilesCheckNext
+        mov P_Placement,1
+        jmp $$DO64
+FilesCheckNext:
 	    mov    al, byte ptr Result_Val.$P_PICKED_VAL ;AN000;
 	    mov    P_Files, al		;AN000; Save it temporarily
 ;	$ENDLOOP			;AN000;
 	JMP SHORT $$DO64
 $$EN64:
-	    mov    al, P_Files		;AN000;
+	    mov al,P_Placement
+        mov FilesLow,al
+        mov    al, P_Files		;AN000;
 	    mov    Files, al		;AN000; No error. Really set the value now.
 ;	$ENDSRCH			;AN000;
 $$SR64:
@@ -2215,6 +2248,7 @@ TRYK:
 ;	 JMP	 COFF
 
 Do_TryK:
+	mov P_Placement,0
 	mov	di, offset STKS_Parms	;AN000;
 	xor	cx, cx			;AN000;
 	mov	dx, cx			;AN000;
@@ -2228,11 +2262,16 @@ $$DO76:
 	    call   Print		;AN000;   and Show messages and end the search loop.
 	    call   Error_Line		;AN006;
 ;	$ORELSE 			;AN000;
-	JMP SHORT $$SR76
+	JMP $$SR76
 $$IF76:
 	    cmp    ax, $P_RC_EOL	;AN000; End of Line?
 ;	$LEAVE	   E			;AN000;  then end the $ENDLOOP
 	JE $$EN76
+        cmp Result_Val.$P_SYNONYM_PTR,offset Switch_L
+        jne STKSCheckNext
+        mov P_Placement,1
+        jmp $$DO76
+STKSCheckNext:
 	    mov    ax, word ptr Result_Val.$P_PICKED_VAL   ;AN000;
 	    cmp    cx, 1				   ;AN000;
 ;	    $IF    E					   ;AN000;
@@ -2283,7 +2322,9 @@ $$EN84:
 ;	    $ELSE					   ;AN000;
 	    JMP SHORT $$EN91
 $$IF91:
-		 mov	ax, P_Stack_Count		   ;AN000;
+		 mov al,P_Placement
+        mov StacksLow,al
+        mov	ax, P_Stack_Count		   ;AN000;
 		 mov	Stack_Count, ax 		   ;AN000;
 		 mov	ax, P_Stack_Size		   ;AN000;
 		 mov	Stack_Size, ax			   ;AN000;
@@ -2415,6 +2456,7 @@ TRYX:
 ;	 JMP	 COFF
 ;TryXBad:JMP	 BadOp
 
+	mov P_Placement,0
 	mov	di, offset FCBS_Parms	;AN000;
 	xor	cx, cx			;AN000;
 	mov	dx, cx			;AN000;
@@ -2431,6 +2473,11 @@ $$IF95:
 	    cmp    ax, $P_RC_EOL	;AN000; End of Line?
 ;	$LEAVE	   E			;AN000;  then end the $ENDLOOP
 	JE $$EN95
+        cmp Result_Val.$P_SYNONYM_PTR,offset Switch_L
+        jne FCBSCheckNext
+        mov P_Placement,1
+        jmp $$DO95
+FCBSCheckNext:
 	    mov    al, byte ptr Result_Val.$P_PICKED_VAL  ;AN000;
 	    cmp    cx, 1		;AN000; The first positional?
 ;	    $IF    E			;AN000;
@@ -2456,6 +2503,8 @@ $$EN95:
 	    JMP SHORT $$EN103
 $$IF103:
 		mov    Fcbs, al 	    ;AN000; No error. Really set the value now.
+		mov    al, P_Placement
+		mov    FcbsLow, al
 		mov    al, P_Keep	    ;AN000;
 		mov    Keep, al 	    ;AN000;
 ;	    $ENDIF			;AN005;

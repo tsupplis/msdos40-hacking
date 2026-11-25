@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+"""Boot with UMBs and check each CONFIG.SYS placement override independently."""
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+with tempfile.TemporaryDirectory() as scratch:
+    folder = Path(scratch)
+    image = folder / "system.img"
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+    probe = folder / "tblplace.com"
+    subprocess.run(["nasm", "-f", "bin", root / "test/tblplace.asm", "-o", probe], check=True)
+    for source, name in [(probe, "tblplace.com"), (root / "extra/pcehimem.sys", "himem.sys")]:
+        subprocess.run(["mcopy", "-o", "-i", image, source, "::" + name], check=True)
+    batch = folder / "layout.bat"
+    batch.write_text("tblplace\n")
+    base = "DEVICE=HIMEM.SYS 1024\nDOS=HIGH,UMB\nFILES=80\nFCBS=4,1\nSTACKS=9,256\nBUFFERS=30\n"
+    cases = [
+        ("", "UUUU"),
+        ("FILES=80 /l", "LUUU"),
+        ("FCBS=4,1 /L", "ULUU"),
+        ("STACKS=9,256 /L", "UULU"),
+        ("BUFFERS=30 /L", "UUUL"),
+        ("BUFFERS=30 /X /L", "UUUL"),
+        ("BUFFERS=30 /L\nBUFFERS=30 /U", "UUUL"),
+        ("FILES=80 /L\nFILES=80", "UUUU"),
+    ]
+    for directive, expected in cases:
+        batch.with_suffix(".cfg").write_text(base + directive + "\n")
+        output = subprocess.check_output([root / "test/run_tests", batch],
+            env=dict(os.environ, IMG=str(image), PCE_TEST_WORK=str(folder / "guest")))
+        if expected.encode() not in output.splitlines():
+            raise SystemExit(f"{directive or 'defaults'}: expected {expected}, got {output!r}")
+    print(f"PASS {len(cases)} table-placement boots")

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Boot the shipped EMM386 on a 486 and exercise active BUFFERS /X."""
+import argparse
 import os
 from pathlib import Path
 import re
@@ -7,6 +8,10 @@ import shutil
 import subprocess
 import tempfile
 import time
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("mode", choices=("active", "low"), nargs="?", default="active")
+switches = "/x /l" if parser.parse_args().mode == "low" else "/x"
 
 root = Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory(dir=root / "test/work") as work:
@@ -26,7 +31,7 @@ with tempfile.TemporaryDirectory(dir=root / "test/work") as work:
     (folder / "payload.bin").write_bytes(payload)
     subprocess.run(["mformat", "-C", "-f", "1440", "-i", data, "::"], check=True)
     subprocess.run(["mcopy", "-i", data, folder / "payload.bin", "::PAYLOAD.BIN"], check=True)
-    (folder / "config.sys").write_bytes(b"device=emm386.sys 1024 ON\r\nbuffers=64 /x\r\n")
+    (folder / "config.sys").write_bytes(f"device=emm386.sys 1024 ON\r\nbuffers=64 {switches}\r\n".encode())
     batch = ["@echo off", "ctty com1", "emsread", "if errorlevel 1 goto bad",
              "copy b:\\payload.bin b:\\result.bin", "if errorlevel 1 goto bad",
              "echo EMS PASS", "goto end", ":bad", "echo EMS FAILED", ":end"]

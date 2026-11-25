@@ -157,6 +157,8 @@ The directive inventory comes from the keyword tables in both versions of IO.SYS
 
 Measured conventional-memory savings on PCE¹ are 7,504 bytes for `DOS=HIGH`, 4,544 for `DEVICEHIGH=ANSI.SYS`, 6,096 for `SHELLHIGH=COMMAND.COM /P /E:160`, 10,640 for `BUFFERS=20`, 3,296 for `STACKS=9,128`, 272 for `FCBS=4,1`, 464 for `LASTDRIVE=E` (2,304 for Z), and 912 for `FILES=20`.
 
+Use `FILES=80 /L` with Windows 3.0 to keep the System File Table in conventional memory while retaining `DOS=HIGH,UMB`. `FCBS` and `STACKS` also accept `/L`. For `BUFFERS`, `/X /L` tries EMS then conventional memory.
+
 PCE example for `config.sys`
 
 ```dos

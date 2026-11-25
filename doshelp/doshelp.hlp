@@ -77,9 +77,12 @@ BREAK=       Enable or disable extended Ctrl+C checking.
  BREAK=OFF
 BUFFERS=     Set the number of disk buffers.
 
- BUFFERS=count
+ BUFFERS=count[,secondary] [/X] [/L]
 
    count           Number of disk buffers to allocate at startup.
+   secondary       Number of secondary buffers (0-8).
+   /X              Try expanded memory first.
+   /L              Use conventional memory if EMS is unused or unavailable.
 CALL         Run a nested batch file.
 
  CALL batchfile [arguments]
@@ -364,10 +367,11 @@ FC           Compare two files and display their differences.
                    /number is also accepted. Switch letters ignore case.
 FCBS=        Set the number of file control blocks.
 
- FCBS=n[,m]
+ FCBS=n,m [/L]
 
    n               Number of file control blocks.
    m               Number of blocks protected against automatic closure.
+   /L              Keep the FCB table in conventional memory.
 FDISK        Manage fixed-disk partitions.
 
  FDISK [/STATUS]
@@ -377,9 +381,10 @@ FDISK        Manage fixed-disk partitions.
    /MBR            Rewrite the master boot code.
 FILES=       Set the maximum number of open files.
 
- FILES=count
+ FILES=count [/L]
 
    count           Maximum number of files DOS can keep open.
+   /L              Keep the file table in conventional memory (Windows 3.0).
 FIND         Search for text in files or standard input.
 
  FIND [/V] [/C] [/N] [/I] "text" [files...]
@@ -749,10 +754,11 @@ SORT         Sort input.
    /+column        Begin the comparison at this column.
 STACKS=      Configure interrupt stacks.
 
- STACKS=count,size
+ STACKS=count,size [/L]
 
    count           Number of interrupt stacks.
    size            Bytes reserved per stack.
+   /L              Keep interrupt stacks and handlers in conventional memory.
 SUBST        Map a drive or remove its mapping.
 
  SUBST [drive: path | drive: /D]

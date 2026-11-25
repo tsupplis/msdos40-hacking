@@ -55,7 +55,7 @@ PROC calls `AllocateBlock`, `ResizeBlock` and `ExecLargest` directly. The last r
 
 MISC registers `CloseEntries` and `BufEntries`. CLOSE calls BUF directly inside DOSCODE. The redirector can enter CLOSE on an application stack, so its resident callback uses DS for DOSGROUP. BUF keeps its disk transfer area below A20.
 
-The active EMS regression (`test/check_ems`) boots the shipped EMM386.SYS with QEMU on a 486 and `BUFFERS=64 /X`. It requires QEMU and NASM, checks the kernel cache mode, injects a BIOS read failure, retries, and compares a copied file after shutdown.
+The active EMS regression (`test/check_ems`) boots the shipped EMM386.SYS with QEMU on a 486 and `BUFFERS=64 /X /L`. It requires QEMU and NASM, checks the kernel cache mode, injects a BIOS read failure, retries, and compares a copied file after shutdown.
 
 ## DINFO and CREATE
 

@@ -200,6 +200,7 @@ ASSUME	CS:SYSINITSEG,DS:NOTHING,ES:NOTHING,SS:NOTHING
 	public Buffer_LineNum
 	public DoNotShowNum
 	public H_Buffers
+        extrn BufferPlacement:byte, FilesLow:byte, StacksLow:byte, FcbsLow:byte
 	public Buffer_Slash_X			;AN023;
 	public ConfigMsgFlag			;AN014;
 	public Do_Install_Exec			;AN019;
@@ -1023,8 +1024,14 @@ TryBuffers:
 	je	DoDefaultBuff
 	cmp	Buffer_Slash_X, 1		;AN000;
 	jne	DO_Buffer			;AN000;
+        push [BUFFERS]
 	call	DoEMS				;AN000; Carry set if (enough) EMS is not available
-	jc	DoDefaultBuff			;AN000;  Error. Just use default buffer.
+	pop ax
+        jnc DO_Buffer
+        mov [BUFFERS],ax
+        cmp [BUFFERS],99          ; Larger counts require EMS.
+        jbe DO_Buffer
+        jmp DoDefaultBuff			;AN000;  Error. Just use default buffer.
 DO_Buffer:
 	jmp	DOBUFF				; the user entered the buffers=.
 
@@ -1431,6 +1438,8 @@ DoInstallStack:
 	POP	DX
 	PUSH	DX
 	ADD	AX,DX
+        CMP CS:StacksLow,1
+        JE SetStackLow
 	CMP	WORD PTR CS:XMS_ENTRY+2,0
 	JE	SetStackLow
 	PUSH	AX
@@ -1728,6 +1737,8 @@ SetFcbs PROC NEAR
 	MOV	BL,SIZE SF_ENTRY
 	MUL	BL
 	ADD	AX,SFTable
+        CMP CS:FcbsLow,1
+        JE SetFcbsLow
 	CMP	WORD PTR CS:XMS_ENTRY+2,0
 	JE	SetFcbsLow
 	PUSH	AX
@@ -1790,6 +1801,8 @@ SetFiles PROC NEAR
 	MUL	BL
 	ADD	AX,SFTable		; include the link and count
 	PUSH	AX			; table size in bytes
+        CMP CS:FilesLow,1
+        JE SetFilesLow
 	CMP	WORD PTR CS:XMS_ENTRY+2,0
 	JE	SetFilesLow
 	CALL	ParaRound
@@ -2502,12 +2515,15 @@ $$XL5:
 ;	$ELSE					;AN000;
 	JMP SHORT $$EN18
 $$IF18:
+             cmp cs:BufferPlacement,0
+             jne EmsFallback
 	     mov  ax, cs:[Buffer_LineNum]	;AN000; Show error message.
 	     push cs:[LineCount]		;AN017; Save current line count
 	     mov  cs:[LineCount], ax		;AN000; Now, we can change Linecount
 	     call Error_Line			;AN000; since we are through with CONFIG.SYS file.
 	     pop cs:[LineCount] 		;AN017; Restore line count
-	     stc				;AN000;
+EmsFallback:
+             stc
 ;	$ENDIF
 $$EN18:
 	pop	bx				;AN010;
@@ -2523,6 +2539,8 @@ DoEMS	endp
 ; relative to its own segment. A failed request leaves UMB_BUF_SEG zero.
 ; DS:BX points to BuffInfo and must survive the call.
 ClaimBufferUmb PROC NEAR
+        CMP CS:BufferPlacement,1
+        JE ClaimBufferDone
 	CMP	WORD PTR CS:XMS_ENTRY+2,0
 	JE	ClaimBufferDone
 	PUSH	BX
