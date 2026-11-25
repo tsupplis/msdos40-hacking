@@ -20,4 +20,6 @@
 ;:use    8       COMMON1                 ;"Incorrect DOS Version"
 ;:use    9       COMMON1                 ;"APPEND already installed"
 
+:def 11 "APPEND: Invalid parameter - %1",CR,LF
+:def 10 "APPEND: Invalid switch - %1",CR,LF
 :end

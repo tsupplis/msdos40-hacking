@@ -347,7 +347,7 @@ FASTOPEN     Cache file and directory lookups.
    /X              Use expanded memory for the cache.
 FC           Compare two files and display their differences.
 
- FC [/A] [/B] [/C] [/L] [/LBn] [/N] [/T] [/W] [/n] file1 file2
+ FC [/A] [/B] [/C] [/L] [/LBn] [/N] [/T] [/W] [/Dcount] file1 file2
 
    file1, file2    Files to compare.
    /A              Abbreviate each group of differences.
@@ -357,8 +357,9 @@ FC           Compare two files and display their differences.
    /LBn            Set the text comparison buffer to n lines.
    /N              Show line numbers.
    /T              Preserve tab characters.
-   /W              Compress runs of whitespace during comparison.
-   /n              Require n matching lines to resume after a difference.
+   /W              Ignore whitespace and skip blank lines.
+   /Dcount         Require count matching lines to resume (default 2).
+                   /number is also accepted. Switch letters ignore case.
 FCBS=        Set the number of file control blocks.
 
  FCBS=n[,m]
@@ -774,11 +775,12 @@ TIME         Display or set the time.
    time            New system time.
 TREE         Display a directory tree.
 
- TREE [drive:][path] [/F] [/A]
+ TREE [drive:][path] [/F] [/A] [/L]
 
    path            Directory where the listing starts.
    /F              Include filenames.
    /A              Draw branches with ASCII characters.
+   /L              Display directory names in lowercase.
 TRUENAME     Display the canonical path for a file or directory.
 
  TRUENAME [path]

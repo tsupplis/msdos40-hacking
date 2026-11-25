@@ -338,6 +338,7 @@ semicolon	db	";",0		; null list
 
 tv_flag 	db	0		; flag to indicate re-entr from TopView
 
+arg_start dw 0
 parse_flag	db	0		; flag used by APPEND parsing
 
 FCB_ext_err	db	0		; flag used to indicate that FCB
@@ -415,7 +416,7 @@ inv_parm    db	0bh	;length 						;an010;bgb
 	    db	0	;reserved						;an010;bgb
 si_off	    dw	0	;put offset of command line here			;an010;bgb
 si_seg	    dw	0	;put segment of command line here			;an010;bgb
-	    db	0	;use percent zero					;an010;bgb
+	    db	1	;utility message substitution %1					;an010;bgb
 	    db	Left_Align+Char_Field_ASCIIZ ;type of data			;an010;bgb
 	    db	128			;max width				;an010;bgb
 	    db	1			;min width				;an010;bgb
@@ -2530,10 +2531,15 @@ abort_exit:				; exit to abort append		  ; @@05
 	push	di
 	les	di,cmd_name@
 	mov	es:byte ptr[di],0	; set no command now
-	pop	di
-	pop	es
+	mov word ptr es:[di+1],0A500h ; status for COMMAND when name is consumed
+        cmp ax,0A501h
+        jne status_recorded
+        inc byte ptr es:[di+1]
+status_recorded:
+        pop di
+        pop es
 
-	cmp	ax,0			; error
+        cmp ax,0                     ; error
 	jne	no_E_mode
 	test	mode_flags,E_mode	; no /E processing
 	jz	no_E_mode
@@ -2777,6 +2783,7 @@ process_argsx:				; process all arguments
 					; parse past it if we do
 
 get_pars_info:
+        mov cs:arg_start,si
 	call	dword ptr pars_off	; call to COMMAND.COM's parser
 
 	cmp	ax,-1			; end of line?
@@ -3131,7 +3138,7 @@ no_dirs_appended:
 	call	sysloadmsg						 ;AN000;
 									 ;AN000;
 	mov	ax,5			; message number		 ;AN000;
-	mov	bx,STDERR		; handle			 ;AN000;
+	mov	bx,STDOUT		; handle			 ;AN000;
 	xor	cx,cx			; sub count			 ;AN000;
 	xor	dl,dl			; no input			 ;AN000;
 	mov	dh,-1			; message class 		 ;AN000;
@@ -3251,8 +3258,9 @@ terminate:				; terminate to dos or return	  ; @@05
 	mov	ah,term_proc		; return to DOS on first time	  ; @@05
 	call	int_21							  ; @@05
 is_res: 								  ; @@05
-	mov	ax,-1			; set abort requested		  ; @@05
-	jmp	abort_exit		; must go back to COMMAND	  ; @@05
+	mov ax,0A501h                 ; resident APPEND failure for COMMAND
+        jmp abort_exit
+
 
 
 print_STDOUT:
@@ -3373,7 +3381,13 @@ do_parse_err	PROC								;an010;bgb
 ;;;;;;;;xor	cx,cx			; sub count				;an010;bgb
 	mov	cx,1			;display invalid parm			;an010;bgb
 	xor	dl,dl			; no input				;an010;bgb
-	mov	dh,02			; message class of parse error		;an010;bgb
+	cmp ax,3
+        mov ax,10
+        je append_diagnostic
+        inc ax
+append_diagnostic:
+        mov dh,-1
+
 ;;;;;;;;mov	cs:si_off,81h		   ;initialize pointer			;an010;bgb
 										;an010;bgb
 	   dec	  si			;point to last byte of invalid parm	;an010;bgb
@@ -3390,14 +3404,18 @@ $$LL1:
 ;	   $ENDIF								;an010;bgb
 $$IF1:
 	   mov	   byte ptr [si+1],00	  ;zero terminate display string	;an010;bgb
-nextsi: 									;an010;bgb
-public nextsi									;an010;bgb
-	   dec	   si			;look at previous char			;an010;bgb
-	   cmp	   byte ptr [si],' '	;find parm separator			;an010;bgb
-	   jnz	   nextsi		;loop until begin of parm found 	;an010;bgb
-										;an010;bgb
-	mov	cs:si_off,si		;mov si into display parms		;an010;bgb
-	mov	cs:si_seg,ds		   ;initialize pointer			;an010;bgb
+nextsi:
+        cmp si,cs:arg_start
+        jbe token_start
+        cmp byte ptr [si-1],' '
+        je token_start
+        cmp byte ptr [si-1],9
+        je token_start
+        dec si
+        jmp nextsi
+token_start:
+        mov cs:si_off,si
+        mov	cs:si_seg,ds		   ;initialize pointer			;an010;bgb
 	ret					; return to caller		;an010;bgb
 do_parse_err	ENDP								;an010;bgb
 

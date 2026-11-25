@@ -18,10 +18,15 @@ DGROUP  GROUP   CONST, _BSS, _DATA
 _DATA   SEGMENT
 PUBLIC	_BadSw, _UseMes, _BadOpn, _LngFil, _NoDif, _NoMem, _Bad_ver, _ReSyncMes, _UnKnown
 
-_BadSw          DB      "Incompatible switches",0
+PUBLIC _Missing,_BadParam,_BadOption,_ReadErr
+_Missing DB "Required parameters missing.",0
+_BadParam DB "Invalid parameter.",0
+_BadOption DB "Invalid switch.",0
+_ReadErr DB "Read error.",0
+_BadSw          DB      "Invalid switch combination.",0
 _Bad_ver        DB      "Incorrect DOS version",0
 _UseMes         DB      "usage: fc [/a] [/b] [/c] [/l] [/lbNN] [/w] [/t] [/n] [/NNNN] file1 file2",0ah,0
-_BadOpn         DB      "cannot open %s - %s",0
+_BadOpn         DB      "FC: Cannot open %s - %s",0
 _LngFil         DB      "%s longer than %s",0
 _NoDif          DB      "no differences encountered",0
 _NoMem          DB      "out of memory",0ah,0

@@ -186,6 +186,15 @@ append_dispatch:
 	int	2FH				; execute command
 	cmp	TRANGROUP:IDLEN,0		; execute requested
 	jne	contcom
+        mov ax,word ptr TRANGROUP:[IDLEN+1]
+        cmp ah,0A5h             ; resident APPEND returned a status
+        jne append_done
+        xor ah,ah
+        mov es,RESSEG
+        assume es:RESGROUP
+        mov es:[RETCODE],ax
+        assume es:NOTHING
+append_done:
 	jmp	Cmd_done
 
 contcom:					; continue with internal scan

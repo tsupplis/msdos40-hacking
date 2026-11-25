@@ -462,7 +462,10 @@ $$IF7:
 
 		cmp ax,sw_missing	;an000;is it an invalid switch
 ;		$if z			;an000;invalid switch
-		JNZ $$IF9
+		JE ed_bad_switch
+                    jmp badopt
+ed_bad_switch:
+                    mov OPT_ERR_ptr,34
 		    jmp badopt		;an000;say why and exit
 ;		$endif			;an000;
 $$IF9:

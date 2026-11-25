@@ -28,4 +28,6 @@
 ;;;:def 206  "Extended attribute type mismatch",CR,LF                     ;AN000;
 ;;;:def 208  "Extended attribute value not supported",CR,LF               ;AN000;
 
+:def 17 "ATTRIB: Invalid parameter - %1",CR,LF
+:def 16 "ATTRIB: Invalid switch - %1",CR,LF
 :end                                                                   ;AN000;

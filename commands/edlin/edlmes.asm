@@ -412,15 +412,15 @@ ndname_ptr	label	word		;an000;"File name must be
 					;an000;specified",0d,0a,0
 		dw	0008		;an000;message number
 		db	UTILITY_MSG_CLASS  ;an000;utility message
-		dw	stdout		;an000;display handle
+		dw	stderr		;an000;display handle
 		dw	00		;an000;no sublist
 		dw	00		;an000;no sub
 		db	no_input	;an000;no keyboard input
 		dw	00		;an000;no keyboard buffer
 
 opt_err_ptr	label	word		;an000;"Invalid parameter",0d,0a,0
-		dw	0010		;an000;message number
-		db	Parse_Err_Class ;an000;utility message
+		dw	0035		;an000;message number
+		db	UTILITY_MSG_CLASS ;an000;utility message
 		dw	StdErr		;an000;display handle
 		dw	00		;an000;no sublist
 		dw	00		;an000;no sub

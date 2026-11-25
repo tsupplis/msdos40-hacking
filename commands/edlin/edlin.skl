@@ -42,7 +42,7 @@
 :class B				;utility messages
 :def 6 "*"                              ;prompt_ptr
 :def 7 "Invalid drive or file name",CR,LF       ;baddrv_ptr
-:def 8 "File name must be specified",CR,LF      ;ndname_ptr
+:def 8 "EDLIN: Required parameters missing.",CR,LF      ;ndname_ptr
 :def 10 "File is READ-ONLY",CR,LF               ;ro_err_ptr
 :def 11 "File Creation Error",CR,LF             ;bcreat_ptr
 :def 12 "Too many files open",CR,LF             ;too_many_ptr
@@ -69,6 +69,8 @@
 :def 32 "%1:%2"                                 ;line_num_buf_ptr
 :def 33 "Cannot merge - Code page mismatch",CR,LF ;cp_err_ptr
 
+:def 34 "EDLIN: Invalid switch.",CR,LF
+:def 35 "EDLIN: Invalid parameter.",CR,LF
 :end
 
 ;=========================================================================

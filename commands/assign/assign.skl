@@ -5,4 +5,6 @@
 :use 1 COMMON1	 ;MSG 1 is always
 	       ;"Incorrect DOS version"
 :def 2 "Original %1: set to %2:",cr,lf
+:def 4 "ASSIGN: Invalid parameter - %1",CR,LF
+:def 3 "ASSIGN: Invalid switch - %1",CR,LF
 :end

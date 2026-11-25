@@ -24,7 +24,7 @@ int getl (char *, int);
 /*global*/  char  *error(void);
 /*global*/  long fexpunge(char  *,FILE *);
 /*global*/  char  *fcopy(char  *,char  *);
-/*global*/  int fgetl(char  *,int ,FILE  *);
+/*global*/  int fgetl(char *, int, FILE *, int);
 /*global*/  int fputl(char  *,int ,FILE  *);
 /*global*/  int ffirst(char  *,int ,struct findType  *);
 /*global*/  int fnext(struct findType  *);

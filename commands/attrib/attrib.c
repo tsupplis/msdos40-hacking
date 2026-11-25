@@ -2579,6 +2579,7 @@ void Error_exit(msg_class,ext_err_num,subcnt)                          /*;AN000;
    inregs.x.ax = (WORD)ext_err_num;                                    /*;AN000;*/
    inregs.x.bx = STDERR;                                               /*;AN000;*/
    inregs.x.cx = subcnt;                                               /*;AN000;*/
+   if (msg_class == utility_msg_class) msg_error.sub_id = 1;
    inregs.h.dh = (WORD)msg_class;                                      /*;AN000;*/
    inregs.h.dl = NOINPUT;                                              /*;AN000;*/
    inregs.x.si = (WORD)&msg_error;                                     /*;AN000;*/
@@ -2643,7 +2644,7 @@ void Parse_err(error_num)                                              /*;AN000;
    if (error_num == p_op_missing)                                      /*;AN000;*/
       Error_exit(utility_msg_class,4,NOSUBCNT);                        /*;AN000;*/
    else                                                                /*;AN000;*/
-      Error_exit(ERR_PARSE,error_num,ONEPARM);                         /*;AN000;*/
+      Error_exit(utility_msg_class,error_num == p_not_in_sw ? 16 : 17,ONEPARM);                         /*;AN000;*/
 }                                                                      /*;AN000;*/
 
 

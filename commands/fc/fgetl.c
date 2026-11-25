@@ -3,10 +3,11 @@
 #include "tools.h"
 
 /* returns line from file (no CRLFs); returns NULL if EOF */
-fgetl (buf, len, fh)
+fgetl (buf, len, fh, preserveTabs)
 char *buf;
 int len;
 FILE *fh;
+int preserveTabs;
 {
     register int c;
     register char *p;
@@ -21,7 +22,7 @@ FILE *fh;
 #if MSDOS
 	if (c != '\r')
 #endif
-	    if (c != '\t') {
+	    if (c != '\t' || preserveTabs) {
 		*p++ = c;
 		len--;
 		}

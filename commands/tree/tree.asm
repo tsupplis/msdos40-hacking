@@ -295,7 +295,9 @@ A_GRAF_BAR   DB   "|"		   ;AN000;
 
 ; =  =	=  =  =  =  =  =  =  =	=  =
 FLAGS	     DB   0		   ;AN000;INITIALIZE ALL FLAGS TO "FALSE"
-	     PUBLIC FLAGS,F_SWITCH ;AN000;ADD ENTRIES IN LINK MAP
+	     PUBLIC F_LOWER
+F_LOWER      EQU  80H              ; lowercase directory display
+             PUBLIC FLAGS,F_SWITCH ;AN000;ADD ENTRIES IN LINK MAP
 F_DEF_PAT_TAR EQU 40H		   ;AN008;IF ON, DEFAULT SUBDIR OF TARGET DRIVE IS KNOWN
 				   ;IF OFF, DEF SUBDIR OF TARGET NOT KNOWN     ;AN008;
 F_SUBDIR     EQU  20H		   ;AN000;IF ON, A SUBDIR HAS BEEN DISPLAYED
@@ -728,7 +730,21 @@ $$EN25:
   MOV  DX,OFFSET START_DRIVE	   ;AN000;PASS POINTER TO STRING TO BE DISPLAYED
   CALL LEN_ASCIIZ		   ;AN000;SETS CX = NUMBER OF BYTES TO WRITE
 
-				   ;DS:DX = ADDRESS OF DATA TO WRITE
+
+  DEC CX                           ; exclude the ASCIIZ terminator
+                                   ;DS:DX = ADDRESS OF DATA TO WRITE
+  TEST FLAGS,F_LOWER
+  JZ write_heading
+  MOV SI,DX
+  MOV DI,OFFSET BUF
+  PUSH CX
+  REP MOVSB
+  POP CX
+  MOV BYTE PTR [DI],0
+  MOV SI,OFFSET BUF+2              ; keep the drive letter unchanged
+  CALL lower_directory
+  MOV DX,OFFSET BUF
+write_heading:
   CALL DO_WRITE 		   ;AN000;DISPLAY STARTING SUBDIR TO STDOUT
 
   RET				   ;AN000;RETURN TO CALLER
@@ -1222,6 +1238,14 @@ SHOW_FN PROC NEAR		   ;AN000;
 
       CALL FLN_TO_BUF		   ;AN000; MOVE NAME OF FILE TO OUTPUT BUFFER
 
+      TEST FLAGS,F_LOWER
+      JZ name_ready
+      CMP BL,ATTR_DIR
+      JNE name_ready
+      MOV SI,CURRENT_COL
+      LEA SI,BUF+DASH_NUM[SI]
+      CALL lower_directory
+name_ready:
       CALL GRAF_TO_BUF		   ;AN000;DETERMINE LEADING GRAPHIC FOR BUFFER
 
       CALL BLANK_DASH		   ;AN000;PUT BLANKS OR DASHES INTO BUF BEFORE FILENAME
@@ -1251,6 +1275,10 @@ $$IF78:
       CMP  BL,ATTR_DIR		   ;AN000;LOOK AT ATTRIB OF FILENAME
 ;     $IF  E			   ;AN000;IF IS A SUBDIRECTORY
       JNE $$IF80
+          TEST FLAGS,F_LOWER
+          JZ original_name
+          CALL FLN_TO_BUF          ; traversal consumes the original bytes
+original_name:
 	  OR   FLAGS,F_SUBDIR	   ;AN000;SAY, "A SUBDIR HAS BEEN PRINTED"
 
 	  MOV  DI,CURRENT_COL	   ;AN000;GET COL NUM OF ELBO/TEE
@@ -1296,7 +1324,33 @@ $$DO86:
   LOOP $$DO86
 $$EN86:
   RET				   ;AN000;RETURN TO CALLER
-FLN_TO_BUF ENDP 		   ;AN000;
+FLN_TO_BUF ENDP
+
+; Fold ASCII letters in the display copy. Skip both bytes of DBCS characters.
+lower_directory PROC NEAR
+next_letter:
+  LODSB
+  OR AL,AL
+  JZ lower_done
+  CMP AL,80h
+  JB single_letter
+  CALL CHK_DBCS
+  JNC next_letter
+  CMP BYTE PTR [SI],0
+  JE lower_done
+  INC SI
+  JMP next_letter
+single_letter:
+  CMP AL,"A"
+  JB next_letter
+  CMP AL,"Z"
+  JA next_letter
+  ADD BYTE PTR [SI-1],20h
+  JMP next_letter
+lower_done:
+  RET
+lower_directory ENDP
+; 		   ;AN000;
 ; =  =	=  =  =  =  =  =  =  =	=  =
   HEADER <GRAF_TO_BUF - SELECT LEADING GRAPHIC CHAR FOR BUF> ;AN000;
 GRAF_TO_BUF PROC NEAR		   ;AN000;

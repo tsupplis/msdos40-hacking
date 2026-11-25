@@ -1599,7 +1599,13 @@ PARSE_ERR	proc	near		;an000; dms;report an error
 	mov	cx,1			;an002;1 replaceable parm
 	mov	si,offset Parse_Sublist ;an002;sublist for replaceable parm
 	mov	dl,NO_INPUT		;AN000;no input to message retriever
-	mov	dh,PARSE_ERR_CLASS	;AN000;display parse errors
+	mov byte ptr [si+6],1   ; utility message substitution %1
+	cmp ax,3
+	mov ax,3
+	je assign_diagnostic
+	inc ax
+assign_diagnostic:
+	mov dh,-1	;AN000;display parse errors
 	call	SYSDISPMSG		;AN000;display error
 
 	pop	ax			;AN000;restore errcode

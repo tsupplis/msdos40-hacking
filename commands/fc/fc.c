@@ -151,7 +151,7 @@ END EXPLANATION 2
     -lb n   set the size of the internal line buffer to n lines from default
             of 100
     -w      ignore blank lines and white space (ignore len 0, use strcmps)
-    -t      do not untabify (use fgets instead of fgetl)
+    -t      do not untabify
     -n      output the line number also
     -NNNN   set the number of lines to resynchronize to n which defaults
             to 2.  Failure to have this value set correctly can result in
@@ -208,6 +208,7 @@ WARNING:
 
 
 #include <showhelp.h>
+extern char *strchr();
 #include "tools.h"
 #include "fc.h"
 
@@ -218,8 +219,7 @@ extern int  fgetl(),
 
 extern byte toupper ();
 
-int (*funcRead) (),                     /* function to use to read lines     */
-    (*fCmp) ();                         /* function to use to compare lines  */
+int (*fCmp) ();                         /* function to use to compare lines  */
 
 extern byte BadSw[],
             Bad_ver[],
@@ -227,7 +227,6 @@ extern byte BadSw[],
             LngFil[],
             NoDif[],
             NoMem[],
-            UseMes[],
             ReSyncMes[];
 
 int ctSync  = -1,                       /* number of lines required to sync  */
@@ -254,21 +253,31 @@ byte *extBin[] = { ".EXE", ".OBJ", ".LIB",
                             ".COM", ".BIN", ".SYS", NULL };
 
 
+extern byte Missing[], BadParam[], BadOption[], ReadErr[];
+static int preserveTabs;
+
+static int count_arg(p,limit)
+char *p;
+unsigned limit;
+{
+    unsigned n = 0;
+    while (*p) {
+        unsigned digit = *p++ - '0';
+        if (digit > 9 || n > (limit-digit)/10) usage(BadParam,1);
+        n = n*10 + digit;
+    }
+    if (!n) usage(BadParam,1);
+    return n;
+}
+
 main (c, v)
 int c;
 byte *v[];
 {
 
         int     i;
-        int     j;
-        int     fileargs;
-        char    *strpbrk(),
-                *slash;
-        char    n[2][80];
-        char    temp;
-
-
-
+        int fileargs = 0;
+        char *n[2], *arg, *next, *opt;
         extern byte _osmajor, _osminor;
         word version;                   /* _osmajor._osminor, used for        */
                                         /* version binding checks.            */
@@ -283,88 +292,40 @@ byte *v[];
             usage (Bad_ver, 1);
         }
 
-        funcRead = (int (*) ())FNADDR(fgetl);
-
-        fileargs=0;
-
-        for (i=1; i < c ; i++)
-        {
-/**
- *  If argument doesn't begin with a /, parse a filename off of it
- *  then examine the argument for following switches.
- *
-**/
-                if (*v[i] != '/')
-                {
-                        slash= strpbrk( v[i],"/" );
-
-                        if ( slash )
-                        {
-                                temp = *slash;
-                                *slash='\0'  ;
-                                strcpy(n[fileargs++],v[i]);
-                                *slash =temp  ;
-                        }
-                        else
-                                strcpy(n[fileargs++],v[i]);
+    for (i=1; i<c; i++) {
+        arg = v[i];
+        next = strchr(arg,'/');
+        if (arg != next) {
+            if (fileargs == 2 || (next ? next-arg : strlen(arg)) >= MAXARG)
+                usage(BadParam,1);
+            n[fileargs++] = arg;
+        }
+        while (next) {
+            *next = 0;
+            opt = next+1;
+            next = strchr(opt,'/');
+            if (next) *next = 0;
+            if (opt[0] && !opt[1]) {
+                switch (toupper(*opt)) {
+                case 'A': fAbbrev=TRUE; continue;
+                case 'B': fBinary=TRUE; continue;
+                case 'C': fCase=FALSE; continue;
+                case 'L': fLine=TRUE; continue;
+                case 'N': fNumb=TRUE; continue;
+                case 'T': preserveTabs=TRUE; continue;
+                case 'W': fIgnore=TRUE; continue;
                 }
-
-                for ( j=0 ; j < strlen( v[i] ) ; j++)
-                {
-                        if(*(v[i]+j)=='/')
-                        {
-                                switch(toupper( *(v[i]+j+1)))
-                                {
-                                     case 'A' :
-                                             fAbbrev = TRUE;
-                                         break;
-                                     case 'B' :
-                                             fBinary = TRUE;
-                                         break;
-                                     case 'C' :
-                                             fCase = FALSE;
-                                         break;
-#ifdef  DEBUG
-                                     case 'D' :
-                                             fDebug = TRUE;
-                                         break;
-#endif
-                                     case 'W' :
-                                             fIgnore = TRUE;
-                                         break;
-                                     case 'L' :
-                                             if (toupper(*(v[i]+j+2))=='B')
-                                             {
-                                                 cLine = ntoi ((v[i]+j+3),10);
-                                                 break;
-                                             }
-                                             else
-                                                 fLine = TRUE;
-                                         break;
-                                     case 'N' :
-                                             fNumb = TRUE;
-                                         break;
-                                     case 'T' :
-                                             funcRead =(int (*) ())FNADDR(fgets);
-                                         break;
-                                     default:
-                                             if (*strbskip((v[i]+j+1),"0123456789") == 0)
-                                             {
-                                                 ctSync = ntoi ((v[i]+j+1), 10);
-                                             }
-                                             else
-                                             {
-                                                 usage (NULL, 1);
-                                             }
-                                } /* end switch */
-                        }       /* end if */
-                }       /* end parse of argument for '/' */
-        }       /* End ARGUMENT Search */
-
-
-
-    if (fileargs != 2)
-        usage (NULL, 1);
+            }
+            if (toupper(opt[0])=='L' && toupper(opt[1])=='B')
+                cLine = count_arg(opt+2,65535U / sizeof(struct lineType));
+            else if (toupper(opt[0])=='D')
+                ctSync = count_arg(opt+1,32767);
+            else if (*opt >= '0' && *opt <= '9')
+                ctSync = count_arg(opt,32767);
+            else usage(BadOption,1);
+        }
+    }
+    if (fileargs != 2) usage(Missing,1);
 
     if (ctSync != -1)
         fLine = TRUE;
@@ -414,11 +375,7 @@ byte *v[];
 usage (p, erc)
 unsigned char *p;
 {
-    if (p)
-        printf ("fc: %s\n", p);
-    else
-        printf (UseMes);
-
+    fprintf(erc ? stderr : stdout,"FC: %s\n",p);
     exit (erc);
 }
 
@@ -434,14 +391,16 @@ unsigned char *f1, *f2;
 
     if ((fh1 = fopen (f1, "rb")) == NULL)
     {
-        sprintf (line, BadOpn, f1, error ());
-        usage (line, 1);
+        fprintf(stderr,BadOpn,f1,error());
+        fputc(10,stderr);
+        exit(1);
     }
 
     if ((fh2 = fopen (f2, "rb")) == NULL)
     {
-        sprintf (line, BadOpn, f2, error ());
-        usage (line, 1);
+        fprintf(stderr,BadOpn,f2,error());
+        fputc(10,stderr);
+        exit(1);
     }
     pos = 0L;
 
@@ -461,14 +420,17 @@ unsigned char *f1, *f2;
             }
             else
             {
-                sprintf (line, LngFil, f1, f2);
-                usage (line, 1);
+                if (ferror(fh1) || ferror(fh2)) usage(ReadErr,1);
+                printf(LngFil,f1,f2);
+                putchar(10);
+                exit(1);
             }
         }
         else
         {
             if ((c2 = getc (fh2)) == EOF)
             {
+                if (ferror(fh1) || ferror(fh2)) usage(ReadErr,1);
                 if (fSame)
                     usage (NoDif, 0);
                 else
@@ -476,8 +438,10 @@ unsigned char *f1, *f2;
             }
             else
             {
-                sprintf (line, LngFil, f2, f1);
-                usage (line, 1);
+                if (ferror(fh1) || ferror(fh2)) usage(ReadErr,1);
+                printf(LngFil,f2,f1);
+                putchar(10);
+                exit(1);
             }
         }
         pos++;
@@ -495,7 +459,7 @@ register int s1, s2;
         printf ("compare (%d, %d, %d, %d, %d)\n", l1, s1, l2, s2, ct);
 #endif
 
-    if (ct == 0 || s1+ct > l1 || s2+ct > l2)
+    if (ct <= 0 || s1+ct > l1 || s2+ct > l2)
         return FALSE;
 
     while (ct--)
@@ -537,19 +501,21 @@ unsigned char *f1, *f2;
 
     if ((fh1 = fopen (f1, "rb")) == NULL)
     {
-        sprintf (line, BadOpn, f1, error ());
-        usage (line, 1);
+        fprintf(stderr,BadOpn,f1,error());
+        fputc(10,stderr);
+        exit(1);
     }
 
     if ((fh2 = fopen (f2, "rb")) == NULL)
     {
-        sprintf (line, BadOpn, f2, error ());
-        usage (line, 1);
+        fprintf(stderr,BadOpn,f2,error());
+        fputc(10,stderr);
+        exit(1);
     }
 
     if ((buffer1 = (struct lineType *)malloc (cLine * (sizeof *buffer1))) == NULL ||
         (buffer2 = (struct lineType *)malloc (cLine * (sizeof *buffer1))) == NULL)
-        usage (NoMem);
+        usage (NoMem,1);
 
     l1 = l2 = 0;
     line1 = line2 = 0;
@@ -567,7 +533,7 @@ l0:
     {
         if (fSame)
             usage (NoDif, 0);
-        return;
+        exit(1);
     }
     xc = min (l1, l2);
 
@@ -695,15 +661,13 @@ int *plnum;
 #endif
 
     i = 0;
-    while (ct-- && (*funcRead) (pl->text, MAXARG, fh) != NULL)
-    {
-        if (funcRead == (int (*) ())FNADDR(fgets))
-            pl->text[strlen(pl->text)-1] = 0;
+    while (i < ct && fgetl(pl->text,MAXARG,fh,preserveTabs)) {
+        ++*plnum;
         if (fIgnore && !strcmps (pl->text, ""))
             pl->text[0] = 0;
         if (strlen (pl->text) != 0 || !fIgnore)
         {
-            pl->line = ++*plnum;
+            pl->line = *plnum;
             pl++;
             i++;
         }
@@ -714,6 +678,7 @@ int *plnum;
         printf ("xfill returns %d\n", i);
 #endif
 
+    if (ferror(fh)) usage(ReadErr,1);
     return i;
 }
 

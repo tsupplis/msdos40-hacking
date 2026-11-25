@@ -17,4 +17,6 @@
 ;	1. NONE OF THE FOUR CAN BE BLANK
 ;	2. EACH OF THE FOUR MUST BE UNIQUE
 ;	3. EACH CHAR MUST BE A SINGLE BYTE (NO DBCS)
+:def 8 "TREE: Invalid switch - %1",CR,LF
+:def 9 "TREE: Invalid parameter - %1",CR,LF
 :end			 ;							;AN000;
