@@ -365,30 +365,35 @@ Ext_translation()                                                      /*;AN000;
 /*                                                                           */
 /*컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�*/
 
-Get_far_str(target,source,length)                                      /*;AN000;*/
-   char *target;                                                       /*;AN000;*/
-   DWORD *source;               /* segment = cs register */            /*;AN000;*/
-   WORD  length;                                                       /*;AN000;*/
-{                                                                      /*;AN000;*/
-   char far *fptr;                                                     /*;AN000;*/
-   WORD i;                                                             /*;AN000;*/
+Get_far_str(target,source,capacity)
+   char *target;
+   DWORD *source;
+   WORD capacity;
+{
+   char far *p = (char far *)*source;
 
-   if (length == 0) {                                                  /*;AN000;*/
+   while (--capacity && *p)
+      *target++ = *p++;
+   if (*p)
+      Error_exit(ERR_PARSE,p_syntax,NOSUBCNT);
+   *target = NUL;
+   strcpy(fix_es_reg,NUL);
+}
 
-      /* copy string in data segment */
-      for (fptr = (char far *) *((DWORD *)source);(char)*fptr != NUL;) /*;AN000;*/
-         *target++ = (char) *fptr++;                                   /*;AN000;*/
-      *target = *fptr;  /*EOS character */                             /*;AN000;*/
-      }                                                                /*;AN000;*/
-   else {
-
-      /* copy string in data segment */
-      for (fptr = (char far *) *((DWORD *)source),i=0;i < length;i++)  /*;AN000;*/
-         *target++ = (char) *fptr++;                                   /*;AN000;*/
-      *target = 0x0;    /*EOS character */                             /*;AN000;*/
-      }
-   strcpy(fix_es_reg,NUL); /* fix for es reg. after using far ptr */   /*;AN000;*/
-}                                                                      /*;AN000;*/
+/* The caller validates the record extent before passing a counted field. */
+Copy_counted(target,capacity,source,length)
+   char *target;
+   WORD capacity;
+   char far *source;
+   WORD length;
+{
+   if (length >= capacity)
+      Error_exit(ERR_EXTENDED,13,NOSUBCNT);
+   while (length--)
+      *target++ = *source++;
+   *target = NUL;
+   strcpy(fix_es_reg,NUL);
+}
 
 
 /*컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�*/
@@ -611,7 +616,7 @@ WORD Parse_it(line)                                                    /*;AN000;
          if (outregs.x.dx == (WORD)&pos3_buff) {                       /*;AN000;*/
 
             /* copy filename from far string to data segment string */
-            Get_far_str(fspec,pos3_buff.p_result_buff,0);              /*;AN000;*/
+            Get_far_str(fspec,pos3_buff.p_result_buff,sizeof(fspec));              /*;AN000;*/
             got_fn = TRUE;                                             /*;AN000;*/
             }                                                          /*;AN000;*/
 
@@ -619,7 +624,7 @@ WORD Parse_it(line)                                                    /*;AN000;
          if (outregs.x.dx == (WORD)&pos6_buff) {                       /*;AN000;*/
 
             /* copy attribute name from far string to data segment string */
-            Get_far_str(ext_attr,pos6_buff.p_result_buff,0);           /*;AN000;*/
+            Get_far_str(ext_attr,pos6_buff.p_result_buff,sizeof(ext_attr));           /*;AN000;*/
             do_ext_attr = TRUE;                                        /*;AN000;*/
             do_reg_attr = FALSE;                                       /*;AN000;*/
             }                                                          /*;AN000;*/
@@ -640,7 +645,10 @@ WORD Parse_it(line)                                                    /*;AN000;
                      status = p_syntax;                                /*;AN000;*/
                      break;                                            /*;AN000;*/
                      }                                                 /*;AN000;*/
-                  Get_far_str(string,pos6b_buff.p_result_buff,0);      /*;AN000;*/
+                  Get_far_str(string,pos6b_buff.p_result_buff,sizeof(string));      /*;AN000;*/
+                  if (strlen(ext_attr_value.ea_ascii) + strlen(string) >=
+                      sizeof(ext_attr_value.ea_ascii))
+                     return(p_syntax);
                   strcat(ext_attr_value.ea_ascii,string);              /*;AN000;*/
                   inregs.x.si = outregs.x.si; /* update SI for parser */ /*;AN000;*/
                   }                                                    /*;AN000;*/
@@ -776,7 +784,7 @@ Determine_type(parser_type,result_ptr)                                 /*;AN000;
 
       case p_string:                                                   /*;AN000;*/
       case p_quoted_string:                                            /*;AN000;*/
-         Get_far_str(string,result_ptr,0);                             /*;AN000;*/
+         Get_far_str(string,result_ptr,sizeof(string));                             /*;AN000;*/
 
          /* is the type EAISLOGICAL or EAISASCII */
          if (strcmp(string,"ON") == 0) {                               /*;AN000;*/
@@ -828,7 +836,7 @@ Determine_type(parser_type,result_ptr)                                 /*;AN000;
 WORD Make_fspec(fspec)                                                 /*;AN000;*/
    char *fspec;                                                        /*;AN000;*/
 {                                                                      /*;AN000;*/
-   WORD Check_DBCS();       /* forward declaration */                  /*;AN000;*/
+   WORD Last_separator();       /* forward declaration */                  /*;AN000;*/
 
    char path[256];                                                     /*;AN000;*/
    WORD status;                                                        /*;AN000;*/
@@ -849,7 +857,7 @@ WORD Make_fspec(fspec)                                                 /*;AN000;
       }                                                                /*;AN000;*/
 
    /* Check if user didn't enter a path in filename */
-   if (!Check_DBCS(fspec,2,'\\')) {                                    /*;AN000;*/
+   if (fspec[2] != '\\') {                                    /*;AN000;*/
       strcpy(path,&fspec[2]);                                          /*;AN000;*/
       fspec[2] = '\\';                                                 /*;AN000;*/
       inregs.x.ax = 0x4700;            /* Get current directory */     /*;AN000;*/
@@ -858,25 +866,19 @@ WORD Make_fspec(fspec)                                                 /*;AN000;
       intdos(&inregs,&outregs);                                        /*;AN000;*/
       status = outregs.x.ax;                                           /*;AN000;*/
 
+      if (outregs.x.cflag & CARRY)
+         return(status);
       if (!(outregs.x.cflag & CARRY)) {                                /*;AN000;*/
          status = NOERROR;                                             /*;AN000;*/
-         if (!Check_DBCS(fspec,strlen(fspec)-1,'\\'))                  /*;AN000;*/
+         if (Last_separator(fspec) != strlen(fspec)-1)                  /*;AN000;*/
             strcat(fspec,"\\");                                        /*;AN000;*/
          strcat(fspec,path);                                           /*;AN000;*/
          }                                                             /*;AN000;*/
       }                                                                /*;AN000;*/
 
-   /* seperate the file specification into path and filename */
-   for (i=strlen(fspec);(i>=0) && (!Check_DBCS(fspec,i,'\\')); i--)    /*;AN000;*/
-      /* null statement */ ;                                           /*;AN000;*/
-   i++;                                                                /*;AN000;*/
-   j = 0;                                                              /*;AN000;*/
-   while (fspec[i+j] != '\0') {                                        /*;AN000;*/
-      file[j] = fspec[i+j];                                            /*;AN000;*/
-      fspec[i+j] = '\0';                                               /*;AN000;*/
-      j++;                                                             /*;AN000;*/
-      }                                                                /*;AN000;*/
-   file[j] = '\0';                                                     /*;AN000;*/
+   i = Last_separator(fspec) + 1;
+   strcpy(file,fspec+i);
+   fspec[i] = NUL;
 
    /* Check for filenames of: . (current dir) .. (parent dir) */
    if (strcmp(file,".") == 0)                                          /*;AN001;*/
@@ -1169,10 +1171,65 @@ WORD Ext_open(fspec,handle)                                            /*;AN000;
 /*                                                                           */
 /*컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�*/
 
+/* Provider lists start with a WORD count. Check each packed field before
+   using it as a length or advancing a far pointer. */
+static WORD Valid_names(data,size)
+   WORD far *data;
+   WORD size;
+{
+   struct name_list far *entry;
+   WORD count, used;
+
+   if (size < sizeof(WORD))
+      return(FALSE);
+   count = *data;
+   entry = (struct name_list far *)(data+1);
+   size -= sizeof(WORD);
+   while (count--) {
+      if (size < NAME_SIZE || entry->nl_name_len >= MAX_KEYWORD)
+         return(FALSE);
+      used = NAME_SIZE + entry->nl_name_len;
+      if (used > size)
+         return(FALSE);
+      size -= used;
+      entry = (struct name_list far *)((BYTE far *)entry + used);
+      }
+   return(TRUE);
+}
+
+static WORD Valid_value(data,size,query)
+   WORD far *data;
+   WORD size;
+   struct query_list *query;
+{
+   struct attr_list far *entry;
+   WORD length;
+
+   if (size < sizeof(WORD) + ATTR_SIZE || *data != 1)
+      return(FALSE);
+   entry = (struct attr_list far *)(data+1);
+   size -= sizeof(WORD) + ATTR_SIZE;
+   if (entry->at_name_len > size || entry->at_name_len != query->ql_name_len ||
+       entry->at_type != query->ql_type)
+      return(FALSE);
+   length = entry->at_value_len;
+   if (length > size - entry->at_name_len)
+      return(FALSE);
+   switch (entry->at_type) {
+      case EAISLOGICAL: return(length == 1);
+      case EAISBINARY:  return(length == 1 || length == 2 || length == 4);
+      case EAISDATE:
+      case EAISTIME:    return(length == 2);
+      case EAISASCII:   return(length < sizeof(ext_attr_value.ea_ascii));
+      case EAISUNDEF:   return(TRUE);
+      }
+   return(FALSE);
+}
+
 WORD Get_ext_attrib(handle,list_ptr,qlist_ptr)                         /*;AN000;*/
    WORD handle;                                                        /*;AN000;*/
    WORD far **list_ptr;   /* ptr to far ptr to list returned */        /*;AN000;*/
-   WORD *qlist_ptr;       /* query list */                             /*;AN000;*/
+   struct query_list *qlist_ptr; /* query list */                             /*;AN000;*/
 {                                                                      /*;AN000;*/
    WORD status;                                                        /*;AN000;*/
    WORD attr_size;                                                     /*;AN000;*/
@@ -1218,6 +1275,11 @@ WORD Get_ext_attrib(handle,list_ptr,qlist_ptr)                         /*;AN000;
          ptr = (WORD *)list_ptr;                                       /*;AN000;*/
          ptr++;                                                        /*;AN000;*/
          *ptr = (WORD)list_seg;                                        /*;AN000;*/
+         if (outregs.x.cx > attr_size ||
+             !Valid_value(*list_ptr,outregs.x.cx,qlist_ptr)) {
+            Dfree((WORD)list_seg);
+            return(13);             /* Invalid provider data */
+            }
          (*list_ptr)++;                                                /*;AN000;*/
          strcpy(fix_es_reg,NUL);  /* restores ES register value */     /*;AN000;*/
          status = NOERROR;                                             /*;AN000;*/
@@ -1294,6 +1356,11 @@ WORD Get_ext_attr_names(handle,list_ptr,num_entries)                   /*;AN000;
          ptr = (WORD *)list_ptr;                                       /*;AN000;*/
          ptr++;                                                        /*;AN000;*/
          *ptr = (WORD)list_seg;                                        /*;AN000;*/
+         if (outregs.x.cx > attr_size ||
+             !Valid_names(*list_ptr,outregs.x.cx)) {
+            Dfree((WORD)list_seg);
+            return(13);             /* Invalid provider data */
+            }
          *num_entries = (WORD)*(WORD far *)*list_ptr;                  /*;AN000;*/
          (*list_ptr)++;                                                /*;AN000;*/
          strcpy(fix_es_reg,NUL);  /* restores ES register value */     /*;AN000;*/
@@ -1546,18 +1613,19 @@ WORD Print_ext_attrib(fspec,type,name_ptr,num,attr_ptr)                /*;AN000;
    WORD status;                                                        /*;AN000;*/
    WORD i;                                                             /*;AN000;*/
    WORD length;                                                        /*;AN000;*/
-   WORD value;                                                         /*;AN000;*/
+   DWORD value;                                                         /*;AN000;*/
    BYTE far *value_ptr;                                                /*;AN000;*/
    char string[129];                                                   /*;AN000;*/
    char far *cptr;                                                     /*;AN000;*/
    struct name_list far *ptr;                                          /*;AN000;*/
 
    /* find value field in attribute list */
-   length = ATTR_SIZE + attr_ptr->at_name_len;                         /*;AN000;*/
-   value_ptr = (BYTE far *)((BYTE far *)attr_ptr + length);            /*;AN000;*/
-   length = attr_ptr->at_value_len;                                    /*;AN000;*/
-   strcpy(fix_es_reg,NUL);                                             /*;AN000;*/
-
+   if (type != EANAMES) {
+      length = ATTR_SIZE + attr_ptr->at_name_len;                         /*;AN000;*/
+      value_ptr = (BYTE far *)((BYTE far *)attr_ptr + length);            /*;AN000;*/
+      length = attr_ptr->at_value_len;                                    /*;AN000;*/
+      strcpy(fix_es_reg,NUL);                                             /*;AN000;*/
+      }
    status = NOERROR;                                                   /*;AN000;*/
    switch (type) {                                                     /*;AN000;*/
       case EAISUNDEF:                                                  /*;AN000;*/
@@ -1598,7 +1666,7 @@ WORD Print_ext_attrib(fspec,type,name_ptr,num,attr_ptr)                /*;AN000;
          msg_str2.sub_value_seg = segregs.ds;                          /*;AN000;*/
          msg_str2.sub_value = (WORD)fspec;                             /*;AN000;*/
          Display_msg(12,STDOUT,ONEPARM,&msg_str2,NOINPUT);             /*;AN000;*/
-         Get_far_str(string,&value_ptr,length);                        /*;AN000;*/
+         Copy_counted(string,sizeof(string),value_ptr,length);                        /*;AN000;*/
          msg_str2.sub_value = (WORD)string;                            /*;AN000;*/
          Display_msg(8,STDOUT,ONEPARM,&msg_str2,NOINPUT);              /*;AN000;*/
          break;                                                        /*;AN000;*/
@@ -1606,14 +1674,14 @@ WORD Print_ext_attrib(fspec,type,name_ptr,num,attr_ptr)                /*;AN000;
          msg_str1.sub_value_seg = segregs.ds;                          /*;AN000;*/
          msg_str1.sub_value = (WORD)fspec;                             /*;AN000;*/
          value = (WORD)*(WORD far *)value_ptr;                         /*;AN000;*/
-         Convert_date(value,&msg_date.sub_value,&msg_date.sub_value_seg); /*;AN000;*/
+         Convert_date((WORD)value,&msg_date.sub_value,&msg_date.sub_value_seg); /*;AN000;*/
          Display_msg(9,STDOUT,TWOPARM,&msg_date,NOINPUT);              /*;AN000;*/
          break;                                                        /*;AN000;*/
       case EAISTIME:                                                   /*;AN000;*/
          msg_str1.sub_value_seg = segregs.ds;                          /*;AN000;*/
          msg_str1.sub_value = (WORD)fspec;                             /*;AN000;*/
          value = (WORD)*(WORD far *)value_ptr;                         /*;AN000;*/
-         Convert_time(value,&msg_time.sub_value,&msg_time.sub_value_seg); /*;AN000;*/
+         Convert_time((WORD)value,&msg_time.sub_value,&msg_time.sub_value_seg); /*;AN000;*/
          Display_msg(9,STDOUT,TWOPARM,&msg_time,NOINPUT);              /*;AN000;*/
          break;                                                        /*;AN000;*/
       case EANAMES:                                                    /*;AN000;*/
@@ -1630,7 +1698,7 @@ WORD Print_ext_attrib(fspec,type,name_ptr,num,attr_ptr)                /*;AN000;
          /* display each attribute name */
          for (ptr = name_ptr,i=0; i<num; i++) {                        /*;AN000;*/
             cptr = (char far *)((BYTE far *)ptr + 4);                  /*;AN000;*/
-            Get_far_str(string,&cptr,(WORD)ptr->nl_name_len);          /*;AN000;*/
+            Copy_counted(string,sizeof(string),cptr,(WORD)ptr->nl_name_len);          /*;AN000;*/
 
             msg_str2.sub_value = (WORD)string;                         /*;AN000;*/
             Display_msg(8,STDOUT,ONEPARM,&msg_str2,NOINPUT);           /*;AN000;*/
@@ -1969,7 +2037,7 @@ WORD Extended_attrib(handle,fspec)                                     /*;AN000;
       set_ext_attr = FALSE;                                            /*;AN000;*/
       nptr = name_ptr;                                                 /*;AN000;*/
       type = EANAMES;                                                  /*;AN000;*/
-      status = Print_ext_attrib(fspec,type,name_ptr,num,list_ptr);     /*;AN004;*/
+      status = Print_ext_attrib(fspec,type,name_ptr,num,(WORD far *)0);     /*;AN004;*/
       did_attrib_ok = TRUE;                                            /*;AN004;*/
       return(status);                                                  /*;AN004;*/
       }                                                                /*;AN000;*/
@@ -1993,7 +2061,7 @@ WORD Extended_attrib(handle,fspec)                                     /*;AN000;
    qlist.ql_flags = ((struct name_list far *)nptr)->nl_flags;          /*;AN000;*/
    qlist.ql_name_len = ((struct name_list far *)nptr)->nl_name_len;    /*;AN000;*/
    cptr = (char far *)((BYTE far *)nptr + 4);                          /*;AN000;*/
-   Get_far_str(qlist.ql_name,&cptr,qlist.ql_name_len);                 /*;AN000;*/
+   Copy_counted(qlist.ql_name,sizeof(qlist.ql_name),cptr,(WORD)qlist.ql_name_len);                 /*;AN000;*/
 
    if ((status = Get_ext_attrib(handle,&list_ptr,&qlist)) != NOERROR) { /*;AN000;*/
       return(status);                                                  /*;AN000;*/
@@ -2027,6 +2095,7 @@ WORD Extended_attrib(handle,fspec)                                     /*;AN000;
       /* CODEPAGE attrbute only - display Y/N message if changing codepage */
       /* to a new value and cp != 0, ask for confirmation.                 */
       if (strcmp(qlist.ql_name,"CP") == 0 &&                           /*;AN000;*/
+           length >= sizeof(WORD) &&
            (WORD)*(WORD far *)value_ptr != 0 &&                        /*;AN000;*/
            (WORD)*(WORD far *)value_ptr != (WORD)ext_attr_value.ea_bin.dword) { /*;AN000;*/
          if (CheckYN(fspec) == NO) {                                   /*;AN000;*/
@@ -2050,6 +2119,9 @@ WORD Extended_attrib(handle,fspec)                                     /*;AN000;
             break;                                                     /*;AN000;*/
          case EAISASCII:                                               /*;AN000;*/
             length = strlen(ext_attr_value.ea_ascii); /* get string length */ /*;AN000;*/
+            if (length > ((struct attr_list far *)list_ptr)->at_value_len &&
+                sizeof(WORD) + ATTR_SIZE + qlist.ql_name_len + length > MAX_ATTR_SIZE)
+               return(EARCVALBAD+200);
             ((struct attr_list far *)list_ptr)->at_value_len = length; /*;AN000;*/
             for (ptr=ext_attr_value.ea_ascii,i=0;i < length;i++) {     /*;AN000;*/
                *(char far *)value_ptr = *ptr++;                        /*;AN000;*/
@@ -2113,6 +2185,8 @@ WORD Attrib(path,file)                                                 /*;AN000;
    WORD found_spl;        /* boolean */                                /*;AN000;*/
    WORD id;                                                            /*;AN000;*/
 
+   if (strlen(path) + strlen(file) >= sizeof(fspec))
+      return(3);     /* path not found */
    strcpy(fspec,path);     /* make full filename */                    /*;AN000;*/
    strcat(fspec,file);                                                 /*;AN000;*/
 
@@ -2194,6 +2268,9 @@ WORD Do_dir(path,file)
    WORD     search_attrib;
 
    next[0] = '\0';                                                     /*;AN000;*/
+   if (strlen(path) + strlen(file) >= sizeof(subdirectory) ||
+       (descending && strlen(path) + 3 >= sizeof(subdirectory)))
+      return(3);
    Dta_save(dta_area,128);
    status = NOERROR;                                                   /*;AN000;*/
 
@@ -2207,6 +2284,10 @@ WORD Do_dir(path,file)
 
       while (status == NOERROR) {
          if ((next[0] != '.') && ((search_attrib & SUBDIR) != 0)) {
+             if (strlen(path) + strlen(next) + 1 >= sizeof(subdirectory)) {
+                status = 3;
+                break;
+                }
              strcpy(subdirectory,path);
              strcat(subdirectory,next);
              strcat(subdirectory,"\\");
@@ -2384,45 +2465,26 @@ Reset_appendx()                                                        /*;AN000;
 /*              None                                                         */
 /*                                                                           */
 /*컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�*/
-WORD Check_DBCS(array,position,character)                              /*;AN000;*/
-   char *array;                                                        /*;AN000;*/
-   WORD position;                                                      /*;AN000;*/
-   char character;                                                     /*;AN000;*/
-{                                                                      /*;AN000;*/
-   BYTE far *ptr;                                                      /*;AN000;*/
-   WORD i;                                                             /*;AN000;*/
-   char c;                                                             /*;AN000;*/
-   char darray[128];        /* DBCS array, put "D" in every position*/ /*;AN000;*/
-                            /* that corresponds to the first byte   */
-                            /* of a DBCS character.                 */
-   for (i=0;i<128;i++)                                                 /*;AN000;*/
-      darray[i] = ' ';                                                 /*;AN000;*/
+/* The normalized path starts with a drive and a root separator. */
+WORD Last_separator(path)
+   char *path;
+{
+   WORD i, last = 0;
+   BYTE far *range;
 
-   /* Check each character, starting with the first in string, for DBCS */
-   /* characters and mark each with a "D" in the corresponding darray.  */
-   for (i=0;i<position;i++) {                                          /*;AN000;*/
-      c = array[i];                                                    /*;AN000;*/
-
-      /* look thru DBCS table to determine if character is first byte */
-      /* of a double byte character                                   */
-      for (ptr=DBCS_ptr; (WORD)*(WORD far *)ptr != 0; ptr += 2) {      /*;AN000;*/
-
-         /* check if byte is within range values of DOS DBCS table */
-         if (c >= *ptr && c <= *(ptr+1)) {                             /*;AN000;*/
-            darray[i] = 'D';                                           /*;AN000;*/
-            i++;           /* skip over second byte of DBCS */         /*;AN000;*/
-            break;
-            }
-         }                                                             /*;AN000;*/
-      }                                                                /*;AN000;*/
-
-   /* if character is not DBCS then check to see if it is == to character */
-   if (darray[position-1] != 'D' && character == array[position]) {    /*;AN000;*/
-      return (TRUE);                                                   /*;AN000;*/
-      }                                                                /*;AN000;*/
-   else                                                                /*;AN000;*/
-      return (FALSE);                                                  /*;AN000;*/
-}                                                                      /*;AN000;*/
+   for (i=0; path[i]; i++) {
+      if (path[i] == '\\')
+         last = i;
+      else
+         for (range=DBCS_ptr; *range; range+=2)
+            if ((BYTE)path[i] >= range[0] && (BYTE)path[i] <= range[1]) {
+               if (path[i+1])
+                  i++;
+               break;
+               }
+      }
+   return(last);
+}
 
 
 /*컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�*/
@@ -2579,7 +2641,7 @@ void Parse_err(error_num)                                              /*;AN000;
 
    /* check for messages with no parameter */
    if (error_num == p_op_missing)                                      /*;AN000;*/
-      Error_exit(ERR_PARSE,error_num,NOSUBCNT);                        /*;AN000;*/
+      Error_exit(utility_msg_class,4,NOSUBCNT);                        /*;AN000;*/
    else                                                                /*;AN000;*/
       Error_exit(ERR_PARSE,error_num,ONEPARM);                         /*;AN000;*/
 }                                                                      /*;AN000;*/

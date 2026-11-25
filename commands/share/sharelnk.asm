@@ -191,4 +191,12 @@ endproc     PACKET_TEMP,FAR
 
 
 code    ENDS
+
+; MSDOSME references this near entry from the editor's DOSCODE segment.
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        PUBLIC ReadConsoleNoEcho
+ReadConsoleNoEcho PROC NEAR
+        RET
+ReadConsoleNoEcho ENDP
+DOSCODE ENDS
     END

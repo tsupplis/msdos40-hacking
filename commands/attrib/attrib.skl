@@ -9,6 +9,7 @@
 :use 2 EXTEND8             ;"Insufficient memory"                      ;AN000;
 
 :class B                                                               ;AN000;
+:def 4 "ATTRIB: Required parameters missing.",CR,LF
 :def 8 "  %1"                                                          ;AN000;
 :def 9 "%1    %2",CR,LF                                                ;AN000;
 :def 10 "%1",CR,LF,"%2",CR,LF                                          ;AN000;

@@ -24,25 +24,31 @@ APPEND       Search additional directories when opening data files.
    /PATH:OFF       Search appended directories only for names without a path.
    /E              Store the list in the environment.
 
- Use APPEND ; to clear the list.
+ Run APPEND to display the current list. Use APPEND ; to clear it.
 ASSIGN       Redirect drive letters.
 
- ASSIGN [x=y ...] [/STATUS | /STA]
+ ASSIGN [x=y ...]
+ ASSIGN /STATUS | /STA
 
-   x=y             Redirect requests for drive x to drive y.
+   x=y             Redirect drive x to drive y. Colons are optional (B:=A:).
    /STATUS, /STA   List current assignments.
 
+ A mapping with /STATUS applies the mapping. Run /STATUS alone to list it.
  Run ASSIGN without arguments to remove all assignments.
 ATTRIB       Display or change file attributes.
 
- ATTRIB [+R|-R] [+A|-A] [+H|-H] [+S|-S] [path] [/S]
+ ATTRIB [+R|-R] [+A|-A] [+H|-H] [+S|-S] filespec [/S]
+ ATTRIB filespec name[=value] [/S]
 
    +R, -R          Set or clear the read-only attribute.
    +A, -A          Set or clear the archive attribute.
    +H, -H          Set or clear the hidden attribute.
    +S, -S          Set or clear the system attribute.
                    Clear existing hidden and system bits to change other flags.
-   path            File or pattern to inspect or change.
+   filespec        Required file or wildcard pattern.
+   name            FILESIZE, DATE and TIME display read-only file information.
+                   Other named attributes require filesystem support. Use *
+                   for the list of names, or name=value to set a writable one.
    /S              Include matching files in subdirectories.
 BACKUP       Back up files to another disk.
 

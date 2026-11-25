@@ -663,6 +663,7 @@ try_another1:
 	lea	di,try_dir		; destination
 	call	get_app_dir		; copy dir to try into try_dir
 	mov	app_dirs_ptr,si 	; save updated pointer
+	jump	C,check_end_dir_list
 
 
 ;-----------------------------
@@ -1049,7 +1050,8 @@ no_eo1: 										  ;AN003;
 	les	si,dword ptr handle_ptr ; ES:SI points to original handle
 	lea	di,fname		; DS:DI points to fname area
 eo_skip1:										  ;AN003;
-	call	get_fname		; strip just the 8.3 filename from
+	call	get_fname
+	jump	C,no_more_to_try2		; strip just the 8.3 filename from
 					; the original ASCIIZ string
 	call	address_path		; address the path
 	cmp	es: byte ptr [di],";"	; is append list null ?
@@ -1069,12 +1071,19 @@ try_another2:
 	mov	true_name_count,cx	; save number of chars for later us		  ;AN003;
 	pop	cx
 	mov	app_dirs_ptr,si 	; save updated pointer
+	jc	skip_long_path
 
 
 ;-----------------------------
 try_app_dir2:
 
 	call	append_fname		; glue the filename onto the end of the dir to try
+	jnc	joined_path
+skip_long_path:
+	stc
+	pushf			; retry and exit paths expect the failed-call flags
+	jmp	should_we_look_more
+joined_path:
 
 
 ;	we now have an ASCIIZ string that includes the original 8.3 filename
@@ -1826,140 +1835,86 @@ Chk_DBCS	ENDP
 ;	append_fname - glues the fname onto the end of the dir to try
 
 append_fname:
-	push	es
-	push	ds
-	pop	es
-	lea	di,try_dir		; destination, sort of (dir name)
-	lea	si,fname		; source (filename)
-
-;	find the end of the dir name
-
-	mov	dbcs_fb,-1		; set flag for no dbcs first byte chars 	 ;AN006;
-
-walk_dir_name:
-	mov	al,byte ptr [di]	; get a char from dir name
-	cmp	al,null 		; are we at the end?
-	je	end_of_dir		; yes, add on the fname
-
-	call	Chk_DBCS		; char is in al 				 ;AN006;
-	jnc	no_dbcs4		; no, keep looking				 ;AN006;
-	mov	dbcs_fb,di		; save offset					 ;AN006;
-	inc	di			; skip second byte
-
-no_dbcs4:
-	inc	di			; no, keep stepping
-	jmp	walk_dir_name
-
-;	now it is time to append the filename
-
-end_of_dir:
-	mov	al,byte ptr [di-1]	; get last char of dir name
-	cmp	al,"\"			; is it a dir seperator?
-	jne	check_next_dir_sep	; no, check the next dir sep char		 ;AN006;
-											 ;AN006;
-	sub	di,2			; yes, must find out if real dir sep		 ;AN006;
-					; or DBCS second byte				 ;AN006;
-	cmp	dbcs_fb,di		; is the char before our dir sep a DBCS 	 ;AN006;
-					; first byte?					 ;AN006;
-	jne	no_dbcs4a		; no, must check for the next dir sep		 ;AN006;
-					; yes, this means we must put in a dir sep	 ;AN006;
-	add	di,2			; restore di					 ;AN006;
-	jmp	put_in_dir_sep		; put int the dir sep char			 ;AN006;
-											 ;AN006;
-no_dbcs4a:										 ;AN006;
-	add	di,1			; restore di, then check next dir sep		 ;AN006;
-
-check_next_dir_sep:
-	cmp	al,"/"			; is it the other dir seperator?
-	je	add_fname		; yes, no need to add one
-put_in_dir_sep: 									 ;AN006;
-	mov	al,"\"			; get dir seperator
-	stosb				; add to end of dir
-
-add_fname:
-	lodsb				; get a char from fname
-	stosb				; copy the char
-	cmp	al,null 		; are we at the and of the filename?
-	je	eo_name 		; yes, all done!
-	jmp	add_fname
-
-
-
-
-
-
-
-eo_name:
-	pop	es
-	ret
-
-
-;-----------------------------
-;	get_fname strips out the 8.3 filename from the original ASCIIZ string
-;
-;	INPUT:	ES:SI points to original string
-;		DS:DI points to area for filename
-
-get_fname:
-
-	mov	bx,si			; save the pointer
-	mov	dbcs_fb,-1		; set the dbcs flag off 			 ;AN006;
-
-gfn1:
-	mov	ah,ES:byte ptr [si]	; get a char from the source
-	cmp	ah,null 		; is it a null?
-	je	got_the_end		; yes, we found the end
-
-	call	chk_dbcs		; is this char a DBCS first byte?		 ;AN006;
-	jnc	no_dbcs5		; no, carry on
-	mov	dbcs_fb,si		; yes, save pointer
-	inc	si			; skip second byte
-
-no_dbcs5:
-	inc	si			; no, point to next char
-	jmp	gfn1			; loop till end found
-
-got_the_end:
-	mov	ah,ES:byte ptr [si]	; get a char
-	cmp	ah,"/"			; did we find a /
-	je	went_too_far		; yes, we found the start
-	cmp	ah,"\"			; did we find a \
-	je	found_bslash		; yes, we found the start			 ;AN006;
-	cmp	ah,":"			; did we find a :
-	je	went_too_far		; yes, we found the start
-	cmp	si,bx			; are we back to the original start?
-	je	got_the_beg		; yes, we found the start of the fname
-	dec	si			; step back a char, then look some more
-	jmp	got_the_end
-
-found_bslash:				; found a backslash, must figure out if 	 ;AN006;
-					; is second byte of DBCS			 ;AN006;
-	dec	si			; point to next char				 ;AN006;
-	cmp	si,dbcs_fb		; do they match?
-	jne	no_dbcs5a		; no, fix up si and carry on			 ;AN006;
-	dec	si			; skip dbcs byte and loop some more		 ;AN006;
-	jmp	got_the_end								 ;AN006;
-
-no_dbcs5a:										 ;AN006;
-	inc	si			; went too far by one extra			 ;AN006;
-											 ;AN006;
-went_too_far:
-	inc	si			; went one char too far back
-
-;	ES:SI now points to the beginning of the filename
-
-got_the_beg:
-	mov	ah,ES:byte ptr [si]	; get a char from the source
-	mov	byte ptr [di],ah	; copy to dest
-	cmp	ah,null 		; did we just copy the end?
-	je	done_with_fname 	; yes, all done
-	inc	si			; no, get the next char
+	lea	di,try_dir
+	mov	ah,0			; last character was a separator
+join_scan:
+	mov	al,[di]
+	or	al,al
+	jz	join_separator
 	inc	di
-	cmp	di,offset app_dirs_ptr	; make sure we dont try to copy past the
-	je	done_with_fname 	; area
-	jmp	got_the_beg
+	mov	ah,0
+	call	Chk_DBCS
+	jnc	join_single
+	cmp	byte ptr [di],0
+	je	path_too_long
+	inc	di
+	jmp	join_scan
+join_single:
+	cmp	al,"\"
+	je	join_mark
+	cmp	al,"/"
+	jne	join_scan
+join_mark:
+	inc	ah
+	jmp	join_scan
+join_separator:
+	or	ah,ah
+	jnz	join_name
+	cmp	di,offset try_dir+127
+	jae	path_too_long
+	mov	byte ptr [di],"\"
+	inc	di
+join_name:
+	lea	si,fname
+join_copy:
+	cmp	di,offset try_dir+128
+	jae	path_too_long
+	lodsb
+	mov	[di],al
+	inc	di
+	or	al,al
+	jnz	join_copy
+	ret				; OR cleared carry
 
-done_with_fname:
+; ES:SI is the original path, DS:DI the 15-byte filename buffer.
+; Remember the byte after the last single-byte separator.
+get_fname:
+	mov	bx,si
+name_scan:
+	mov	al,es:[si]
+	or	al,al
+	jz	name_found
+	inc	si
+	call	Chk_DBCS
+	jnc	name_single
+	cmp	byte ptr es:[si],0
+	je	path_too_long
+	inc	si
+	jmp	name_scan
+name_single:
+	cmp	al,"\"
+	je	name_separator
+	cmp	al,"/"
+	je	name_separator
+	cmp	al,":"
+	jne	name_scan
+name_separator:
+	mov	bx,si
+	jmp	name_scan
+name_found:
+	sub	si,bx
+	cmp	si,15
+	jae	path_too_long
+name_copy:
+	mov	al,es:[bx]
+	mov	[di],al
+	inc	bx
+	inc	di
+	or	al,al
+	jnz	name_copy
+	ret
+path_too_long:
+	stc
 	ret
 
 ;-----------------------------
@@ -2074,6 +2029,12 @@ copy_dir:
 	cmp	ah,";"			; check to see if we are at the end of a dir
 	je	update_pointer		; yes,
 
+	cmp	cx,127
+	jb	store_dir_byte
+	mov	cx,128			; consume excess bytes without writing them
+	inc	si
+	jmp	copy_dir
+store_dir_byte:
 	mov	byte ptr [di],ah	; if not null or semi-colon, then copy it
 	inc	si			; increment both pointers
 	inc	di
@@ -2096,6 +2057,8 @@ no_more_dirs:
 
 all_done:
 	mov	byte ptr [di],null	; null terminate destination
+	cmp	cx,128
+	cmc				; carry set when candidate overflowed
 	ret				; return to caller
 
 ;-----------------------------

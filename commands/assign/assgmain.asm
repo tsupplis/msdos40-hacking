@@ -392,20 +392,12 @@ DoFCB:
 	add	bx,7			; yes, advance past it
 	mov	al,[bx] 		; get read drive byte
 DoMapDrive:
-	or	al,al			; default drive?
-;	$IF	Z			;YES
-	JNZ $$IF1
-	    mov     al,default_drive	; get default drive
-;
-; DS:BX points to the drive byte being munged.	AL is the old value.  Save
-; it away.
-;
-;	$ENDIF				;AC000;
-$$IF1:
-					;SaveFCB:
-	call	EnterAssign		; NS-Enter Assign's critical section
-
-	mov	drive_save,al		; NS-save the drive assignment
+	call	EnterAssign
+	mov	drive_save,al		; restore the caller's original FCB byte
+	or	al,al
+	jnz	fcb_map_drive
+	mov	al,default_drive	; resolve the default only for this call
+fcb_map_drive:
 	call	mapdrv1 		; NS-now let's map it to the
 
 	mov	[bx],al 		; NS-numeric drive associated in
@@ -1083,13 +1075,6 @@ page
 ;    *	.ENDIF				     *
 ;    *	   Continue			     *
 ;    *					     *
-;    *	   Establish address of the	     *
-;    *	   PDB environment		     *
-;    *	   (Process Data Block )	     *
-;    *	   .IF NO SPACE free de-allocate (49)*
-;    *	       memory  at the environment    *
-;    *	       address			     *
-;    *	   .ENDIF			     *
 ;    *****************************************
 ;*******************************************************************************
 
@@ -1165,21 +1150,8 @@ page
 ;    ******************************************
 ;************************************* CNS ************************************
 					;OKDOS:
-	mov	ax,ds:[pdb_environ]	;get your Process Data Block Address
-	or	ax,ax			;check to see if space available
-;	$IF	NZ			;AC000;
-	JZ $$IF43
-					;    jz    nofree
-	    push    es			; save code segment value
-	    mov     es,ax		; de-allocate memory
-	    mov     ah,dealloc		;(49H)
-	    int     DOS_CALL
-
-	    pop     es			;restore code segment value
-
-;	$ENDIF				;ACx00;
-$$IF43:
-					;nofree:
+	; Transient invocations leave cleanup to DOS. A first install
+	; releases its environment immediately before staying resident.
 
 	push	es			;an000; save es
 	mov	ah,Get_In_Vars		;(52H)
@@ -1346,6 +1318,7 @@ page
 $$IF58:
 
 	    call    REPORT_STATUS	;AN000;
+	xor	al,al			; successful completion
 	    call    EXIT_PROG		;AN000;
 
 ;	$ENDIF
@@ -1382,6 +1355,7 @@ page
 	MOV	AH,Set_Default_Drive	;(0EH)
 	INT	DOS_CALL
 
+	xor	al,al			; successful completion
 	call	EXIT_PROG		;go_home:
 
 	INT	PGM_TERM		;(20H) Exit SHOULD not return, but be safe
@@ -1642,10 +1616,16 @@ Release_Environment	proc	near						;an001; dms;
 	mov	ah,Get_PSP		; get the PSP segment			;an001; dms;
 	int	21h			; invoke INT 21h			;an001; dms;
 	mov	es,bx			; BX contains PSP segment - put in ES	;an001; dms;
-	mov	bx,word ptr es:[PSP_Env]; get segment of environmental vector	;an001; dms;
-	mov	es,bx			; place segment in ES for Free Memory	;an001; dms;
-	mov	ah,Dealloc		; Free Allocated Memory 		;an001; dms;
-	int	21h			; invoke INT 21h			;an001; dms;
+	mov	ax,word ptr es:[PSP_Env]
+	or	ax,ax
+	jz	environment_done
+	mov	es,ax
+	mov	ah,Dealloc
+	int	21h
+	jc	environment_done
+	mov	es,bx			; restore PSP segment
+	mov	word ptr es:[PSP_Env],0
+environment_done:
 	pop	es			; restore regs				;an001; dms;
 	pop	bx			;					;an001; dms;
 	pop	ax			;					;an001; dms;
@@ -1748,6 +1728,7 @@ Set_Vectors		proc	near	;set to new vectors			;an001; dms;
 	    call    Release_Environment ;release the environmental vector	;an001; dms;
 
 	    mov     dx,prog_size	;end but stay resident
+	xor	al,al			; successful completion
 	    mov     ah,KEEP_PROCESS	;(31h) NS- ASSIGN loaded in mem
 	    int     DOS_CALL
 
