@@ -58,3 +58,14 @@ or `COMMAND: Invalid …`. Verify fixes before closing them.
 | Report missing filenames on stderr | CLOSED |
 | Distinguish invalid switches and operands; exit on parser errors | CLOSED |
 | Case-insensitive /B and DOSHELP | CLOSED |
+
+## DELTREE
+
+| Issue | Status |
+|---|---|
+| Skip unrelated floppy drives before confirmation | CLOSED |
+| Protect an active SUBST root and current-directory ancestors before descent | CLOSED |
+| Report missing and invalid operands on stderr and fail on unmatched targets | CLOSED |
+| Document wildcards, confirmation and rejected root or dot operands in DOSHELP | CLOSED |
+| Path splitting and trailing separator removal are byte-based on double-byte code pages | OPEN |
+| Verify redirector aliases and UNC share-root protection on a network drive | OPEN |

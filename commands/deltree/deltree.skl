@@ -2,9 +2,9 @@
 :class 1
 :class 2
 :class A
-:def 1 "DELTREE [/Y] path [path...]",CR,LF
-:def 2 "Invalid parameter or path",CR,LF
-:def 3 "Cannot delete %1",CR,LF
+:def 1 "DELTREE: Required parameters missing.",CR,LF
+:def 2 "DELTREE: Invalid parameter or path.",CR,LF
+:def 3 "DELTREE: Cannot delete %1",CR,LF
 :def 4 "Delete %1 and all its contents (Y/N)? "
 :def 6 "Deleting %1",CR,LF
 :end

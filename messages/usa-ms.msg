@@ -1,4 +1,4 @@
-0104
+0105
 COMMON   0006 0038
 0001 U 0000 "Incorrect DOS version",CR,LF
 0002 U 0000 "%1 already installed",CR,LF
@@ -1263,12 +1263,12 @@ MOVE     e2fa 0008
 0007 U 0000 "%1 -> %2",CR,LF
 0008 U 0000 "Both %1 and %2 would move to the same name",CR,LF
 DELTREE  e488 0005
-0001 U 0000 "DELTREE [/Y] path [path...]",CR,LF
-0002 U 0000 "Invalid parameter or path",CR,LF
-0003 U 0000 "Cannot delete %1",CR,LF
+0001 U 0000 "DELTREE: Required parameters missing.",CR,LF
+0002 U 0000 "DELTREE: Invalid parameter or path.",CR,LF
+0003 U 0000 "DELTREE: Cannot delete %1",CR,LF
 0004 U 0000 "Delete %1 and all its contents (Y/N)? "
 0006 U 0000 "Deleting %1",CR,LF
-HELP     e579 0006
+HELP     e596 0006
 0001 U 0000 "Usage: HELP [topic]",CR,LF,0
 0002 U 0000 "Unknown help topic. Type HELP for the topic list.",CR,LF,0
 0003 U 0000 "No help available",CR,LF,0

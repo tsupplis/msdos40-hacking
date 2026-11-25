@@ -208,8 +208,10 @@ DELTREE      Delete a directory tree.
 
  DELTREE [/Y] path [path...]
 
-   path            File or directory tree to delete, including its contents.
+   path            File or directory tree to delete. Wildcards are accepted.
    /Y              Skip confirmation for each selected target.
+
+ Roots, . and .. cannot be selected as targets.
 DEVICE=      Load a device driver with optional arguments.
 
  DEVICE=filename [arguments]

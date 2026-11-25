@@ -30,7 +30,7 @@ $(MSGS): deltree.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 $(ASM_OBJS): %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
-deltree.obj: deltree.c $(MSGS)
+deltree.obj: deltree.c $(ROOT)/include/cds.h $(ROOT)/include/sysvar.h $(MSGS)
 	$(CL) -c -AS -Os -Zp -I. -I'C:\include' -Fo$@ $< -- INCLUDE='C:\sdk\include' PATH='C:\sdk\bin'
 
 deltree.exe: helptest.obj deltree.obj $(ASM_OBJS) deltree.lnk

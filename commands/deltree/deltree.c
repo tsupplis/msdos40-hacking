@@ -1,5 +1,7 @@
 #include <showhelp.h>
 #include <dos.h>
+#include <cds.h>
+#include <sysvar.h>
 #include <io.h>
 #include <direct.h>
 typedef unsigned char BYTE;
@@ -60,10 +62,11 @@ static int question(char *path)
     message(stderr, confirm, path, NULL);
     while (!_dos_read(stdin, &c, 1, &count) && count) {
         if (c == 3 || c == 26) return 0;
-        if (c == '\n') break;
+        if (c == '\r') continue;
+        if (c == '\n') return choice == 'Y' || choice == 'y';
         if (!choice) choice = c;
     }
-    return choice == 'y' || choice == 'Y';
+    return 0;
 }
 
 static char *leaf(char *path)
@@ -77,10 +80,13 @@ static char *leaf(char *path)
 static int canonical(char *input, char *out)
 {
     union REGS r;
+    struct SREGS seg;
+    segread(&seg);
+    seg.es = seg.ds;              /* TRUENAME writes to ES:DI. */
     r.x.ax = 0x6000;
     r.x.si = (unsigned)input;
     r.x.di = (unsigned)out;
-    intdos(&r, &r);
+    intdosx(&r, &r, &seg);
     return !r.x.cflag;
 }
 
@@ -130,22 +136,53 @@ static int erase(char *path, unsigned attr)
     return 0;
 }
 
+/* Match a whole directory component (WIN must not match WINDOWS). */
+static int contains_path(char *parent, char *path)
+{
+    unsigned len = strlen(parent);
+    return !strnicmp(parent, path, len) &&
+           (!path[len] || path[len] == '\\');
+}
+
 static int selected(char *path, unsigned attr)
 {
-    char full[PATHLEN], current[PATHLEN]; static char drivecwd[] = "A:.";
-    unsigned len;
+    char full[PATHLEN], current[PATHLEN];
+    static char drivecwd[] = "A:.";
+    struct sysVarsType far *vars;
+    struct CDSType far *cds;
+    struct SREGS seg;
+    union REGS r;
+    unsigned i, n;
     if (!canonical(path, full) || !full[0] || !*leaf(full)) return 0;
-    len = strlen(full);
-    /* SUBST drives maintain independent current directories. Compare each
-     * logical drive in the same expanded namespace before descending. */
-    for (drivecwd[0] = 'A'; (attr & _A_SUBDIR) && drivecwd[0] <= 'Z';
-         ++drivecwd[0]) {
-        if (!canonical(drivecwd, current)) {
-            if (drivecwd[0] == full[0]) return 0;
-            continue;
+    if (attr & _A_SUBDIR) {
+        /* Read the DOS 4 current-directory table in memory. TRUENAME on
+         * an unrelated floppy can ask the user to insert its disk. */
+        segread(&seg);
+        r.h.ah = 0x52;
+        intdosx(&r, &r, &seg);
+        FP_SEG(vars) = seg.es;
+        FP_OFF(vars) = r.x.bx;
+        cds = (struct CDSType far *)vars->pCDS;
+        for (i = 0; i < vars->cCDS; ++i) {
+            if (!(cds[i].flags & (CDSINUSE | CDSNET))) continue;
+            drivecwd[0] = (char)('A' + i);
+            /* SUBST stores its backing drive in the CDS path. Network
+             * aliases may resolve to a UNC name through the redirector. */
+            if (drivecwd[0] != full[0] && cds[i].text[0] != full[0] &&
+                !(full[0] == '\\' && (cds[i].flags & CDSNET))) continue;
+            /* A SUBST drive's root is protected even when DOS returns
+             * the logical drive spelling for TRUENAME on that root. */
+            if (cds[i].flags & CDSLOCAL) {
+                n = cds[i].cbEnd;
+                if (n >= sizeof(cds[i].text)) return 0;
+                for (n = 0; n < cds[i].cbEnd; ++n)
+                    current[n] = cds[i].text[n];
+                current[cds[i].cbEnd] = 0;
+                if (contains_path(full, current)) return 0;
+            }
+            if (!canonical(drivecwd, current) || contains_path(full, current))
+                return 0;
         }
-        if (!strnicmp(full,current,len) &&
-            (!current[len] || current[len]=='\\')) return 0;
     }
     if (!quiet && !question(path))
         return 1;
@@ -181,7 +218,7 @@ int main(int argc, char **argv)
             rc = 1;
             continue;
         }
-        if (!matches(pattern, selected, 1)) {
+        if (!matches(pattern, selected, 0)) {
             message(stderr, failed, argv[i], NULL);
             rc = 1;
         }
