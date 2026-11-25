@@ -77,8 +77,56 @@ include doscntry.inc
 	i_need	NLS_no2,BYTE			   ;AN000;
 
 
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry $GET_VERSION,179
+        DosCodeEntry $GET_VERIFY_ON_WRITE,180
+        DosCodeEntry $SET_VERIFY_ON_WRITE,181
+        DosCodeEntry $INTERNATIONAL,182
+        DosCodeEntry $GetExtCntry,183
+        DosCodeEntry $GetSetCdPg,184
+        DosCodeEntry $GET_DRIVE_FREESPACE,185
+        DosCodeEntry $GET_DMA,186
+        DosCodeEntry $SET_DMA,187
+        DosCodeEntry $GET_DEFAULT_DRIVE,188
+        DosCodeEntry $SET_DEFAULT_DRIVE,189
+        DosCodeEntry $GET_INTERRUPT_VECTOR,190
+        DosCodeEntry $SET_INTERRUPT_VECTOR,191
+        DosCodeEntry RECSET,192
+        DosCodeEntry $CHAR_OPER,193
+        DosCodeEntry $GetExtendedError,194
+        DosCodeEntry $ECS_call,195
+
+QueryNlsDriver PROC NEAR
+        CallInstall NLSInstall,NLSFUNC,0
+        RET
+QueryNlsDriver ENDP
+
+ReadNlsCountry PROC NEAR
+        CallInstall GetCntry,NLSFUNC,4
+        RET
+ReadNlsCountry ENDP
+
+SetNlsCountry PROC NEAR
+        CallInstall SetCodePage,NLSFUNC,3
+        RET
+SetNlsCountry ENDP
+
+ReadNlsExtended PROC NEAR
+        CallInstall GetExtInfo,NLSFUNC,2
+        RET
+ReadNlsExtended ENDP
+
+SetNlsCodePage PROC NEAR
+        CallInstall SetCodePage,NLSFUNC,1
+        RET
+SetNlsCodePage ENDP
+
+CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP,DS:NOTHING,ES:NOTHING
+
 BREAK <$Get_Version -- Return DOS version number>
-	procedure   $GET_VERSION,NEAR
+	procedure   GetVersion,NEAR
 ASSUME	DS:NOTHING,ES:NOTHING
 
 ; Inputs:
@@ -95,26 +143,26 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	MOV	BX,[USERNUM + 2]
 	MOV	CX,[USERNUM]
 	MOV	AX,[MSVERS]
-	invoke	get_user_stack
+	CallResident get_user_stack
 ASSUME	DS:NOTHING
 	MOV	[SI.user_BX],BX
 	MOV	[SI.user_CX],CX
-	CMP	CS:[Fake_Count],0FFH		   ;AN008;
+	CMP	SS:[Fake_Count],0FFH		   ;AN008;
 	JZ	reg				   ;AN008;
-	CMP	CS:[Fake_Count],0		   ;AN008;
+	CMP	SS:[Fake_Count],0		   ;AN008;
 	JZ	usual				   ;AN008;
-	DEC	CS:[Fake_Count] 		   ;AN008;
+	DEC	SS:[Fake_Count] 		   ;AN008;
 reg:						   ;AN008;
-	CMP	CS:[Special_version],0		   ;AN006;
+	CMP	SS:[Special_version],0		   ;AN006;
 	JZ	usual				   ;AN006;
-	MOV	AX,CS:[Special_version] 	   ;AN006;
+	MOV	AX,SS:[Special_version] 	   ;AN006;
 usual:						   ;AN006;
 	MOV	[SI.user_AX],AX 	; Really only sets AH
 	return
-EndProc $GET_VERSION
+EndProc GetVersion
 
 BREAK <$Get_Verify_on_Write - return verify-after-write flag>
-	procedure   $GET_VERIFY_ON_WRITE,NEAR
+	procedure   GetVerify,NEAR
 ASSUME	DS:NOTHING,ES:NOTHING
 
 ; Inputs:
@@ -126,10 +174,10 @@ ASSUME	DS:NOTHING,ES:NOTHING
 
 	MOV	AL,[VERFLG]
 	return
-EndProc $GET_VERIFY_ON_WRITE
+EndProc GetVerify
 
 BREAK <$Set_Verify_on_Write - Toggle verify-after-write flag>
-	procedure   $SET_VERIFY_ON_WRITE,NEAR
+	procedure   SetVerify,NEAR
 ASSUME	DS:NOTHING,ES:NOTHING
 
 ; Inputs:
@@ -142,7 +190,7 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	AND	AL,1
 	MOV	[VERFLG],AL
 	return
-EndProc $SET_VERIFY_ON_WRITE
+EndProc SetVerify
 
 BREAK <$International - return country-dependent information>
 ;
@@ -197,7 +245,7 @@ BREAK <$International - return country-dependent information>
 ;	     Register AX has the error code.
 
 
-	procedure   $INTERNATIONAL,NEAR   ; DOS 3.3
+	procedure   CountryInfo,NEAR   ; DOS 3.3
 ASSUME	DS:NOTHING,ES:NOTHING
 	CMP	AL,0FFH
 	JZ	BX_HAS_CODE		; -1 means country code is in BX
@@ -231,15 +279,15 @@ international_get:
 	retz				 ; return if equal
 	MOV	DX,BX
 	XOR	BX,BX			 ; bx = 0, default code page
-	CallInstall NLSInstall,NLSFUNC,0 ; check if NLSFUNC in memory
+	CallResident QueryNlsDriver ; check if NLSFUNC in memory
 	CMP	AL,0FFH
 	JNZ	interr			   ; not in memory
 	CMP	BP,0			 ; GetCntry ?
 	JNZ	stcdpg
-	CallInstall GetCntry,NLSFUNC,4	 ; get country info
+	CallResident ReadNlsCountry	 ; get country info
 	JMP	chkok
 stcdpg:
-	CallInstall SetCodePage,NLSFUNC,3  ; set country info
+	CallResident SetNlsCountry  ; set country info
 chkok:
 	CMP	AL,0			   ; success ?
 	retz				   ; yes
@@ -256,12 +304,13 @@ international_copy:
 	MOV	CX,OLD_COUNTRY_SIZE
 	REP	MOVSB			 ;copy country info
 international_ok3:
-	invoke	get_user_stack
+	CallResident get_user_stack
 ASSUME	DS:NOTHING
 	MOV	[SI.user_BX],BX
 international_ok:
 	MOV	AX,BX		     ; Return country code in AX too.
-	transfer SYS_RET_OK
+	CallResident SYS_RET_OK
+        RET
 
 international_set:
 ASSUME	DS:DOSGROUP
@@ -271,12 +320,16 @@ ASSUME	DS:DOSGROUP
 errtn:
 	CMP	AL,0FFH
 	JZ	errtn2
-	transfer SYS_RET_ERR	     ; return what we got from NLSFUNC
+	CallResident SYS_RET_ERR
+        RET	     ; return what we got from NLSFUNC
 errtn2:
-	error	error_Invalid_Function	; NLSFUNC not existent
+
+        MOV AL,error_Invalid_Function
+        CallResident SYS_RET_ERR
+        RET
 
 
-EndProc $INTERNATIONAL
+EndProc CountryInfo
 
 
 
@@ -313,7 +366,7 @@ BREAK <$GetExtCntry - return extended country-dependent information>
 ;		1, YES
 
 
-	procedure   $GetExtCntry,NEAR	; DOS 3.3
+	procedure   ExtendedCountryInfo,NEAR	; DOS 3.3
 ASSUME	DS:NOTHING,ES:NOTHING
 	CMP	AL,CAP_ONE_CHAR 	;AN000;MS. < 20H ?
 	JAE	capcap			;AN000;MS.
@@ -329,8 +382,13 @@ capit:					;AN000;
 	CMP	AL,CAP_ONE_CHAR 	;AN000;;MS.cap one char ?
 	JNZ	chkyes			;AN000;;MS. no
 	MOV	AL,DL			;AN000;;MS. set up AL
-	invoke	GETLET3 		;AN000;;MS. upper case it
-	invoke	get_user_stack		;AN000;;MS. get user stack
+
+        PUSH DS
+        PUSH SS
+        POP DS
+        invoke UpperTableChar
+        POP DS
+	CallResident get_user_stack		;AN000;;MS. get user stack
 	MOV	byte ptr [SI.user_DX],AL;AN000;;MS. user's DL=AL
 	JMP	SHORT nono		;AN000;;MS. done
 chkyes: 				;AN000;
@@ -340,7 +398,7 @@ chkyes: 				;AN000;
 IF  DBCS				;AN000;
 	PUSH	AX			;AN000;;MS.
 	MOV	AL,DL			;AN000;;MS.
-	invoke	TESTKANJ		;AN000;;MS. DBCS ?
+	invoke	IsLeadByte		;AN000;;MS. DBCS ?
 	POP	AX			;AN000;;MS.
 	JNZ	dbcs_char		;AN000;;MS. yes, return error
 ENDIF					;AN000;
@@ -358,7 +416,8 @@ dbcs_char:				;AN000;
 yesyes: 				;AN000'
 	INC	AX			;AN000;;MS. return 1
 nono:					;AN000;
-	transfer SYS_RET_OK		;AN000;;MS. done
+	CallResident SYS_RET_OK
+        RET		;AN000;;MS. done
 capstring:				;AN000;
 	MOV	SI,DX			;AN000;;MS. si=dx
 	CMP	AL,CAP_STRING		;AN000;;MS. cap string ?
@@ -368,7 +427,7 @@ capstring:				;AN000;
 concap: 				;AN000;
 	LODSB				;AN000;;MS. get char
  IF  DBCS				;AN000;;MS.
-	invoke	TESTKANJ		;AN000;;MS. DBCS ?
+	invoke	IsLeadByte		;AN000;;MS. DBCS ?
 	JZ	notdbcs 		;AN000;;MS. no
 	INC	SI			;AN000;;MS. skip 2 chars
 	DEC	CX			;AN000;;MS. bad input, one DBCS char at end
@@ -377,7 +436,11 @@ concap: 				;AN000;
 notdbcs:				;AN000;
  ENDIF					;AN000;
 
-	invoke	GETLET3 		;AN000;;MS. upper case it
+        PUSH DS
+        PUSH SS
+        POP DS
+        invoke UpperTableChar
+        POP DS
 	MOV	byte ptr [SI-1],AL	;AN000;;MS. store back
 next99: 				;AN000;
 	LOOP	concap			;AN000;;MS. continue
@@ -390,7 +453,7 @@ concap2:				;AN000;
 	CMP	AL,0			;AN000;;MS. end of string ?
 	JZ	nono			;AN000;;MS. yes
  IF  DBCS				;AN000;;MS.
-	invoke	TESTKANJ		;AN000;;MS. DBCS ?
+	invoke	IsLeadByte		;AN000;;MS. DBCS ?
 	JZ	notdbcs2		;AN000;;MS. no
 	CMP	BYTE PTR [SI],0 	;AN000;;MS. bad input, one DBCS char at end
 	JZ	nono			;AN000;;MS. yes
@@ -398,14 +461,21 @@ concap2:				;AN000;
 	JMP	concap2 		;AN000;;MS.
 notdbcs2:				;AN000;
  ENDIF					;AN000;
-	invoke	GETLET3 		;AN000;;MS. upper case it
+
+        PUSH DS
+        PUSH SS
+        POP DS
+        invoke UpperTableChar
+        POP DS
 	MOV	byte ptr [SI-1],AL	;AN000;;MS. store back
 	JMP	concap2 		;AN000;;MS. continue
 
 
 notcap:
 	CMP	CX,5			; minimum size is 5
-	JB	sizeerror
+	JAE	CountryBufferOK
+        JMP sizeerror
+CountryBufferOK:
 	context DS
 	MOV	SI,OFFSET DOSGROUP:COUNTRY_CDPG
 	CMP	DX,-1			; active country ?
@@ -436,7 +506,10 @@ NXTENTRY:
 	LOOP	NXTENTRY
 	POP	CX
 capinval:
-	error	error_Invalid_Function	; info type not found
+
+        MOV AL,error_Invalid_Function
+        CallResident SYS_RET_ERR
+        RET
 FOUNDIT:
 	MOVSB				; move info id byte
 	POP	CX			; retsore char count
@@ -449,9 +522,10 @@ OK_RETN:
 	MOV	CX,AX			; CX = actual length returned
 	MOV	AX,BX			; return sys code page in ax
 GETDONE:
-	invoke	get_user_stack		; return actual length to user's CX
+	CallResident get_user_stack		; return actual length to user's CX
 	MOV	[SI.user_CX],CX
-	transfer SYS_RET_OK
+	CallResident SYS_RET_OK
+        RET
 setsize:
 	SUB	CX,3			; size after length field
 	CMP	WORD PTR [SI],CX	; less than table size
@@ -468,20 +542,24 @@ CHKNLS:
 	XOR	AH,AH
 	PUSH	AX			   ; save info type
 	POP	BP			   ; bp = info type
-	CallInstall NLSInstall,NLSFUNC,0 ; check if NLSFUNC in memory
+	CallResident QueryNlsDriver ; check if NLSFUNC in memory
 	CMP	AL,0FFH
 	JZ	NLSNXT			   ;	 in memory
 sizeerror:
-	error	error_Invalid_Function
-NLSNXT: CallInstall GetExtInfo,NLSFUNC,2  ;get extended info
+
+        MOV AL,error_Invalid_Function
+        CallResident SYS_RET_ERR
+        RET
+NLSNXT: CallResident ReadNlsExtended  ;get extended info
 	CMP	AL,0			   ; success ?
 	JNZ	NLSERROR
 	MOV	AX,[SI.ccSysCodePage]	; ax = sys code page id
 	JMP	GETDONE
 NLSERROR:
-	transfer SYS_RET_ERR		; return what is got from NLSFUNC
+	CallResident SYS_RET_ERR
+        RET		; return what is got from NLSFUNC
 
-EndProc $GetExtCntry
+EndProc ExtendedCountryInfo
 
 BREAK <$GetSetCdPg - get or set global code page>
 ;
@@ -501,7 +579,7 @@ BREAK <$GetSetCdPg - get or set global code page>
 ;	     Register AX has the error code.
 
 
-	procedure   $GetSetCdPg,NEAR   ; DOS 3.3
+	procedure   GlobalCodePage,NEAR   ; DOS 3.3
 ASSUME	DS:NOTHING,ES:NOTHING
 	context DS
 	MOV	SI,OFFSET DOSGROUP:COUNTRY_CDPG
@@ -509,12 +587,13 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	JNZ	setglpg 	       ; set global cod epage
 	MOV	BX,[SI.ccDosCodePage]  ; get active code page id
 	MOV	DX,[SI.ccSysCodePage]  ; get sys code page id
-	invoke	get_user_stack
+	CallResident get_user_stack
 ASSUME DS:NOTHING
 	MOV	[SI.user_BX],BX        ; update returned bx
 	MOV	[SI.user_DX],DX        ; update returned dx
 OK_RETURN:
-	transfer SYS_RET_OK
+	CallResident SYS_RET_OK
+        RET
 ASSUME DS:DOSGROUP
 setglpg:
 	CMP	AL,2
@@ -522,10 +601,10 @@ setglpg:
 ;;;;;;; CMP	BX,[SI.ccDosCodePage]  ; same as active code page
 ;;;;;;; JZ	OK_RETURN	       ; yes
 	MOV	DX,[SI.ccDosCountry]
-	CallInstall NLSInstall,NLSFUNC,0 ; check if NLSFUNC in memory
+	CallResident QueryNlsDriver ; check if NLSFUNC in memory
 	CMP	AL,0FFH
 	JNZ	nomem			   ; not in memory
-	CallInstall SetCodePage,NLSFUNC,1  ;set the code page
+	CallResident SetNlsCodePage  ;set the code page
 	CMP	AL,0			   ; success ?
 	JZ	OK_RETURN		   ; yes
 	CMP	AL,65			   ; set device code page failed
@@ -535,20 +614,25 @@ setglpg:
 	MOV	[EXTERR_ACTION],errACT_Ignore
 	MOV	[EXTERR_CLASS],errCLASS_HrdFail
 	MOV	[EXTERR_LOCUS],errLOC_SerDev
-	transfer   From_GetSet
+	CallResident From_GetSet
+        RET
 
 seterr:
-	transfer  SYS_RET_ERR
+	CallResident SYS_RET_ERR
+        RET
 nomem:
-	error	error_Invalid_Function ; function not defined
+
+        MOV AL,error_Invalid_Function
+        CallResident SYS_RET_ERR
+        RET
 ;
-EndProc $GetSetCdPg
+EndProc GlobalCodePage
 
 
 
 
 BREAK <$Get_Drive_Freespace -- Return bytes of free disk space on a drive>
-	procedure   $GET_DRIVE_FREESPACE,NEAR
+	procedure   DriveFreeSpace,NEAR
 ASSUME	DS:NOTHING,ES:NOTHING
 
 ; Inputs:
@@ -566,15 +650,15 @@ ASSUME	DS:NOTHING,ES:NOTHING
 
 	context DS
 	MOV	AL,DL
-	invoke	GetThisDrv		; Get drive
+	CallResident GetThisDrv		; Get drive
 SET_AX_RET:
 	JC	BADFDRV
-	invoke	DISK_INFO
+	invoke	GetDiskInfo
 	XCHG	DX,BX
 	JC	SET_AX_RET		; User FAILed to I 24
 	XOR	AH,AH			; Chuck Fat ID byte
 DoSt:
-	invoke	get_user_stack
+	CallResident get_user_stack
 ASSUME	DS:NOTHING
 	MOV	[SI.user_DX],DX
 	MOV	[SI.user_CX],CX
@@ -583,13 +667,13 @@ ASSUME	DS:NOTHING
 	return
 BADFDRV:
 ;	MOV	AL,error_invalid_drive	; Assume error
-	invoke	FCB_RET_ERR
+	CallResident FCB_RET_ERR
 	MOV	AX,-1
 	JMP	DoSt
-EndProc $GET_DRIVE_FREESPACE
+EndProc DriveFreeSpace
 
 BREAK <$Get_DMA, $Set_DMA -- Get/Set current DMA address>
-	procedure   $GET_DMA,NEAR
+	procedure   GetTransferAddress,NEAR
 ASSUME	DS:NOTHING,ES:NOTHING
 
 ; Inputs:
@@ -601,13 +685,13 @@ ASSUME	DS:NOTHING,ES:NOTHING
 
 	MOV	BX,WORD PTR [DMAADD]
 	MOV	CX,WORD PTR [DMAADD+2]
-	invoke	get_user_stack
+	CallResident get_user_stack
 	MOV	[SI.user_BX],BX
 	MOV	[SI.user_ES],CX
 	return
-EndProc $GET_DMA
+EndProc GetTransferAddress
 
-	procedure   $SET_DMA,NEAR
+	procedure   SetTransferAddress,NEAR
 ASSUME	DS:NOTHING,ES:NOTHING
 
 ; Inputs:
@@ -620,10 +704,10 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	MOV	WORD PTR [DMAADD],DX
 	MOV	WORD PTR [DMAADD+2],DS
 	return
-EndProc $SET_DMA
+EndProc SetTransferAddress
 
 BREAK <$Get_Default_Drive, $Set_Default_Drive -- Set/Get default drive>
-	procedure   $GET_DEFAULT_DRIVE,NEAR
+	procedure   DefaultDrive,NEAR
 ASSUME	DS:NOTHING,ES:NOTHING
 
 ; Inputs:
@@ -635,9 +719,9 @@ ASSUME	DS:NOTHING,ES:NOTHING
 
 	MOV	AL,[CURDRV]
 	return
-EndProc $GET_DEFAULT_DRIVE
+EndProc DefaultDrive
 
-	procedure   $SET_DEFAULT_DRIVE,NEAR
+	procedure   SelectDefaultDrive,NEAR
 ASSUME	DS:NOTHING,ES:NOTHING
 
 ; Inputs:
@@ -649,7 +733,7 @@ ASSUME	DS:NOTHING,ES:NOTHING
 
 	MOV	AL,DL
 	INC	AL			; A=1, b=2...
-	invoke	GetVisDrv		; see if visible drive
+	CallResident GetVisDrv		; see if visible drive
 	JC	SETRET			; errors do not set
 ;	LDS	SI,ThisCDS		; get CDS
 ;	TEST	[SI].curdir_flags,curdir_splice ; was it spliced?
@@ -658,10 +742,10 @@ ASSUME	DS:NOTHING,ES:NOTHING
 SETRET:
 	MOV	AL,[CDSCOUNT]		; let user see what the count really is
 RET17:	return
-EndProc $SET_DEFAULT_DRIVE
+EndProc SelectDefaultDrive
 
 BREAK <$Get_Interrupt_Vector - Get/Set interrupt vectors>
-	procedure   $GET_INTERRUPT_VECTOR,NEAR
+	procedure   GetVector,NEAR
 ASSUME	DS:NOTHING,ES:NOTHING
 
 ; Inputs:
@@ -671,15 +755,15 @@ ASSUME	DS:NOTHING,ES:NOTHING
 ; Returns:
 ;	ES:BX is current interrupt vector
 
-	CALL	RECSET
+	CALL	MapVector
 	LES	BX,DWORD PTR ES:[BX]
-	invoke	get_user_stack
+	CallResident get_user_stack
 	MOV	[SI.user_BX],BX
 	MOV	[SI.user_ES],ES
 	return
-EndProc $GET_INTERRUPT_VECTOR
+EndProc GetVector
 
-	procedure   $SET_INTERRUPT_VECTOR,NEAR
+	procedure   SetVector,NEAR
 ASSUME	DS:NOTHING,ES:NOTHING
 
 ; Inputs:
@@ -690,13 +774,13 @@ ASSUME	DS:NOTHING,ES:NOTHING
 ; Returns:
 ;	None
 
-	CALL	RECSET
+	CALL	MapVector
 	CLI				; Watch out!!!!! Folks sometimes use
 	MOV	ES:[BX],DX		;   this for hardware ints (like timer).
 	MOV	ES:[BX+2],DS
 	STI
 	return
-EndProc $SET_INTERRUPT_VECTOR
+EndProc SetVector
 
 	IF	ALTVECT
 TABLE	SEGMENT
@@ -723,7 +807,7 @@ GSET001E label byte
 TABLE	ENDS
 	ENDIF
 
-procedure   RECSET,NEAR
+procedure   MapVector,NEAR
 
 	IF	ALTVECT
 	context ES
@@ -741,7 +825,7 @@ procedure   RECSET,NEAR
 	SHL	BX,1
 	SHL	BX,1
 	return
-EndProc recset
+EndProc MapVector
 
 BREAK <$Char_Oper - hack on paths, switches so that xenix can look like PCDOS>
 ;
@@ -754,7 +838,7 @@ BREAK <$Char_Oper - hack on paths, switches so that xenix can look like PCDOS>
 ;			No longer supported (NOP)
 ; output:   (get) DL - character/flag
 ;
-	procedure   $CHAR_OPER,NEAR
+	procedure   CharacterOptions,NEAR
 	ASSUME	DS:NOTHING,ES:NOTHING
 	context DS
 	CMP	AL,1
@@ -774,12 +858,12 @@ CharSetSw:
 CharGetDev:
 	MOV	DL,-1
 CharSet:
-	Invoke	Get_User_Stack
+	CallResident Get_User_Stack
 	ASSUME	DS:NOTHING
 	MOV	[SI.User_DX],DX
 CharSetDev:
 	return
-EndProc $CHAR_OPER
+EndProc CharacterOptions
 
 BREAK <$GetExtendedError - Return Extended DOS error code>
 ;
@@ -790,21 +874,22 @@ BREAK <$GetExtendedError - Return Extended DOS error code>
 ;	    CH = locus of error
 ;	    ES:DI = may be pointer
 ;
-	procedure   $GetExtendedError,NEAR
+	procedure   ReadExtendedError,NEAR
 	ASSUME	DS:NOTHING,ES:NOTHING
 	Context DS
 	MOV	AX,[EXTERR]
 	LES	DI,[EXTERRPT]
 	MOV	BX,WORD PTR [EXTERR_ACTION]	; BL = Action, BH = Class
 	MOV	CH,[EXTERR_LOCUS]
-	invoke	get_user_stack
+	CallResident get_user_stack
 ASSUME	DS:NOTHING
 	MOV	[SI.user_DI],DI
 	MOV	[SI.user_ES],ES
 	MOV	[SI.user_BX],BX
 	MOV	[SI.user_CX],CX
-	transfer SYS_RET_OK
-EndProc $GetExtendedError
+	CallResident SYS_RET_OK
+        RET
+EndProc ReadExtendedError
 
 BREAK <$Get_Global_CdPg  - Return Global Code Page>
 ;
@@ -815,7 +900,7 @@ BREAK <$Get_Global_CdPg  - Return Global Code Page>
 	ASSUME	DS:NOTHING,ES:NOTHING
 	PUSH	SI
 	MOV	SI,OFFSET DOSGROUP:COUNTRY_CDPG
-	MOV	AX,CS:[SI.ccDosCodePage]
+	MOV	AX,SS:[SI.ccDosCodePage]
 	POP	SI
 	return
 EndProc Get_Global_CdPg
@@ -825,7 +910,7 @@ BREAK	<ECS_call - Extended Code System support function>
 
 ASSUME	DS:NOTHING, ES:NOTHING
 
-	procedure   $ECS_call,NEAR
+	procedure   ExtendedCharacterService,NEAR
 
 ; Inputs:
 ;	AL = 0	get lead byte table
@@ -852,7 +937,10 @@ ASSUME	DS:NOTHING, ES:NOTHING
 	je	set_interim							;AN000;
 	cmp	al, GetInterimMode	; AL = 2 (get interim flag)?		;AN000;
 	je	get_interim							;AN000;
-	error	error_invalid_function						;AN000;
+
+        MOV AL,error_Invalid_Function
+        CallResident SYS_RET_ERR
+        RET
 										;AN000;
 get_lbt:				; get lead byte table			;AN000;
 	push	ax								;AN000;
@@ -863,14 +951,15 @@ get_lbt:				; get lead byte table			;AN000;
 	MOV	AX,[BX+1]		; set EV address to DS:SI		;AN000;
 	MOV	BX,[BX+3]							;AN000;
 	ADD	AX,2			; Skip Lemgth				;AN000;
-	invoke	get_user_stack							;AN000;
+	CallResident get_user_stack							;AN000;
  assume ds:nothing								;AN000;
 	MOV	[SI.user_SI], AX						;AN000;
 	MOV	[SI.user_DS], BX						;AN000;
 	pop	ds								;AN000;
 	pop	bx								;AN000;
 	pop	ax								;AN000;
-	transfer SYS_RET_OK							;AN000;
+	CallResident SYS_RET_OK
+        RET							;AN000;
 
 set_interim:				; Set interim console flag		;AN000;
 	push	dx								;AN000;
@@ -881,32 +970,57 @@ set_interim:				; Set interim console flag		;AN000;
 	mov	byte ptr ds:[PDB_InterCon], dl	; update value in pdb		;AN000;
 	pop	ds								;AN000;
 	pop	dx								;AN000;
-	transfer SYS_RET_OK							;AN000;
+	CallResident SYS_RET_OK
+        RET							;AN000;
 
 get_interim:									;AN000;
 	push	dx								;AN000;
 	push	ds								;AN000;
 	mov	dl,[InterCon]							;AN000;
-	invoke	get_user_stack		; get interim console flag		;AN000;
+	CallResident get_user_stack		; get interim console flag		;AN000;
  assume ds:nothing								;AN000;
 	mov	[SI.user_DX],DX 						;AN000;
 	pop	ds								;AN000;
 	pop	dx								;AN000;
-	transfer SYS_RET_OK							;AN000;
+	CallResident SYS_RET_OK
+        RET							;AN000;
  ELSE										;AN000;
 	or	al, al			; AL = 0 (get table)?  ;AN000;
 	jnz	okok					       ;AN000;
 get_lbt:						       ;AN000;
-	invoke	get_user_stack				       ;AN000;
+	CallResident get_user_stack				       ;AN000;
  assume ds:nothing					       ;AN000;
 	MOV	[SI.user_SI], Offset Dosgroup:DBCS_TAB+2       ;AN000;
-	MOV	[SI.user_DS], CS			       ;AN000;
+	MOV	[SI.user_DS], SS			       ;AN000;
 okok:							       ;AN000;
-	transfer SYS_RET_OK		;		       ;AN000;
+	CallResident SYS_RET_OK
+        RET		;		       ;AN000;
 
  ENDIF							       ;AN000;
 
-$ECS_call endp						       ;AN000;
+ExtendedCharacterService endp						       ;AN000;
 
-CODE	ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC GetsetEntries
+GetsetEntries LABEL WORD
+        DW OFFSET DOSGROUP:$GET_VERSION_VECTOR, OFFSET DOSGROUP:GetVersion
+        DW OFFSET DOSGROUP:$GET_VERIFY_ON_WRITE_VECTOR, OFFSET DOSGROUP:GetVerify
+        DW OFFSET DOSGROUP:$SET_VERIFY_ON_WRITE_VECTOR, OFFSET DOSGROUP:SetVerify
+        DW OFFSET DOSGROUP:$INTERNATIONAL_VECTOR, OFFSET DOSGROUP:CountryInfo
+        DW OFFSET DOSGROUP:$GetExtCntry_VECTOR, OFFSET DOSGROUP:ExtendedCountryInfo
+        DW OFFSET DOSGROUP:$GetSetCdPg_VECTOR, OFFSET DOSGROUP:GlobalCodePage
+        DW OFFSET DOSGROUP:$GET_DRIVE_FREESPACE_VECTOR, OFFSET DOSGROUP:DriveFreeSpace
+        DW OFFSET DOSGROUP:$GET_DMA_VECTOR, OFFSET DOSGROUP:GetTransferAddress
+        DW OFFSET DOSGROUP:$SET_DMA_VECTOR, OFFSET DOSGROUP:SetTransferAddress
+        DW OFFSET DOSGROUP:$GET_DEFAULT_DRIVE_VECTOR, OFFSET DOSGROUP:DefaultDrive
+        DW OFFSET DOSGROUP:$SET_DEFAULT_DRIVE_VECTOR, OFFSET DOSGROUP:SelectDefaultDrive
+        DW OFFSET DOSGROUP:$GET_INTERRUPT_VECTOR_VECTOR, OFFSET DOSGROUP:GetVector
+        DW OFFSET DOSGROUP:$SET_INTERRUPT_VECTOR_VECTOR, OFFSET DOSGROUP:SetVector
+        DW OFFSET DOSGROUP:RECSET_VECTOR, OFFSET DOSGROUP:MapVector
+        DW OFFSET DOSGROUP:$CHAR_OPER_VECTOR, OFFSET DOSGROUP:CharacterOptions
+        DW OFFSET DOSGROUP:$GetExtendedError_VECTOR, OFFSET DOSGROUP:ReadExtendedError
+        DW OFFSET DOSGROUP:$ECS_call_VECTOR, OFFSET DOSGROUP:ExtendedCharacterService
+        DW 0
+DOSEND ENDS
     END

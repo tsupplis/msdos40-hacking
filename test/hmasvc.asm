@@ -29,6 +29,71 @@ parent:
     mov ah,4ah
     int 21h
     jc fail
+    ; GETSET must preserve a caller-owned DTA and return the original vector.
+    mov dx,pathname
+    mov ah,1ah
+    int 21h
+    mov ah,2fh
+    int 21h
+    cmp bx,pathname
+    jne fail
+    mov ax,es
+    push ds
+    pop bx
+    cmp ax,bx
+    jne fail
+    mov dx,80h
+    mov ah,1ah
+    int 21h
+    mov ax,3560h
+    int 21h
+    push es
+    push bx
+    mov dx,vector_handler
+    mov ax,2560h
+    int 21h
+    mov ax,3560h
+    int 21h
+    cmp bx,vector_handler
+    jne vector_wrong
+    mov ax,es
+    mov bx,cs
+    cmp ax,bx
+vector_wrong:
+    pop dx
+    pop ax
+    pushf
+    push ds
+    mov ds,ax
+    mov ax,2560h
+    int 21h
+    pop ds
+    popf
+    jne fail
+    mov ah,54h
+    int 21h
+    push ax
+    xor al,1
+    xor dx,dx
+    mov ah,2eh
+    int 21h
+    mov ah,54h
+    int 21h
+    pop bx
+    xor al,1
+    cmp al,bl
+    pushf
+    push bx
+    mov al,bl
+    mov ah,2eh
+    int 21h
+    mov ah,54h
+    int 21h
+    pop bx
+    popf
+    jne fail
+    cmp al,bl
+    jne fail
     mov bx,8
     mov ah,48h
     int 21h
@@ -249,6 +314,8 @@ legacy_child:
     int 21h
     mov ax,4c00h
     int 21h
+vector_handler:
+    iret
 fail:
     mov ax,4c01h
     int 21h
