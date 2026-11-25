@@ -44,6 +44,23 @@ Installed = TRUE
 SUBTTL GET_FILE_INFO -- Get File Information
 PAGE
 
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry GET_FILE_INFO,135
+        DosCodeEntry SET_FILE_ATTRIBUTE,136
+FileInfoNetwork PROC NEAR
+        INT 2Fh
+        RET
+FileInfoNetwork ENDP
+SetAttributeNetwork PROC NEAR
+        PUSH AX                 ; redirector expects attributes on the stack
+        MOV AX,(multNET SHL 8) OR 14
+        INT 2Fh
+        POP BX
+        RET
+SetAttributeNetwork ENDP
+CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
 ; Inputs:
 ;	[WFP_START] Points to WFP string ("d:/" must be first 3 chars, NUL
 ;		terminated)
@@ -71,11 +88,11 @@ PAGE
 ;			Bad path in current directory part of path
 ; DS preserved, others destroyed
 
-	procedure   GET_FILE_INFO,NEAR
-	DOSAssume   CS,<DS>,"Get_File_Info"
+	procedure   GetFileInformation,NEAR
+	DOSAssume   SS,<DS>,"GetFileInformation"
 	ASSUME	ES:NOTHING
 
-	Invoke	TestNet
+	CallResident TestNet
 	JNC	Local_Info
 ;	invoke	OWN_SHARE2		       ;IFS. IFS owns share ?		;AN000;
 ;	JZ	ifsshare		       ;IFS. yes			;AN000;
@@ -96,7 +113,7 @@ IF NOT Installed
 	transfer NET_GET_FILE_INFO
 ELSE
 	MOV	AX,(multNET SHL 8) OR 15
-	INT	2FH
+	CallResident FileInfoNetwork
 	return
 ENDIF
 nofiles:
@@ -105,14 +122,14 @@ nofiles:
 ;	ret				       ;IFS. return
 
 LOCAL_INFO:
-	EnterCrit   critDisk
+	CallResident ECritDisk
 	MOV	[NoSetDir],1		; if we find a dir, don't change to it
 	invoke	Get_FAST_PATH
 info_check:
 	JNC	info_check_dev
 
 NO_PATH:
-	DOSAssume   CS,<DS>,"FINFO/No_Path"
+	DOSAssume   SS,<DS>,"FINFO/No_Path"
 	ASSUME	ES:NOTHING
 
 	JNZ	bad_path
@@ -123,7 +140,7 @@ info_no_file:
 BadRet:
 	STC
 justRet:
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 	return
 
 bad_path:
@@ -151,9 +168,9 @@ NO_SIZE:
 	POP	DS
 	CLC
 	jmp	JustRet
-EndProc GET_FILE_INFO
+EndProc GetFileInformation
 
-Break	<SET_FILE_ATTRIBUTE -- Set File Attribute>
+Break	<SetFileAttribute -- Set File Attribute>
 
 ; Inputs:
 ;	[WFP_START] Points to WFP string ("d:/" must be first 3 chars, NUL
@@ -187,8 +204,8 @@ Break	<SET_FILE_ATTRIBUTE -- Set File Attribute>
 ;			(INT 24H generated)
 ; DS preserved, others destroyed
 
-	procedure   SET_FILE_ATTRIBUTE,NEAR
-	DOSAssume   CS,<DS>,"Set_File_Attribute"
+	procedure   SetFileAttribute,NEAR
+	DOSAssume   SS,<DS>,"SetFileAttribute"
 	ASSUME	ES:NOTHING
 
 	TEST	AX,NOT attr_changeable
@@ -202,24 +219,21 @@ BAD_ACC:
 	return
 
 set_look:
-	Invoke	TestNet
+	CallResident TestNet
 	JNC	Local_Set
 
 IF NOT Installed
 	transfer NET_SEQ_SET_FILE_ATTRIBUTE
 ELSE
-	PUSH	AX
-	MOV	AX,(multNET SHL 8) OR 14
-	INT	2FH
-	POP	BX			; clean stack
+	CallResident SetAttributeNetwork
 	return
 ENDIF
 
 LOCAL_SET:
-	EnterCrit   critDisk
+	CallResident ECritDisk
 	PUSH	AX			; Save new attributes
 	MOV	[NoSetDir],1		; if we find a dir, don't change to it
-	invoke	GetPath 		; get path through fastopen if there	 ;AC000;
+	CallResident GetPath 		; get path through fastopen if there	 ;AC000;
 	JNC	set_check_device
 	POP	BX			; Clean stack (don't zap AX)
 	JMP	NO_PATH
@@ -228,12 +242,12 @@ set_check_device:
 	OR	AH,AH
 	JNS	set_check_share
 	POP	AX
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 	JMP	BAD_ACC 		; device
 
 set_check_share:
 	POP	AX			; Get new attributes
-	invoke	REN_DEL_Check
+	CallResident REN_DEL_Check
 	JNC	set_do
 	MOV	AX,error_sharing_violation
 	jmp	short	ok_bye
@@ -245,7 +259,7 @@ set_do:
 
 	TEST	ES:[DI.buf_flags],buf_dirty  ;LB. if already dirty		;AN000;
 	JNZ	yesdirty		  ;LB.	  don't increment dirty count   ;AN000;
-	invoke	INC_DIRTY_COUNT 	  ;LB.					;AN000;
+	invoke  IncrementDirtyCount 	  ;LB.					;AN000;
 	OR	ES:[DI.buf_flags],buf_dirty
 yesdirty:
 	MOV	AL,[THISDRV]
@@ -255,18 +269,18 @@ yesdirty:
 	MOV	AH,0		  ; dir entry update
 	MOV	DL,AL		  ; drive number A=0,B=1,,
 	MOV	DI,BX		  ; ES:DI -> dir entry
-	invoke	FastOpen_Update
+	CallResident FastOpen_Update
 	POP	DI
 	POP	DX
 ;;;; 9/11/86 F.C update fastopen cache
-	invoke	FlushBuf
+	invoke  FlushBuffers
 	JNC	OK_BYE
 	MOV	AX,error_file_not_found
 OK_BYE:
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 	return
 
-EndProc SET_FILE_ATTRIBUTE
+EndProc SetFileAttribute
 
 
 
@@ -274,7 +288,7 @@ EndProc SET_FILE_ATTRIBUTE
 	ASSUME	DS:NOTHING,ES:NOTHING
 
 	OR	[FastOpenFlg],FastOpen_Set ;FO. trigger fastopen		;AN000;
-	invoke	GetPath
+	CallResident GetPath
 	PUSHF			       ;FO.					;AN000;
 	AND    [FastOpenFlg],Fast_yes  ;FO. clear all fastopen flags		;AN000;
 	POPF			       ;FO.					;AN000;
@@ -282,5 +296,12 @@ EndProc SET_FILE_ATTRIBUTE
 
 EndProc GET_FAST_PATH
 
-CODE	ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC FinfoEntries
+FinfoEntries LABEL WORD
+        DW OFFSET DOSGROUP:GET_FILE_INFO_VECTOR, OFFSET DOSGROUP:GetFileInformation
+        DW OFFSET DOSGROUP:SET_FILE_ATTRIBUTE_VECTOR, OFFSET DOSGROUP:SetFileAttribute
+        DW 0
+DOSEND ENDS
     END

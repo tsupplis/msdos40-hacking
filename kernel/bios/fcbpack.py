@@ -28,7 +28,7 @@ legacy_length = code_start - start
 native = image[start:end]
 upper = bytearray(native)
 base = 0x100
-entries = [15, 16, 19, 20, 21, 22, 23, 33, 34, 35, 36, 39, 40, 78, 79]
+entries = [15, 16, 19, 20, 21, 22, 23, 33, 34, 35, 36, 39, 40]
 backs = {}
 segments = []
 low_relative = []
@@ -103,23 +103,11 @@ selectors = {symbols[n] for n in ("dos_open", "dos_create", "dos_read", "dos_wri
 for name, origin in [
     ("fcbio", start),
     ("fcbio2", symbols["getrr"]),
-    ("search", symbols["$find_first"]),
-    ("rename", symbols["hma_localrename"]),
-    ("create", symbols["hma_create"]),
-    ("open", symbols["hma_open"]),
     ("dircall", symbols["hma_dos_mkdir"]),
-    ("disk", symbols["hma_read"]),
-    ("disk2", symbols["setup"]),
-    ("disk3", symbols["diskwrite"]),
-    ("isearch", symbols["hma_localfirst"]),
     ("dir", symbols["hma_findentry"]),
     ("dir2", symbols["hma_getpath"]),
-    ("mknode", symbols["hma_builddir"]),
-    ("rom", symbols["fndclus"]),
     ("fcb", symbols["hma_makefcb"]),
-    ("file", symbols["hma_$open"]),
     ("macro2", symbols["hma_transfcb"]),
-    ("fat", symbols["hma_iseof"]),
 ]:
     for within, relative in object_fixups(dos / (name + ".obj")):
         address = origin + within
@@ -140,24 +128,19 @@ for name, origin in [
             and value in selectors
             and image[address - 1] in (0xBF, 0xB9)
         ):
-            if value in (symbols["dos_read"], symbols["dos_write"]):
-                body = "hma_read" if value == symbols["dos_read"] else "hma_write"
-                upper[off : off + 2] = word(base + symbols[body] - start)
-            else:
-                upper[off : off + 2] = word(base + bridge(value))
-vectors = ("read", "write", "open", "create", "getpath", "getpathnoset", "makefcb", "nametrans", "packname",
-           "findentry", "srch", "nextent", "metacompare", "getentry", "getent",
-           "setdirsrch", "startsrch", "matchattributes", "localfirst", "localnext", "rename_next",
-           "iseof", "unpack", "pack", "allocate", "figrec",
-           "newdir", "setdotent", "makenode", "localrename", "doopen", "dos_mkdir", "dos_chdir", "dos_rmdir")
-# 78 and 79 are DOS find-first/find-next entry points.
+            upper[off : off + 2] = word(base + bridge(value))
+# Only legacy entries need bindings here. DOSCODE modules supply their own.
+legacy_vectors = {
+    45: "getpath", 46: "getpathnoset", 47: "makefcb", 48: "nametrans",
+    50: "findentry", 51: "srch", 52: "nextent", 53: "metacompare", 54: "getentry",
+    55: "getent", 56: "setdirsrch", 57: "startsrch", 58: "matchattributes",
+    72: "dos_mkdir", 73: "dos_chdir", 74: "dos_rmdir",
+}
 extra_vectors = (
     "transfcb", "transpath", "transpathset", "transpathnoset", "skipback", "splice", "pathsepgotch",
-    "$open", "$open2", "$creat", "$chmod", "$unlink", "$rename", "$createnewfile", "$createtempfile",
-    "$extended_open",
 )
 slots = [(fn, name, "hma_" + name)
-         for fn, name in (*enumerate(vectors, 41), *enumerate(extra_vectors, 80))]
+         for fn, name in (*legacy_vectors.items(), *enumerate(extra_vectors, 80))]
 # Each module supplies its own zero-terminated list of (vector, body) pairs.
 module_pos = symbols["doscodemodules"]
 linked_slots = []

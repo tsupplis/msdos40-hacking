@@ -341,7 +341,7 @@ Procedure   DirFromSFT,NEAR
 
 	PUSH	[HIGH_SECTOR]			 ;F.C. >32mb
 	PUSH	DX
-	CallResident FATREAD_SFT		; ES:BP points to DPB, [THISDRV] set
+	invoke ReadFileFAT		; ES:BP points to DPB, [THISDRV] set
 					; [THISDPB] set
 	POP	DX
 	POP	[HIGH_SECTOR]			 ;F.C. >32mb

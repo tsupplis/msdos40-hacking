@@ -51,8 +51,8 @@ case "${1:-}" in
     suite=$(mktemp -d "$PWD/test/work/regression.XXXXXX")
     # Schedule the independent disk layouts first; reboots within one layout
     # share its disk and must observe the previous boot's writes.
-    set -- check_ems.active check_dir32.near check_dir32.high check_fat16.high check_fat16.near \
-      check_fat16.far check_ifs.low check_ifs.high $(list_cases)
+    set -- check_hma.high check_hma.near check_hma.far check_ems.active check_dir32.near check_dir32.high check_fat16.high check_fat16.near \
+      check_fat16.far check_ifs.low check_ifs.high check_edit.high check_edit.near check_edit.far $(list_cases)
     status=0
     printf '%s\n' "$@" | xargs -n 1 -P 10 "$PWD/test/run_tests" --regression-job "$suite" || status=1
     for job do

@@ -1,7 +1,6 @@
 ; IBM SBCS extension to function 0Ah. DI is the insertion point in INBUF,
 ; DH is the complete line length. DS:SI and BX still describe the caller's
 ; template. No history or additional line buffer is retained.
-EditActive db 0
         i_need  BCON,DWORD
         i_need  ConSwap,BYTE
 
@@ -10,10 +9,10 @@ EditConsole:
         push    si
         push    bx
         push    dx
-        mov     cs:EditActive,0
+        mov     ss:EditActive,0
         mov     bx,1
 EditHandle:
-        invoke  GET_IO_SFT
+        invoke GetConsoleSft
         jc      EditChecked
         mov     ax,[si.sf_flags]
         and     ax,sf_isnet OR devid_device OR devid_device_raw
@@ -27,7 +26,7 @@ EditHandle:
         jne     EditChecked
         dec     bx
         jns     EditHandle
-        mov     cs:EditActive,0ffh
+        mov     ss:EditActive,0ffh
 EditChecked:
         pop     dx
         pop     bx
@@ -36,7 +35,7 @@ EditChecked:
         ret
 
 EditKey:
-        invoke  $STD_CON_INPUT_NO_ECHO
+        invoke  ReadConsoleNoEcho
         cmp     al,4bh
         je      EditLeft
         cmp     al,4dh
@@ -89,7 +88,7 @@ EditUp:
 EditRecall:
         lodsb
         stosb
-        invoke  BUFOUT
+        invoke  PrintBufferCharacter
         inc     dh
         inc     bh
         loop    EditRecall
@@ -104,10 +103,10 @@ EditLimit:
 EditStep:
         mov     al,es:[di]
         inc     di
-        invoke  BUFOUT
+        invoke  PrintBufferCharacter
         ret
 EditFinish:
-        cmp     cs:EditActive,0
+        cmp     ss:EditActive,0
         je      EditAtEnd
         call    EditLimit
 EditToEnd:
@@ -170,7 +169,7 @@ EditRetreat:
         pop     cx
         sub     cx,ax
         jcxz    RetreatDone
-        invoke  OEMBackCells
+        CallResident OEMBackCells
 RetreatDone:
         pop     cx
         ret
@@ -215,7 +214,7 @@ EditPut:
         jae     EditFull
         stosb
         inc     dh
-        invoke  BUFOUT
+        invoke  PrintBufferCharacter
         clc
         ret
 EditFull:
@@ -277,12 +276,12 @@ EditPaint:
         push    word ptr [CARPOS]
 PaintErase:
         mov     al,' '
-        invoke  OUTT
+        invoke  OutputChar
         loop    PaintErase
         pop     ax
         mov     [CARPOS],al
         pop     cx
-        invoke  OEMBackCells
+        CallResident OEMBackCells
 PaintSeek:
         pop     bp
         call    EditRetreat

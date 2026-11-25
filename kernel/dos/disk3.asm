@@ -76,9 +76,10 @@ ENDIF
 
 	
 
-CODE	ENDS
+CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
 
-LAST	SEGMENT PARA PUBLIC 'LAST'
 Break	<DISKWRITE -- PERFORM USER DISK WRITE>
 
 ; Inputs:
@@ -96,7 +97,7 @@ Break	<DISKWRITE -- PERFORM USER DISK WRITE>
 ;	AX has error code
 
 	procedure   DISKWRITE,NEAR
-	DOSAssume   CS,<DS>,"DiskWrite"
+	DOSAssume   SS,<DS>,"DiskWrite"
 	ASSUME	ES:NOTHING
 
 	Assert	ISSFT,<ES,DI>,"DiskWrite"
@@ -213,13 +214,13 @@ HAVSTART:
 ;;; 11/5/86 FastSeek
 	MOV	[FSeek_logclus],DX   ; delete EOF (FFFFH)
 	INC	[FSeek_logclus]
-	invoke	FastSeek_Truncate    ;
+	CallResident FastSeek_Truncate    ;
 ;;; 11/5/86 FastSeek
-	invoke	HMA_ALLOCATE
+	invoke	AllocateClusters
 	JNC	DOWRTJ
 
 	entry	WRTERR
-	DOSAssume   CS,<DS>,"DiskWrite/WrtErr"
+	DOSAssume   SS,<DS>,"DiskWrite/WrtErr"
 	ASSUME	ES:NOTHING
 
 	MOV	AH,0FH				;MS. write/data/fail/abort	;AN000;
@@ -265,10 +266,10 @@ NOGROW:
 	JZ	NULL_FILE	      ;FS. yes					;AN000;
 	MOV	[FSeek_logclus],DX    ;FS. delete EOF (FFFFH)			;AN000;
 	INC	[FSeek_logclus]       ;FS.					;AN000;
-	invoke	FastSeek_Truncate     ;FS.					;AN000;
+	CallResident FastSeek_Truncate     ;FS.					;AN000;
 NULL_FILE:
 ;;; 11/5/86 FastSeek
-	invoke	HMA_ALLOCATE
+	invoke	AllocateClusters
 	POP	AX
 	JC	WRTERR
 	MOV	CX,AX
@@ -321,7 +322,7 @@ wokok:
 	PUSH	CX			  ;LB.					;AN000;
 	PUSH	[HIGH_SECTOR]		  ;LB.					;AN000;
 SCANNEXT:				  ;LB.					;AN000;
-	invoke	GETCURHEAD		  ;LB.					;AN000;
+	invoke GetBufferHead		  ;LB.					;AN000;
 ASSUME	DS:NOTHING
 NEXTBUFF:			; Search for buffers
 	CMP	[SC_CACHE_COUNT],0	    ;LB. SC support ?			;AN000;
@@ -329,7 +330,7 @@ NEXTBUFF:			; Search for buffers
 	PUSH	AX			    ;LB. save reg			;AN000;
 	PUSH	CX			    ;LB. save reg			;AN000;
 	PUSH	DX			    ;LB. save reg			;AN000;
-	invoke	INVALIDATE_SC		    ;LB. invalidate SC			;AN000;
+	CallResident INVALIDATE_SC		    ;LB. invalidate SC			;AN000;
 	POP	DX			    ;LB. save reg			;AN000;
 	POP	CX			    ;LB. save reg			;AN000;
 	POP	AX			    ;LB. save reg			;AN000;
@@ -341,10 +342,10 @@ nosc:
 inrange2:
 	TEST	[DI.buf_flags],buf_dirty    ;LB. if dirty			;AN000;
 	JZ	not_dirty		    ;LB.				;AN000;
-	invoke	DEC_DIRTY_COUNT 	    ;LB. then decrement dirty count	;AN000;
+	invoke DecrementDirtyCount 	    ;LB. then decrement dirty count	;AN000;
 not_dirty:
 	MOV	WORD PTR [DI.buf_ID],(buf_visit SHL 8) OR 0FFH	  ; Free the buffer, it is being over written
-	invoke	SCANPLACE
+	invoke ScanPlaceBuffer
 DONEXTBUFF:
 	CMP	DI,[FIRST_BUFF_ADDR]	  ;LB. end of chain			;AN000;
 	JNZ	NEXTBUFF		  ;LB. no				;AN000;
@@ -363,8 +364,8 @@ IF	BUFFERFLAG
 	pushf
 	cmp	[BUF_EMS_MODE], -1
 	je	safe_write	
-	call	save_map
-	call	restore_user_map
+	invoke SaveBufferMap
+	CallResident restore_user_map
 safe_write:
 	popf
 ENDIF	
@@ -375,8 +376,8 @@ IF	BUFFERFLAG
 	pushf
 	cmp	[BUF_EMS_MODE], -1
 	je	safe_map	
-	call	save_user_map
-	call	restore_map
+	CallResident save_user_map
+	invoke RestoreBufferMap
 safe_map:
 	popf
 ENDIF
@@ -415,7 +416,7 @@ Update_size:
 ; Make sure that all other SFT's see this growth also.
 ;
 	MOV	AX,1
-	invoke	Share_Update_SFT
+	CallResident Share_Update_SFT
 SAMSIZ:
 	transfer SETCLUS		  ; ES:DI already points to SFT
 
@@ -443,10 +444,10 @@ SET_ACC_ERRWJ2:
 	JC	SET_ACC_ERRW
 ;;; 11/5/86 FastSeek
 	MOV	[FSeek_logclus],DX    ; truncate clusters starting from DX
-	invoke	FastSeek_Truncate
+	CallResident FastSeek_Truncate
 ;;; 11/5/86 FastSeek
 	JCXZ	RELFILE
-	invoke	HMA_ALLOCATE
+	invoke	AllocateClusters
 	JC	WRTERRJ 	     ;;;;;;;;; disk full
 UPDATE:
 	LES	DI,[THISSFT]
@@ -459,7 +460,7 @@ UPDATE:
 ; Make sure that all other SFT's see this growth also.
 ;
 	MOV	AX,2
-	invoke	Share_Update_SFT
+	CallResident Share_Update_SFT
 	XOR	CX,CX
 	transfer ADDREC
 
@@ -483,7 +484,7 @@ KILLFIL:
 	XCHG	BX,ES:[DI.sf_firclus]
 	POP	ES
 ;; 11/5/86 FastSeek
-	invoke	Delete_FSeek   ; delete fastseek entry
+	CallResident Delete_FSeek   ; delete fastseek entry
 
 	OR	BX,BX
 	JZ	UPDATEJ
@@ -497,7 +498,7 @@ KILLFIL:
 	MOV	DL,ES:[BP.dpb_drive]	 ; get current drive
 	MOV	CX,BX			 ; first cluster #
 	MOV	AH,2			 ; delete cache entry by drive:firclus
-	invoke	FastOpen_Update 	 ; call fastopen
+	CallResident FastOpen_Update 	 ; call fastopen
 	POP	DX
 	POP	CX
 	POP	AX
@@ -505,14 +506,12 @@ KILLFIL:
 	POP	ES
 ;; 10/23/86 FastOpen update
 
-	invoke	RELEASE
+	invoke ReleaseClusters
 	JC	SET_ACC_ERRWJJ
 UpDateJ:
 	JMP	UPDATE
 EndProc DISKWRITE
-LAST	ENDS
 
-CODE	SEGMENT BYTE PUBLIC  'CODE'
 
 
 
@@ -614,7 +613,7 @@ chardev2:
 doi24:
 	MOV	BP,DS				  ;MS. bp:si -> device header	;AN000;
 	MOV	DI,error_I24_gen_failure	;MS. general error		;AN000;
-	invoke	NET_I24_ENTRY			;MS. issue I24			;AN000;
+	CallResident NET_I24_ENTRY			;MS. issue I24			;AN000;
 	STC					;MS. must be fail		;AN000;
 	POP	DS				;MS. restore DS 		;AN000;
 	MOV	AX,[EXTERR]			;MS. set error			;AN000;
@@ -654,7 +653,11 @@ secfound:
 	return
 
 EndProc BUFF_RANGE_CHECK
-
-CODE	ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC Disk3Entries
+Disk3Entries LABEL WORD
+        ; DISK3 is entered exclusively by near calls within movable code.
+        DW 0
+DOSEND ENDS
     END
-

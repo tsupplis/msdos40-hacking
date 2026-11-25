@@ -71,6 +71,11 @@ include EA.inc				     ;AN000;
 										;AN000;
 										;AN000;
 										;AN000;
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry GetSet_XA,143
+CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
 BREAK <GetSet_EA get or set extended attributes by handle>			;AN000;
 										;AN000;
 ;      Input: [XA_type] = function code, (e.g., get,set)			;AN000;
@@ -91,8 +96,8 @@ BREAK <GetSet_EA get or set extended attributes by handle>			;AN000;
 ;										;AN000;
 										;AN000;
 										;AN000;
-procedure   GetSet_XA,near					   ;AN000;
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP	   ;AN000;
+procedure   FileExtendedAttributes,near					   ;AN000;
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP	   ;AN000;
 
 
 	LES    DI,DWORD PTR [SAVE_DI]  ;AN000;;FT. ES:DI -> query list
@@ -151,7 +156,7 @@ geteaname:
 	MOV    CX,2		       ;AN000;;FT. FAKE FAKE ......................
 ;;	MOV    CX,[MAX_EANAME_SIZE]    ;AN000;;FT. get name size
 set_user_cx:			       ;AN000;
-	invoke get_user_stack	       ;AN000;;FT. get user stack
+	CallResident get_user_stack	       ;AN000;;FT. get user stack
 	MOV    [SI.user_CX],CX	       ;AN000;;FT.
 	JMP    OKexit		       ;AN000;;FT. exit
 
@@ -228,7 +233,7 @@ setea:				       ;AN000;
 OKexit: 					 ;AN000;
 	return					 ;AN000;
 
-EndProc GetSet_XA				 ;AN000;
+EndProc FileExtendedAttributes				 ;AN000;
 
 
 ; Input: [SAVE_ES]:[SAVE_DI] points to buffer
@@ -675,5 +680,11 @@ EndProc GetSet_XA				 ;AN000;
 ;
 ;EndProc Get_max_EA_size		      ;FT. exit 			 ;AN000;				   ;AN000;
 										;AN000;
-CODE	ENDS									;AN000;
-END										;AN000;
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC ExtattrEntries
+ExtattrEntries LABEL WORD
+        DW OFFSET DOSGROUP:GetSet_XA_VECTOR, OFFSET DOSGROUP:FileExtendedAttributes
+        DW 0
+DOSEND ENDS
+    END

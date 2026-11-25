@@ -336,7 +336,7 @@ TABLE	ENDS
 ;   key input from a device and dispatch to the proper
 ;   routines leaving all registers UNTOUCHED.
 ;
-; Inputs:   CS, SS are DOSGROUP
+; Inputs:   SS addresses DOSGROUP. The editor and its handlers share DOSCODE.
 ; Outputs:  None. This function is expected to JMP to one of
 ;	    the following labels:
 ;
@@ -356,13 +356,16 @@ TABLE	ENDS
 ; Registers that are allowed to be modified by this function are:
 ;	    AX, CX, BP
 
+CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE
 Procedure   OEMFunctionKey,NEAR
 	ASSUME	DS:NOTHING,ES:NOTHING,SS:DOSGROUP
  IF  DBCS				;AN000;
 extrn	intCNE0:near			;AN000; 2/17/KK
 	CALL	intCNE0 		;AN000; 2/17/KK
  ELSE					;AN000;
-	invoke	$std_con_input_no_echo	; Get the second byte of the sequence
+	invoke ReadConsoleNoEcho	; Get the second byte of the sequence
  ENDIF					;AN000;
         entry   OEMKeyCode
 	IF NOT Rainbow
@@ -373,7 +376,18 @@ extrn	intCNE0:near			;AN000; 2/17/KK
 	POP	DI			; restore DI
 	SHL	CX,1			; convert byte offset to word
 	MOV	BP,CX			; move to indexable register
-	JMP	[BP+OFFSET DOSGROUP:ESCFUNC]	; Go to the right routine
+	MOV     BP,[BP+OFFSET DOSGROUP:ESCFUNC]
+        ; Translate the linked handler offset to its offset in this copy.
+        PUSHF
+        PUSH    AX
+        SUB     BP,OFFSET DOSGROUP:KeyDispatchBase
+        CALL    KeyDispatchBase
+KeyDispatchBase:
+        POP     AX
+        ADD     BP,AX
+        POP     AX
+        POPF
+        JMP     BP	; Go to the right routine
 	ENDIF
 	IF Rainbow
 
@@ -390,13 +404,13 @@ ENDM
 GoGetCh:
 	transfer    GetCh		; no, ignore sequence
 EatParm:
-	invoke	$std_con_input_no_echo	; get argument
+	invoke ReadConsoleNoEcho	; get argument
 	CMP	AL,'A'                  ; is it alphabetic arg?
 	JAE	EatAlpha		; yes, go snarf one up
 	XOR	BP,BP			; init digit counter
 	JMP	InDigit 		; jump into internal eat digit routine
 EatNum:
-	invoke	$std_con_input_no_echo	; get next digit
+	invoke ReadConsoleNoEcho	; get next digit
 InDigit:
 	CMP	AL,'9'                  ; still a digit?
 	JA	CheckNumEnd		; no, go check for end char
@@ -432,11 +446,14 @@ EatAlpha:
 	transferIf  'D',BackSp          ; LEFT
 	JMP	GoGetCh
 EatPQRS:
-	invoke	$std_con_input_no_echo	; eat char after O
+	invoke ReadConsoleNoEcho	; eat char after O
 	JMP	GoGetCh
 	ENDIF
 
 EndProc OEMFunctionKey
+DOSCODE ENDS
+CODE SEGMENT BYTE PUBLIC 'CODE'
+        ASSUME CS:DOSGROUP
 
 include editsw.inc
 IF LINEEDIT

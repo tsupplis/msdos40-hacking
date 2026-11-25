@@ -97,6 +97,12 @@ RunIO:  CALL    CheckMultiplex
         CALL    WriteFile
         CMP     AX,CX
         Check   JE
+        MOV     AX,5702h                ; local EA size query
+        XOR     CX,CX
+        INT     21h
+        Check   JNC
+        CMP     CX,2
+        Check   JE
         ; Committing a dirty file must keep the shared SFT usable.
         MOV     AH,45h                  ; duplicate the open handle
         INT     21h
@@ -259,6 +265,23 @@ Full:   CALL    WriteFile
         Check   JE
         MOV     AH,10h
         CALL    FcbCall
+        MOV     DX,OFFSET FindFCB
+        MOV     AH,11h                  ; FCB first returns the padded name at DTA+1
+        INT     21h
+        OR      AL,AL
+        Check   JZ
+        PUSH    DS
+        POP     ES
+        MOV     SI,OFFSET Cache+1
+        MOV     DI,OFFSET FcbName
+        MOV     CX,11
+        REPE    CMPSB
+        Check   JE
+        MOV     DX,OFFSET FindFCB
+        MOV     AH,12h                  ; exact name has no second match
+        INT     21h
+        CMP     AL,0FFh
+        Check   JE
         JMP     SHORT Passed
 CheckShare:
         MOV     AX,1000h                ; share installation check
@@ -375,6 +398,22 @@ CallbackA20 DB  0
 
 ; These INT 2Fh interfaces also run on an application's stack.
 CheckMultiplex:
+        ; INT 2Fh/1205h takes the character in the stacked AX. Keep the
+        ; application stack and capture its output through the redirected handle.
+        PUSH    DS
+        MOV     AX,1203h
+        PUSH    AX
+        INT     2Fh
+        POP     BX
+        MOV     AX,'!'
+        PUSH    AX
+        MOV     AX,1205h
+        INT     2Fh
+        POP     BX
+        POP     DS
+        MOV     DX,OFFSET OutputReturned
+        MOV     AH,9
+        INT     21h
         PUSH    DS
         POP     ES
         MOV     DI,OFFSET MockSft
@@ -429,10 +468,22 @@ CheckNetworkClose:
         PUSH    WORD PTR DS:[CurrentSFT+2]
         MOV     WORD PTR DS:[CurrentSFT],OFFSET RemoteSFT
         MOV     WORD PTR DS:[CurrentSFT+2],CS
+        MOV     WORD PTR CS:[RemoteSFT+5],80h ; local character device for open
+        MOV     WORD PTR CS:[RemoteSFT+9],CS
+        MOV     AX,120Ch                ; set SFT mode on the application stack
+        PUSH    AX
+        INT     2Fh
+        POP     BX
+        MOV     WORD PTR CS:[RemoteSFT+5],8000h ; remote SFT for close
+        JC      BadOpenMode
         MOV     AX,1201h
         PUSH    AX
         INT     2Fh
         POP     BX
+        JMP     SHORT RestoreSFT
+BadOpenMode:
+        XOR     AX,AX
+RestoreSFT:
         PUSHF
         POP     CX
         POP     WORD PTR DS:[CurrentSFT+2]
@@ -468,6 +519,10 @@ ReturnClose:
 OldMultiplex DD 0
 RemoteSFT DB 5 DUP (0)                 ; sf_flags at offset 5
           DW 8000h
+          DW OFFSET MockDevice,0        ; sf_devptr
+MockDevice DD -1
+          DW 0                          ; no device open/close requests
+OutputReturned DB ' OUTT PASS',13,10,'$'
 MockSft DW 1
 MockBuffer DB 6 DUP (0)
 
@@ -728,6 +783,9 @@ DiskName DB     'FULL    TMP'
 NameB   DB      'B:FULL.TMP',0
 NullDev DB      'NUL',0
 Payload DB      'ABCD'
+FindFCB DB      0
+        DB      'HMATEST TMP',25 DUP (0)
+FcbName DB      'HMATEST TMP'
 Fcb     DB      0,'HMATEST TMP',25 DUP (0)
 Cache   DB      4096 DUP (0)
 CODE    ENDS

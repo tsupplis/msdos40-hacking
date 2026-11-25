@@ -526,11 +526,11 @@ normread:
 endif
 	OR	SI,SI
 	JZ	NORMSEC
-	CallResident FATSECRD
+	invoke FATSECRD
 	MOV	AH,buf_isFAT		; Set buf_flags
 	JMP	SHORT GOTTHESEC 	; Buffer is marked free if read barfs
 NORMSEC:
-	CallResident DREAD			; Buffer is marked free if read barfs
+	invoke DREAD			; Buffer is marked free if read barfs
 	MOV	AH,0			; Set buf_flags to no type, DO NOT XOR!
 GOTTHESEC:				; Carry set by either FATSECRD or DREAD
 if	bufferflag
@@ -770,7 +770,7 @@ if	bufferflag
 skipwritetrans:
 endif
 
-	CallResident DWRITE		; Write out the dirty buffer
+	invoke DWRITE		; Write out the dirty buffer
 
 if	bufferflag
 	pushf			; save carry flag from DWRITE

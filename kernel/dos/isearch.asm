@@ -50,6 +50,12 @@ Installed = TRUE
 	i_need	FastopenFlg,BYTE
 	I_need	DOS34_FLAG,WORD
 
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry DOS_SEARCH_FIRST,144
+        DosCodeEntry DOS_SEARCH_NEXT,145
+CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
 ; Inputs:
 ;	[WFP_START] Points to WFP string ("d:/" must be first 3 chars, NUL
 ;		terminated)
@@ -89,8 +95,8 @@ Installed = TRUE
 ;			Bad path in current directory part of path
 ; DS preserved, others destroyed
 
-	procedure   DOS_SEARCH_FIRST,NEAR
-	DOSAssume   CS,<DS>,"DOS_Search_First"
+	procedure   SearchFirst,NEAR
+	DOSAssume   SS,<DS>,"SearchFirst"
 	ASSUME	ES:NOTHING
 
 	LES	DI,[THISCDS]
@@ -100,7 +106,7 @@ IF NOT Installed
 	transfer NET_SEQ_SEARCH_FIRST
 ELSE
 	MOV	AX,(multNET SHL 8) OR 25
-	INT	2FH
+	CallResident DosMultiplex
 	return
 ENDIF
 
@@ -111,17 +117,17 @@ IF NOT Installed
 	transfer NET_SEARCH_FIRST
 ELSE
 	MOV	AX,(multNET SHL 8) OR 27
-	INT	2FH
+	CallResident DosMultiplex
 	return
 ENDIF
 
 LOCAL_SEARCH_FIRST:
-        transfer LocalFirst
-EndProc DOS_SEARCH_FIRST
+        transfer FindFirstLocal
+EndProc SearchFirst
 
 
 
-BREAK <DOS_SEARCH_NEXT - scan for subsequent matches>
+BREAK <SearchNext - scan for subsequent matches>
 
 ; Inputs:
 ;	[DMAADD] Points to 53 byte buffer returned by DOS_SEARCH_FIRST
@@ -138,8 +144,8 @@ BREAK <DOS_SEARCH_NEXT - scan for subsequent matches>
 ;			No more files to find
 ; DS preserved, others destroyed
 
-	procedure   DOS_SEARCH_NEXT,NEAR
-	DOSAssume   CS,<DS>,"DOS_Search_Next"
+	procedure   SearchNext,NEAR
+	DOSAssume   SS,<DS>,"SearchNext"
 	ASSUME	ES:NOTHING
 
 	LES	DI,[DMAADD]
@@ -150,19 +156,17 @@ IF NOT Installed
 	transfer NET_SEARCH_NEXT
 ELSE
 	MOV	AX,(multNET SHL 8) OR 28
-	INT	2FH
+	CallResident DosMultiplex
 	return
 ENDIF
 
 LOCAL_SEARCH_NEXT:
-        transfer LocalNext
-EndProc DOS_SEARCH_NEXT
-CODE ENDS
+        transfer FindNextLocal
+EndProc SearchNext
 
-LAST SEGMENT PARA PUBLIC 'LAST'
-        procedure HMA_LocalFirst,NEAR
+        procedure FindFirstLocal,NEAR
         ASSUME DS:DOSGROUP,ES:NOTHING
-	EnterCrit   critDisk
+	CallResident ECritDisk
 	TEST	[DOS34_FLAG],SEARCH_FASTOPEN  ;AN000;
 	JZ	NOFN			      ;AN000;
 	OR	[FastOpenflg],Fastopen_Set    ;AN000;
@@ -172,7 +176,7 @@ NOFN:					      ;AN000;
 	JNC	norm_getpath		;AN000;;FO. no
 	AND	[FastOpenflg],Fast_yes	;AN000;;FO. reset fastopen
 norm_getpath:
-	invoke	HMA_GetPath
+	CallResident GetPath
 getdone:
 	JNC	find_check_dev
 	JNZ	bad_path
@@ -184,7 +188,7 @@ BadBye:
 	AND	SS:[FastOpenflg],Fast_yes  ;AN000;;FO. reset fastopen
 
 	STC
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 	return
 
 bad_path:
@@ -279,27 +283,27 @@ NO05:
 	AND	SS:[FastOpenflg],Fast_yes  ;AN000;;FO. reset fastopen
 	context DS
 	CLC
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 	return
 
-EndProc HMA_LocalFirst
+EndProc FindFirstLocal
 
-        procedure HMA_LocalNext,NEAR
+        procedure FindNextLocal,NEAR
         ASSUME DS:DOSGROUP,ES:NOTHING
 ;AL is drive A=1
 	MOV	[EXTERR_LOCUS],errLOC_Disk
-	EnterCrit   critDisk
+	CallResident ECritDisk
 	MOV	WORD PTR ThisCDS,OFFSET DOSGROUP:DummyCDS
 	MOV	WORD PTR ThisCDS+2,SS
 	ADD	AL,'A'-1
-	invoke	InitCDS
+	CallResident InitCDS
 
 ;	invoke	GetThisDrv		; Set CDS pointer
 
 	JC	No_files		; Bogus drive letter
 	LES	DI,[THISCDS]		; Get CDS pointer
 	LES	BP,ES:[DI.curdir_devptr]; Get DPB pointer
-	invoke	GOTDPB			; [THISDPB] = ES:BP
+	CallResident GOTDPB			; [THISDPB] = ES:BP
 
 	mov	AL,ES:[BP.dpb_drive]
 	mov	ThisDrv,AL
@@ -313,7 +317,7 @@ ASSUME	DS:NOTHING
 ;	DEC	AL
 ;	MOV	[THISDRV],AL
 
-	entry	HMA_RENAME_NEXT		; Entry used by DOS_RENAME
+	entry	FindNextRename		; Entry used by DOS_RENAME
 
 	context ES			; THIS BLOWS ES:BP POINTER TO DPB
 	MOV	DI,OFFSET DOSGROUP:NAME1
@@ -333,22 +337,22 @@ cont_load:
 	MOV	BX,AX
 	context DS
 	LES	BP,[THISDPB]		; Recover ES:BP
-	invoke	HMA_SetDirSrch
+	CallResident SetDirSrch
 	JNC	SEARCH_GOON
 	POP	AX			; Clean stack
 	JMP	No_files
 
 SEARCH_GOON:
-	invoke	HMA_StartSrch
+	CallResident StartSrch
 	POP	AX
-	invoke	HMA_GetEnt
+	CallResident GetEnt
 	JC	No_files
-	invoke	HMA_NextEnt
+	CallResident NextEnt
 	JC	No_files
 	XOR	AH,AH			; If Search_Next, can't be a DEV
 	JMP	found_it
 
-EndProc HMA_LocalNext
+EndProc FindNextLocal
 
 
 ;Input: [WFP_START]= pointer to final path
@@ -373,6 +377,12 @@ NO_Question:				;AN000;
 	return				;AN000;;FO.
 
 EndProc CHECK_QUESTION			;AN000;
-
-LAST	ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC IsearchEntries
+IsearchEntries LABEL WORD
+        DW OFFSET DOSGROUP:DOS_SEARCH_FIRST_VECTOR, OFFSET DOSGROUP:SearchFirst
+        DW OFFSET DOSGROUP:DOS_SEARCH_NEXT_VECTOR, OFFSET DOSGROUP:SearchNext
+        DW 0
+DOSEND ENDS
     END

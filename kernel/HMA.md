@@ -1,6 +1,6 @@
 # DOS kernel HMA standard
 
-**Progress — Four modules use DOSCODE: PROC, ALLOC, CLOSE and BUF.**
+**Progress — 23 whole modules relocatable in DOSCODE.** PROC, ALLOC, CLOSE, BUF, DINFO, CREATE, ROM, MKNODE, FINFO, DUP, DISK, DISK2, DISK3, EXTATTR, FILE, ISEARCH, CPMIO, CPMIO2, ABORT, SEARCH, RENAME, OPEN and FAT.
 
 Count the assembly input that produces the object file. Track included sources under their owning module. The inventory lists the affected service sources since v1.2.0. Update the progress line and inventory together after verification.
 
@@ -57,6 +57,30 @@ MISC registers `CloseEntries` and `BufEntries`. CLOSE calls BUF directly inside 
 
 The active EMS regression (`test/check_ems`) boots the shipped EMM386.SYS with QEMU on a 486 and `BUFFERS=64 /X`. It requires QEMU and NASM, checks the kernel cache mode, injects a BIOS read failure, retries, and compares a copied file after shutdown.
 
+## DINFO and CREATE
+
+`DinfoEntries` binds the disk-information gateway. `CreateEntries` binds create, exclusive create, node-error translation, media-ID update and extended-mode setup. CREATE keeps its lookup table in resident TABLE. Its redirector adapters push the attributes immediately before INT 2Fh. DINFO calls the redirector through a resident adapter and reads FAT entries directly in DOSCODE.
+
+## ROM, MKNODE and FINFO
+
+ROM owns cluster allocation, release and traversal. MKNODE calls ROM and BUF directly for cluster and buffer operations. Its node creation and rename bodies share ordinary near entries with the other movable callers. FINFO keeps the INT 2Fh redirector adapters resident, including the stack argument for setting attributes.
+
+## DUP, DISK, DISK2, DISK3 and EXTATTR
+
+DUP uses DS for kernel callbacks during DOS initialization, when SS belongs to the boot caller. Its direct handle entry preserves the caller’s DS and uses the DOS stack segment to obtain DOSGROUP.
+
+DISK calls DISK2’s SETUP directly. The EOF and zero-capacity exits consume the near return address and return to the read or write caller. DISK2 retains resident entries for absolute disk I/O. DISK3 has only movable callers, so its module list has no gateway slots. EXTATTR keeps its handle interface and returns the local attribute size through the saved user registers.
+
+## FILE, ISEARCH, CPMIO and CPMIO2
+
+FILE keeps its indirect open/create and SHARE callbacks resident. ISEARCH owns the local search bodies and calls the resident multiplex adapter for redirector searches. SEARCH remains a separate module.
+
+CPMIO and CPMIO2 keep editor state below A20. OEM function-key dispatch jumps within the movable editor frame. The resident Ctrl-C handler reaches BUFOUT and CRLF through gateways. INT 2Fh/1205h accepts an application stack and uses the DOS character-output dispatcher to write to standard output. The regression checks the emitted character and return. Each editor boot verifies its placement before testing Ctrl-C and prompt recovery.
+
+## ABORT, SEARCH, RENAME, OPEN and FAT
+
+ABORT keeps the redirector and SHARE termination callbacks resident. SEARCH owns the FCB and handle find services. RENAME calls ISEARCH directly to resume a wildcard rename. OPEN keeps network interrupt arguments on the resident stack and uses DS for callbacks from the INT 2Fh SFT interfaces, where SS can belong to the caller. FAT calls BUF directly and routes device I/O and critical errors through resident entries.
+
 ## Linked modules and dependencies
 
 The module name is the object filename in the LINK response file. Each row lists the INCLUDE directives in the top-level assembly source and the other objects that supply its external code or data references in this build. Conditional INCLUDE directives appear even when disabled. The object dependencies come from MASM fixup records resolved against the defining objects' public symbols. A reference can be a call, pointer, dispatch-table entry or shared variable. Runtime calls through interrupt vectors and installed drivers require a separate interface review.
@@ -69,42 +93,42 @@ The module name is the object filename in the LINK response file. Each row lists
 
 | Module (.obj) | Direct source includes | Direct links to other modules | HMA review |
 |---|---|---|---|
-| ABORT | dosseg.asm, dossym.inc, devsym.inc | CONST2, HANDLE, NIBDOS, UTIL | — |
+| ABORT | dosseg.asm, dossym.inc, devsym.inc | CONST2, HANDLE, MISC, NIBDOS, UTIL | DOSCODE, Whole Module Relocatable |
 | ALLOC | dosseg.asm, dossym.inc, devsym.inc | CONST2, CRIT, MISC, MSCODE, MSDISP, NIBDOS | DOSCODE, Whole Module Relocatable |
 | BUF | dosseg.asm, dossym.inc, devsym.inc, version.inc | CONST2, CRIT, DISK, DISK2, MISC, MSDATA, MSDISP, MSTABLE, NIBDOS | DOSCODE, Whole Module Relocatable. EMS interrupt adapter and cache data stay resident. |
 | CLOSE | dosseg.asm, dossym.inc, devsym.inc, bugtyp.asm | BUF, CONST2, CRIT, DELETE, DEV, DIR, FAT, MISC, MISC2, MSDATA, MSTABLE, NIBDOS, SHARE, TIME | DOSCODE, Whole Module Relocatable. Redirector and SHARE callbacks use resident adapters. |
 | CONST2 | dossym.inc, dosseg.asm, devsym.inc | CRIT, MSDATA | — |
-| CPMIO | dosseg.asm, dossym.inc, devsym.inc, doscntry.inc, kstrin.asm, editsw.inc, strin.asm | CONST2, CPMIO2, DEV, DISK, MSCTRLC, MSDATA, MSDOSME, MSTABLE, NIBDOS, TIME | — |
-| CPMIO2 | dosseg.asm, dossym.inc, devsym.inc | CONST2, CPMIO, DEV, DISK, MSCTRLC, MSDISP | — |
-| CREATE | dosseg.asm, dossym.inc, devsym.inc, version.inc | CONST2, CRIT, DELETE, FAT, IOCTL, MISC, MKNODE, MSDATA, MSTABLE, OPEN | Legacy local create and node creation. |
+| CPMIO | dosseg.asm, dossym.inc, devsym.inc, doscntry.inc, kstrin.asm, editsw.inc, strin.asm | CONST2, CPMIO2, DEV, DISK, MISC, MSCTRLC, MSDATA, MSDOSME, MSTABLE, NIBDOS, TIME | DOSCODE, Whole Module Relocatable |
+| CPMIO2 | dosseg.asm, dossym.inc, devsym.inc | CONST2, CPMIO, DEV, DISK, MISC, MSCTRLC, MSDISP | DOSCODE, Whole Module Relocatable |
+| CREATE | dosseg.asm, dossym.inc, devsym.inc, version.inc | CONST2, CRIT, DELETE, FAT, IOCTL, MISC, MKNODE, MSDATA, MSTABLE, OPEN | DOSCODE, Whole Module Relocatable. |
 | CRIT | dosseg.asm, dossym.inc, bugtyp.asm | — | — |
 | DELETE | dosseg.asm, dossym.inc, devsym.inc, fastopen.inc, fastseek.inc, fastxxxx.inc | BUF, CONST2, CREATE, CRIT, DIR, DIR2, FAT, MACRO2, MISC2, MKNODE, MSDATA, MSTABLE, NIBDOS, ROM, SEARCH, SHARE | — |
 | DEV | dosseg.asm, dossym.inc, devsym.inc, version.inc | CONST2, CRIT, DISK, IOCTL, MSCTRLC, MSDATA, MSDISP, MSTABLE, NIBDOS | — |
-| DINFO | dosseg.asm, dossym.inc, devsym.inc, bugtyp.asm | CONST2, CRIT, FAT, MISC2, MSDATA | — |
+| DINFO | dosseg.asm, dossym.inc, devsym.inc, bugtyp.asm | CONST2, CRIT, FAT, MISC, MISC2, MSDATA | DOSCODE, Whole Module Relocatable. |
 | DIR | dosseg.asm, fastopen.inc, dossym.inc | CONST2, DIR2, DISK, FAT, MISC, MSDATA, MSTABLE, ROM | Legacy directory walker and search entries. |
 | DIR2 | dosseg.asm, dossym.inc, devsym.inc, fastopen.inc | BUF, CONST2, CRIT, DIR, DIRCALL, DISK, FAT, FCB, MACRO2, MISC, MISC2, MSDATA, MSTABLE, NIBDOS, TIME | Legacy path walker. Preserve FASTOPEN callbacks. |
 | DIRCALL | dosseg.asm, dossym.inc, devsym.inc, fastopen.inc, fastxxxx.inc | BUF, CONST2, CREATE, CRIT, DELETE, DIR, DIR2, MISC, MISC2, MKNODE, MSDATA, MSTABLE, ROM | Legacy directory verb entries. |
-| DISK | dosseg.asm, fastseek.inc, fastxxxx.inc, dossym.inc, devsym.inc, version.inc | BUF, CLOSE, CONST2, CPMIO, CPMIO2, CRIT, DEV, DISK2, DISK3, FAT, LOCK, MISC, MISC2, MSCTRLC, MSDATA, MSDISP, MSTABLE, NIBDOS, ROM, UTIL | Legacy read/write entries and vectors. |
-| DISK2 | dosseg.asm, dossym.inc, devsym.inc, version.inc | BUF, CONST2, DEV, DISK, DISK3, FAT, LOCK, MSCTRLC, MSDATA, MSDISP, MSTABLE, NIBDOS, ROM | Legacy setup paths can consume a near return address. |
-| DISK3 | dosseg.asm, dossym.inc, devsym.inc, version.inc | BUF, CONST2, DELETE, DEV, DISK, DISK2, MSCTRLC, MSDATA, MSDISP, MSTABLE, NIBDOS, OPEN, ROM | Legacy file growth crosses SHARE. |
-| DUP | dosseg.asm, dossym.inc, devsym.inc | DEV, MISC2, MSDATA | — |
-| EXTATTR | dosseg.asm, dossym.inc, devsym.inc, ea.inc | MSDATA, MSDISP, MSTABLE | — |
-| FAT | dosseg.asm, dossym.inc, devsym.inc | BUF, CONST2, DEV, MISC, MSCODE, MSCTRLC, MSDATA, MSTABLE, NIBDOS | Legacy FAT packing and EOF entries. |
+| DISK | dosseg.asm, fastseek.inc, fastxxxx.inc, dossym.inc, devsym.inc, version.inc | BUF, CLOSE, CONST2, CPMIO, CPMIO2, CRIT, DEV, DISK2, DISK3, FAT, LOCK, MISC, MISC2, MSCTRLC, MSDATA, MSDISP, MSTABLE, NIBDOS, ROM, UTIL | DOSCODE, Whole Module Relocatable |
+| DISK2 | dosseg.asm, dossym.inc, devsym.inc, version.inc | BUF, CONST2, DEV, DISK, DISK3, FAT, LOCK, MISC, MSCTRLC, MSDATA, MSDISP, MSTABLE, NIBDOS, ROM | DOSCODE, Whole Module Relocatable |
+| DISK3 | dosseg.asm, dossym.inc, devsym.inc, version.inc | BUF, CONST2, DELETE, DEV, DISK, DISK2, MISC, MSCTRLC, MSDATA, MSDISP, MSTABLE, NIBDOS, OPEN, ROM | DOSCODE, Whole Module Relocatable |
+| DUP | dosseg.asm, dossym.inc, devsym.inc | DEV, MISC, MISC2, MSDATA | DOSCODE, Whole Module Relocatable |
+| EXTATTR | dosseg.asm, dossym.inc, devsym.inc, ea.inc | MISC, MSDATA, MSDISP, MSTABLE | DOSCODE, Whole Module Relocatable |
+| FAT | dosseg.asm, dossym.inc, devsym.inc | BUF, CONST2, DEV, MISC, MSCODE, MSCTRLC, MSDATA, MSTABLE, NIBDOS | DOSCODE, Whole Module Relocatable |
 | FCB | dosseg.asm, dossym.inc, devsym.inc, doscntry.inc | CONST2, MACRO, MISC, MSDATA, MSDOSME | Legacy FCB construction and name translation. |
 | FCBIO | dosseg.asm, dossym.inc, devsym.inc, fastopen.inc, bugtyp.asm | CLOSE, CONST2, DELETE, DIR2, FCBIO2, FINFO, LOCK, MACRO, MACRO2, MISC, MISC2, MSCODE, MSCTRLC, MSDATA, MSDISP, NIBDOS, RENAME | Legacy FCB dispatch and indirect I/O. |
 | FCBIO2 | dosseg.asm, dossym.inc, devsym.inc, version.inc, bugtyp.asm | BUF, CONST2, CREATE, DISK, FCBIO, LOCK, MACRO, MACRO2, MISC2, MSCODE, MSDATA, MSDISP, NIBDOS, OPEN, SHARE, TIME | Legacy record I/O, shared buffers and SHARE callbacks. |
-| FILE | dosseg.asm, dossym.inc, devsym.inc, fastopen.inc, ea.inc, version.inc, bugtyp.asm | CONST2, CREATE, CRIT, DELETE, FCB, FINFO, HANDLE, MACRO, MACRO2, MISC, MISC2, MSCODE, MSDATA, MSDISP, MSTABLE, NIBDOS, OPEN, RENAME, TIME, UTIL | Legacy file-service entries. |
-| FINFO | dosseg.asm, dossym.inc, devsym.inc, fastxxxx.inc, fastopen.inc | BUF, CONST2, CRIT, DELETE, DIR2, MISC2, MSDATA, MSTABLE | — |
+| FILE | dosseg.asm, dossym.inc, devsym.inc, fastopen.inc, ea.inc, version.inc, bugtyp.asm | CONST2, CREATE, CRIT, DELETE, FCB, FINFO, HANDLE, MACRO, MACRO2, MISC, MISC2, MSCODE, MSDATA, MSDISP, MSTABLE, NIBDOS, OPEN, RENAME, TIME, UTIL | DOSCODE, Whole Module Relocatable |
+| FINFO | dosseg.asm, dossym.inc, devsym.inc, fastxxxx.inc, fastopen.inc | BUF, CONST2, CRIT, DELETE, DIR2, MISC, MISC2, MSDATA, MSTABLE | DOSCODE, Whole Module Relocatable |
 | GETSET | dosseg.asm, dossym.inc, devsym.inc, doscntry.inc | CONST2, DINFO, FCB, MACRO, MSCODE, MSDISP, MSDOSME, MSTABLE, NIBDOS | — |
 | HANDLE | dosseg.asm, dossym.inc, devsym.inc, ea.inc, version.inc, bugtyp.asm | ALLOC, BUF, CLOSE, CONST2, CRIT, DISK, DUP, EXTATTR, MSCODE, MSDATA, MSDISP, MSTABLE, NIBDOS, UTIL | — |
 | IOCTL | dosseg.asm, dossym.inc, devsym.inc, ioctl.inc, ifssym.inc | CONST2, DEV, DISK, MACRO, MSCODE, MSCTRLC, MSDATA, MSDISP, NIBDOS, UTIL | — |
-| ISEARCH | dosseg.asm, dossym.inc, devsym.inc, fastopen.inc, fastxxxx.inc | CONST2, CRIT, DIR, DIR2, MACRO, MSCODE, MSDATA, MSTABLE | Legacy search start and continuation. |
+| ISEARCH | dosseg.asm, dossym.inc, devsym.inc, fastopen.inc, fastxxxx.inc | CONST2, CRIT, DIR, DIR2, MACRO, MISC, MSCODE, MSDATA, MSTABLE | DOSCODE, Whole Module Relocatable |
 | LOCK | dosseg.asm, dossym.inc, devsym.inc, lock.inc | CONST2, MISC2, MSCODE, MSCTRLC, MSDATA, NIBDOS, UTIL | — |
 | MACRO | dosseg.asm, dossym.inc, devsym.inc | CONST2, MSCODE, MSDATA, MSDISP, NIBDOS | — |
 | MACRO2 | dosseg.asm, dossym.inc, devsym.inc | CONST2, CRIT, DIR2, FAT, FCB, MACRO, MISC, MISC2, MSCODE, MSDATA, NIBDOS, SEARCH | Legacy pathname and FCB translation entries. |
-| MISC | dosseg.asm, dossym.inc, devsym.inc, bugtyp.asm | ALLOC, BUF, CLOSE, CONST2, CRIT, DINFO, DUP, FAT, IOCTL, MACRO, MSCODE, MSDATA, MSDISP, MSTABLE, NIBDOS, PROC, UTIL | Gateway and callbacks. Keep A20 and return-frame handling here. |
+| MISC | dosseg.asm, dossym.inc, devsym.inc, bugtyp.asm | ABORT, ALLOC, BUF, CLOSE, CONST2, CPMIO, CPMIO2, CREATE, CRIT, DINFO, DISK, DISK2, DISK3, DUP, EXTATTR, FAT, FILE, FINFO, IOCTL, ISEARCH, MACRO, MKNODE, MSCODE, MSDATA, MSDISP, MSTABLE, NIBDOS, OPEN, PROC, RENAME, ROM, SEARCH, UTIL | Gateway and callbacks. Keep A20 and return-frame handling here. |
 | MISC2 | dosseg.asm, dossym.inc, fastseek.inc, fastxxxx.inc, bugtyp.asm | CONST2, FCB, FILE, HANDLE, IOCTL, MSDATA, MSTABLE, NIBDOS | — |
-| MKNODE | dosseg.asm, fastopen.inc, dossym.inc, devsym.inc | BUF, CONST2, CRIT, DELETE, DEV, DIR, DIR2, DISK, FAT, MISC, MSDATA, MSTABLE, ROM, SHARE, TIME | Legacy node creation across directory and FAT modules. |
+| MKNODE | dosseg.asm, fastopen.inc, dossym.inc, devsym.inc | BUF, CONST2, CRIT, DELETE, DEV, DIR, DIR2, DISK, FAT, MISC, MSDATA, MSTABLE, ROM, SHARE, TIME | DOSCODE, Whole Module Relocatable |
 | MSCODE | mssw.asm, ms_code.asm | BUF, CONST2, CRIT, DELETE, DISK2, MACRO, MISC, MISC2, MSDATA, MSDISP, MSTABLE | — |
 | MSCTRLC | mssw.asm, ctrlc.asm | ABORT, ALLOC, BUF, CONST2, CPMIO, CPMIO2, CRIT, DEV, DISK, GETSET, MKNODE, MSCODE, MSDATA, MSDISP, MSDOSME, MSTABLE, NIBDOS, PROC | — |
 | MSDATA | mssw.asm, dosseg.asm, dosmac.inc, sf.inc, dirent.inc, curdir.inc, dpb.inc, buffer.inc, arena.inc, vector.inc, devsym.inc, pdb.inc, find.inc, mi.inc, ms_data.asm, msinit.asm | CONST2, DEV, MISC, MSCODE, MSCTRLC, MSDISP, MSDOSME, MSTABLE, NIBDOS, PROC | — |
@@ -112,13 +136,13 @@ The module name is the object filename in the LINK response file. Each row lists
 | MSDOSME | mssw.asm, dosseg.asm, dosmes.asm | CPMIO | — |
 | MSTABLE | mssw.asm, ms_table.asm | ALLOC, BUF, CLOSE, CPMIO, CPMIO2, DIR2, FCB, FCBIO, FCBIO2, FILE, GETSET, HANDLE, IOCTL, LOCK, MACRO, MACRO2, MISC, MISC2, MSCODE, MSCTRLC, MSDISP, MSDOSME, NIBDOS, OPEN, PARSE, PATH, PROC, SEARCH, SHARE, SRVCALL, TIME, UTIL | — |
 | NIBDOS | mssw.asm, msconst.asm | CONST2, MSCODE, MSDATA, MSDISP | — |
-| OPEN | dosseg.asm, dossym.inc, devsym.inc, fastopen.inc, fastxxxx.inc, ifssym.inc | CONST2, CRIT, DELETE, DEV, DIR2, MISC, MISC2, MKNODE, MSDATA, MSTABLE, NIBDOS, SHARE | Legacy local open and SHARE callbacks. |
+| OPEN | dosseg.asm, dossym.inc, devsym.inc, fastopen.inc, fastxxxx.inc, ifssym.inc | CONST2, CRIT, DELETE, DEV, DIR2, MISC, MISC2, MKNODE, MSDATA, MSTABLE, NIBDOS, SHARE | DOSCODE, Whole Module Relocatable |
 | PARSE | dosseg.asm, dossym.inc, devsym.inc | FCB, MSDISP | — |
 | PATH | dosseg.asm, dossym.inc, devsym.inc | CONST2, CRIT, DIR2, DIRCALL, MACRO, MACRO2, MISC2, MSCODE, MSDATA, MSDISP | — |
 | PROC | dosseg.asm, dossym.inc, devsym.inc, exec.asm | ALLOC, CONST2, CRIT, FILE, HANDLE, IOCTL, MACRO, MISC, MISC2, MSCODE, MSCTRLC, MSDATA, MSDISP, MSTABLE, NIBDOS, UTIL | DOSCODE, Whole Module Relocatable |
-| RENAME | dosseg.asm, dossym.inc, devsym.inc | BUF, CONST2, CRIT, DELETE, DIR, DIR2, ISEARCH, MISC, MISC2, MKNODE, MSDATA, PATH, SHARE | Legacy rename and directory search continuation. |
-| ROM | dosseg.asm, fastseek.inc, fastxxxx.inc, version.inc, dossym.inc, devsym.inc, ea.inc | BUF, CONST2, DELETE, FAT, MISC, MSDATA, MSTABLE | Legacy cluster allocation. Preserve disk-full and partial allocation exits. |
-| SEARCH | dosseg.asm, dossym.inc, devsym.inc, fastopen.inc, fastxxxx.inc | CONST2, ISEARCH, MACRO2, MISC, MSCODE, MSDATA | Legacy name packing and find dispatch. |
+| RENAME | dosseg.asm, dossym.inc, devsym.inc | BUF, CONST2, CRIT, DELETE, DIR, DIR2, ISEARCH, MISC, MISC2, MKNODE, MSDATA, PATH, SHARE | DOSCODE, Whole Module Relocatable |
+| ROM | dosseg.asm, fastseek.inc, fastxxxx.inc, version.inc, dossym.inc, devsym.inc, ea.inc | BUF, CONST2, DELETE, FAT, MISC, MSDATA, MSTABLE | DOSCODE, Whole Module Relocatable |
+| SEARCH | dosseg.asm, dossym.inc, devsym.inc, fastopen.inc, fastxxxx.inc | CONST2, ISEARCH, MACRO2, MISC, MSCODE, MSDATA | DOSCODE, Whole Module Relocatable |
 | SHARE | dosseg.asm, dossym.inc, devsym.inc | CONST2, MISC2, MSCTRLC, MSDATA, NIBDOS | — |
 | SRVCALL | dosseg.asm, dossym.inc, devsym.inc, dpl.asm | CLOSE, CONST2, CRIT, IOCTL, MISC2, MSCODE, MSDATA, MSDISP, NIBDOS, UTIL | — |
 | TIME | dosseg.asm, dossym.inc, devsym.inc | CONST2, DEV, MSDATA, MSDISP, MSTABLE, NIBDOS | — |

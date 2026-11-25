@@ -109,8 +109,40 @@ Break	<DOS_Open - internal file access>
 ;			generates an INT 24 on compatibility mode SFTs
 ; DS preserved, others destroyed
 
-	procedure   DOS_Open,NEAR
-	DOSAssume   CS,<DS>,"DOS_Open"
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry DOS_Open,43
+        DosCodeEntry SET_SFT_MODE,165
+        DosCodeEntry SHARE_ERROR,166
+; SHARE and redirector callbacks enter through resident code.
+procedure Share_Update_SFT,NEAR
+if installed
+	call	JShare + 14 * 4
+else
+	Call	ShSU
+endif
+	RET
+EndProc Share_Update_SFT
+; Keep the redirector argument immediately below the interrupt frame.
+OpenNetwork PROC NEAR
+        PUSH AX
+        MOV AX,(multNET SHL 8) OR 22
+        INT 2Fh
+        POP BX
+        RET
+OpenNetwork ENDP
+OpenExtendedNetwork PROC NEAR
+        PUSH AX
+        MOV AX,(multNET SHL 8) OR 46
+        INT 2Fh
+        POP BX
+        RET
+OpenExtendedNetwork ENDP
+CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+
+	procedure   OpenFile,NEAR
+	DOSAssume   SS,<DS>,"DOS_Open"
 	ASSUME	ES:NOTHING
 
 	MOV	[NoSetDir],0
@@ -131,10 +163,8 @@ Break	<DOS_Open - internal file access>
 	JZ	NOEXTOP 		    ;FT. no, do normal			;AN000;
 IFS_extopen:									;AN000;
 	MOV	AL,byte ptr [SAVE_CX]	    ;FT. al= create attribute		;AN000;
-	PUSH	AX			    ;FT. pass create attr to IFS	;AN000;
-	MOV	AX,(multNET SHL 8) OR 46    ;FT. issue extended open verb	;AN000;
-	INT	2FH			    ;FT.				;AN000;
-	POP	BX			    ;FT. trash bx			;AN000;
+
+        CallResident OpenExtendedNetwork
 	MOV	[EXTOPEN_ON],0		    ;FT.				;AN000;
 	JNC	update_size		    ;IFS. file may be opened		;AN000;
 	return				    ;FT.				;AN000;
@@ -145,10 +175,8 @@ NOEXTOP:
 IF NOT Installed
 	transfer NET_SEQ_OPEN
 ELSE
-	PUSH	AX
-	MOV	AX,(multNET SHL 8) OR 22
-	INT	2FH
-	POP	BX			; clean stack
+
+        CallResident OpenNetwork
 	return
 ENDIF
 
@@ -167,10 +195,8 @@ TEST_RE_NET:
 IF NOT Installed
 	transfer NET_OPEN
 ELSE
-	PUSH	AX
-	MOV	AX,(multNET SHL 8) OR 22
-	INT	2FH
-	POP	BX			; clean stack
+
+        CallResident OpenNetwork
 ;	JC	nomore			;IFS. error				;AN000;
 update_size:									;AN000;
 ;	CALL	OWN_SHARE		;IFS. IFS owns share ?			;AN000;
@@ -185,17 +211,8 @@ nomore:
 ENDIF
 
 LOCAL_OPEN:
-	JMP	WORD PTR CS:[OPEN_VECTOR]
-OpenFar:
-	PUSH	AX
-	MOV	AH,43
-	JMP	FCB_SELECTED
+        JMP OpenLocal
 
-	EXTRN	FCB_SELECTED:NEAR
-	PUBLIC	OPEN_VECTOR
-OPEN_VECTOR	DW OFFSET DOSGROUP:OpenFar
-
-;
 ; Finish SFT initialization for new reference.	Set the correct mode.
 ;
 ;   Inputs:
@@ -205,12 +222,13 @@ OPEN_VECTOR	DW OFFSET DOSGROUP:OpenFar
 ;	Carry clear
 ;   Registers modified: AX.
 
-	entry	SET_SFT_MODE
-	DOSAssume   CS,<DS>,"Set_SFT_Mode"
+	; INT 2Fh/120Ch supplies DOSGROUP in DS on a caller-owned stack.
+	entry	SetOpenMode
+	DOSAssume   SS,<DS>,"Set_SFT_Mode"
 	ASSUME	ES:NOTHING
 
 	LES	DI,ThisSFT
-	invoke	DEV_OPEN_SFT
+	CallResident DEV_OPEN_SFT,DS
 	TEST	ES:[DI.sf_mode],sf_isfcb; Clears carry
 	retz				; sf_mode correct
 	MOV	AX,[CurrentPDB]
@@ -219,17 +237,16 @@ OPEN_VECTOR	DW OFFSET DOSGROUP:OpenFar
 Clear_FastOpen:
 	return			       ;;;;; DOS 3.3
 
-EndProc DOS_Open
-CODE	ENDS
+EndProc OpenFile
 
-LAST	SEGMENT PARA PUBLIC 'LAST'
-	procedure HMA_OPEN,NEAR
-	EnterCrit   critDisk
+
+	procedure OpenLocal,NEAR
+	CallResident ECritDisk
 
 ; DOS 3.3 FastOPen 6/16/86
 
 	OR	[FastOpenFlg],FastOpen_Set+Special_Fill_Set   ;  only open can
-	invoke	HMA_GETPATH
+	CallResident GETPATH
 
 
 ; DOS 3.3 FastOPen 6/16/86
@@ -243,7 +260,7 @@ OpenFNF:
 OpenBadRet:
 	AND	BYTE PTR SS:[FastOpenFlg],Fast_yes    ;; DOS 3.3
 	STC
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 	RET
 
 bad_path:
@@ -325,17 +342,17 @@ NORM1:										;AN000;
 NORM0:
 
 ;;; File Tagging DOS 4.00
-	invoke	HMA_DOOPEN			; Fill in SFT
+	invoke	OpenNode			; Fill in SFT
 	AND	BYTE PTR SS:[FastOpenFlg],Fast_yes    ;; DOS 3.3
 	CALL	DO_SHARE_CHECK		;
 	JNC	Share_Ok
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 	RET
 
 SHARE_OK:
 	MOV	AX,3
 	LES	DI,ThisSFT
-	invoke	Share_Update_SFT
+	CallResident Share_Update_SFT
 ;; DOS 4.00 10/27/86
 	LES	DI,ThisSFT			   ; if this is a newly 	;AN000;
 	CMP	ES:[DI.sf_firclus],0		   ; created file then		;AN000;
@@ -343,29 +360,17 @@ SHARE_OK:
 	MOV	CX,ES:[DI.sf_firclus]		   ; first cluster #		;AN000;
 	LES	DI,ES:[DI.sf_devptr]		   ; pointer to DPB		;AN000;
 	MOV	DL,ES:[DI.dpb_drive]		   ; drive #			;AN000;
-	invoke	FastSeek_Open			   ; call fastseek		;AN000;
+	CallResident FastSeek_Open			   ; call fastseek		;AN000;
 no_fastseek:
 
 ;; DOS 4.00 10/27/86
 
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 
-	transfer SET_SFT_MODE
-EndProc HMA_OPEN
-LAST	ENDS
-
-CODE	SEGMENT BYTE PUBLIC 'CODE'
+	JMP SetOpenMode
+EndProc OpenLocal
 
 
-; Enter the sharer from resident code with the HMA reference released.
-procedure Share_Update_SFT,NEAR
-if installed
-	call	JShare + 14 * 4
-else
-	Call	ShSU
-endif
-	RET
-EndProc Share_Update_SFT
 
 ; Called on sharing violations. ES:DI points to SFT. AX has error code
 ; If SFT is FCB or compatibility mode gens INT 24 error.
@@ -373,8 +378,9 @@ EndProc Share_Update_SFT
 ; really ignore).  Carry clear
 ; if user wants a retry. ES, DI, DS preserved
 
-procedure SHARE_ERROR,NEAR
-	DOSAssume   CS,<DS>,"Share_Error"
+; INT 2Fh/120Bh has the same caller-stack contract as 120Ch.
+procedure OpenShareError,NEAR
+	DOSAssume   SS,<DS>,"Share_Error"
 	ASSUME	ES:NOTHING
 	TEST	ES:[DI.sf_mode],sf_isfcb
 	JNZ	HARD_ERR
@@ -383,14 +389,14 @@ procedure SHARE_ERROR,NEAR
 	CMP	CL,sharing_compat
 	JNE	NO_HARD_ERR
 HARD_ERR:
-	invoke	SHARE_VIOLATION
+	CallResident SHARE_VIOLATION,DS
 	retnc				; User wants retry
 NO_HARD_ERR:
 	MOV	AX,error_sharing_violation
 	STC
 	return
 
-EndProc SHARE_ERROR
+EndProc OpenShareError
 
 
 ; Input: THISDPB, WFP_Start, THISSFT set
@@ -399,25 +405,25 @@ EndProc SHARE_ERROR
 ;	  carry clear, share ok
 
 procedure DO_SHARE_CHECK,NEAR
-	DOSAssume   CS,<DS>,"DO_SHARE__CHECK"
+	DOSAssume   SS,<DS>,"DO_SHARE__CHECK"
 	ASSUME	ES:NOTHING
-	EnterCrit   critDisk		; enter critical section
+	CallResident ECritDisk		; enter critical section
 
 OPN_RETRY:
 	MOV	CX,RetryCount		; Get # tries to do
 OpenShareRetry:
 	SaveReg <CX>			; Save number left to do
-	invoke	SHARE_CHECK		; Final Check
+	CallResident SHARE_CHECK		; Final Check
 	RestoreReg  <CX>		; CX = # left
 	JNC	Share_Ok2		; No problem with access
-	Invoke	Idle
+	CallResident Idle
 	LOOP	OpenShareRetry		; One more retry used up
 OpenShareFail:
 	LES	DI,[ThisSft]
-	invoke	SHARE_ERROR
+	invoke OpenShareError
 	JNC	OPN_RETRY		; User wants more retry
 Share_Ok2:
-	LeaveCrit   critDisk		; leave critical section
+	CallResident LCritDisk		; leave critical section
 	return
 
 EndProc DO_SHARE_CHECK
@@ -429,7 +435,7 @@ EndProc DO_SHARE_CHECK
 ;	  otherwise, use DOS SHARE
 
 procedure OWN_SHARE,NEAR		;AN000;
-	DOSAssume   CS,<DS>,"OWN_SHARE" ;AN000;
+	DOSAssume   SS,<DS>,"OWN_SHARE" ;AN000;
 	ASSUME	ES:NOTHING		;AN000;
 
 ;	PUSH	DS			;IFS. save reg				;AN000;
@@ -449,7 +455,7 @@ EndProc OWN_SHARE			;AN000;
 ;	  otherwise, use DOS SHARE
 
 procedure OWN_SHARE2,NEAR		  ;AN000;
-	DOSAssume   CS,<DS>,"OWN_SHARE2"  ;AN000;
+	DOSAssume   SS,<DS>,"OWN_SHARE2"  ;AN000;
 	ASSUME	ES:NOTHING		  ;AN000;
 
 ;	CMP	WORD PTR [THISCDS],-1	;IFS. UNC ?				;AN000;
@@ -472,7 +478,7 @@ EndProc OWN_SHARE2			;AN000;
 ; Output: none
 
 procedure SET_THISDPB,NEAR		       ;AN000;
-	DOSAssume   CS,<DS>,"SET_THISDPB"      ;AN000;
+	DOSAssume   SS,<DS>,"SET_THISDPB"      ;AN000;
 	ASSUME	ES:NOTHING		       ;AN000;
 
 ;	PUSH	DS			;IFS. save reg				;AN000;
@@ -493,7 +499,7 @@ EndProc SET_THISDPB			;AN000;
 ; Output: none
 
 procedure IFS_SHARE_CHECK,NEAR			   ;AN000;
-	DOSAssume   CS,<DS>,"IFS_SHARE_CHECK"      ;AN000;
+	DOSAssume   SS,<DS>,"IFS_SHARE_CHECK"      ;AN000;
 	ASSUME	ES:NOTHING			   ;AN000;
 
 
@@ -533,7 +539,7 @@ EndProc IFS_SHARE_CHECK 		;AN000;
 ; No other registers effected
 
 	procedure Check_Access_AX
-	DOSAssume   CS,<DS>,"Check_Access"
+	DOSAssume   SS,<DS>,"Check_Access"
 	ASSUME	ES:NOTHING
 
 	MOV	Open_Access,AL
@@ -573,7 +579,7 @@ EndProc Check_Access_AX
 ;	     =3    fail
 
 procedure Code_Page_Mismatched_Error,NEAR		 ;AN000;
-	DOSAssume   CS,<DS>,"Code_Page_Mismatched_Error" ;AN000;
+	DOSAssume   SS,<DS>,"Code_Page_Mismatched_Error" ;AN000;
 	ASSUME	ES:NOTHING				 ;AN000;
 
 ;	PUSH	DS		       ;FT.					;AN000;
@@ -591,5 +597,14 @@ procedure Code_Page_Mismatched_Error,NEAR		 ;AN000;
 ;	return						 ;FT.			;AN000;
 
 EndProc Code_Page_Mismatched_Error			 ;AN000;
-CODE	ENDS
+
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC OpenEntries
+OpenEntries LABEL WORD
+        DW OFFSET DOSGROUP:DOS_Open_VECTOR, OFFSET DOSGROUP:OpenFile
+        DW OFFSET DOSGROUP:SET_SFT_MODE_VECTOR, OFFSET DOSGROUP:SetOpenMode
+        DW OFFSET DOSGROUP:SHARE_ERROR_VECTOR, OFFSET DOSGROUP:OpenShareError
+        DW 0
+DOSEND ENDS
     END

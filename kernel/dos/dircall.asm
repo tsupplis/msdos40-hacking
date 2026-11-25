@@ -175,7 +175,7 @@ LOCAL_MKDIR:
 ;
 	MOV	WORD PTR RenBuf.sf_mft,0    ; make sure SHARER won't complain.
 	MOV	AL,attr_directory
-	invoke	HMA_MAKENODE
+	invoke	CreateNode
 
 	JC	PATHNFJ
 	CMP	AX,3
@@ -192,7 +192,7 @@ ASSUME	DS:NOTHING
 	PUSH	[DIRSTART]	; Parent for .. entry
 	XOR	AX,AX
 	MOV	[DIRSTART],AX	; Null directory
-	invoke	HMA_NEWDIR
+	invoke	ExtendDirectory
 	JC	NODEEXISTSPOPDEL    ; No room
 	invoke	HMA_GETENT		; First entry
 	JC	NODEEXISTSPOPDEL    ; Screw up
@@ -206,10 +206,10 @@ yesdirty:
 	ADD	DI,BUFINSIZ	; Point at buffer
 	MOV	AX,202EH	; ". "
 	MOV	DX,[DIRSTART]	; Point at itself
-	invoke	HMA_SETDOTENT
+	invoke	SetDotEntry
 	MOV	AX,2E2EH	; ".."
 	POP	DX		; Parent
-	invoke	HMA_SETDOTENT
+	invoke	SetDotEntry
 	LES	BP,[THISDPB]
 	MOV	[ALLOWED],allowed_FAIL + allowed_RETRY
 	POP	DX		; Entry sector

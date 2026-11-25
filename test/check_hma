@@ -96,7 +96,7 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
             if len(upper) != 2 or upper[0] != upper[1]:
                 raise RuntimeError(f"child failed to release its UMB allocations: {lines!r}")
         expected = sum(cmd.startswith("hmaio ") for cmd in commands)
-        required = (b"HMA SERVICES PASS", b"RENAME PASS", b"DIRECTORY PASS", b"ENDTEST")
+        required = (b"! OUTT PASS", b"HMA SERVICES PASS", b"RENAME PASS", b"DIRECTORY PASS", b"ENDTEST")
         if lines.count(b"HMA I/O PASS") != expected or any(line not in lines for line in required):
             raise RuntimeError(f"{layout}: {output.decode('cp437')}")
         batch.write_text("REM @blank-b\nprocabrt\n")

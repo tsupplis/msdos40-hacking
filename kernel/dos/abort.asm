@@ -38,6 +38,22 @@ Installed = TRUE
 	i_need  JSHARE,DWORD
 	I_need  sftFCB,DWORD            ; pointer to SFTs for FCB cache
 
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry DOS_ABORT,162
+; External termination callbacks run with the kernel on its resident stack.
+AbortExternal PROC NEAR
+	CallInstall Net_Abort, multNet, 29
+if installed
+	call    JShare + 4 * 4
+else
+	call    mftCloseP
+endif
+        RET
+AbortExternal ENDP
+CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+
 Break   <DOS_ABORT -- CLOSE all files for process>
 
 ; Inputs:
@@ -48,7 +64,7 @@ Break   <DOS_ABORT -- CLOSE all files for process>
 ;       None
 ; All destroyed except stack
 
-	Procedure   DOS_ABORT,NEAR
+	Procedure   AbortProcessFiles,NEAR
 	ASSUME  DS:NOTHING,ES:NOTHING
 
 	MOV     ES,[CurrentPDB]
@@ -58,7 +74,7 @@ reset_free_jfn:
 	PUSH    CX
 	DEC     BX                      ; get jfn (start with last one)
 
-	invoke  $close
+	CallResident $close
 	POP     CX
 	LOOP    reset_free_jfn          ; and do 'em all
 ;
@@ -78,12 +94,7 @@ reset_free_jfn:
 ; Sleazy, eh?
 ;
 	context DS
-	CallInstall Net_Abort, multNet, 29
-if installed
-	call    JShare + 4 * 4
-else
-	call    mftCloseP
-endif
+        CallResident AbortExternal
 	assume  ds:nothing
 ;
 ; Scan the FCB cache for guys that belong to this process and zap their ref
@@ -109,7 +120,7 @@ FCBScanDone:
 	XOR     BX,BX
 Scan:
 	push    bx
-	invoke  SFFromSFN
+	CallResident SFFromSFN
 	pop     bx
 	retc
 	cmp     es:[di].sf_ref_count,0
@@ -131,7 +142,13 @@ next:
 	inc     bx
 	jmp     scan
 
-EndProc DOS_Abort
+EndProc AbortProcessFiles
 
-CODE    ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC AbortEntries
+AbortEntries LABEL WORD
+        DW OFFSET DOSGROUP:DOS_ABORT_VECTOR, OFFSET DOSGROUP:AbortProcessFiles
+        DW 0
+DOSEND ENDS
     END

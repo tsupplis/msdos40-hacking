@@ -69,18 +69,13 @@ include EA.inc
 
 
         EXTRN FCB_SELECTED:NEAR
-        PUBLIC FIGREC_VECTOR
-FIGREC_VECTOR DW OFFSET DOSGROUP:FigRecFar
-        procedure FIGREC,NEAR
-        JMP WORD PTR CS:[FIGREC_VECTOR]
-FigRecFar:
-        PUSH AX
-        MOV AH,66
-        JMP FCB_SELECTED
-EndProc FIGREC
+        DosCodeEntry FIGREC,66
+        DosCodeEntry ALLOCATE,65
+        DosCodeEntry RELEASE,133
 CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
 
-LAST SEGMENT PARA PUBLIC 'LAST'
 Break   <FNDCLUS -- Skip over allocation units>
 
 ; Inputs:
@@ -95,7 +90,7 @@ Break   <FNDCLUS -- Skip over allocation units>
 ; DI destroyed. No other registers affected.
 
         procedure   FNDCLUS,NEAR
-        DOSAssume   CS,<DS>,"FndClus"
+        DOSAssume   SS,<DS>,"FndClus"
         ASSUME  ES:NOTHING
 
         Assert      ISDPB,<ES,BP>,"FndCLus"
@@ -135,8 +130,10 @@ entry   SKPCLP
         MOV     [Temp_Var2],BX                    ; save physical cluster       ;AN000;
                                                   ; PTR P005079
 SKPCLP2:
-        invoke  FastSeek_Lookup                   ; ask for next cluster #      ;AN000;
-        JNC     clusfound                         ; yes, we got it              ;AN000;
+        CallResident FastSeek_Lookup                   ; ask for next cluster #      ;AN000;
+        JC      LookupMiss
+        JMP     clusfound
+LookupMiss:
         CMP     DI,1                              ; valid drive ,e.g. C,D...    ;AN000;
         JNZ     par_found                         ; yes,                        ;AN000;
         AND     [FastSeekflg],Fast_yes            ; no more, fastseek           ;AN000;
@@ -152,7 +149,7 @@ noteof:
         MOV     [FSeek_logclus],DX                ; use current                 ;AN000;
         MOV     BX,[Temp_Var2]                    ; retore pysical cluster      ;AN000;
         MOV     DI,BX                             ; insert cureent cluster      ;AN000;
-        invoke  FastSeek_Insert                   ; insert cluster # to         ;AN000;
+        CallResident FastSeek_Insert                   ; insert cluster # to         ;AN000;
         INC     [FSeek_logclus]                   ; get next inserted position  ;AN000;
         JMP     SHORT do_norm
 OnCache:
@@ -166,16 +163,16 @@ dodo:
 
 do_norm:
 
-        invoke  HMA_UNPACK
+        invoke ReadClusterEntry
         JNC     WalkCluster
         RET
 WalkCluster:
 
-        invoke  FastSeek_Insert                   ; insert cluster # to         ;AN000;
+        CallResident FastSeek_Insert                   ; insert cluster # to         ;AN000;
 cluss:                                                                          ;AN000;
         PUSH    BX                                ; FastSeek                    ;AN000;
         MOV     BX,DI
-        Invoke  HMA_IsEOF
+        invoke ClusterIsEOF
         POP     BX
         JAE     RET10
         XCHG    BX,DI
@@ -225,15 +222,15 @@ Break  <BUFSEC -- BUFFER A SECTOR AND SET UP A TRANSFER>
 ;       Carry set if error (user FAILed to I 24)
 
         procedure   BUFSEC,NEAR
-        DOSAssume   CS,<DS>,"BufSec"
+        DOSAssume   SS,<DS>,"BufSec"
         ASSUME  ES:NOTHING
 
         Assert      ISDPB,<ES,BP>,"BufSec"
         MOV     DX,[CLUSNUM]
         MOV     BL,[SECCLUSPOS]
         MOV     [ALLOWED],allowed_FAIL + allowed_RETRY + allowed_IGNORE
-        CALL    HMA_FIGREC
-        invoke  GETBUFFR
+        CALL    ClusterToSector
+        invoke  ReadBuffer
         JNC     BufReady
         RET
 BufReady:
@@ -259,7 +256,7 @@ Break   <BUFRD, BUFWRT -- PERFORM BUFFERED READ AND WRITE>
 ; Carry set if error (currently user FAILed to I 24)
 
         procedure   BUFRD,NEAR
-        DOSAssume   CS,<DS>,"BufRd"
+        DOSAssume   SS,<DS>,"BufRd"
         ASSUME  ES:NOTHING
 
         Assert      ISDPB,<ES,BP>,"BufRd"
@@ -287,11 +284,11 @@ EVENRD:
         Assert  ISBUF,<DS,DI>,"BufRD/EvenRD"
         LEA     BX,[DI.BufInSiz]
         SUB     SI,BX                   ; Position in buffer
-        invoke  PLACEBUF
+        invoke  PlaceBuffer
         Assert  ISDPB,<ES,BP>,"BufRD/EvenRD"
         CMP     SI,ES:[BP.dpb_sector_size] ; Read Last byte?
         JB      RBUFPLACEDC             ; No, leave buf where it is
-        invoke  PLACEHEAD               ; Make it prime candidate for chucking
+        invoke  PlaceBufferHead               ; Make it prime candidate for chucking
                                         ;  even though it is MRU.
 RBUFPLACEDC:
         CLC
@@ -306,7 +303,7 @@ EndProc BUFRD
 ; Carry set if error (currently user FAILed to I 24)
 
         procedure   BUFWRT,NEAR
-        DOSAssume   CS,<DS>,"BufWrt"
+        DOSAssume   SS,<DS>,"BufWrt"
         ASSUME  ES:NOTHING
 
         Assert      ISDPB,<ES,BP>,"BufWrt"
@@ -342,18 +339,18 @@ EVENWRT:
 
         TEST    [BX.buf_flags],buf_dirty  ;LB. if already dirty                 ;AN000;
         JNZ     yesdirty                  ;LB.    don't increment dirty count   ;AN000;
-        invoke  INC_DIRTY_COUNT           ;LB.                                  ;AN000;
+        invoke  IncrementDirtyCount           ;LB.                                  ;AN000;
         OR      [BX.buf_flags],buf_dirty
 yesdirty:
         LEA     SI,[BX.BufInSiz]
         SUB     DI,SI                   ; Position in buffer
         MOV     SI,DI
         MOV     DI,BX
-        invoke  PLACEBUF
+        invoke  PlaceBuffer
         Assert  ISDPB,<ES,BP>,"BufWrt/EvenWrt"
         CMP     SI,ES:[BP.dpb_sector_size]  ; Written last byte?
         JB      WBUFPLACED              ; No, leave buf where it is
-        invoke  PLACEHEAD               ; Make it prime candidate for chucking
+        invoke  PlaceBufferHead               ; Make it prime candidate for chucking
                                         ;  even though it is MRU.
 WBUFPLACED:
         CLC
@@ -368,7 +365,7 @@ Break   <NEXTSEC -- Compute next sector to read or write>
 ; ES:BP Points to DPB
 
         procedure   NEXTSEC,NEAR
-        DOSAssume   CS,<DS>,"NextSec"
+        DOSAssume   SS,<DS>,"NextSec"
         ASSUME  ES:NOTHING
 
         Assert      ISDPB,<ES,BP>,"NextSec"
@@ -379,7 +376,7 @@ Break   <NEXTSEC -- Compute next sector to read or write>
         CMP     AL,ES:[BP.dpb_cluster_mask]
         JBE     SAVPOS
         MOV     BX,[CLUSNUM]
-        Invoke  HMA_IsEOF
+        invoke ClusterIsEOF
         JAE     NONEXT
 ;; 11/5/86 FastSeek
         TEST    [FastSeekflg],Fast_yes            ; fastseek installed?         ;AN000;
@@ -391,7 +388,7 @@ Break   <NEXTSEC -- Compute next sector to read or write>
         TEST    [FastSeekflg],FS_begin  ; from R/W                              ;AN000;
         JZ      do_norm2                ; no                                    ;AN000;
 look2:                                                                          ;AN000;
-        invoke  FastSeek_Lookup         ; call lookup                           ;AN000;
+        CallResident FastSeek_Lookup         ; call lookup                           ;AN000;
         JNC     clusgot                 ; found one                             ;AN000;
 
         CMP     DI,1                              ; valid drive ,e.g. C,D...    ;AN000;
@@ -405,9 +402,9 @@ parfound2:
                                         ; use the old bx                        ;AN000;
                                                                                 ;AN000;
 do_norm2:
-        invoke  HMA_UNPACK
+        invoke ReadClusterEntry
         JC      NONEXT
-        invoke  FastSeek_Insert         ; call insert                           ;AN000;
+        CallResident FastSeek_Insert         ; call insert                           ;AN000;
         AND     [FastSeekflg],FS_no_insert  ; clear insert flag                 ;AN000;
                                                                                 ;AN000;
 clusgot:
@@ -446,7 +443,7 @@ Break   <OPTIMIZE -- DO A USER DISK REQUEST WELL>
 ; ES:BP unchanged. Note that segment of transfer not set.
 
         procedure   OPTIMIZE,NEAR
-        DOSAssume   CS,<DS>,"Optimize"
+        DOSAssume   SS,<DS>,"Optimize"
         ASSUME  ES:NOTHING
 
         Assert      ISDPB,<ES,BP>,"Optimize"
@@ -478,7 +475,7 @@ OPTCLUS:
         JZ      do_norm3                          ; no                          ;AN000;
         TEST    [FastSeekflg],FS_insert           ; is in insert mode ?         ;AN000;
         JNZ     do_norm3                          ; yes                         ;AN000;
-        invoke  FastSeek_Lookup                   ; call lookup                 ;AN000;
+        CallResident FastSeek_Lookup                   ; call lookup                 ;AN000;
         JNC     clusgot2                          ; found one                   ;AN000;
 
         CMP     DI,1                              ; valid drive ,e.g. C,D...    ;AN000;
@@ -492,10 +489,10 @@ par_found3:
         OR      [FastSeekflg],FS_insert           ; prepare for insertion       ;AN000;
                                                   ; use old bx                  ;AN000;
 do_norm3:
-        invoke  HMA_UNPACK
+        invoke ReadClusterEntry
         JC      OP_ERR
 clusgot2:
-        invoke  FastSeek_Insert         ; call insert                           ;AN000;
+        CallResident FastSeek_Insert         ; call insert                           ;AN000;
         INC     [FSeek_logclus]         ; insert to next position               ;AN000;
 ;;; 11/5/86 FastSeek                                                            ;AN000;
         ADD     CL,AL
@@ -521,7 +518,7 @@ FINCLUS:
         SUB     BX,DX           ; Number of new clusters accessed
         ADD     [LASTPOS],BX
         POP     BX              ; BL = sector postion within cluster
-        invoke  HMA_FIGREC
+        invoke  ClusterToSector
         MOV     BX,SI
         AND     [FastSeekflg],FS_no_insert  ; clear insert flag
         CLC
@@ -553,7 +550,7 @@ Break   <FIGREC -- Figure sector in allocation unit>
 ;       [HIGH_SECTOR] Physical sector address (HIGH)
 ; No other registers affected.
 
-        procedure   HMA_FIGREC,NEAR
+        procedure   ClusterToSector,NEAR
 ASSUME  DS:NOTHING,ES:NOTHING
 
         Assert      ISDPB,<ES,BP>,"FigRec"
@@ -578,11 +575,9 @@ noshift:
         ADC     [HIGH_SECTOR],0              ;F.C. >32mb
         POP     CX
         RET
-EndProc HMA_FIGREC
+EndProc ClusterToSector
 
-LAST ENDS
 
-CODE SEGMENT BYTE PUBLIC 'CODE'
 Break   <ALLOCATE -- Assign disk space>
 
 ;***    ALLOCATE - Allocate Disk Space
@@ -662,27 +657,16 @@ Break   <ALLOCATE -- Assign disk space>
 ;
 ;       USES    ALL but SI, BP
 
-        PUBLIC ALLOCATE_VECTOR
-ALLOCATE_VECTOR DW OFFSET DOSGROUP:AllocateFar
-        PROCEDURE ALLOCATE,NEAR
-        JMP WORD PTR CS:[ALLOCATE_VECTOR]
-AllocateFar:
-        PUSH AX
-        MOV AH,65
-        JMP FCB_SELECTED
-EndProc ALLOCATE
-CODE ENDS
 
-LAST SEGMENT PARA PUBLIC 'LAST'
-        PROCEDURE   HMA_ALLOCATE,NEAR
+        PROCEDURE   AllocateClusters,NEAR
 
-        DOSAssume   CS,<DS>,"Allocate"
+        DOSAssume   SS,<DS>,"Allocate"
         ASSUME  ES:NOTHING
 
         Assert      ISDPB,<ES,BP>,"Allocate"
         PUSH    BX                      ; save (bx)
         XOR     BX,BX
-        invoke  HMA_UNPACK
+        invoke ReadClusterEntry
         MOV     [FATBYT],DI             ; save correct cluster 0 value
         POP     BX
         JNC     AllocScan
@@ -721,7 +705,7 @@ FINDFRE:
         JBE     aupk
         jmp     ads7            ; at end of disk
 aupk:
-        invoke  HMA_UNPACK          ; check out this cluster
+        invoke ReadClusterEntry          ; check out this cluster
         jc      ads4            ; FAT error             [INTERR?]
         jnz     findfre         ; not free, keep on truckin
 
@@ -733,7 +717,7 @@ aupk:
         mov     es:[bp.dpb_next_free],bx        ; next time start search here
         xchg    ax,dx           ; save (dx) in ax
         mov     dx,1            ; mark this free guy as "1"
-        invoke  HMA_PACK            ; set special "temporary" mark
+        invoke WriteClusterEntry            ; set special "temporary" mark
         jc      ads4            ; FAT error             [INTERR?]
         CMP     ES:[BP.dpb_free_cnt],-1 ; Free count valid?
         JZ      NO_ALLOC                ; No
@@ -742,7 +726,7 @@ NO_ALLOC:
         xchg    ax,dx           ; (dx) = current last cluster in file
         XCHG    BX,DX
         MOV     AX,DX
-        invoke  HMA_PACK            ; link free cluster onto file
+        invoke WriteClusterEntry            ; link free cluster onto file
                                 ;  CAVEAT.. On Nul file, first pass stuffs
                                 ;    cluster 0 with FIRCLUS value.
         jc      ads4            ; FAT error             [INTERR?]
@@ -755,7 +739,7 @@ NO_ALLOC:
 ;       (BX) = last cluster in file
 
         MOV     DX,0FFFFH
-        invoke  HMA_PACK            ; mark last cluster EOF
+        invoke WriteClusterEntry            ; mark last cluster EOF
 
 ;   Note that FAT errors jump here to clean the stack and exit.  this saves us
 ;   2 whole bytes.  Hope its worth it...
@@ -766,7 +750,7 @@ NO_ALLOC:
 ads4:   POP     BX
         POP     CX              ; Don't need this stuff since we're successful
         JC      AllocReturn
-        invoke  HMA_UNPACK          ; Get first cluster allocated for return
+        invoke ReadClusterEntry          ; Get first cluster allocated for return
                                 ; CAVEAT... In nul file case, UNPACKs cluster 0.
         JC      AllocReturn
         invoke  RESTFATBYT      ; Restore correct cluster 0 value
@@ -801,7 +785,7 @@ dofastk:
         PUSH    CX
         MOV     CX,BX                             ; set up firclus #
         MOV     [FSeek_firclus],BX                ; update firclus varible
-        invoke  FastSeek_Open                     ; create this file entry
+        CallResident FastSeek_Open                     ; create this file entry
         POP     CX
 do_norm5:
         POP     ES
@@ -850,13 +834,13 @@ endif
         STC
         RET
 
-EndProc HMA_ALLOCATE
+EndProc AllocateClusters
 
 ; SEE ALLOCATE CAVEAT
 ;       Carry set if error (currently user FAILed to I 24)
 
         procedure   RESTFATBYT,NEAR
-        DOSAssume   CS,<DS>,"RestFATByt"
+        DOSAssume   SS,<DS>,"RestFATByt"
         ASSUME  ES:NOTHING
 
         PUSH    BX
@@ -864,18 +848,16 @@ EndProc HMA_ALLOCATE
         PUSH    DI
         XOR     BX,BX
         MOV     DX,[FATBYT]
-        invoke  HMA_PACK
+        invoke WriteClusterEntry
         POP     DI
         POP     DX
         POP     BX
         RET
 
 EndProc RESTFATBYT
-LAST ENDS
 
-CODE SEGMENT BYTE PUBLIC 'CODE'
 
-Break   <RELEASE -- DEASSIGN DISK SPACE>
+Break   <ReleaseClusters -- DEASSIGN DISK SPACE>
 
 ; Inputs:
 ;       BX = Cluster in file
@@ -885,24 +867,24 @@ Break   <RELEASE -- DEASSIGN DISK SPACE>
 ;       Carry set if error (currently user FAILed to I 24)
 ; AX,BX,DX,DI all destroyed. Other registers unchanged.
 
-        procedure   RELEASE,NEAR
-        DOSAssume   CS,<DS>,"Release"
+        procedure   ReleaseClusters,NEAR
+        DOSAssume   SS,<DS>,"ReleaseClusters"
         ASSUME  ES:NOTHING
 
         XOR     DX,DX
 entry   RELBLKS
-        DOSAssume   CS,<DS>,"RelBlks"
+        DOSAssume   SS,<DS>,"RelBlks"
         Assert      ISDPB,<ES,BP>,"RelBlks"
 
 ;   Enter here with DX=0FFFFH to put an end-of-file mark in the first cluster
 ;   and free the rest in the chain.
 
-        invoke  UNPACK
+        invoke ReadClusterEntry
         retc
         retz
         MOV     AX,DI
         PUSH    DX
-        invoke  PACK
+        invoke WriteClusterEntry
         POP     DX
         retc
         OR      DX,DX
@@ -914,10 +896,10 @@ NO_DEALLOC:
         MOV     BX,AX
         dec     ax              ; check for "1"
         retz                    ; is last cluster of incomplete chain
-        Invoke  IsEOF
-        JB      RELEASE         ; Carry clear if JMP not taken
+        invoke ClusterIsEOF
+        JB      ReleaseClusters         ; Carry clear if JMP not taken
 ret12:  return
-EndProc RELEASE
+EndProc ReleaseClusters
 
 Break   <GETEOF -- Find the end of a file>
 
@@ -931,15 +913,15 @@ Break   <GETEOF -- Find the end of a file>
 ; DI destroyed. No other registers affected.
 
         procedure   GETEOF,NEAR
-        DOSAssume   CS,<DS>,"GetEOF"
+        DOSAssume   SS,<DS>,"GetEOF"
         ASSUME  ES:NOTHING
 
         Assert      ISDPB,<ES,BP>,"GetEof"
-        invoke  UNPACK
+        invoke ReadClusterEntry
         retc
         PUSH    BX
         MOV     BX,DI
-        Invoke  IsEOF
+        invoke ClusterIsEOF
         POP     BX
         JAE     RET12           ; Carry clear if jmp
         MOV     BX,DI
@@ -960,18 +942,25 @@ Break   <FS_TRUNC_EOF - truncate EOF for Fastseek>
         ASSUME  ES:NOTHING,DS:NOTHING
 
         MOV     BX,DI                             ; get beginning physical#     ;AN000;
-        invoke  IsEOF                             ; is EOF                      ;AN000;
+        invoke ClusterIsEOF                             ; is EOF                      ;AN000;
         JB      noteof2                           ; no                          ;AN000;
         PUSH    [FSeek_logclus]                   ;                             ;AN000;
         PUSH    [FSeek_logsave]                   ; logclus=logsave             ;AN000;
         POP     [FSeek_logclus]                   ; delete EOF                  ;AN000;
-        invoke  FastSeek_Truncate                 ;                             ;AN000;
+        CallResident FastSeek_Truncate                 ;                             ;AN000;
         POP     [FSeek_logclus]                   ; redo the look up            ;AN000;
         CLC                                                                     ;AN000;
 noteof2:                                                                        ;AN000;
         return                                                                  ;AN000;
 EndProc FS_TRUNC_EOF                                                            ;AN000;
 
-CODE    ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC RomEntries
+RomEntries LABEL WORD
+        DW OFFSET DOSGROUP:FIGREC_VECTOR, OFFSET DOSGROUP:ClusterToSector
+        DW OFFSET DOSGROUP:ALLOCATE_VECTOR, OFFSET DOSGROUP:AllocateClusters
+        DW OFFSET DOSGROUP:RELEASE_VECTOR, OFFSET DOSGROUP:ReleaseClusters
+        DW 0
+DOSEND ENDS
     END
-

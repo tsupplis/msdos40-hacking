@@ -49,6 +49,42 @@ INCLUDE DEVSYM.INC
     i_need  SaveCurFlg,BYTE			 ;AN000;
 
 
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry $STD_CON_INPUT,154
+        DosCodeEntry $STD_CON_OUTPUT,155
+        DosCodeEntry $STD_AUX_INPUT,156
+        DosCodeEntry $STD_AUX_OUTPUT,157
+        DosCodeEntry $STD_PRINTER_OUTPUT,158
+        DosCodeEntry $STD_CON_INPUT_STATUS,159
+        DosCodeEntry $STD_CON_INPUT_FLUSH,160
+        DosCodeEntry BUFOUT,152
+
+; INT 2Fh/1205h supplies the character in AL and retains the caller's SS.
+; INT 21h selects the DOS I/O stack when called from an application.
+        PUBLIC OUTT
+OUTT PROC NEAR
+        PUSH AX
+        PUSH DX
+        MOV DL,AL
+        PUSH BX
+        MOV BX,SS
+        MOV AX,CS
+        CMP AX,BX
+        POP BX
+        JNE OutputFromApplication
+        CALL $STD_CON_OUTPUT
+        JMP SHORT OutputDone
+OutputFromApplication:
+        MOV AH,2
+        INT 21h
+OutputDone:
+        POP DX
+        POP AX
+        RET
+OUTT ENDP
+CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
 Break
 
 ; Inputs:
@@ -58,7 +94,7 @@ Break
 ; Returns:
 ;	AL = character
 
-	procedure   $STD_CON_INPUT,NEAR   ;System call 1
+	procedure   ReadConsoleEcho,NEAR   ;System call 1
 ASSUME	DS:NOTHING,ES:NOTHING
 
  IF  DBCS					;AN000;
@@ -72,19 +108,19 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	jnz	sj0				;AN000;
 	mov	[SaveCurFlg],1			;AN000;
 sj0:						;AN000;
-	invoke	OUTT				;AN000;
+	invoke	OutputChar				;AN000;
 	mov	[SaveCurFLg],0			;AN000;
 	pop	AX				;AN000;
 	popf					;AN000;
-	jz	$STD_CON_INPUT			;AN000;
+	jz	ReadConsoleEcho			;AN000;
  ELSE						;AN000;
-	invoke	$STD_CON_INPUT_NO_ECHO
+	invoke	ReadConsoleNoEcho
 	PUSH	AX
-	invoke	OUTT
+	invoke	OutputChar
 	POP	AX
  ENDIF						;AN000;
 	return
-EndProc $STD_CON_INPUT
+EndProc ReadConsoleEcho
 
 Break
 
@@ -95,13 +131,13 @@ Break
 ; Returns:
 ;	None
 
-	procedure   $STD_CON_OUTPUT,NEAR   ;System call 2
+	procedure   WriteConsoleChar,NEAR   ;System call 2
 	public	OUTCHA			       ;AN000;
 ASSUME	DS:NOTHING,ES:NOTHING
 
 	MOV	AL,DL
 
-	entry	OUTT
+	entry	OutputChar
 	CMP	AL,20H
 	JB	CTRLOUT
 	CMP	AL,c_DEL
@@ -115,10 +151,10 @@ OUTCH:
 	AND	BYTE PTR [CHARCO],00111111B	;AN000; every 64th char
 	JNZ	OUTSKIP
 	PUSH	AX
-	invoke	STATCHK
+	CallResident STATCHK
 	POP	AX
 OUTSKIP:
-	invoke	RAWOUT				;output the character
+	invoke	WriteRawCharacter				;output the character
 	POP	SI
 	POP	DS
  IF  DBCS				;AN000;
@@ -131,7 +167,7 @@ OUTSKIP:
 	PUSH	DS
 	PUSH	SI
 	MOV	BX,1
-	invoke	GET_IO_SFT
+	invoke GetConsoleSft
 	JC	TRIPOPJ
 	MOV	BX,[SI.sf_flags]
 	TEST	BX,sf_isnet			; output to NET?
@@ -139,7 +175,7 @@ OUTSKIP:
 	TEST	BX,devid_device 		; output to file?
 	JZ	TRIPOPJ 			; if so, no echo
 	MOV	BX,4
-	invoke	GET_IO_SFT
+	invoke GetConsoleSft
 	JC	TRIPOPJ
 	TEST	[SI.sf_flags],sf_net_spool	; StdPrn redirected?
 	JZ	LISSTRT2J			; No, OK to echo
@@ -169,7 +205,7 @@ CTRLOUT:
 	JCXZ	POPTAB
 TABLP:
 	MOV	AL," "
-	invoke	OUTT
+	invoke	OutputChar
 	LOOP	TABLP
 POPTAB:
 	POP	CX
@@ -178,13 +214,13 @@ POPTAB:
 ZERPOS:
 	MOV	BYTE PTR [CARPOS],0
 	JMP	OUTCH
-OUTJ:	JMP	OUTT
+OUTJ:	JMP	OutputChar
 
 BACKPOS:
 	DEC	BYTE PTR [CARPOS]
 	JMP	OUTCH
 
-	entry	BUFOUT
+	entry	PrintBufferCharacter
 	CMP	AL," "
 	JAE	OUTJ		;Normal char
 	CMP	AL,9
@@ -200,13 +236,12 @@ NOT_CTRLU:
 
 	PUSH	AX
 	MOV	AL,"^"
-	invoke	OUTT		;Print '^' before control chars
+	invoke	OutputChar		;Print '^' before control chars
 	POP	AX
 	OR	AL,40H		;Turn it into Upper case mate
 CTRLU:
-	invoke	OUTT
-	return
-EndProc $STD_CON_OUTPUT
+	JMP	OutputChar
+EndProc WriteConsoleChar
 
 Break
 
@@ -217,24 +252,24 @@ Break
 ; Returns:
 ;	Character in AL
 
-	procedure   $STD_AUX_INPUT,NEAR   ;System call 3
+	procedure   ReadAuxChar,NEAR   ;System call 3
 ASSUME	DS:NOTHING,ES:NOTHING
 
-	invoke	STATCHK
+	CallResident STATCHK
 	MOV	BX,3
-	invoke	GET_IO_SFT
+	invoke GetConsoleSft
 	retc
 	JMP	SHORT TAISTRT
 AUXILP:
-	invoke	SPOOLINT
+	CallResident SPOOLINT
 TAISTRT:
 	MOV	AH,1
-	invoke	IOFUNC
+	CallResident IOFUNC
 	JZ	AUXILP
 	XOR	AH,AH
-	invoke	IOFUNC
+	CallResident IOFUNC
 	return
-EndProc $STD_AUX_INPUT
+EndProc ReadAuxChar
 
 Break
 
@@ -245,14 +280,14 @@ Break
 ; Returns:
 ;	Nothing
 
-	procedure   $STD_AUX_OUTPUT,NEAR   ;System call 4
+	procedure   WriteAuxChar,NEAR   ;System call 4
 ASSUME	DS:NOTHING,ES:NOTHING
 
 	PUSH	BX
 	MOV	BX,3
 	JMP	SHORT SENDOUT
 
-EndProc $STD_AUX_OUTPUT
+EndProc WriteAuxChar
 
 Break
 
@@ -263,7 +298,7 @@ Break
 ; Returns:
 ;	None
 
-	procedure   $STD_PRINTER_OUTPUT,NEAR   ;System call 5
+	procedure   WritePrinterChar,NEAR   ;System call 5
 ASSUME	DS:NOTHING,ES:NOTHING
 
 	PUSH	BX
@@ -272,18 +307,18 @@ ASSUME	DS:NOTHING,ES:NOTHING
 SENDOUT:
 	MOV	AL,DL
 	PUSH	AX
-	invoke	STATCHK
+	CallResident STATCHK
 	POP	AX
 	PUSH	DS
 	PUSH	SI
 LISSTRT2:
-	invoke	RAWOUT2
+	invoke	WriteRawHandle
 TRIPOP:
 	POP	SI
 	POP	DS
 	POP	BX
 	return
-EndProc $STD_PRINTER_OUTPUT
+EndProc WritePrinterChar
 
 Break
 
@@ -294,15 +329,15 @@ Break
 ; Returns:
 ;	AL = -1 character available, = 0 no character
 
-	procedure   $STD_CON_INPUT_STATUS,NEAR	 ;System call 11
+	procedure   ConsoleStatus,NEAR	 ;System call 11
 ASSUME	DS:NOTHING,ES:NOTHING
 
-	invoke	STATCHK
+	CallResident STATCHK
 	MOV	AL,0			; no xor!!
 	retz
 	OR	AL,-1
 	return
-EndProc $STD_CON_INPUT_STATUS
+EndProc ConsoleStatus
 
 Break
 
@@ -313,16 +348,16 @@ Break
 ; Returns:
 ;	Whatever call in AL returns or AL=0 if AL was not 1,6,7,8 or 10
 
-	procedure   $STD_CON_INPUT_FLUSH,NEAR	;System call 12
+	procedure   FlushConsole,NEAR	;System call 12
 ASSUME	DS:NOTHING,ES:NOTHING
 
 	PUSH	AX
 	PUSH	DX
 	XOR	BX,BX
-	invoke	GET_IO_SFT
+	invoke GetConsoleSft
 	JC	BADJFNCON
 	MOV	AH,4
-	invoke	IOFUNC
+	CallResident IOFUNC
 
 BADJFNCON:
 	POP	DX
@@ -347,8 +382,20 @@ REDISPJ:
 				  ;AN000; set DS same as one from COMMAND entry
  ENDIF
 	CLI
-	transfer    REDISP
-EndProc $STD_CON_INPUT_FLUSH
-
-CODE	ENDS
+	CallResident REDISP
+EndProc FlushConsole
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC Cpmio2Entries
+Cpmio2Entries LABEL WORD
+        DW OFFSET DOSGROUP:$STD_CON_INPUT_VECTOR, OFFSET DOSGROUP:ReadConsoleEcho
+        DW OFFSET DOSGROUP:$STD_CON_OUTPUT_VECTOR, OFFSET DOSGROUP:WriteConsoleChar
+        DW OFFSET DOSGROUP:$STD_AUX_INPUT_VECTOR, OFFSET DOSGROUP:ReadAuxChar
+        DW OFFSET DOSGROUP:$STD_AUX_OUTPUT_VECTOR, OFFSET DOSGROUP:WriteAuxChar
+        DW OFFSET DOSGROUP:$STD_PRINTER_OUTPUT_VECTOR, OFFSET DOSGROUP:WritePrinterChar
+        DW OFFSET DOSGROUP:$STD_CON_INPUT_STATUS_VECTOR, OFFSET DOSGROUP:ConsoleStatus
+        DW OFFSET DOSGROUP:$STD_CON_INPUT_FLUSH_VECTOR, OFFSET DOSGROUP:FlushConsole
+        DW OFFSET DOSGROUP:BUFOUT_VECTOR, OFFSET DOSGROUP:PrintBufferCharacter
+        DW 0
+DOSEND ENDS
     END

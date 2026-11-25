@@ -8,7 +8,7 @@ Break
 ; Returns:
 ;       None
 
-        procedure   $STD_CON_STRING_INPUT,NEAR   ;System call 10
+        procedure   ReadConsoleLine,NEAR   ;System call 10
 ASSUME  DS:NOTHING,ES:NOTHING
 
 IF LINEEDIT
@@ -54,12 +54,12 @@ NEWLIN:
         MOV     DI,OFFSET DOSGROUP:INBUF        ;Build the new line here
         MOV     [INSMODE],CH    ;Insert mode off
 IF LINEEDIT
-        mov     al,cs:EditActive
+        mov     al,ss:EditActive
         mov     [INSMODE],al
 ENDIF
         MOV     BH,CH           ;No chars from template yet
         MOV     DH,CH           ;No chars to new line yet
-        invoke  $STD_CON_INPUT_NO_ECHO          ;Get first char
+        invoke  ReadConsoleNoEcho          ;Get first char
         CMP     AL,c_LF         ;Linefeed
         JNZ     GOTCH           ;Filter out LF so < works
 ;
@@ -71,7 +71,7 @@ ENDIF
 ;   DL is the length of the buffer
 ;
 entry   GETCH
-        invoke  $STD_CON_INPUT_NO_ECHO
+        invoke  ReadConsoleNoEcho
 GOTCH:
 ;
 ; Brain-damaged TP ignored ^F in case his BIOS did not flush the
@@ -133,7 +133,7 @@ ENDIF
 ;
 SAVCH:
 IF LINEEDIT
-        cmp     cs:EditActive,0
+        cmp     ss:EditActive,0
         je      OldSave
         call    EditPut
         jc      BUFFUL
@@ -144,7 +144,7 @@ ENDIF
         JAE     BUFFUL                  ; buffer is full.
         STOSB
         INC     DH                      ; increment count in buffer.
-        invoke  BUFOUT                  ;Print control chars nicely
+        invoke  PrintBufferCharacter                  ;Print control chars nicely
 SavedChar:
         CMP     BYTE PTR [INSMODE],0
         JNZ     GETCH                   ; insertmode => don't advance template
@@ -158,12 +158,12 @@ BACKSPJ: JMP    SHORT BACKSP
 
 BUFFUL:
         MOV     AL,7                    ; Bell to signal full buffer
-        invoke  OUTT
+        invoke  OutputChar
         JMP     SHORT GETCH
 
 ESCape:                         ;change reserved keyword DBM 5-7-87
 IF LINEEDIT
-        cmp     cs:EditActive,0
+        cmp     ss:EditActive,0
         je      OldEscape
         jmp     EditKey
 OldEscape:
@@ -176,7 +176,7 @@ IF LINEEDIT
         mov     al,c_CR
 ENDIF
         STOSB                           ; Put the CR in the buffer
-        invoke  OUTT                    ; Echo it
+        invoke  OutputChar                    ; Echo it
         POP     DI                      ; Get start of user buffer
         MOV     [DI-1],DH               ; Tell user how many bytes
         INC     DH                      ; DH is length including CR
@@ -194,7 +194,7 @@ PHYCRLF:
 IF LINEEDIT
         call    EditFinish
 ENDIF
-        invoke  CRLF
+        invoke  ConsoleNewLine
         JMP     GETCH
 
 ;
@@ -237,10 +237,10 @@ GetChJ:
 ;
         entry   KILNEW
         MOV     AL,"\"
-        invoke  OUTT            ;Print the CANCEL indicator
+        invoke  OutputChar            ;Print the CANCEL indicator
         POP     SI              ;Remember start of edit buffer
 PUTNEW:
-        invoke  CRLF            ;Go to next line on screen
+        invoke  ConsoleNewLine            ;Go to next line on screen
         MOV     AL,[STARTPOS]
         invoke  TAB             ;Tab over
         JMP     NEWLIN          ;Start over again
@@ -251,7 +251,7 @@ PUTNEW:
 ;
 entry   BackSp
 IF LINEEDIT
-        cmp     cs:EditActive,0
+        cmp     ss:EditActive,0
         je      OldBack
         jmp     EditBack
 OldBack:
@@ -321,11 +321,11 @@ BACKUP:
         DEC     DI
 BACKMES:
         MOV     AL,c_BS         ;Backspace
-        invoke  OUTT
+        invoke  OutputChar
         MOV     AL," "          ;Erase
-        invoke  OUTT
+        invoke  OutputChar
         MOV     AL,c_BS         ;Backspace
-        JMP     OUTT            ;Done
+        JMP     OutputChar            ;Done
 
 ;User really wants an ESC character in his line
         entry   TwoEsc
@@ -348,7 +348,7 @@ BACKMES:
 ;Copy CX chars from template to line
 COPYEACH:
 IF LINEEDIT
-        cmp     cs:EditActive,0
+        cmp     ss:EditActive,0
         je      OldCopy
         mov     byte ptr [INSMODE],0
 EditCopy:
@@ -370,7 +370,7 @@ ENDIF
         JZ      GETCH2                  ;At end of template, can't do anything
         LODSB
         STOSB
-        invoke  BUFOUT
+        invoke  PrintBufferCharacter
         INC     BH                      ;Ahead in template
         INC     DH                      ;Ahead in line
         LOOP    COPYEACH
@@ -398,10 +398,10 @@ GETCH2:
 ;       Make sure nothing extra on stack when this routine
 ;       is called!!! (no PUSHes before calling it).
 FINDOLD:
-        invoke  $STD_CON_INPUT_NO_ECHO
+        invoke  ReadConsoleNoEcho
         CMP     AL,[ESCCHAR]            ; did he type a function key?
         JNZ     FindSetup               ; no, set up for scan
-        invoke  $STD_CON_INPUT_NO_ECHO  ; eat next char
+        invoke  ReadConsoleNoEcho  ; eat next char
         JMP     NotFnd                  ; go try again
 FindSetup:
         MOV     CL,BL
@@ -430,7 +430,7 @@ NOTFND:
 
 entry   REEDIT
         MOV     AL,"@"          ;Output re-edit character
-        invoke  OUTT
+        invoke  OutputChar
         POP     DI
         PUSH    DI
         PUSH    ES
@@ -453,14 +453,14 @@ entry   REEDIT
         JMP     SAVCH
 
 ;Output a CRLF
-        entry   CRLF
+        entry   ConsoleNewLine
         MOV     AL,c_CR
-        invoke  OUTT
+        invoke  OutputChar
         MOV     AL,c_LF
-        JMP     OUTT
+        JMP     OutputChar
 
 IF LINEEDIT
 include lineedit.asm
 ENDIF
-EndProc $STD_CON_STRING_INPUT
+EndProc ReadConsoleLine
 

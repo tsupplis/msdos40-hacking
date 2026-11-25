@@ -87,7 +87,13 @@ IF	BUFFERFLAG
 ENDIF
 
 
-Break	<DSKREAD -- PHYSICAL DISK READ>
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry DskRead,141
+        DosCodeEntry DSKWRITE,142
+CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+Break	<ReadDeviceSectors -- PHYSICAL DISK READ>
 
 ; Inputs:
 ;	DS:BX = Transfer addr
@@ -105,16 +111,16 @@ Break	<DSKREAD -- PHYSICAL DISK READ>
 ;	Zero clear if error (carry clear)
 ; SI Destroyed, others preserved
 
-	procedure   DskRead,NEAR
+	procedure   ReadDeviceSectors,NEAR
 ASSUME	DS:NOTHING,ES:NOTHING
 
-	Assert	ISDPB,<ES,BP>,"DskRead"
+	Assert	ISDPB,<ES,BP>,"ReadDeviceSectors"
 	PUSH	CX
 	MOV	AH,ES:[BP.dpb_media]
 	MOV	AL,ES:[BP.dpb_UNIT]
 	PUSH	BX
 	PUSH	ES
-	invoke	SETREAD
+	CallResident SETREAD
 	JMP	DODSKOP
 
 Break	<DWRITE -- SEE ABOUT WRITING>
@@ -137,7 +143,7 @@ Break	<DWRITE -- SEE ABOUT WRITING>
 ASSUME	DS:NOTHING,ES:NOTHING
 
 	Assert	ISDPB,<ES,BP>,"DWrite"
-	CALL	DSKWRITE
+	CALL	WriteDeviceSectors
 	retz			; Carry clear
 	MOV	BYTE PTR [READOP],1
 	invoke	HARDERRRW
@@ -150,7 +156,7 @@ ASSUME	DS:NOTHING,ES:NOTHING
 NO_CAR2:
 	return
 
-Break	<DSKWRITE -- PHYSICAL DISK WRITE>
+Break	<WriteDeviceSectors -- PHYSICAL DISK WRITE>
 
 ; Inputs:
 ;	DS:BX = Transfer addr
@@ -168,22 +174,22 @@ Break	<DSKWRITE -- PHYSICAL DISK WRITE>
 ;	Zero clear if error (carry clear)
 ; SI Destroyed, others preserved
 
-	entry	DSKWRITE
+	entry	WriteDeviceSectors
 ASSUME	DS:NOTHING,ES:NOTHING
 
-	Assert	ISDPB,<ES,BP>,"DskWrite"
+	Assert	ISDPB,<ES,BP>,"WriteDeviceSectors"
 	PUSH	CX
 	MOV	AH,ES:[BP.dpb_media]
 	MOV	AL,ES:[BP.dpb_UNIT]
 	PUSH	BX
 	PUSH	ES
-	invoke	SETWRITE
+	CallResident SETWRITE
 DODSKOP:
 	MOV	CX,DS		; Save DS
 	POP	DS		; DS:BP points to DPB
 	PUSH	DS
 	LDS	SI,DS:[BP.dpb_driver_addr]
-	invoke	DEVIOCALL2
+	CallResident DEVIOCALL2
 	MOV	DS,CX		; Restore DS
 	POP	ES		; Restore ES
 	POP	BX
@@ -195,11 +201,11 @@ DODSKOP:
 	MOV	[IFS_DRIVER_ERR],AX ;IFS. save it for IFS			;AN000;
 	TEST	AX,STERR
 	return
-EndProc DskRead
+EndProc ReadDeviceSectors
 
 
 
-Break	<HardErrRW - map extended errors and call harderr>
+Break	<HardErrRW - map extended errors and CallResident harderr>
 
 ; Inputs:
 ;	AX is error code from read or write
@@ -226,15 +232,13 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	POP	SI
 	POP	DS
 DO_ERR:
-	invoke	HARDERR
+	CallResident HARDERR
 	return
 
 EndProc HARDERRRW
 
-CODE	ENDS
 
 ; SETUP can discard its near return to DOS_READ or DOS_WRITE.
-LAST	SEGMENT PARA PUBLIC 'LAST'
 Break	<SETUP -- SETUP A DISK READ OR WRITE FROM USER>
 
 ; Inputs:
@@ -267,7 +271,7 @@ Break	<SETUP -- SETUP A DISK READ OR WRITE FROM USER>
 ; All other registers destroyed
 
 	procedure   SETUP,NEAR
-	DOSAssume   CS,<DS>,"SetUp"
+	DOSAssume   SS,<DS>,"SetUp"
 	ASSUME	ES:NOTHING
 
 	Assert	    ISSFT,<ES,DI>,"SetUp"
@@ -347,9 +351,7 @@ NOROOM:
 	CLC
 	RET			; RETURN TO CALLER OF CALLER
 EndProc SETUP
-LAST	ENDS
 
-CODE	SEGMENT BYTE PUBLIC  'CODE'
 
 
 Break	<BREAKDOWN -- CUT A USER READ OR WRITE INTO PIECES>
@@ -365,7 +367,7 @@ Break	<BREAKDOWN -- CUT A USER READ OR WRITE INTO PIECES>
 ; AX, BX, DX destroyed. No other registers affected.
 
 	procedure   BREAKDOWN,near
-	DOSAssume   CS,<DS>,"BreakDown"
+	DOSAssume   SS,<DS>,"BreakDown"
 	ASSUME	ES:NOTHING
 
 	Assert	    ISDPB,<ES,BP>,"BreakDown"
@@ -403,7 +405,7 @@ EndProc BreakDown
 ; ES:DI,DS,CX preserved
 
 	procedure READ_LOCK_VIOLATION,NEAR
-	DOSAssume   CS,<DS>,"Read_Lock_Violation"
+	DOSAssume   SS,<DS>,"Read_Lock_Violation"
 	ASSUME	ES:NOTHING
 
 	Assert	    ISSFT,<ES,DI>,"ReadLockViolation"
@@ -419,7 +421,7 @@ ERR_ON_CHECK:
 	POP	CX
 	JNE	NO_HARD_ERR
 HARD_ERR:
-	invoke	LOCK_VIOLATION
+	CallResident LOCK_VIOLATION
 	retnc				; User wants Retrys
 NO_HARD_ERR:
 	XOR	CX,CX			;No bytes transferred
@@ -432,7 +434,7 @@ EndProc READ_LOCK_VIOLATION
 ; Same as READ_LOCK_VIOLATION except for READOP.
 ; This entry used by NET_WRITE
 	procedure WRITE_LOCK_VIOLATION,NEAR
-	DOSAssume   CS,<DS>,"Write_Lock_Violation"
+	DOSAssume   SS,<DS>,"Write_Lock_Violation"
 	ASSUME	ES:NOTHING
 	Assert	    ISSFT,<ES,DI>,"WriteLockViolation"
 
@@ -447,16 +449,14 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	Context DS
 
 	entry	SET_ACC_ERR
-	DOSAssume   CS,<DS>,"SET_ACC_ERR"
+	DOSAssume   SS,<DS>,"SET_ACC_ERR"
 
 	XOR	CX,CX
 	MOV	AX,error_access_denied
 	STC
 	return
 
-CODE	ENDS
 
-LAST	SEGMENT PARA PUBLIC 'LAST'
 Break	<DISKREAD -- PERFORM USER DISK READ>
 
 ; Inputs:
@@ -474,7 +474,7 @@ Break	<DISKREAD -- PERFORM USER DISK READ>
 ;	AX has error code
 
 	procedure   DISKREAD,NEAR
-	DOSAssume   CS,<DS>,"DiskRead"
+	DOSAssume   SS,<DS>,"DiskRead"
 	ASSUME	ES:NOTHING
 
 	Assert	ISSFT,<ES,DI>,"DISKREAD"
@@ -557,14 +557,14 @@ RDLP:
 ASSUME	DS:NOTHING
 	PUSH	DX
 	PUSH	CX
-	invoke	SET_RQ_SC_PARMS 	 ;LB. do this for SC		       ;AN000;
+	invoke SetCacheRequest 	 ;LB. do this for SC		       ;AN000;
 
 IF	BUFFERFLAG
 	pushf
 	cmp	[BUF_EMS_SAFE_FLAG], 1
 	je	safe_read
-	call	save_map
-	call	restore_user_map
+	invoke SaveBufferMap
+	CallResident restore_user_map
 safe_read:
 	popf
 ENDIF
@@ -575,8 +575,8 @@ IF	BUFFERFLAG
 	pushf
 	cmp	[BUF_EMS_SAFE_FLAG], 1
 	je	safe_mapping
-	call	save_user_map
-	call	restore_map
+	CallResident save_user_map
+	invoke RestoreBufferMap
 safe_mapping:
 	popf
 ENDIF
@@ -624,7 +624,7 @@ yesdirty:
 IF	NOT	BUFFERFLAG
 	LDS	DI,[DI.BUFFER_BUCKET]	  ;LB. ds:di is 1st buffer addr 	;AN000;
 	MOV	[FIRST_BUFF_ADDR],DI	  ;LB. save first buff addr 1/19/88	;AN000;
-	invoke	SET_MAP_PAGE		  ;LB. activate handle if EMS there	;AN000;
+	invoke MapBufferPage		  ;LB. activate handle if EMS there	;AN000;
 ELSE
 ;	int	3
 	push	ds
@@ -651,7 +651,7 @@ ELSE
 	pop	dx
 	pop	di
 
-	invoke	SET_MAP_PAGE		  ;LB. activate handle if EMS there	;AN000;
+	invoke MapBufferPage		  ;LB. activate handle if EMS there	;AN000;
 	pop	di			; restore hash ptr.
 	pop	ds
 	LDS	DI,[DI.BUFFER_BUCKET]	  ;LB. ds:di is 1st buffer addr 	;AN000;
@@ -701,10 +701,10 @@ EVENMOV:
 	POP	DX
 	POP	DI
 	MOV	AL,ES:[BP.dpb_drive]
-	invoke	SCANPLACE		 ;LB. done with this chain		;AN000;
+	invoke ScanPlaceBuffer		 ;LB. done with this chain		;AN000;
 	JMP	SHORT end_scan		 ;LB.					;AN000;
 CLBUFF:
-	invoke	SCANPLACE
+	invoke ScanPlaceBuffer
 DONXTBUF:
 	CMP	DI,[FIRST_BUFF_ADDR]	 ;LB. end of buffers			;AN000;
 	JNZ	NXTBUF
@@ -720,7 +720,7 @@ SCAN_DONE:
 	POP	CX
 	POP	BX
 	JCXZ	RDLAST
-	invoke	HMA_IsEOF			; test for eof on fat size
+	invoke ClusterIsEOF			; test for eof on fat size
 	JAE	SETSFT
 	MOV	DL,0
 	INC	[LASTPOS]	; We'll be using next cluster
@@ -750,14 +750,14 @@ RDLAST:
 ;	Carry clear
 
 	entry	SETSFT
-	DOSAssume   CS,<DS>,"SetSFT"
+	DOSAssume   SS,<DS>,"SetSFT"
 	ASSUME	ES:NOTHING
 
 	LES	DI,[THISSFT]
 
 ; Same as SETSFT except ES:DI already points to SFT
 	entry	SETCLUS
-	DOSAssume   CS,<DS>,"SetClus"
+	DOSAssume   SS,<DS>,"SetClus"
 	ASSUME	ES:NOTHING
 
 	Assert	ISSFT,<ES,DI>,"SetClus"
@@ -782,7 +782,7 @@ RDLAST:
 ;	Carry clear
 
 	entry	AddRec
-	DOSAssume   CS,<DS>,"AddRec"
+	DOSAssume   SS,<DS>,"AddRec"
 	ASSUME	ES:NOTHING
 
 	Assert	ISSFT,<ES,DI>,"AddRec"
@@ -792,7 +792,12 @@ RDLAST:
 RET28:	CLC
 	RET
 EndProc DISKREAD
-
-LAST	ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC Disk2Entries
+Disk2Entries LABEL WORD
+        DW OFFSET DOSGROUP:DskRead_VECTOR, OFFSET DOSGROUP:ReadDeviceSectors
+        DW OFFSET DOSGROUP:DSKWRITE_VECTOR, OFFSET DOSGROUP:WriteDeviceSectors
+        DW 0
+DOSEND ENDS
     END
-

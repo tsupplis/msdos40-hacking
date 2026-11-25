@@ -29,7 +29,13 @@ INCLUDE DEVSYM.INC
 
 	i_need	THISSFT,DWORD
 
-BREAK <DOS_DUP -- DUP SFT across network>
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry DOS_DUP,137
+        DosCodeEntry Dos_Dup_Direct,138
+CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+BREAK <DuplicateCurrentSft -- DUP SFT across network>
 
 ; Inputs:
 ;	[THISSFT] set to the SFT for the file being DUPed
@@ -47,22 +53,38 @@ BREAK <DOS_DUP -- DUP SFT across network>
 ;	time with SS NOT DOSGROUP. There will be no Network handles at
 ;	that time.
 
-	procedure   DOS_DUP,NEAR
-	ASSUME	ES:NOTHING,SS:NOTHING
+	procedure   DuplicateCurrentSft,NEAR
+	ASSUME	ES:NOTHING,SS:NOTHING,DS:DOSGROUP
 
 	LES	DI,ThisSFT
-	Entry	Dos_Dup_Direct
+	JMP DuplicateSft
+
+        Entry DuplicateSelectedSft
+        ; The handle path supplies the JFN segment in DS and DOSGROUP in SS.
+        PUSH DS
+        PUSH SS
+        POP DS
+        CALL DuplicateSft
+        POP DS
+        RET
+DuplicateSft:
 	Assert	ISSFT,<ES,DI>,"DOSDup"
-	invoke	IsSFTNet
+	CallResident IsSFTNet,DS
 	JNZ	DO_INC
-	invoke	DEV_OPEN_SFT
+	CallResident DEV_OPEN_SFT,DS
 DO_INC:
 	Assert	ISSFT,<ES,DI>,"DOSDup/DoInc"
 	INC	ES:[DI.sf_ref_count]	; Clears carry (if this ever wraps
 					;   we're in big trouble anyway)
 	return
 
-EndProc DOS_DUP
-
-CODE	ENDS
+EndProc DuplicateCurrentSft
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC DupEntries
+DupEntries LABEL WORD
+        DW OFFSET DOSGROUP:DOS_DUP_VECTOR, OFFSET DOSGROUP:DuplicateCurrentSft
+        DW OFFSET DOSGROUP:Dos_Dup_Direct_VECTOR, OFFSET DOSGROUP:DuplicateSelectedSft
+        DW 0
+DOSEND ENDS
     END

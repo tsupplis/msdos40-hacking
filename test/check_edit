@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Check an interactive COMMAND prompt and a direct 0Ah caller on a scratch floppy."""
+import argparse
 import os
 from pathlib import Path
 import shutil
@@ -7,7 +8,12 @@ import subprocess
 import tempfile
 import time
 
+from hmaprobe import install_probe
 from pcecfg import write_config
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("layout", nargs="?", choices=("near", "far", "high"))
+layout = parser.parse_args().layout
 
 root = Path(__file__).resolve().parents[1]
 work = root / "test/work"
@@ -18,14 +24,27 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
         subprocess.run(args, cwd=folder, check=True, **kwargs)
 
     image = folder / "boot.img"
-    shutil.copyfile(root / "media/msdos40_full.img", image)
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+    for binary in (root / "kernel/dos/msdos.sys", root / "kernel/bios/io.sys"):
+        if subprocess.check_output(["mtype", "-i", image, "::" + binary.name]) != binary.read_bytes():
+            raise SystemExit(f"editor test image differs from {binary}")
+    setup = ""
+    if layout:
+        install_probe(root, folder, image)
+        setup = f"hmaio {layout[0]}!\r\n"
+        configs = {"near": "dos=high", "far": "device=ramdrive.sys 80",
+                   "high": "dos=high,umb\ndevice=himem.sys"}
+        (folder / "config.sys").write_bytes((configs[layout] + "\n").replace("\n", "\r\n").encode())
+        if layout == "high":
+            run("mcopy", "-o", "-i", image, root / "extra/pcehimem.sys", "::HIMEM.SYS")
+        run("mcopy", "-o", "-i", image, "config.sys", "::CONFIG.SYS")
     shutil.copyfile(root / "test/editbuf.asm", folder / "editbuf.asm")
     env = dict(os.environ, EMU2_DRIVE_C=tmp)
     for tool, args in (("masm", "editbuf.asm,editbuf.obj;"),
                        ("link", "editbuf.obj,editbuf.exe,nul;")):
         run("emu2", root / f"sdk/bin/{tool}.exe", args, env=env)
     run("mcopy", "-i", image, "editbuf.exe", "::EDITBUF.EXE")
-    (folder / "auto.bat").write_bytes(b"@echo off\r\nprompt Q$G\r\neditbuf\r\necho on\r\n")
+    (folder / "auto.bat").write_bytes(f"@echo off\r\nprompt Q$G\r\n{setup}editbuf\r\necho on\r\n".encode())
     run("mcopy", "-o", "-i", image, "auto.bat", "::AUTOEXEC.BAT")
     write_config(folder)
     with (folder / "pce.log").open("wb") as log:
@@ -63,6 +82,8 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
 
         try:
             # The probe prints the next case letter after the last passing case.
+            if layout:
+                expect("LAYOUT PASS", anywhere=True)
             expect("EDIT PASS M", anywhere=True)
             expect("Q>")
             print("PASS direct 0Ah buffer cases A-L", flush=True)
@@ -96,6 +117,14 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
             key("Return")
             expect("Q>")
             print("PASS tab repaint and Ctrl-H", flush=True)
+            type_text("echo interrupted")
+            key("+Ctrl c -Ctrl")
+            expect("^C", anywhere=True)
+            expect("Q>")
+            type_text("echo recovered")
+            key("Return")
+            expect("recovered\n\nQ>")
+            print("PASS Ctrl-C and prompt recovery", flush=True)
             # Fill the screen, then wrap and scroll while editing the last row.
             for _ in range(25):
                 key("Return")

@@ -821,7 +821,7 @@ Procedure   FCBRegen,NEAR
 	invoke	CheckShare		; test for sharer
 	JNZ	RegenFail		; yep, fail this.
 	MOV	AX,multNet SHL 8	; install check on multnet
-	invoke	HMA_MULTIPLEX
+	invoke	DosMultiplex
 	OR	AL,AL			; is it there?
 	JZ	RegenDead		; no, just fail the operation
 RegenFail:

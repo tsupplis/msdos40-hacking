@@ -111,23 +111,23 @@ endif
         RET
 FileCollapse ENDP
         EXTRN FCB_SELECTED:NEAR
-        HmaEntry $Open,87
-        HmaEntry $Open2,88
-        HmaEntry $Creat,89
-        HmaEntry $CHMOD,90
-        HmaEntry $UNLINK,91
-        HmaEntry $RENAME,92
-        HmaEntry $CreateNewFile,93
-        HmaEntry $CreateTempFile,94
-        HmaEntry $Extended_Open,95
+        DosCodeEntry $Open,87
+        DosCodeEntry $Creat,89
+        DosCodeEntry $CHMOD,90
+        DosCodeEntry $UNLINK,91
+        DosCodeEntry $RENAME,92
+        DosCodeEntry $CreateNewFile,93
+        DosCodeEntry $CreateTempFile,94
+        DosCodeEntry $Extended_Open,95
 CODE ENDS
-LAST SEGMENT PARA PUBLIC 'LAST'
-Procedure   HMA_$Open,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+Procedure   OpenHandle,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	fmt TypSysCall,LevLog,<"Open\n">
 	fmt TypSysCall,LevArgs,<" Mode = $x file = '$S'\n">,<AX,DS,DX>
 	XOR	AH,AH
-Entry HMA_$Open2				;AN000;
+Entry OpenHandleWithMode				;AN000;
 	mov	ch,attr_hidden+attr_system+attr_directory
 	call	SetAttrib
 	MOV	CX,OFFSET DOSGroup:DOS_Open ; address of routine to call
@@ -146,9 +146,9 @@ IF  DBCS				;AN000;
 	OR	[DOS34_FLAG],DBCS_VOLID ;AN000;;KK. set bit for transpath	       ;AN000;
 novol:					;AN000;
 ENDIF					;AN000;
-	EnterCrit   critSFT
-	invoke	SFNFree 		; get a free sfn
-	LeaveCrit   critSFT
+	CallResident ECritSFT
+	CallResident SFNFree 		; get a free sfn
+	CallResident LCritSFT
 	JC	OpenFailJ		; oops, no free sft's
 	MOV	SFN,BX			; save the SFN for later
 	fmt	TypAccess,LevSFN,<"AccessFile setting SFN to $x\n">,<BX>
@@ -157,7 +157,7 @@ ENDIF					;AN000;
 ;
 ; Find a free area in the user's JFN table.
 ;
-	invoke	JFNFree 		; get a free jfn
+	CallResident JFNFree 		; get a free jfn
 	JNC	SaveJFN
 OpenFailJ:
 	JMP	OpenFail		; there were free JFNs... try SFN
@@ -174,7 +174,7 @@ SaveJFN:
 	MOV	SI,DX			; get name in appropriate place
 	MOV	DI,OFFSET DOSGroup:OpenBuf  ; appropriate buffer
 	SaveReg <CX>			; save routine to call
-	invoke	TransPath		; convert the path
+	CallResident TransPath		; convert the path
 	RestoreReg  <BX>		; restore routine to call
 	LDS	SI,ThisSFT
 	ASSUME	DS:NOTHING
@@ -213,7 +213,7 @@ IF	NOT IBMCOPYRIGHT
 	pop	es
 	push	si
 	pop	di
-	call	Set_EXT_mode
+	invoke SetExtendedMode
 	pop	di
 	pop	es
 
@@ -223,7 +223,7 @@ ENDIF
 
 	Context DS
 	SaveReg <CX>
-	CALL	FileDispatch			; blam!
+	CallResident FileDispatch			; blam!
 	RestoreReg  <CX>
 	LDS	SI,ThisSFT
 	ASSUME	DS:NOTHING
@@ -246,11 +246,11 @@ OpenOK:
 ; sharer.
 ;
 	MOV	AX,JFN
-        CALL FileCollapse
+        CallResident FileCollapse
 	fmt	TypAccess,LevSFN,<"AccessFile setting SFN to -1\n">
 	MOV	SFN,-1			; clear out sfn pointer
 	fmt	TypSysCall,LevLog,<"Open/CreateXX: return $x\n">,<AX>
-	transfer    Sys_Ret_OK		; bye with no errors
+	JMP FileReturnOK		; bye with no errors
 ;Extended Open hooks check
 OpenE2: 				   ;AN000;;EO.
 	CMP	AX,error_invalid_parameter ;AN000;;EO. IFS extended open ?
@@ -279,15 +279,16 @@ OpenCritLeave:
 ;; File Tagging DOS 4.00
 	CMP	SS:[EXTERR],error_Code_Page_Mismatched	;AN000;;FT. code page mismatch
 	JNZ	NORERR					;AN000;;FT. no
-	transfer From_GetSet				;AN000;;FT. yes
+	CallResident From_GetSet
+        ret				;AN000;;FT. yes
 NORERR: 						;AN000;
 
 ;; File Tagging DOS 4.00
-	transfer    Sys_Ret_Err 	; no free, return error
+	JMP FileReturnError 	; no free, return error
 
-EndProc HMA_$Open
+EndProc OpenHandle
 
-BREAK <HMA_$Creat - create a brand-new file>
+BREAK <CreateHandle - create a brand-new file>
 
 ;
 ;   $Creat - create the directory entry specified in DS:DX and give it the
@@ -298,8 +299,8 @@ BREAK <HMA_$Creat - create a brand-new file>
 ;		Carry reset - AX has handle
 ;   Registers modified: all
 
-Procedure   HMA_$Creat,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+Procedure   CreateHandle,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	fmt TypSysCall,LevLog,<"Create\n">
 	fmt TypSysCall,LevArgs,<" Att = $x file = '$S'\n">,<CX,DS,DX>
 IF DBCS 				;AN000;
@@ -310,9 +311,9 @@ ENDIF					;AN000;
 AccessSet:
 	mov	SAttrib,attr_hidden+attr_system
 	JMP	AccessFile		; use good ol' open
-EndProc HMA_$Creat
+EndProc CreateHandle
 
-BREAK <HMA_$CHMOD - change file attributes>
+BREAK <FileAttributes - change file attributes>
 ;
 ;   Assembler usage:
 ;	    LDS     DX, name
@@ -324,12 +325,12 @@ BREAK <HMA_$CHMOD - change file attributes>
 ;	    AX = error_access_denied
 ;
 
-	procedure HMA_$CHMOD,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+	procedure FileAttributes,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	MOV	DI,OFFSET DOSGroup:OpenBuf  ; appropriate buffer
 	SaveReg <AX,CX> 		; save function and attributes
 	MOV	SI,DX			; get things in appropriate places
-	invoke	TransPathSet		; get correct path
+	CallResident TransPathSet		; get correct path
 	RestoreReg  <CX,AX>		; and get function and attrs back
 	JC	ChModErr		; errors get mapped to path not found
 	Context DS			; set up for later possible calls
@@ -340,25 +341,27 @@ BREAK <HMA_$CHMOD - change file attributes>
 	JB	ChModGet		; 0 -> go get value
 	JZ	ChModSet		; 1 -> go set value
 	MOV	EXTERR_LOCUS,errLoc_Unk ; Extended Error Locus
-	error	error_invalid_function	; bad value
+
+	MOV AL,error_invalid_function	; bad value
+	JMP FileReturnError
 ChModGet:
-	invoke	Get_File_Info		; suck out the ol' info
+	invoke GetFileInformation		; suck out the ol' info
 	JC	ChModE			; error codes are already set for ret
-	invoke	Get_User_stack		; point to user saved vaiables
+	CallResident Get_User_stack		; point to user saved vaiables
 	MOV	[SI.User_CX],AX 	; return the attributes
-	transfer    Sys_Ret_OK		; say sayonara
+	JMP FileReturnOK		; say sayonara
 ChModSet:
 	MOV	AX,CX			; get attrs in position
-	invoke	Set_File_Attribute	; go set
+	invoke SetFileAttribute	; go set
 	JC	ChModE			; errors are set
-	transfer    Sys_Ret_OK
+	JMP FileReturnOK
 ChModErr:
 	mov	al,error_path_not_found
 ChmodE:
-	Transfer    SYS_RET_ERR
-EndProc HMA_$ChMod
+	JMP FileReturnError
+EndProc FileAttributes
 
-BREAK <HMA_$UNLINK - delete a file entry>
+BREAK <UnlinkFile - delete a file entry>
 ;
 ;   Assembler usage:
 ;	    LDS     DX, name
@@ -372,12 +375,12 @@ BREAK <HMA_$UNLINK - delete a file entry>
 ;	       = error_access_denied
 ;
 
-	procedure HMA_$UNLINK,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+	procedure UnlinkFile,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	SaveReg <CX>			; Save possible CX input parm
 	MOV	SI,DX			; Point at input string
 	MOV	DI,OFFSET DOSGroup:OpenBuf  ; temp spot for path
-	invoke	TransPathSet		; go get normalized path
+	CallResident TransPathSet		; go get normalized path
 	RestoreReg <CX>
 	JC	ChModErr		; badly formed path
 	CMP	cMeta,-1		; meta chars?
@@ -385,18 +388,18 @@ BREAK <HMA_$UNLINK - delete a file entry>
 	Context DS
 	mov	ch,attr_hidden+attr_system   ; unlink appropriate files
 	call	SetAttrib
-	invoke	DOS_Delete		; remove that file
+	CallResident DOS_Delete		; remove that file
 	JC	UnlinkE 		; error is there
 
 
-	transfer    Sys_Ret_OK		; okey doksy
+	JMP FileReturnOK		; okey doksy
 NotFound:
 	MOV	AL,error_path_not_found
 UnlinkE:
-	transfer    Sys_Ret_Err 	; bye
-EndProc HMA_$UnLink
+	JMP FileReturnError 	; bye
+EndProc UnlinkFile
 
-BREAK <HMA_$RENAME - move directory entries around>
+BREAK <RenameFile - move directory entries around>
 ;
 ;   Assembler usage:
 ;	    LDS     DX, source
@@ -411,8 +414,8 @@ BREAK <HMA_$RENAME - move directory entries around>
 ;	       = error_not_same_device
 ;	       = error_access_denied
 
-	procedure HMA_$RENAME,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+	procedure RenameFile,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	SaveReg <CX,DS,DX>		; save source and possible CX arg
 	PUSH	ES
 	POP	DS			; move dest to source
@@ -422,7 +425,7 @@ BREAK <HMA_$RENAME - move directory entries around>
 	MOV	WORD PTR [NO_FILTER_DPATH],SI	;AN000;;IFS. save them for IFS
 	MOV	WORD PTR [NO_FILTER_DPATH+2],DS ;AN000;;IFS.
 
-	invoke	TransPathSet		; munge the paths
+	CallResident TransPathSet		; munge the paths
 	PUSH	WFP_Start		; get pointer
 	POP	Ren_WFP 		; stash it
 	RestoreReg <SI,DS,CX>		; get back source and possible CX arg
@@ -431,7 +434,7 @@ epjc2:	JC	ChModErr		; get old error
 	JNZ	NotFound
 	SaveReg <CX>			; Save possible CX arg
 	MOV	DI,OFFSET DOSGroup:OpenBuf  ; appropriate buffer
-	invoke	TransPathSet		; wham
+	CallResident TransPathSet		; wham
 	RestoreReg <CX>
 	JC	EPJC2
 	Context DS
@@ -445,29 +448,33 @@ epjc2:	JC	ChModErr		; get old error
 	POP	ES			   ;AN000;;MS.es:di-> source
 	XOR	AL,AL			   ;AN000;;MS.scan all CDS
 rnloop: 				   ;AN000;
-	invoke	GetCDSFromDrv		   ;AN000;;MS.
+	CallResident GetCDSFromDrv		   ;AN000;;MS.
 	JC	dorn			   ;AN000;;MS.	end of CDS
-	invoke	StrCmp			   ;AN000;;MS.	current dir ?
+	CallResident StrCmp			   ;AN000;;MS.	current dir ?
 	JZ	rnerr			   ;AN000;;MS.	yes
 	INC	AL			   ;AN000;;MS.	next
 	JMP	rnloop			   ;AN000;;MS.
 rnerr:					   ;AN000;
 	ADD	SP,4			   ;AN000;;MS. pop thiscds
-	error	error_current_directory    ;AN000;;MS.
+
+	MOV AL,error_current_directory    ;AN000;;MS.
+	JMP FileReturnError
 dorn:					   ;AN000;
 	POP	WORD PTR SS:[THISCDS+2]    ;AN000;;MS.
 	POP	WORD PTR SS:[THISCDS]	   ;AN000;;MS.
 	Context DS
 	mov	ch,attr_directory+attr_hidden+attr_system; rename appropriate files
 	call	SetAttrib
-	invoke	DOS_Rename		; do the deed
-	JC	UnlinkE 		; errors
+	invoke RenameDirectoryEntry		; do the deed
+	JNC	RenameSuccess
+	JMP	UnlinkE
+RenameSuccess:
 
 
-	transfer    Sys_Ret_OK
-EndProc HMA_$Rename
+	JMP FileReturnOK
+EndProc RenameFile
 
-Break <HMA_$CreateNewFile - Create a new directory entry>
+Break <CreateNewHandle - Create a new directory entry>
 
 ;
 ;   CreateNew - Create a new directory entry.  Return a file handle if there
@@ -482,8 +489,8 @@ Break <HMA_$CreateNewFile - Create a new directory entry>
 ;		    AX has error code
 ;   Registers modified: All
 
-	Procedure HMA_$CreateNewFile,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+	Procedure CreateNewHandle,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	fmt TypSysCall,LevLog,<"CreateNew\n">
 	fmt TypSysCall,LevArgs,<" Att = $x file = '$S'\n">,<CX,DS,DX>
 IF DBCS 				;AN000;
@@ -492,7 +499,7 @@ ENDIF					;AN000;
 	SaveReg <CX>			; Save attributes on stack
 	MOV	CX,OFFSET DOSGroup:DOS_Create_New   ; routine to call
 	JMP	AccessSet		; use good ol' open
-EndProc HMA_$CreateNewFile
+EndProc CreateNewHandle
 
 Break	<HexToAsciz - convert a number to hex and store it in memory>
 
@@ -523,7 +530,7 @@ DoStore:
 	return
 EndProc HexToAsciz
 
-Break	<HMA_$CreateTempFile - create a unique name>
+Break	<CreateTempHandle - create a unique name>
 
 ;
 ;   $CreateTemp - given a directory, create a unique name in that directory.
@@ -536,8 +543,8 @@ Break	<HMA_$CreateTempFile - create a unique name>
 ;		AX has handle
 ;   Registers modified: all
 
-	Procedure HMA_$CreateTempFile,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+	Procedure CreateTempHandle,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	fmt TypSysCall,LevLog,<"CreateTmp\n">
 	fmt TypSysCall,LevArgs,<" Att = $x dir = '$S'\n">,<CX,DS,DX>
 PUBLIC FILE001S,FILE001E
@@ -576,7 +583,7 @@ Kloop:					;AN000;; 2/13/KK
 	INC	DI			;AN000;; 2/13/KK
 	OR	AL,AL			;AN000;; 2/13/KK
 	JZ	GOTEND			;AN000;; 2/13/KK
-	invoke	testkanj		;AN000;; 2/13/KK
+	CallResident testkanj		;AN000;; 2/13/KK
 	jz	Kloop			;AN000;; 2/13/KK
 	inc	di			;AN000;; Skip over second kanji byte 2/13/KK
 	CMP	BYTE PTR ES:[DI],0	;AN000;; 2/13/KK
@@ -594,7 +601,7 @@ okok:					;AN000;
  ENDIF					;AN000;
 	DEC	DI			; point back to the null
 	MOV	AL,ES:[DI-1]		; Get char before the NUL
-	invoke	PathChrCmp		; Is it a path separator?
+	CallResident PathChrCmp		; Is it a path separator?
 	JZ	SETENDPTR		; Yes
 STOREPTH:
 	MOV	AL,'\'
@@ -604,7 +611,7 @@ SETENDPTR:
 CreateLoop:
 	Context DS			; let ReadTime see variables
 	SaveReg <BP>
-	invoke	ReadTime		; go get time
+	CallResident ReadTime		; go get time
 	RestoreReg  <BP>
 ;
 ; Time is in CX:DX.  Go drop it into the string.
@@ -620,7 +627,7 @@ CreateLoop:
 ASSUME	DS:NOTHING
 	MOV	CX,Attr 		; get attr
 	SaveReg <BP>
-	CALL	HMA_$CreateNewFile		; try to create a new file
+	CALL	CreateNewHandle		; try to create a new file
 	RestoreReg  <BP>
 	JNC	CreateDone		; failed, go try again
 ;
@@ -646,10 +653,10 @@ SETTMPERR:
 CreateDone:
 	Leave
 	JC	CreateFail
-	transfer    Sys_Ret_OK		; success!
+	JMP FileReturnOK		; success!
 CreateFail:
-	transfer    Sys_Ret_Err
-EndProc HMA_$CreateTempFile
+	JMP FileReturnError
+EndProc CreateTempHandle
 
 Break	<SetAttrib - set the search attrib>
 
@@ -696,8 +703,8 @@ Break	<Extended_Open- Extended open the file>
 ;
 
 
-procedure   HMA_$Extended_Open,NEAR 			       ;AN000;
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP  ;AN000;
+procedure   ExtendedOpen,NEAR 			       ;AN000;
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP  ;AN000;
 
 	MOV	[XA_from],0		  ;AN000;EO. init for set XA
 	MOV	[EXTOPEN_FLAG],DX	  ;AN000;EO. save ext. open flag
@@ -749,11 +756,15 @@ procedure   HMA_$Extended_Open,NEAR 			       ;AN000;
 ;	JNZ	no_cdpg_chk			 ;AN000;;EO.  no
 	JMP	SHORT goopen2			 ;AN000;;EO.  do nromal
 ext_inval2:					 ;AN000;;EO.
-	error	error_Invalid_Function		 ;AN000;EO..  invalid function
+
+	MOV AL,error_Invalid_Function		 ;AN000;EO..  invalid function
+	JMP FileReturnError
 ext_inval_parm: 				 ;AN000;EO..
 	POP	CX				 ;AN000;EO..  pop up satck
 	POP	SI				 ;AN000;EO..
-	error	error_Invalid_data		 ;AN000;EO..  invalid parms
+
+	MOV AL,error_Invalid_data		 ;AN000;EO..  invalid parms
+	JMP FileReturnError
 error_return:					 ;AN000;EO.
 	ret					 ;AN000;EO..  return with error
 ;no_cdpg_chk:						EO.
@@ -768,7 +779,7 @@ goopen: 					 ;AN000;
 	AND	[EXTOPEN_FLAG],0FFH		 ;AN000;EO.create new ?
 	CMP	[EXTOPEN_FLAG],ext_exists_fail + ext_nexists_create ;AN000;FT.
 	JNZ	chknext 			 ;AN000;;EO.  no
-	invoke	HMA_$CreateNewFile			 ;AN000;;EO.  yes
+	invoke	CreateNewHandle			 ;AN000;;EO.  yes
 	JC	error_return			 ;AN000;;EO.  error
 	CMP	[EXTOPEN_ON],0			 ;AN000;;EO.  IFS does it
 	JZ	ok_return2			 ;AN000;;EO.  yes
@@ -776,11 +787,11 @@ goopen: 					 ;AN000;
 	MOV	[XA_from],By_Create		 ;AN000;;EO.  for set xa
 	JMP	setXAttr			 ;AN000;;EO.  set XAs
 ok_return2:
-	transfer SYS_RET_OK			 ;AN000;;EO.
+	JMP FileReturnOK			 ;AN000;;EO.
 chknext:
 	TEST	[EXTOPEN_FLAG],ext_exists_open	 ;AN000;;EO.  exists open
 	JNZ	exist_open			 ;AN000;;EO.  yes
-	invoke	HMA_$Creat				 ;AN000;;EO.  must be replace open
+	invoke	CreateHandle				 ;AN000;;EO.  must be replace open
 	JC	error_return			 ;AN000;;EO.  return with error
 	CMP	[EXTOPEN_ON],0			 ;AN000;;EO.  IFS does it
 	JZ	ok_return2			 ;AN000;;EO.  yes
@@ -800,7 +811,7 @@ exist_open:					 ;AN000;
 	MOV	CL,CH				 ;AN000;;EO. cl=search attribute
 
 noserver:
-	invoke	HMA_$Open2				 ;AN000;;EO.  do open
+	invoke	OpenHandleWithMode				 ;AN000;;EO.  do open
 	JNC	ext_ok				 ;AN000;;EO.
 	CMP	[EXTOPEN_ON],0			 ;AN000;;EO.  error and IFS call
 	JZ	error_return2			 ;AN000;;EO.  return with error
@@ -816,7 +827,7 @@ do_creat:
 	MOV	CX,[SAVE_CX]			 ;AN000;;EO.  get ds:dx for file name
 	LDS	SI,DWORD PTR [SAVE_SI]		 ;AN000;;EO.  cx = attribute
 	MOV	DX,SI				 ;AN000;;EO.
-	invoke	HMA_$Creat				 ;AN000;;EO.  do create
+	invoke	CreateHandle				 ;AN000;;EO.  do create
 	JC	extexit 			 ;AN000;;EO.  error
 	MOV	[EXTOPEN_FLAG],action_created_opened  ;AN000;;EO. is created/opened
 	JMP	SHORT setXAttr			      ;AN000;;EO.   set XAs
@@ -842,14 +853,14 @@ setXAttr:
 ;	POP	DX			;AN000;;EO. restore file name addr
 ;	POP	DS			;AN000;;EO.
 ;	JC	extexit2		;AN000;;EO.
-	invoke	get_user_stack		;AN000;;EO.
+	CallResident get_user_stack		;AN000;;EO.
 	MOV	AX,[EXTOPEN_FLAG]	;AN000;;EO.
 	MOV	[SI.USER_CX],AX 	;AN000;;EO. set action code for cx
 	POP	AX			;AN000;;EO.
 	MOV	[SI.USER_AX],AX 	;AN000;;EO. set handle for ax
 
 ok_return:				;AN000;
-	transfer SYS_RET_OK		;AN000;;EO.
+	JMP FileReturnOK		;AN000;;EO.
 
 extexit2:				;AN000; ERROR RECOVERY
 
@@ -859,11 +870,11 @@ extexit2:				;AN000; ERROR RECOVERY
 	JNZ	justopen		;AN000;EO.
 	LDS	SI,DWORD PTR [SAVE_SI]		 ;AN000;EO.  cx = attribute
 	LDS	DX,DWORD PTR [SI]		 ;AN000;EO.
-	invoke	HMA_$UNLINK 		;AN000;EO. delete the file
+	invoke	UnlinkFile 		;AN000;EO. delete the file
 	JMP	SHORT reserror		;AN000;EO.
 
 justopen:				;AN000;
-	invoke	$close			;AN000;EO. pretend never happend
+	CallResident $close			;AN000;EO. pretend never happend
 reserror:				;AN000;
 	POP	AX			;AN000;EO. retore error code from set XA
 	JMP	SHORT extexit		;AN000;EO.
@@ -875,11 +886,9 @@ ext_file_unfound:			;AN000;
 ext_inval:				 ;AN000;
 	MOV	AX,error_invalid_function;AN000;EO.
 extexit:
-	transfer SYS_RET_ERR		;AN000;EO.
+	JMP FileReturnError		;AN000;EO.
 
-EndProc HMA_$Extended_Open			;AN000;
-LAST ENDS
-CODE SEGMENT BYTE PUBLIC 'CODE'
+EndProc ExtendedOpen			;AN000;
 
 
 
@@ -925,8 +934,24 @@ Break	<GetIOParms - get IO parms form extended open parm list>
 ;	LOOP	GetIOParms							;AN000;
 ;	return									;AN000;
 ;EndProc GetIOParms								 ;AN000;
-
-
-CODE ENDS
-END
-
+FileReturnOK:
+        CallResident Sys_Ret_OK
+        RET
+FileReturnError:
+        CallResident Sys_Ret_Err
+        RET
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC FileEntries
+FileEntries LABEL WORD
+        DW OFFSET DOSGROUP:$Open_VECTOR, OFFSET DOSGROUP:OpenHandle
+        DW OFFSET DOSGROUP:$Creat_VECTOR, OFFSET DOSGROUP:CreateHandle
+        DW OFFSET DOSGROUP:$CHMOD_VECTOR, OFFSET DOSGROUP:FileAttributes
+        DW OFFSET DOSGROUP:$UNLINK_VECTOR, OFFSET DOSGROUP:UnlinkFile
+        DW OFFSET DOSGROUP:$RENAME_VECTOR, OFFSET DOSGROUP:RenameFile
+        DW OFFSET DOSGROUP:$CreateNewFile_VECTOR, OFFSET DOSGROUP:CreateNewHandle
+        DW OFFSET DOSGROUP:$CreateTempFile_VECTOR, OFFSET DOSGROUP:CreateTempHandle
+        DW OFFSET DOSGROUP:$Extended_Open_VECTOR, OFFSET DOSGROUP:ExtendedOpen
+        DW 0
+DOSEND ENDS
+    END

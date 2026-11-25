@@ -79,9 +79,6 @@ farEntry:
         WalkerEntry SetDirSrch,56
         WalkerEntry StartSrch,57
         WalkerEntry MatchAttributes,58
-        WalkerEntry LocalFirst,59
-        WalkerEntry LocalNext,60
-        WalkerEntry Rename_Next,61
 CODE ENDS
 
 LAST SEGMENT PARA PUBLIC 'LAST'
@@ -313,7 +310,7 @@ Procedure NextEntry
 	CMP	BL,BYTE PTR [CLUSFAC]
 	JB	SAMECLUS
 	MOV	BX,[NXTCLUSNUM]
-	Invoke	HMA_IsEOF
+	Invoke	ClusterIsEOF
 	JAE	NONE
 	CMP	BX,2
 	JB	NONE
@@ -432,7 +429,7 @@ Break	<HMA_SETDIRSRCH HMA_SETROOTSRCH -- Set Search environments>
 	JNZ	UNP_OK
 
 ; DOS 3.3 for FastOPen	F.C. 6/12/86
-	invoke	HMA_UNPACK
+	invoke	ReadClusterEntry
 	JNC	UNP_OK
 	RestoreReg  <SI>
 	return
@@ -442,7 +439,7 @@ UNP_OK:
 	MOV	DX,BX
 	XOR	BL,BL
 	MOV	BYTE PTR [SECCLUSPOS],BL
-	invoke	HMA_FIGREC
+	invoke	ClusterToSector
 	RestoreReg  <SI>
 	PUSH	DX			   ;AN000; >32mb
 	MOV	DX,[HIGH_SECTOR]	   ;AN000; >32mb

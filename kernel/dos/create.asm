@@ -49,6 +49,32 @@ Installed = TRUE
 	I_need	DOS34_FLAG,WORD 		  ;AN000;
 	I_need	SAVE_BX,WORD			  ;AN000;
 
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry DOS_Create,44
+        DosCodeEntry DOS_Create_New,129
+        DosCodeEntry SET_MKND_ERR,130
+        DosCodeEntry Set_Media_ID,131
+        DosCodeEntry Set_EXT_mode,132
+; The redirector takes the create attributes on the interrupt caller's stack.
+CreateNetworkExtended:
+        PUSH AX
+        MOV AX,(multNET SHL 8) OR 46
+        JMP SHORT IssueNetworkCreate
+CreateNetworkSequential:
+        PUSH AX
+        MOV AX,(multNET SHL 8) OR 24
+        JMP SHORT IssueNetworkCreate
+CreateNetworkFile:
+        PUSH AX
+        MOV AX,(multNET SHL 8) OR 23
+IssueNetworkCreate:
+        INT 2Fh
+        POP BX
+        RET
+CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+
 ; Inputs:
 ;	[WFP_START] Points to WFP string ("d:/" must be first 3 chars, NUL
 ;		terminated)
@@ -82,8 +108,8 @@ Installed = TRUE
 ;			generates an INT 24
 ; DS preserved, others destroyed
 
-	procedure   DOS_Create,NEAR
-	DOSAssume   CS,<DS>,"DOS_Create"
+	procedure   CreateFile,NEAR
+	DOSAssume   SS,<DS>,"CreateFile"
 	ASSUME	ES:NOTHING
 
 	XOR	AH,AH		; Truncate is OK
@@ -102,7 +128,7 @@ NoReset:
 AttErr:
 	MOV	AX,5		; Attribute problem
 	MOV	Exterr_Locus,errLOC_Unk
-	JMP	SHORT SET_MKND_ERR ; Gotta use MKDIR to make dirs, NEVER allow
+	JMP	SHORT MapCreateError ; Gotta use MKDIR to make dirs, NEVER allow
 				   ;	attr_device to be set.
 ATT_OK:
 	LES	DI,[THISSFT]
@@ -116,10 +142,8 @@ ATT_OK:
 	TEST	[EXTOPEN_ON],ext_open_on    ;AN000;EO. from extnded open
 	JZ	NOEXTOP 		    ;AN000;EO. no, do normal
 IFS_extopen:				    ;AN000;EO.
-	PUSH	AX			    ;AN000;EO. pass create attr
-	MOV	AX,(multNET SHL 8) OR 46    ;AN000;EO. issue extended open verb
-	INT	2FH			    ;AN000;EO.
-	POP	BX			    ;AN000;EO. trash bx
+
+        CallResident CreateNetworkExtended
 	MOV	[EXTOPEN_ON],0		    ;AN000;EO.
 	return				    ;AN000;EO.
 NOEXTOP:				    ;AN000;
@@ -128,10 +152,8 @@ NOEXTOP:				    ;AN000;
 IF NOT Installed
 	transfer NET_SEQ_CREATE
 ELSE
-	PUSH	AX
-	MOV	AX,(multNET SHL 8) OR 24
-	INT	2FH
-	POP	BX			; BX is trashed anyway
+
+        CallResident CreateNetworkSequential
 	return
 ENDIF
 
@@ -140,7 +162,7 @@ TEST_RE_NET:
 	POP	ES
 	JZ	LOCAL_CREATE
 
-	CALL	Set_EXT_mode		    ;AN000;EO.
+	CALL	SetExtendedMode		    ;AN000;EO.
 	JC	SHORT dochk		    ;AN000;EO.
 	OR	ES:[DI.sf_mode],sharing_compat + open_for_both ;IFS.
 dochk:
@@ -155,27 +177,17 @@ dochk:
 IF NOT Installed
 	transfer NET_CREATE
 ELSE
-	PUSH	AX
-	MOV	AX,(multNET SHL 8) OR 23
-	INT	2FH
-	POP	BX			; BX is trashed anyway
+
+        CallResident CreateNetworkFile
 nomore:
 	return
 ENDIF
 
 LOCAL_CREATE:
-	JMP	WORD PTR CS:[CREATE_VECTOR]
-CreateFar:
-	PUSH	AX
-	MOV	AH,44
-	JMP	FCB_SELECTED
+        JMP CreateLocal
 
-	EXTRN	FCB_SELECTED:NEAR
-	PUBLIC	CREATE_VECTOR
-CREATE_VECTOR	DW OFFSET DOSGROUP:CreateFar
-
-	entry	SET_MKND_ERR
-	DOSAssume   CS,<DS>,"Set_MkNd_Err"
+	entry	MapCreateError
+	DOSAssume   SS,<DS>,"MapCreateError"
 	ASSUME	ES:NOTHING
 ; Looks up MakeNode errors and converts them. AL is MakeNode
 ; error, SI is GetPath bad spot return if path_not_found error.
@@ -201,22 +213,19 @@ CRTERRTAB LABEL BYTE		; Lookup table for MakeNode returns
 CREAT001E  label byte
 TABLE	ENDS
 
-EndProc DOS_Create
-CODE	ENDS
-
-LAST	SEGMENT PARA PUBLIC 'LAST'
-	procedure HMA_CREATE,NEAR
-	CALL	Set_EXT_mode	       ;AN000;EO. set mode if from extended open
+EndProc CreateFile
+	procedure CreateLocal,NEAR
+	CALL	SetExtendedMode	       ;AN000;EO. set mode if from extended open
 	JC	setdone 	       ;AN000;EO.
 	OR	ES:[DI].sf_mode,sharing_compat+open_for_both
 setdone:
-	EnterCrit   critDisk
-	invoke	HMA_MakeNode
+	CallResident ECritDisk
+	invoke CreateNode
 	JNC	Create_ok
 	mov	[VOLCHNG_FLAG],-1	; indicate no change in volume label
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 
-	transfer SET_MKND_ERR
+	jmp MapCreateError
 
 ;
 ; We have just created a new file.  This results in the truncation of old
@@ -228,7 +237,7 @@ Create_ok:
 ; drive number to force a Build BPB after Media Check.
 
 ;;; FASTOPEN 8/29/86
-	invoke	FastOpen_Delete
+	CallResident FastOpen_Delete
 ;;; FASTOPEN 8/29/86
 	mov	al,[SATTRIB]
 	test	al,attr_volume_id
@@ -238,23 +247,20 @@ Create_ok:
 	sub	ah,'A'                  ; convert to drive letter
 	mov	[VOLCHNG_FLAG],ah	;Set flag to indicate volid change
 	MOV	BH,1			;AN000;>32mb set volume id to boot record
-	CALL	Set_Media_ID		;AN000;>32mb
+	CALL	SetMediaId		;AN000;>32mb
 
-	EnterCrit CritDisk
-	invoke	FatRead_CDS		; force a media check
-	LeaveCrit CritDisk
+	CallResident ECritDisk
+	invoke ReadDirectoryFAT		; force a media check
+	CallResident LCritDisk
 NoVolLabel:
 	MOV	ax,2
 	LES	DI,ThisSFT
-	invoke	Share_Update_SFT
-	LeaveCrit   critDisk
-	transfer SET_SFT_MODE
+	CallResident Share_Update_SFT
+	CallResident LCritDisk
+	invoke SetOpenMode
+        ret
 
-EndProc HMA_CREATE
-LAST	ENDS
-
-CODE	SEGMENT BYTE PUBLIC 'CODE'
-
+EndProc CreateLocal
 
 ; Inputs:
 ;	[WFP_START] Points to WFP string ("d:/" must be first 3 chars, NUL
@@ -287,14 +293,14 @@ CODE	SEGMENT BYTE PUBLIC 'CODE'
 ;			Already a file by this name
 ; DS preserved, others destroyed
 
-	procedure   DOS_Create_New,NEAR
-	DOSAssume   CS,<DS>,"DOS_Create_New"
+	procedure   CreateExclusiveFile,NEAR
+	DOSAssume   SS,<DS>,"CreateExclusiveFile"
 	ASSUME	ES:NOTHING
 
 	MOV	AH,1		; Truncate is NOT OK
 	JMP	Create_inter
 
-EndProc DOS_Create_New
+EndProc CreateExclusiveFile
 
 
 ; Inputs:
@@ -310,8 +316,8 @@ EndProc DOS_Create_New
 ;	CARRY SET
 ;	    AX is error code
 
-	procedure   Set_Media_ID,NEAR		   ;AN000;
-	DOSAssume   CS,<DS>,"DOS_Create_New"       ;AN000;
+	procedure   SetMediaId,NEAR		   ;AN000;
+	DOSAssume   SS,<DS>,"SetMediaId"               ;AN000;
 	ASSUME	ES:NOTHING			   ;AN000;
 
 	PUSH	AX		;AN000;;>32mb
@@ -328,7 +334,7 @@ EndProc DOS_Create_New
 	PUSH	DX		;AN000;;>32mb
 	XOR	BH,BH		;AN000;;>32mb
 
-	invoke	$IOCTL		;AN000;;>32mb
+	CallResident $IOCTL		;AN000;;>32mb
 	POP	DX		;AN000;;>32mb
 	POP	BX		;AN000;;>32mb
 	JC	geterr		;AN000;;>32mb
@@ -342,18 +348,18 @@ Noname: 			;AN000;
 doset:					       ;AN000;
 	MOV	DI,DX		;AN000;;>32mb
 	ADD	DI,MEDIA_LABEL	;AN000;;>32mb
-	PUSH	CS		;AN000;;>32mb  move new volume id to packet
+	PUSH	SS		;AN000;;>32mb  move new volume id to packet
 	POP	DS		;AN000;;>32mb
-	PUSH	CS		;AN000;;>32mb
+	PUSH	SS		;AN000;;>32mb
 	POP	ES		;AN000;;>32mb
 	MOV	CX,11		;AN000;;>32mb
 	REP	MOVSB		;AN000;;>32mb
 	MOV	CX,0846H	;AN001;;>32mb
 	MOV	AL,0DH		;AN000;;>32mb
 	XOR	BH,BH		;AN000;;>32mb
-	invoke	$IOCTL		;AN000;;>32mb  set volume id
+	CallResident $IOCTL		;AN000;;>32mb  set volume id
 geterr: 			;AN000;
-	PUSH	CS		;AN000;>32mb
+	PUSH	SS		;AN000;>32mb
 	POP	DS		;AN000;>32mb   ds= dosgroup
 
 	POP	DI		;AN000;;>32mb
@@ -361,7 +367,7 @@ geterr: 			;AN000;
 	POP	AX		;AN000;;>32mb
 	return			;AN000;>32mb
 
-EndProc Set_Media_ID		;AN000;
+EndProc SetMediaId		;AN000;
 
 
 ; Inputs:
@@ -374,10 +380,10 @@ EndProc Set_Media_ID		;AN000;
 ;	carry clear, mode not set yet
 
 IF	NOT IBMCOPYRIGHT
-	public Set_EXT_mode
+	public SetExtendedMode
 ENDIF
 
-	procedure   Set_EXT_mode,NEAR	    ;AN000;
+	procedure   SetExtendedMode,NEAR	    ;AN000;
 	ASSUME	ES:NOTHING,DS:NOTHING	    ;AN000;
 
 	TEST	[EXTOPEN_ON],ext_open_on    ;AN000;EO. from extnded open
@@ -390,8 +396,17 @@ ENDIF
 NOTEX:					    ;AN000;
 	return				    ;AN000;EO.
 
-EndProc Set_EXT_mode			    ;AN000;
+EndProc SetExtendedMode			    ;AN000;
 
-CODE	ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC CreateEntries
+CreateEntries LABEL WORD
+        DW OFFSET DOSGROUP:DOS_Create_VECTOR, OFFSET DOSGROUP:CreateFile
+        DW OFFSET DOSGROUP:DOS_Create_New_VECTOR, OFFSET DOSGROUP:CreateExclusiveFile
+        DW OFFSET DOSGROUP:SET_MKND_ERR_VECTOR, OFFSET DOSGROUP:MapCreateError
+        DW OFFSET DOSGROUP:Set_Media_ID_VECTOR, OFFSET DOSGROUP:SetMediaId
+        DW OFFSET DOSGROUP:Set_EXT_mode_VECTOR, OFFSET DOSGROUP:SetExtendedMode
+        DW 0
+DOSEND ENDS
     END
-

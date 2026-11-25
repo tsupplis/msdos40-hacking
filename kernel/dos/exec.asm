@@ -178,7 +178,7 @@ exec_check_2:
 
 	XOR	AL,AL			; open for reading
 	PUSH	BP
-	CallResident	$OPEN			; is the file there?
+	invoke OpenHandle			; is the file there?
 	POP	BP
 	JC	exec_ret_err
 ;File Type Checking

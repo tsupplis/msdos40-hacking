@@ -67,50 +67,15 @@ include devsym.inc
 
 ; Near callers use the native copy or the A20 gateway selected at boot.
         EXTRN FCB_SELECTED:NEAR
-
-        PUBLIC NEWDIR_VECTOR
-NEWDIR_VECTOR DW OFFSET DOSGROUP:NEWDIRFar
-        procedure NEWDIR,NEAR
-        JMP WORD PTR CS:[NEWDIR_VECTOR]
-NEWDIRFar:
-        PUSH AX
-        MOV AH,67
-        JMP FCB_SELECTED
-EndProc NEWDIR
-
-        PUBLIC SETDOTENT_VECTOR
-SETDOTENT_VECTOR DW OFFSET DOSGROUP:SETDOTENTFar
-        procedure SETDOTENT,NEAR
-        JMP WORD PTR CS:[SETDOTENT_VECTOR]
-SETDOTENTFar:
-        PUSH AX
-        MOV AH,68
-        JMP FCB_SELECTED
-EndProc SETDOTENT
-
-        PUBLIC MakeNode_VECTOR
-MakeNode_VECTOR DW OFFSET DOSGROUP:MakeNodeFar
-        procedure MakeNode,NEAR
-        JMP WORD PTR CS:[MakeNode_VECTOR]
-MakeNodeFar:
-        PUSH AX
-        MOV AH,69
-        JMP FCB_SELECTED
-EndProc MakeNode
-
-        PUBLIC DOOPEN_VECTOR
-DOOPEN_VECTOR DW OFFSET DOSGROUP:DOOPENFar
-        procedure DOOPEN,NEAR
-        JMP WORD PTR CS:[DOOPEN_VECTOR]
-DOOPENFar:
-        PUSH AX
-        MOV AH,71
-        JMP FCB_SELECTED
-EndProc DOOPEN
-
+        DosCodeEntry NEWDIR,67
+        DosCodeEntry SETDOTENT,68
+        DosCodeEntry MakeNode,69
+        DosCodeEntry DOOPEN,71
+        DosCodeEntry CHECK_VIRT_OPEN,134
 CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
 
-LAST SEGMENT PARA PUBLIC 'LAST'
 Break   <BUILDDIR,NEWDIR -- ALLOCATE DIRECTORIES>
 
 ; Inputs:
@@ -130,8 +95,8 @@ Break   <BUILDDIR,NEWDIR -- ALLOCATE DIRECTORIES>
 ;               AX = first entry of new dir
 ;       GETENT should be called to set [LASTENT]
 
-        procedure   HMA_BUILDDIR,NEAR
-        DOSAssume   CS,<DS>,"BuildDir"
+        procedure   BuildDirectory,NEAR
+        DOSAssume   SS,<DS>,"BuildDir"
         ASSUME  ES:NOTHING
 
         MOV     AX,[ENTFREE]
@@ -142,11 +107,11 @@ Break   <BUILDDIR,NEWDIR -- ALLOCATE DIRECTORIES>
 
 CHECK_IF_ROOT:
         CMP     [DIRSTART],0
-        JNZ     HMA_NEWDIR
+        JNZ     ExtendDirectory
         STC
         return                  ; Can't grow root
 
-        entry   HMA_NEWDIR
+        entry   ExtendDirectory
         MOV     BX,[DIRSTART]
         OR      BX,BX
         JZ      NULLDIR
@@ -154,19 +119,19 @@ CHECK_IF_ROOT:
         retc                    ; Screw up
 NULLDIR:
         MOV     CX,1
-        invoke  HMA_ALLOCATE
+        invoke  AllocateClusters
         retc
         MOV     DX,[DIRSTART]
         OR      DX,DX
         JNZ     ADDINGDIR
-        invoke  HMA_SETDIRSRCH
+        CallResident SETDIRSRCH
         retc
         MOV     [LASTENT],-1
         JMP     SHORT GOTDIRREC
 ADDINGDIR:
         PUSH    BX
         MOV     BX,[ClusNum]
-        Invoke  HMA_IsEof
+        invoke ClusterIsEOF
         POP     BX
         JB      NOTFIRSTGROW
 ;;;; 10/17/86 update CLUSNUM in the fastopen cache
@@ -178,7 +143,7 @@ ADDINGDIR:
         MOV     DL,ES:[BP.dpb_drive]       ; drive #
         MOV     CX,[DIRSTART]              ; first cluster #
         MOV     BP,BX                      ; CLUSNUM
-        invoke  FastOpen_Update
+        CallResident FastOpen_Update
         POP     BP
         POP     AX
         POP     CX
@@ -187,7 +152,7 @@ ADDINGDIR:
 NOTFIRSTGROW:
         MOV     DX,BX
         XOR     BL,BL
-        invoke  HMA_FIGREC
+        invoke  ClusterToSector
 GOTDIRREC:
         MOV     CL,ES:[BP.dpb_cluster_mask]
         INC     CL
@@ -196,7 +161,7 @@ ZERODIR:
         PUSH    CX
         MOV     [ALLOWED],allowed_FAIL + allowed_RETRY
         MOV     AL,0FFH
-        invoke  GETBUFFR
+        invoke  ReadBuffer
         JNC     GET_SSIZE
         POP     CX
         return
@@ -218,7 +183,7 @@ EVENZ:
 
         TEST    ES:[DI.buf_flags],buf_dirty  ;LB. if already dirty              ;AN000;
         JNZ     yesdirty                  ;LB.    don't increment dirty count   ;AN000;
-        invoke  INC_DIRTY_COUNT           ;LB.                                  ;AN000;
+        invoke  IncrementDirtyCount           ;LB.                                  ;AN000;
         OR      ES:[DI.buf_flags],buf_dirty
 yesdirty:
         POP     ES
@@ -231,7 +196,7 @@ yesdirty:
         CLC
         return
 
-EndProc HMA_BUILDDIR
+EndProc BuildDirectory
 
 ;
 ; set up a . or .. directory entry for a directory.
@@ -240,8 +205,8 @@ EndProc HMA_BUILDDIR
 ;               AX contains ". " or ".."
 ;               DX contains first cluster of entry
 ;
-        procedure   HMA_SETDOTENT,NEAR
-        DOSAssume   CS,<DS>,"SetDotEnt"
+        procedure   SetDotEntry,NEAR
+        DOSAssume   SS,<DS>,"SetDotEnt"
 ;
 ; Fill in name field
 ;
@@ -282,7 +247,7 @@ EndProc HMA_BUILDDIR
         STOSW
         errnz   <(size dir_entry)-(dir_size_l+4)>
         return
-EndProc HMA_SETDOTENT
+EndProc SetDotEntry
 
 Break   <MAKENODE -- CREATE A NEW NODE>
 
@@ -327,15 +292,15 @@ Break   <MAKENODE -- CREATE A NEW NODE>
 ;          Attribute byte in entry is input AL
 ; DS preserved, others destroyed
 
-        procedure   HMA_MakeNode,NEAR
-        DOSAssume   CS,<DS>,"MakeNode"
+        procedure   CreateNode,NEAR
+        DOSAssume   SS,<DS>,"MakeNode"
         ASSUME  ES:NOTHING
 
         MOV     WORD PTR [CREATING],0E5FFH      ; Creating, not DEL *.*
         PUSH    AX              ; Save AH value
         MOV     [NoSetDir],0
         MOV     [SATTRIB],AL
-        invoke  HMA_GetPathNoSet
+        CallResident GetPathNoSet
         MOV     DL,CL           ; Save CL info
         MOV     CX,AX           ; Device ID to CH
         POP     AX              ; Get back AH
@@ -350,7 +315,7 @@ make_err_ret:
         STC
         return
 
-        entry   HMA_RENAME_MAKE     ; Used by DOS_RENAME to "copy" a node
+        entry   CreateRenameNode     ; Used by DOS_RENAME to "copy" a node
 
 make_type:
 ;Extended Open hooks
@@ -390,7 +355,7 @@ make_exists:
         MOV     CH,ES:[BX+dir_attr] ; Get file attributes
         TEST    CH,attr_read_only
         JNZ     make_err_ret_5P ; Cannot create on read only files
-        invoke  HMA_MatchAttributes
+        CallResident MatchAttributes
         POP     CX              ; Devid back in CH
         JNZ     make_err_ret_5  ; Attributes not ok
         XOR     AL,AL           ; AL = 0, Disk Node
@@ -399,11 +364,11 @@ make_share:
         PUSH    AX              ; Save Disk or Device node
         PUSH    CX              ; Save Device ID
         MOV     AH,CH           ; Device ID to AH
-        CALL    HMA_DOOPEN          ; Fill in SFT for share check
+        CALL    OpenNode          ; Fill in SFT for share check
         LES     DI,[THISSFT]
 ;       MOV     ES:[DI.sf_mode],sharing_compat + open_for_both
         SaveReg <SI,BX>         ; Save CURBUF pointers
-        invoke  ShareEnter
+        CallResident ShareEnter
         jnc     MakeEndShare
 ;
 ; User failed request.
@@ -439,7 +404,7 @@ make_new:
         retnz                   ; Don't "open" directories, so don't
                                 ;   tell the sharer about them
         SaveReg <AX,BX,SI>      ; Save AL code
-        invoke  ShareEnter
+        CallResident ShareEnter
         RestoreReg  <SI,BX,AX>
         retnc
 ;
@@ -453,12 +418,12 @@ make_new:
 
         TEST    ES:[DI.buf_flags],buf_dirty  ;LB. if already dirty              ;AN000;
         JNZ     yesdirty2                 ;LB.    don't increment dirty count   ;AN000;
-        invoke  INC_DIRTY_COUNT           ;LB.                                  ;AN000;
+        invoke  IncrementDirtyCount           ;LB.                                  ;AN000;
         OR      ES:[DI].buf_flags,buf_dirty ; flag buffer as dirty
 yesdirty2:
         LES     BP,ThisDPB
         MOV     AL,ES:[BP].DPB_Drive    ; get drive for flush
-        Invoke  FlushBuf                ; write out buffer.
+        invoke  FlushBuffers                ; write out buffer.
         POP     AX
         jmp     make_Share_ret
 ;
@@ -476,14 +441,14 @@ yesdirty2:
 MakeEndShare:
         LES     DI,ThisSFT              ; grab SFT
         XOR     AX,AX
-        EnterCrit   critSFT
+        CallResident ECritSFT
         XCHG    AX,ES:[DI].sf_ref_count
         SaveReg <AX,DI,ES>
         PUSHF
-        invoke  ShareEnd                ; remove sharing
+        CallResident ShareEnd                ; remove sharing
         POPF
         RestoreReg  <ES,DI,ES:[DI].sf_ref_count>
-        LeaveCrit   critSFT
+        CallResident LCritSFT
         RestoreReg  <BX,SI,CX,AX>
         CALL    make_save
 ;
@@ -492,14 +457,14 @@ MakeEndShare:
         retc                            ; bye if error
         SaveReg <AX,BX,SI>
         PUSHF
-        invoke  ShareEnter
+        CallResident ShareEnter
         POPF
         RestoreReg  <SI,BX,AX>
 ;
 ; If Share_check fails, then we have an internal ERROR!!!!!
 ;
         return
-EndProc HMA_MakeNode
+EndProc CreateNode
 
 ; Inputs:
 ;       [THISSFT] set
@@ -532,7 +497,7 @@ EndProc HMA_MakeNode
 ; DS, BX, SI preserved (meaning on SI BX, not value), others destroyed
 
         procedure NEWENTRY,NEAR
-        DOSAssume   CS,<DS>,"NewEntry"
+        DOSAssume   SS,<DS>,"NewEntry"
         ASSUME  ES:NOTHING
 
         LES     BP,[THISDPB]
@@ -541,9 +506,9 @@ ASSUME  ES:NOTHING
         CMP     [FAILERR],0
         STC
         retnz                   ; User FAILed, node might exist
-        CALL    HMA_BUILDDIR        ; Try to build dir
+        CALL    BuildDirectory        ; Try to build dir
         retc                    ; Failed
-        invoke  HMA_GETENT          ; Point at that free entry
+        CallResident GETENT          ; Point at that free entry
         retc                    ; Failed
         JMP     SHORT FREESPOT
 
@@ -552,10 +517,10 @@ ERRRET3:
         return
 
 EXISTENT:
-        DOSAssume   CS,<DS>,"MKNODE/ExistEnt"
+        DOSAssume   SS,<DS>,"MKNODE/ExistEnt"
         OR      AH,AH           ; Check if file is I/O device
         JNS     NOT_DEV1
-        JMP     HMA_DOOPEN          ; If so, proceed with open
+        JMP     OpenNode          ; If so, proceed with open
 
 NOT_DEV1:
         invoke  FREEENT         ; Free cluster chain
@@ -587,7 +552,7 @@ NOTVOLID:
 ;; File Tagging for Create DOS 4.00
         XOR     AX,AX
         REP     STOSW           ; Zero pad
-        invoke  DATE16
+        CallResident DATE16
         XCHG    AX,DX
         errnz   dir_time-(dir_attr+1+2*5)
         STOSW                   ; dir_time
@@ -608,7 +573,7 @@ updnxt:
 
         TEST    ES:[SI.buf_flags],buf_dirty  ;LB. if already dirty              ;AN000;
         JNZ     yesdirty3                 ;LB.    don't increment dirty count   ;AN000;
-        invoke  INC_DIRTY_COUNT           ;LB.                                  ;AN000;
+        invoke  IncrementDirtyCount           ;LB.                                  ;AN000;
         OR      ES:[SI.buf_flags],buf_dirty
 yesdirty3:
         LES     BP,[THISDPB]
@@ -629,21 +594,21 @@ yesdirty3:
         MOV     BX,DS
         MOV     word ptr ES:[DI.sf_devptr+2],BX
         RestoreReg <BX,DS>      ; need to use DS for segment later on
-        invoke  Dev_Open_SFT    ; increment ref. count
+        CallResident Dev_Open_SFT    ; increment ref. count
         mov     [VIRTUAL_OPEN],1; set flag
 GotADevice:
         RestoreReg <DI,ES>
 
         PUSH    [ACT_PAGE]      ;LB. save EMS page for curbuf                   ;AN000;
-        invoke  FLUSHBUF
+        invoke  FlushBuffers
         POP     BX              ;LB. restore EMS page for curbuf                ;AN000;
         PUSHF                   ;LB. save flushbuf falg                         ;AN000;
         CMP     BX,-1           ;BL-NETWORK PTM #-?
         JE      Page_ok         ;BL-NETWORK PTM #-?
-        invoke  SET_MAP_PAGE    ;LB. remap curbuf                               ;AN000;
+        invoke  MapBufferPage    ;LB. remap curbuf                               ;AN000;
 Page_ok:                        ;BL-NETWORK PTM #-?
         POPF                    ;LB. restore flush flag                         ;AN000;
-        Call    CHECK_VIRT_OPEN ; decrement ref. count                          ;AN000;
+        Call    CloseVirtualOpen ; decrement ref. count                          ;AN000;
         POP     BX
         POP     AX
         POP     SI              ; Get SI input back
@@ -685,8 +650,8 @@ Page_ok:                        ;BL-NETWORK PTM #-?
 ;           sf_dirsec sf_dirpos set
 ; DS,SI,BX preserved, others destroyed
 
-    entry   HMA_DOOPEN
-        DOSAssume   CS,<DS>,"DoOpen"
+    entry   OpenNode
+        DOSAssume   SS,<DS>,"DoOpen"
         ASSUME  ES:NOTHING
 
 ;
@@ -857,7 +822,7 @@ EndProc NEWENTRY
 ; DS BX SI ES BP preserved (BX,SI in meaning, not value) others destroyed
 
         procedure FREEENT,NEAR
-        DOSAssume   CS,<DS>,"FreeEnt"
+        DOSAssume   SS,<DS>,"FreeEnt"
         ASSUME  ES:NOTHING
 
         PUSH    DS
@@ -868,7 +833,7 @@ ASSUME  DS:NOTHING
         MOV     [HIGH_SECTOR],DX               ;F.C. >32mb                      ;AN000;
         MOV     DX,WORD PTR [DI.buf_sector]
         POP     DS
-        DOSAssume   CS,<DS>,"MKNODE/FreeEnt"
+        DOSAssume   SS,<DS>,"MKNODE/FreeEnt"
         CMP     CX,2
         JB      RET1            ; Was 0 length file (or mucked Firclus if CX=1)
         CMP     CX,ES:[BP.dpb_max_cluster]
@@ -879,8 +844,8 @@ ASSUME  DS:NOTHING
         PUSH    DX              ; Save sector number
 
         MOV     BX,CX
-        invoke  Delete_FSeek    ; FS. delete Fastseek Clusters                  ;AN000;
-        invoke  RELEASE         ; Free any data allocated
+        CallResident Delete_FSeek    ; FS. delete Fastseek Clusters                  ;AN000;
+        invoke  ReleaseClusters         ; Free any data allocated
         POP     DX
         POP     [HIGH_SECTOR]                  ;F.C. >32mb                      ;AN000;
         JNC     GET_BUF_BACK
@@ -891,10 +856,10 @@ GET_BUF_BACK:
 
         MOV     [ALLOWED],allowed_RETRY + allowed_FAIL
         XOR     AL,AL
-        invoke  GETBUFFR        ; Get sector back
+        invoke  ReadBuffer        ; Get sector back
         POP     BX              ; Get offset back
         retc
-        invoke  SET_BUF_AS_DIR
+        invoke SET_BUF_AS_DIR
         ADD     BX,WORD PTR [CURBUF]    ; Correct it for new buffer
         MOV     SI,BX
         ADD     SI,dir_first    ; Get corrected SI
@@ -903,19 +868,17 @@ RET1:
         return
 EndProc FREEENT
 
-LAST ENDS
 
-CODE SEGMENT BYTE PUBLIC 'CODE'
 ;
-; CHECK_VIRT_OPEN checks to see if we had performed a "virtual open" (by
+; CloseVirtualOpen checks to see if we had performed a "virtual open" (by
 ; examining the flag [VIRTUAL_OPEN] to see if it is 1). If we did, then
 ; it calls Dev_Close_SFT to decrement the ref. count. It also resets the
 ; flag [VIRTUAL_OPEN].
 ; No registers affected (including flags).
 ; On input, [THISSFT] points to current SFT.
 ;
-        Procedure CHECK_VIRT_OPEN,NEAR
-        DOSAssume   CS,<DS>,"Check_Virt_Open"
+        Procedure CloseVirtualOpen,NEAR
+        DOSAssume   SS,<DS>,"CloseVirtualOpen"
 
         PUSH    AX
         lahf                    ; preserve flags
@@ -924,7 +887,7 @@ CODE SEGMENT BYTE PUBLIC 'CODE'
         mov     [VIRTUAL_OPEN],0        ; reset flag
         SaveReg <ES,DI>
         LES     DI,[THISSFT]
-        INVOKE  DEV_CLOSE_SFT
+        CallResident DEV_CLOSE_SFT
         RestoreReg <DI,ES>
 
 ALL_CLOSED:
@@ -932,9 +895,18 @@ ALL_CLOSED:
         POP     AX
         return
 
-EndProc CHECK_VIRT_OPEN
+EndProc CloseVirtualOpen
 
 
-CODE    ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC MknodeEntries
+MknodeEntries LABEL WORD
+        DW OFFSET DOSGROUP:NEWDIR_VECTOR, OFFSET DOSGROUP:ExtendDirectory
+        DW OFFSET DOSGROUP:SETDOTENT_VECTOR, OFFSET DOSGROUP:SetDotEntry
+        DW OFFSET DOSGROUP:MakeNode_VECTOR, OFFSET DOSGROUP:CreateNode
+        DW OFFSET DOSGROUP:DOOPEN_VECTOR, OFFSET DOSGROUP:OpenNode
+        DW OFFSET DOSGROUP:CHECK_VIRT_OPEN_VECTOR, OFFSET DOSGROUP:CloseVirtualOpen
+        DW 0
+DOSEND ENDS
     END
-

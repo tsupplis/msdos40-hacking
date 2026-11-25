@@ -297,13 +297,36 @@ DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
         PUBLIC DosCodeEnd
 DosCodeEnd LABEL BYTE
 
-        EXTRN ProcEntries:WORD,AllocEntries:WORD,CloseEntries:WORD,BufEntries:WORD
+        EXTRN ProcEntries:WORD,AllocEntries:WORD,CloseEntries:WORD,BufEntries:WORD,DinfoEntries:WORD,CreateEntries:WORD
+        EXTRN RomEntries:WORD,MknodeEntries:WORD,FinfoEntries:WORD
+        EXTRN DupEntries:WORD,DiskEntries:WORD,Disk2Entries:WORD,Disk3Entries:WORD,ExtattrEntries:WORD
+        EXTRN FileEntries:WORD,IsearchEntries:WORD,CpmioEntries:WORD,Cpmio2Entries:WORD
+        EXTRN AbortEntries:WORD,SearchEntries:WORD,RenameEntries:WORD,OpenEntries:WORD,FatEntries:WORD
         PUBLIC DosCodeModules
 DosCodeModules LABEL WORD
         DW OFFSET DOSGROUP:ProcEntries
         DW OFFSET DOSGROUP:AllocEntries
         DW OFFSET DOSGROUP:CloseEntries
         DW OFFSET DOSGROUP:BufEntries
+        DW OFFSET DOSGROUP:DinfoEntries
+        DW OFFSET DOSGROUP:CreateEntries
+        DW OFFSET DOSGROUP:RomEntries
+        DW OFFSET DOSGROUP:MknodeEntries
+        DW OFFSET DOSGROUP:FinfoEntries
+        DW OFFSET DOSGROUP:DupEntries
+        DW OFFSET DOSGROUP:DiskEntries
+        DW OFFSET DOSGROUP:Disk2Entries
+        DW OFFSET DOSGROUP:Disk3Entries
+        DW OFFSET DOSGROUP:ExtattrEntries
+        DW OFFSET DOSGROUP:AbortEntries
+        DW OFFSET DOSGROUP:SearchEntries
+        DW OFFSET DOSGROUP:RenameEntries
+        DW OFFSET DOSGROUP:OpenEntries
+        DW OFFSET DOSGROUP:FatEntries
+        DW OFFSET DOSGROUP:FileEntries
+        DW OFFSET DOSGROUP:IsearchEntries
+        DW OFFSET DOSGROUP:CpmioEntries
+        DW OFFSET DOSGROUP:Cpmio2Entries
         DW 0
 DOSEND ENDS
 
@@ -311,10 +334,10 @@ CODE SEGMENT BYTE PUBLIC 'CODE'
         ASSUME CS:DOSGROUP,SS:DOSGROUP
 
 ; Redirectors may call user code while handling the multiplex interrupt.
-        procedure HMA_MULTIPLEX,NEAR
+        procedure DosMultiplex,NEAR
         INT     2Fh
         return
-EndProc HMA_MULTIPLEX
+EndProc DosMultiplex
 
 BREAK <$SetDPB - Create a valid DPB from a user-specified BPB>
 ;----+----+----+----+----+----+----+----+----+----+----+----+----+----+----;

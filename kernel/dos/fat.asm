@@ -67,50 +67,17 @@ FastDiv = TRUE
 
 ; Near callers enter the native copy directly or use the A20 gateway.
         EXTRN FCB_SELECTED:NEAR
-        PUBLIC IsEof_VECTOR
-IsEof_VECTOR DW OFFSET DOSGROUP:IsEofFar
-        procedure IsEof,NEAR
-        JMP WORD PTR CS:[IsEof_VECTOR]
-IsEofFar:
-        PUSH AX
-        MOV AH,62
-        JMP FCB_SELECTED
-EndProc IsEof
-
-        PUBLIC Unpack_VECTOR
-Unpack_VECTOR DW OFFSET DOSGROUP:UnpackFar
-        procedure Unpack,NEAR
-        JMP WORD PTR CS:[Unpack_VECTOR]
-UnpackFar:
-        PUSH AX
-        MOV AH,63
-        JMP FCB_SELECTED
-EndProc Unpack
-
-        PUBLIC Pack_VECTOR
-Pack_VECTOR DW OFFSET DOSGROUP:PackFar
-        procedure Pack,NEAR
-        JMP WORD PTR CS:[Pack_VECTOR]
-PackFar:
-        PUSH AX
-        MOV AH,64
-        JMP FCB_SELECTED
-EndProc Pack
-
+        DosCodeEntry IsEof,62
+        DosCodeEntry Unpack,63
+        DosCodeEntry Pack,64
+        DosCodeEntry FATREAD_SFT,167
+        DosCodeEntry FATREAD_CDS,168
 CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
 
-LAST SEGMENT PARA PUBLIC 'LAST'
-Break <IsEOF - check the quantity in BX for EOF>
-
-;
-; IsEOF - check the fat value in BX for eof.
-;
-;   Inputs:	ES:BP point to DPB
-;		BX has fat value
-;   Outputs:	JAE eof
-;   Registers modified: none
-Procedure HMA_IsEof,NEAR
-	ASSUME	SS:DOSGROUP,CS:DOSGROUP,DS:NOTHING,ES:NOTHING
+Procedure ClusterIsEOF,NEAR
+	ASSUME	SS:DOSGROUP,CS:DOSCODE,DS:NOTHING,ES:NOTHING
 	Assert	    ISDPB,<ES,BP>,"IsEOF"
 	CMP	ES:[BP.dpb_max_cluster],4096-10 ; is this 16 bit fat?
 	JAE	EOF16			; yes, check for eof there
@@ -127,7 +94,7 @@ IsEOF_other:
 EOF16:
 	CMP	BX,0FFF8h		; 16 bit compare
 	return
-EndProc HMA_IsEof
+EndProc ClusterIsEOF
 
 Break	<UNPACK -- UNPACK FAT ENTRIES>
 
@@ -140,8 +107,8 @@ Break	<UNPACK -- UNPACK FAT ENTRIES>
 ;	Carry set means error (currently user FAILed to I 24)
 ; SI Destroyed, No other registers affected. Fatal error if cluster too big.
 
-	procedure   HMA_UNPACK,NEAR
-	DOSAssume   CS,<DS>,"UnPack"
+	procedure   ReadClusterEntry,NEAR
+	DOSAssume   SS,<DS>,"UnPack"
 	ASSUME	ES:NOTHING
 
 	Assert	    ISDPB,<ES,BP>,"Unpack"
@@ -179,7 +146,7 @@ HURTFAT:
 ; Signal Bad FAT to INT int_fatal_abort handler.  We have an invalid cluster.
 ;
 	MOV	DI,0FFFH		; In case INT int_fatal_abort returns (it shouldn't)
-	invoke	FATAL
+	CallResident FATAL
 	CMP	AL,3
 	CLC
 	JNZ	OKU_RET 		; Try to ignore bad FAT
@@ -187,7 +154,7 @@ HURTFAT:
 OKU_RET:
 	POP	AX
 	return
-EndProc HMA_UNPACK
+EndProc ReadClusterEntry
 
 Break	<PACK -- PACK FAT ENTRIES>
 
@@ -201,8 +168,8 @@ Break	<PACK -- PACK FAT ENTRIES>
 ;	Carry set means error (currently user FAILed to I 24)
 ;	No other registers affected
 
-	procedure   HMA_PACK,NEAR
-	DOSAssume   CS,<DS>,"Pack"
+	procedure   WriteClusterEntry,NEAR
+	DOSAssume   SS,<DS>,"Pack"
 	ASSUME	ES:NOTHING
 
 	Assert	    ISDPB,<ES,BP>,"Pack"
@@ -231,7 +198,7 @@ PACKIN:
 	LDS	SI,[CURBUF]
 	TEST	[SI.buf_flags],buf_dirty  ;LB. if already dirty 		;AN000;
 	JNZ	yesdirty		  ;LB.	  don't increment dirty count   ;AN000;
-	invoke	INC_DIRTY_COUNT 	  ;LB.					;AN000;
+	invoke IncrementDirtyCount 	  ;LB.					;AN000;
 	OR	[SI.buf_flags],buf_dirty  ;LB.					;AN000;
 yesdirty:				  ;LB.					;AN000;
 	CMP	BYTE PTR [CLUSSPLIT],0
@@ -253,14 +220,14 @@ ASSUME	DS:NOTHING
 	MOV	DX,WORD PTR [CLUSSEC]
 	MOV	SI,1
 	XOR	AL,AL
-	invoke	GETBUFFRB
+	invoke ReadBufferType
 	POP	AX
 	JC	POPP_RET
 	LDS	DI,[CURBUF]
 ASSUME	DS:NOTHING
 	TEST	[DI.buf_flags],buf_dirty  ;LB. if already dirty 		;AN000;
 	JNZ	yesdirty2		  ;LB.	  don't increment dirty count   ;AN000;
-	invoke	INC_DIRTY_COUNT 	  ;LB.					;AN000;
+	invoke IncrementDirtyCount 	  ;LB.					;AN000;
 	OR	[DI.buf_flags],buf_dirty
 yesdirty2:
 	ADD	DI,BUFINSIZ
@@ -276,7 +243,7 @@ POPP_RET:
 	POP	AX
 	return
 
-EndProc HMA_PACK
+EndProc WriteClusterEntry
 
 Break	<MAPCLUSTER - BUFFER A FAT SECTOR>
 
@@ -294,7 +261,7 @@ Break	<MAPCLUSTER - BUFFER A FAT SECTOR>
 ; SI is destroyed.
 
 	procedure   MAPCLUSTER,NEAR
-	DOSAssume   CS,<DS>,"MapCluster"
+	DOSAssume   SS,<DS>,"MapCluster"
 	ASSUME	ES:NOTHING
 
 	Assert	    ISDPB,<ES,BP>,"MapCluster"
@@ -346,7 +313,7 @@ DivDone:
 	MOV	[HIGH_SECTOR],0 	;F.C. >32mb  low sector #
 	XOR	AL,AL
 	MOV	SI,1
-	invoke	GETBUFFRB
+	invoke ReadBufferType
 	RestoreReg  <CX,AX,DX>		; CX is sec siz-1, AX is offset in sec
 	JC	MAP_POP
 	LDS	SI,[CURBUF]
@@ -365,7 +332,7 @@ ASSUME	DS:NOTHING
 	MOV	[HIGH_SECTOR],0 	      ;F.C. >32mb  FAT sector <32mb	;AN000;
 	XOR	AL,AL
 	MOV	SI,1
-	invoke	GETBUFFRB
+	invoke ReadBufferType
 	JC	MAP_POP
 	LDS	SI,[CURBUF]
 ASSUME	DS:NOTHING
@@ -397,9 +364,7 @@ ENDIF
 
 EndProc MAPCLUSTER
 
-LAST ENDS
 
-CODE SEGMENT BYTE PUBLIC 'CODE'
 Break	<FATREAD_SFT/FATREAD_CDS -- CHECK DRIVE GET FAT>
 
 ; Inputs:
@@ -418,18 +383,18 @@ Break	<FATREAD_SFT/FATREAD_CDS -- CHECK DRIVE GET FAT>
 ;	Since getting a true disk changed on this call is a screw up
 ;	anyway, that's the way it goes.
 
-	procedure  FATREAD_SFT,NEAR
-	DOSAssume   CS,<DS>,"FATRead_SFT"
+	procedure  ReadFileFAT,NEAR
+	DOSAssume   SS,<DS>,"FATRead_SFT"
 	ASSUME	ES:NOTHING
 
 	LES	BP,ES:[DI.sf_devptr]
 	Assert	    ISDPB,<ES,BP>,"FatReadSFT"
 	MOV	AL,ES:[BP.dpb_drive]
 	MOV	[THISDRV],AL
-	invoke	GOTDPB			;Set THISDPB
+	CallResident GOTDPB			;Set THISDPB
 	CALL	FAT_GOT_DPB
 	return
-EndProc FATREAD_SFT
+EndProc ReadFileFAT
 
 ; Inputs:
 ;	DS:DOSGROUP
@@ -445,8 +410,8 @@ EndProc FATREAD_SFT
 ;	Carry set if error (currently user FAILed to I 24)
 ; DS preserved , all other registers destroyed
 
-	procedure   FATREAD_CDS,NEAR
-	DOSAssume   CS,<DS>,"FATRead_CDS"
+	procedure   ReadDirectoryFAT,NEAR
+	DOSAssume   SS,<DS>,"FATRead_CDS"
 	ASSUME	ES:NOTHING
 
 	PUSH	ES
@@ -455,7 +420,7 @@ EndProc FATREAD_SFT
 	Assert	ISDPB,<ES,BP>,"FatReadCDS"
 	MOV	AL,ES:[BP.dpb_drive]
 	MOV	[THISDRV],AL
-	invoke	GOTDPB			;Set THISDPB
+	CallResident GOTDPB			;Set THISDPB
 	CALL	FAT_GOT_DPB
 	POP	DI			;Get back CDS pointer
 	POP	ES
@@ -478,7 +443,7 @@ CHECK_CDS:
 	PUSH	ES
 	PUSH	DI
 	LES	DI,ES:[DI.curdir_devptr]
-	invoke	POINTCOMP
+	invoke CompareBufferPointers
 	POP	DI
 	POP	ES
 	JNZ	NEXTCDS 		; CDS not for this drive
@@ -489,24 +454,24 @@ NEXTCDS:
 	ADD	DI,SIZE curdir_list	; Point to next CDS
 	LOOP	CHECK_CDS
 	POP	DS
-	DOSAssume   CS,<DS>,"FAT/NextCDS"
+	DOSAssume   SS,<DS>,"FAT/NextCDS"
 NO_CHANGE:
 	LES	BP,[THISDPB]
 	CLC
 	return
-EndProc FATREAD_CDS
+EndProc ReadDirectoryFAT
 
 Break	<Fat_Operation - miscellaneous fat stuff>
 
 	procedure   FAT_operation,NEAR
 FATERR:
-	DOSAssume   CS,<DS>,"FATERR"
+	DOSAssume   SS,<DS>,"FATERR"
 	MOV	ES:[BP.dpb_free_cnt],-1 ; Err in FAT must force recomp of freespace
 	AND	DI,STECODE		; Put error code in DI
 	MOV	[ALLOWED],allowed_FAIL + allowed_RETRY
 	MOV	AH,2 + allowed_FAIL + allowed_RETRY ; While trying to read FAT
 	MOV	AL,BYTE PTR [THISDRV]	 ; Tell which drive
-	invoke	FATAL1
+	CallResident FATAL1
 	LES	BP,[THISDPB]
 	CMP	AL,3
 	JNZ	FAT_GOT_DPB		; User said retry
@@ -528,7 +493,7 @@ FAT_GOT_DPB:
 	LDS	SI,ES:[BP.dpb_driver_addr]  ; DS:SI Points to device header
 ASSUME	DS:NOTHING
 	POP	ES			; ES:BX Points to call header
-	invoke	DEVIOCALL2
+	CallResident DEVIOCALL2
 	Context DS
 	POP	ES			; Restore ES:BP
 	MOV	DI,[DEVCALL.REQSTAT]
@@ -573,7 +538,7 @@ ASSUME	DS:NOTHING
 	MOV	WORD PTR [EXTERRPT],DI
 	MOV	AX,error_I24_wrong_disk
 	MOV	[READOP],1		; Write
-	invoke	HARDERR
+	CallResident HARDERR
 	POP	DI			; Get back buffer for ignore
 	POP	DS
 ASSUME	DS:NOTHING
@@ -583,7 +548,7 @@ FAIL_OPJ2:
 	JMP	FAT_GOT_DPB		; Retry
 
 CHKBUFFDIRT:
-	DOSAssume   CS,<DS>,"FAT/ChkBuffDirt"
+	DOSAssume   SS,<DS>,"FAT/ChkBuffDirt"
 ;	LDS	DI,[BUFFHEAD]
 ASSUME	DS:NOTHING
 	XOR	DX,DX				 ;LB.				;AN000;
@@ -595,7 +560,7 @@ scan_dirty:
 	JZ	GETNEXT 			 ;LB.	 get next hash entry	;AN000;
 	PUSH	DS				 ;LB. save hash entry addr	;AN000;
 	PUSH	DI				 ;LB.				;AN000;
-	invoke	Map_Entry			 ;LB.				;AN000;
+	invoke MapBufferBucket			 ;LB.				;AN000;
 NBUFFER:				; Look for dirty buffers
 	CMP	AL,[DI.buf_ID]
 	JNZ	LFNXT			; Not for this unit
@@ -632,7 +597,7 @@ ASSUME DS:NOTHING
 	MOV	CX,[BUF_HASH_COUNT]	;LB. get Hash entry count		  ;AN000;
 
 NxtHash:
-	invoke	GETCURHEAD		;LB. get Hash entry buffer header	  ;AN000;
+	invoke GetBufferHead		;LB. get Hash entry buffer header	  ;AN000;
 					;  to do this AFTER the check for
 ASSUME	DS:NOTHING
 NXBUFFER:
@@ -646,7 +611,7 @@ OLDDRV2:
 	JMP	Disk_Chng_Err		; Disk changed but dirty buffers
 OLDDRV:
 	MOV	WORD PTR [DI.buf_ID],(buf_visit SHL 8) OR 0FFH	; Free up buffer
-	invoke	SCANPLACE
+	invoke ScanPlaceBuffer
 SKPBUFF:
 	CMP	DI,[FIRST_BUFF_ADDR]	;LB.  end of chain  1/19/88		  ;AN000;
 	JNZ	NXBUFFER		;LB.  no				  ;AN000;
@@ -663,7 +628,7 @@ GOGETBPB:
 	JNZ	GETFREEBUF
 	context DS
 	MOV	BX,2
-	CALL	UNPACK			; Read the first FAT sector into CURBUF
+	invoke ReadClusterEntry			; Read the first FAT sector into CURBUF
 FAIL_OPJ:
 	JC	FAIL_OP
 	LDS	DI,[CURBUF]
@@ -677,9 +642,9 @@ ASSUME	DS:NOTHING
 ;	LDS	DI,[BUFFHEAD]
 	XOR	DX,DX			     ;LB.  fake to get 1st		  ;AN000;
 	MOV	[HIGH_SECTOR],DX	     ;LB.  buffer addr			  ;AN000;
-	invoke	GETCURHEAD		     ;LB.				  ;AN000;
+	invoke GetBufferHead		     ;LB.				  ;AN000;
 
-	invoke	BUFWRITE
+	invoke WriteBuffer
 	POP	BP
 	POP	ES
 	JC	FAIL_OPJ
@@ -704,7 +669,7 @@ GOTGETBUF:
 	POP	DS			; DS:SI Points to device header
 ASSUME	DS:NOTHING
 	POP	ES			; ES:BX Points to call header
-	invoke	DEVIOCALL2
+	CallResident DEVIOCALL2
 	POP	ES			; Restore ES:BP
 	Context DS
 	MOV	DI,[DEVCALL.REQSTAT]
@@ -714,7 +679,7 @@ ASSUME	DS:NOTHING
 	LDS	SI,[CALLBPB]
 ASSUME	DS:NOTHING
 	MOV	ES:[BP].DPB_next_free,0 ; recycle scanning pointer
-	invoke	$SETDPB
+	CallResident $SETDPB
 	LDS	DI,[CALLXAD]		; Get back buffer pointer
 	MOV	AL,BYTE PTR ES:[BP.dpb_FAT_count]
 	MOV	[DI.buf_wrtcnt-BUFINSIZ],AL   ;>32mb				;AN000;
@@ -729,5 +694,15 @@ FATERRJ: JMP	FATERR
 
 EndProc FAT_operation
 
-CODE	ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC FatEntries
+FatEntries LABEL WORD
+        DW OFFSET DOSGROUP:IsEof_VECTOR, OFFSET DOSGROUP:ClusterIsEOF
+        DW OFFSET DOSGROUP:Unpack_VECTOR, OFFSET DOSGROUP:ReadClusterEntry
+        DW OFFSET DOSGROUP:Pack_VECTOR, OFFSET DOSGROUP:WriteClusterEntry
+        DW OFFSET DOSGROUP:FATREAD_SFT_VECTOR, OFFSET DOSGROUP:ReadFileFAT
+        DW OFFSET DOSGROUP:FATREAD_CDS_VECTOR, OFFSET DOSGROUP:ReadDirectoryFAT
+        DW 0
+DOSEND ENDS
     END

@@ -85,6 +85,14 @@ IF	BUFFERFLAG
 
 ENDIF
 
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry DOS_READ,41
+        DosCodeEntry DOS_WRITE,42
+        DosCodeEntry SWAPBACK,139
+        DosCodeEntry get_io_sft,140
+CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
 Break	<SwapCon, Swap Back - Old-style I/O to files>
 ; * * * * Drivers for file input from devices * * * *
 
@@ -95,12 +103,12 @@ Break	<SwapCon, Swap Back - Old-style I/O to files>
 ;   Outputs:	CONSWAP is set to false.
 ;   Registers modified: none
 
-	procedure   SWAPBACK,NEAR
-	DOSAssume   CS,<DS>,"SwapBack"
+	procedure   ClearConsoleSwap,NEAR
+	DOSAssume   SS,<DS>,"ClearConsoleSwap"
 	ASSUME	ES:NOTHING
 	MOV	BYTE PTR [CONSWAP],0	; signal no conswaps
 	return
-EndProc SWAPBACK
+EndProc ClearConsoleSwap
 
 ;   Copy ThisSFT to CONSFT for use by the 1-12 primitives.
 ;
@@ -109,7 +117,7 @@ EndProc SWAPBACK
 ;   Outputs:	CONSWAP is set.  CONSFT = ThisSFT.
 ;   Registers modified: none
 	procedure   SWAPCON,NEAR
-	DOSAssume   CS,<DS>,"SwapCon"
+	DOSAssume   SS,<DS>,"SwapCon"
 	ASSUME	ES:NOTHING
 	SaveReg <ES,DI>
 	MOV	BYTE PTR [CONSWAP],1	;   CONSwap = TRUE;
@@ -121,30 +129,8 @@ EndProc SWAPBACK
 	return
 EndProc SWAPCON
 
-        EXTRN   FCB_SELECTED:NEAR
-        PUBLIC  READ_VECTOR,WRITE_VECTOR
-READ_VECTOR  DW OFFSET DOSGROUP:ReadFar
-WRITE_VECTOR DW OFFSET DOSGROUP:WriteFar
 
-        procedure DOS_READ,NEAR
-        JMP     WORD PTR CS:[READ_VECTOR]
-ReadFar:
-        PUSH    AX
-        MOV     AH,41
-        JMP     FCB_SELECTED
-EndProc DOS_READ
-
-        procedure DOS_WRITE,NEAR
-        JMP     WORD PTR CS:[WRITE_VECTOR]
-WriteFar:
-        PUSH    AX
-        MOV     AH,42
-        JMP     FCB_SELECTED
-EndProc DOS_WRITE
-CODE    ENDS
-
-LAST    SEGMENT PARA PUBLIC 'LAST'
-Break	<DOS_READ -- MAIN READ ROUTINE AND DEVICE IN ROUTINES>
+Break	<ReadFileData -- MAIN READ ROUTINE AND DEVICE IN ROUTINES>
 
 ;
 ; Inputs:
@@ -164,8 +150,8 @@ Break	<DOS_READ -- MAIN READ ROUTINE AND DEVICE IN ROUTINES>
 ;	ES:DI point to SFT
 ; DS preserved, all other registers destroyed
 
-	procedure   HMA_READ,NEAR
-	DOSAssume   CS,<DS>,"DOS_Read"
+	procedure   ReadFileData,NEAR
+	DOSAssume   SS,<DS>,"ReadFileData"
 	ASSUME	ES:NOTHING
 
 IF	BUFFERFLAG
@@ -181,7 +167,7 @@ ENDIF
 	
 
 	LES	DI,[THISSFT]
-	Assert	ISSFT,<ES,DI>,"DOS_Read"
+	Assert	ISSFT,<ES,DI>,"ReadFileData"
 ;
 ; Verify that the sft has been opened in a mode that allows reading.
 ;
@@ -194,7 +180,7 @@ ENDIF
 READ_NO_MODE:
 	invoke	SETUP
 	JCXZ	NoIORet 		; no bytes to read - fast return
-	invoke	IsSFTNet
+	CallResident IsSFTNet
 	JZ	LOCAL_READ
 
 ;	invoke	OWN_SHARE		;AN000;;IFS. IFS owns share ?
@@ -211,7 +197,7 @@ IF NOT Installed
 	transfer NET_READ
 ELSE
 	MOV	AX,(multNET SHL 8) OR 8
-	invoke	HMA_MULTIPLEX
+	CallResident DosMultiplex
 	return
 ENDIF
 
@@ -227,7 +213,7 @@ LOCAL_READ:
 	TEST	ES:[DI.sf_flags],devid_device  ; Check for named device I/O
 	JNZ	READDEV
 	MOV	[EXTERR_LOCUS],errLOC_Disk
-	EnterCrit   critDisk
+	CallResident ECritDisk
 	TEST	[FastSeekflg],Fast_yes	       ; FastSeek installed ?
 	JZ	FS_no			       ; no
 	OR	[FastSeekflg],FS_begin	       ; set fastseek mode
@@ -237,7 +223,7 @@ FS_no:
 	AND	SS:[FastSeekflg],FS_end       ; reset fastseek mode
 	POPF				      ; retore flag
 critexit:
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 	return
 
 ;
@@ -246,7 +232,7 @@ critexit:
 ; null device, we can safely indicate no transfer.
 ;
 READDEV:
-	DOSAssume   CS,<DS>,"DISK/ReadDev"
+	DOSAssume   SS,<DS>,"DISK/ReadDev"
 	ASSUME	ES:NOTHING
 	MOV	[EXTERR_LOCUS],errLOC_SerDev
 	MOV	BL,BYTE PTR ES:[DI.sf_flags]
@@ -271,7 +257,7 @@ TESTRAW:
 	JMP	READCON
 
 DVRDRAW:
-	DOSAssume   CS,<DS>,"DISK/DvRdRaw"
+	DOSAssume   SS,<DS>,"DISK/DvRdRaw"
 	PUSH	ES
 	POP	DS			; Xaddr to DS:DI
 ASSUME	DS:NOTHING
@@ -279,17 +265,17 @@ ReadRawRetry:
 	MOV	BX,DI			; DS:BX transfer addr
 	XOR	AX,AX			; Media Byte, unit = 0
 	MOV	DX,AX			; Start at 0
-	invoke	SETREAD
+	CallResident SETREAD
 	PUSH	DS			; Save Seg part of Xaddr
 	LDS	SI,[THISSFT]
-	Assert	ISSFT,<DS,SI>,"DOS_Read/DvRdRawR"
-	invoke	DEVIOCALL
+	Assert	ISSFT,<DS,SI>,"ReadFileData/DvRdRawR"
+	CallResident DEVIOCALL
 	MOV	DX,DI			; DS:DX is preserved by INT 24
 	MOV	AH,86H			; Read error
 	MOV	DI,[DEVCALL.REQSTAT]
 	TEST	DI,STERR
 	JZ	CRDROK			; No errors
-	invoke	CHARHARD
+	CallResident CHARHARD
 	MOV	DI,DX			; DS:DI is Xaddr
 	OR	AL,AL
 	JZ	CRDROK			; Ignore
@@ -306,7 +292,7 @@ CRDFERR:
 	POP	DI			; Clean stack
 DEVIOFERR:
 	LES	DI,[THISSFT]
-	Assert	ISSFT,<ES,DI>,"DOS_Read/DEVIOFERR"
+	Assert	ISSFT,<ES,DI>,"ReadFileData/DEVIOFERR"
 	transfer    SET_ACC_ERR_DS
 
 CRDROK:
@@ -333,20 +319,20 @@ ASSUME	DS:NOTHING
 	MOV	AX,DX
 	PUSH	CX
 	MOV	CX,1
-	invoke	SETREAD
+	CallResident SETREAD
 	POP	CX
 	LDS	SI,[THISSFT]
-	Assert	ISSFT,<DS,SI>,"DOS_Read/NotRdCon"
+	Assert	ISSFT,<DS,SI>,"ReadFileData/NotRdCon"
 	LDS	SI,[SI.sf_devptr]
 DVRDLP:
-	invoke	DSKSTATCHK
-	invoke	DEVIOCALL2
+	CallResident DSKSTATCHK
+	CallResident DEVIOCALL2
 	PUSH	DI		; Save "count" done
 	MOV	AH,86H
 	MOV	DI,[DEVCALL.REQSTAT]
 	TEST	DI,STERR
 	JZ	CRDOK
-	invoke	CHARHARD
+	CallResident CHARHARD
 	POP	DI
 	MOV	[CALLSCNT],1
 	CMP	AL,1
@@ -390,18 +376,18 @@ NORMCH:
 	LOOPNZ	TRANBUF
 	JNZ	ENDRDCON
 	XOR	SI,SI		; Cause a new buffer to be read
-	invoke	OUTT		; Transmit linefeed
+	invoke OutputChar		; Transmit linefeed
 	OR	AL,1		; Clear zero flag--not end of file
 ENDRDCON:
 	Context DS
-	CALL	SWAPBACK
+	CALL	ClearConsoleSwap
 	MOV	[CONTPOS],SI
 ENDRDDEV:
 	Context DS
 	MOV	[NEXTADD],DI
 	JNZ	SETSFTC 	; Zero set if Ctrl-Z found in input
 	LES	DI,[THISSFT]
-	Assert	ISSFT,<ES,DI>,"DOS_Read/EndRdDev"
+	Assert	ISSFT,<ES,DI>,"ReadFileData/EndRdDev"
 	AND	BYTE PTR ES:[DI.sf_flags],NOT devid_device_EOF ; Mark as no more data available
 SETSFTC:
 	invoke	SETSFT
@@ -410,7 +396,7 @@ SETSFTC:
 ASSUME	DS:NOTHING,ES:NOTHING
 
 READCON:
-	DOSAssume   CS,<DS>,"ReadCon"
+	DOSAssume   SS,<DS>,"ReadCon"
 	CALL	SWAPCON
 	MOV	SI,[CONTPOS]
 	OR	SI,SI
@@ -423,7 +409,7 @@ GETBUF:
 	PUSH	ES
 	PUSH	DI
 	MOV	DX,OFFSET DOSGROUP:CONBUF
-	invoke	$STD_CON_STRING_INPUT		; Get input buffer
+	invoke ReadConsoleLine		; Get input buffer
 	POP	DI
 	POP	ES
 	POP	CX
@@ -434,13 +420,13 @@ GETBUF:
 	STOSB
 	DEC	DI
 	MOV	AL,c_LF
-	invoke	OUTT		; Send linefeed
+	invoke OutputChar		; Send linefeed
 	XOR	SI,SI
 	JMP	ENDRDCON
 
-EndProc HMA_READ
+EndProc ReadFileData
 
-Break	<DOS_WRITE -- MAIN WRITE ROUTINE AND DEVICE OUT ROUTINES>
+Break	<WriteFileData -- MAIN WRITE ROUTINE AND DEVICE OUT ROUTINES>
 
 ;
 ; Inputs:
@@ -462,8 +448,8 @@ Break	<DOS_WRITE -- MAIN WRITE ROUTINE AND DEVICE OUT ROUTINES>
 ;	ES:DI point to SFT
 ; DS preserved, all other registers destroyed
 
-	procedure   HMA_WRITE,NEAR
-	DOSAssume   CS,<DS>,"DOS_Write"
+	procedure   WriteFileData,NEAR
+	DOSAssume   SS,<DS>,"WriteFileData"
 	ASSUME	ES:NOTHING
 
 IF	BUFFERFLAG
@@ -505,7 +491,7 @@ Check_FCB_RO:
 	JNZ	BadMode 		; Can't write to Read_Only files via FCB
 WRITE_NO_MODE:
 	invoke	SETUP
-	invoke	IsSFTNet
+	CallResident IsSFTNet
 	JZ	LOCAL_WRITE
 
 ;	invoke	OWN_SHARE		;AN000;;IFS. IFS owns share ?
@@ -522,7 +508,7 @@ IF NOT Installed
 	transfer NET_WRITE
 ELSE
 	MOV	AX,(multNET SHL 8) OR 9
-	invoke	HMA_MULTIPLEX
+	CallResident DosMultiplex
 ;	JC	nomore		       ;AN000;;IFS. error
 ;	invoke	OWN_SHARE	       ;AN000;;IFS. IFS owns share ?
 ;	JZ	nomore		       ;AN000;;IFS. yes
@@ -537,9 +523,11 @@ ENDIF
 
 LOCAL_WRITE:
 	TEST	ES:[DI.sf_flags],devid_device  ; Check for named device I/O
-	JNZ	WRTDEV
+	JZ	WriteLocalDisk
+	JMP	WRTDEV
+WriteLocalDisk:
 	MOV	[EXTERR_LOCUS],errLOC_Disk
-	EnterCrit   critDisk
+	CallResident ECritDisk
 	TEST	[FastSeekflg],Fast_yes	       ;AN000;FO. FastSeek installed ?
 	JZ	FS_no2			       ;AN000;FO. no
 	OR	[FastSeekflg],FS_begin	       ;AN000;FO. set fastseek mode
@@ -554,27 +542,27 @@ FS_no2: 				       ;AN000;
 	TEST	ES:[DI.sf_mode],auto_commit_write ;AN000;EO.
 	JZ	nocommit		       ;AN000;EO.
 	PUSH	CX			       ;AN000;EO.
-	invoke	DOS_COMMIT		       ;AN000;EO.
+	invoke CommitSFT		       ;AN000;EO.
 	POP	CX			       ;AN000;EO.
 nocommit:				       ;AN000;
 ;; Extended Open
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 	return
 
 DVWRTRAW:
 ASSUME	DS:NOTHING
 	XOR	AX,AX			; Media Byte, unit = 0
-	invoke	SETWRITE
+	CallResident SETWRITE
 	PUSH	DS			; Save seg of transfer
 	LDS	SI,[THISSFT]
 	Assert	ISSFT,<DS,SI>,"DosWrite/DvWrtRaw"
-	invoke	DEVIOCALL		; DS:SI -> DEVICE
+	CallResident DEVIOCALL		; DS:SI -> DEVICE
 	MOV	DX,DI			; Offset part of Xaddr saved in DX
 	MOV	AH,87H
 	MOV	DI,[DEVCALL.REQSTAT]
 	TEST	DI,STERR
 	JZ	CWRTROK
-	invoke	CHARHARD
+	CallResident CHARHARD
 	MOV	BX,DX			; Recall transfer addr
 	OR	AL,AL
 	JZ	CWRTROK 		; Ignore
@@ -590,7 +578,7 @@ CWRFERR:
 CWRTROK:
 	POP	AX			; Chuck saved seg of transfer
 	POP	DS
-	DOSAssume   CS,<DS>,"DISK/CWrtOK"
+	DOSAssume   SS,<DS>,"DISK/CWrtOK"
 	MOV	AX,[CALLSCNT]		; Get actual number of bytes transferred
 ENDWRDEV:
 	LES	DI,[THISSFT]
@@ -605,7 +593,7 @@ WrtCookJ:
 	JMP	WRTCOOKDONE
 
 WRTDEV:
-	DOSAssume   CS,<DS>,"DISK/WrtDev"
+	DOSAssume   SS,<DS>,"DISK/WrtDev"
 	MOV	[EXTERR_LOCUS],errLOC_SerDev
 	OR	BYTE PTR ES:[DI.sf_flags],devid_device_EOF  ; Reset EOF for input
 	MOV	BL,BYTE PTR ES:[DI.sf_flags]
@@ -623,7 +611,9 @@ ASSUME	DS:NOTHING
 
 TEST_DEV_CON:
 	TEST	AL,devid_device_con_out ; Console output device?
-	JNZ	WRITECON
+	JZ	CheckNullOutput
+	JMP	WRITECON
+CheckNullOutput:
 	TEST	AL,devid_device_null
 	JNZ	WRTNUL
 	MOV	AX,DX
@@ -631,23 +621,23 @@ TEST_DEV_CON:
 	JZ	WRTCOOKJ		; Yes, transfer nothing
 	PUSH	CX
 	MOV	CX,1
-	invoke	SETWRITE
+	CallResident SETWRITE
 	POP	CX
 	LDS	SI,[THISSFT]
 	OR	SS:[DOS34_FLAG],X25_Special;AN000;;PTM. bad x25 driver
 	MOV	AH,3			;AN000;;PTM. prompt critical error ASAP
-	invoke	IOFUNC			;AN000;;PTM.
+	CallResident IOFUNC			;AN000;;PTM.
 	Assert	ISSFT,<DS,SI>,"DosWrite/TestDevCon"
 	LDS	SI,[SI.sf_devptr]
 DVWRTLP:
-	invoke	DSKSTATCHK
-	invoke	DEVIOCALL2
+	CallResident DSKSTATCHK
+	CallResident DEVIOCALL2
 	PUSH	DI
 	MOV	AH,87H
 	MOV	DI,[DEVCALL.REQSTAT]
 	TEST	DI,STERR
 	JZ	CWROK
-	invoke	CHARHARD
+	CallResident CHARHARD
 	POP	DI
 	MOV	[CALLSCNT],1
 	CMP	AL,1
@@ -688,26 +678,24 @@ WRCONLP:
 	LODSB
 	CMP	AL,1AH		; ^Z?
 	JZ	CONEOF
-	invoke	OUTT
+	invoke OutputChar
 	LOOP	WRCONLP
 CONEOF:
 	POP	AX			; Count
 	SUB	AX,CX			; Amount actually written
 	POP	DS
-	DOSAssume   CS,<DS>,"DISK/ConEOF"
-	CALL	SWAPBACK
+	DOSAssume   SS,<DS>,"DISK/ConEOF"
+	CALL	ClearConsoleSwap
 	JMP	ENDWRDEV
-EndProc HMA_WRITE
-LAST    ENDS
+EndProc WriteFileData
 
-CODE    SEGMENT BYTE PUBLIC 'CODE'
 
 
 ;   Convert JFN number in BX to sf_entry in DS:SI We get the normal SFT if
 ;   CONSWAP is FALSE or if the handle desired is 2 or more.  Otherwise, we
 ;   retrieve the sft from ConSFT which is set by SwapCon.
 
-	procedure   get_io_sft,near
+	procedure   GetConsoleSft,near
 ASSUME	DS:NOTHING,ES:NOTHING
 	TEST	ConSwap,-1
 	JNZ	GetRedir
@@ -715,7 +703,7 @@ GetNormal:
 	Context DS
 	PUSH	ES
 	PUSH	DI
-	invoke	SFFromHandle
+	CallResident SFFromHandle
 	JC	RET44P
 	MOV	SI,ES
 	MOV	DS,SI
@@ -732,7 +720,7 @@ GetRedir:
 	Assert	ISSFT,<DS,SI>,"GetIOSft"
 	CLC
 	return
-EndProc get_io_sft
+EndProc GetConsoleSft
 
 Break	<DIRREAD -- READ A DIRECTORY SECTOR>
 
@@ -753,7 +741,7 @@ Break	<DIRREAD -- READ A DIRECTORY SECTOR>
 ; DS preserved, all other registers destroyed.
 
 	procedure   DirRead,NEAR
-	DOSAssume   CS,<DS>,"DirRead"
+	DOSAssume   SS,<DS>,"DirRead"
 	ASSUME	ES:NOTHING
 	Assert	    ISDPB,<ES,BP>,"DirRead"
 
@@ -802,27 +790,27 @@ DoRead:
 	MOV	[NXTCLUSNUM],BX
 	JCXZ	FIRSTCLUSTER
 SKPCLLP:
-	invoke	UNPACK
+	invoke ReadClusterEntry
 	retc
 	XCHG	BX,DI
-	invoke	IsEOF			; test for eof based on fat size
+	invoke ClusterIsEOF			; test for eof based on fat size
 	JAE	HAVESKIPPED
 	LOOP	SKPCLLP
 HAVESKIPPED:
 	MOV	[NXTCLUSNUM],BX
 	MOV	DX,DI
 	MOV	BL,AH
-	invoke	FIGREC
+	invoke ClusterToSector
 
 	entry	FIRSTCLUSTER
 
 	MOV	[ALLOWED],allowed_RETRY + allowed_FAIL
 	XOR	AL,AL		; Indicate pre-read
-	invoke	GETBUFFR
+	invoke ReadBuffer
 	retc
 
 	entry	SET_BUF_AS_DIR
-	DOSAssume   CS,<DS>,"SET_BUF_AS_DIR"
+	DOSAssume   SS,<DS>,"SET_BUF_AS_DIR"
 	ASSUME	ES:NOTHING
 ; Set the type of CURBUF to be a directory sector.
 ; Only flags are modified.
@@ -866,7 +854,7 @@ NXTFAT:
 	PUSH	CX		      ;AN000;>32mb
 	PUSH	AX
 	MOV	CX,DI
-	invoke	DSKREAD
+	invoke	ReadDeviceSectors
 	POP	AX
 	POP	CX
 	JZ	RET41P		; Carry clear
@@ -897,7 +885,7 @@ Break	<DREAD -- DO A DISK READ>
 ASSUME	DS:NOTHING,ES:NOTHING
 
 	Assert	ISDPB,<ES,BP>,"DREAD"
-	invoke	DSKREAD
+	invoke	ReadDeviceSectors
 	retz			; Carry clear
 	MOV	BYTE PTR [READOP],0
 	invoke	HARDERRRW
@@ -940,7 +928,7 @@ write_cont:				;AN000;
 	MOV	CX,0FFFFH		;AN000;;MS. check for lock on whole file
 Not_Truncate:				;AN000;
 	MOV	AL,80H			;AN000;;MS. check write access
-	invoke	LOCK_CHECK		;AN000;;MS. check lock
+	CallResident LOCK_CHECK		;AN000;;MS. check lock
 	POP	CX			;AN000;;MS. restore reg
 	JNC	WRITE_OK		;AN000;;MS. lock ok
 	invoke	WRITE_LOCK_VIOLATION	;AN000;;MS. issue I24
@@ -970,7 +958,7 @@ ASSUME	DS:NOTHING,ES:NOTHING		       ;AN000;
 	return				       ;AN000;;MS.
 do_retry:				;AN000;
 	MOV	AL,0			;AN000;;MS. check read access
-	invoke	LOCK_CHECK		;AN000;;MS. check lock
+	CallResident LOCK_CHECK		;AN000;;MS. check lock
 	JNC	READ_OK 		;AN000;;MS. lock ok
 	invoke	READ_LOCK_VIOLATION	;AN000;;MS. issue I24
 	JNC	CHECK_READ_LOCK 	;AN000;;MS. retry
@@ -1017,7 +1005,7 @@ IF BUFFERFLAG
 ;----------------------------------------------------------------------------
 Procedure 	choose_buf_page,near
 
-	assume cs:dosgroup, ds:nothing, es:nothing, ss:dosgroup
+	assume CS:DOSCODE, ds:nothing, es:nothing, ss:dosgroup
 
 	push	cx
 	push	bx
@@ -1066,14 +1054,14 @@ pick_first:
 	mov	ax, word ptr [BUF_EMS_FIRST_PAGE]
 	cmp	[BUF_EMS_PFRAME], ax
 	je	fin_choose_page
-	call	restore_user_map
+	CallResident restore_user_map
 	mov	word ptr [LASTBUFFER], -1
 	mov	[BUF_EMS_PFRAME], ax
 	mov	ax, word ptr [BUF_EMS_FIRST_PAGE+2]
 	mov	[BUF_EMS_PAGE_FRAME], ax
 	mov	[BUF_EMS_SAFE_FLAG], 1
-	call	Setup_EMS_Buffers
-	call	save_user_map
+	invoke SetupBufferPages
+	CallResident save_user_map
 	jmp	fin_choose_page
 
 err_choose_page:
@@ -1093,8 +1081,14 @@ fin_choose_page:
 EndProc	choose_buf_page	
 
 ENDIF
-
-CODE	ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC DiskEntries
+DiskEntries LABEL WORD
+        DW OFFSET DOSGROUP:DOS_READ_VECTOR, OFFSET DOSGROUP:ReadFileData
+        DW OFFSET DOSGROUP:DOS_WRITE_VECTOR, OFFSET DOSGROUP:WriteFileData
+        DW OFFSET DOSGROUP:SWAPBACK_VECTOR, OFFSET DOSGROUP:ClearConsoleSwap
+        DW OFFSET DOSGROUP:get_io_sft_VECTOR, OFFSET DOSGROUP:GetConsoleSft
+        DW 0
+DOSEND ENDS
     END
-
-

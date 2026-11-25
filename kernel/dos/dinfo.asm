@@ -38,7 +38,23 @@ if debug
 include bugtyp.asm
 endif
 
-Break	<DISK_INFO -- Get Disk Drive Information>
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry DISK_INFO,128
+DiskInfoNetwork PROC NEAR
+        INT 2Fh
+        RET
+DiskInfoNetwork ENDP
+IF debug
+LogDiskCount PROC NEAR
+        fmt TypInt,LevLog,<"Internal error: MaxClus <= FreeClus\n">
+        RET
+LogDiskCount ENDP
+ENDIF
+CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+
+Break	<GetDiskInfo -- Get Disk Drive Information>
 
 ; Inputs:
 ;	[THISCDS] Points to the Macro List Structure of interest
@@ -54,27 +70,27 @@ Break	<DISK_INFO -- Get Disk Drive Information>
 ;	Carry set if error (currently user FAILed to I 24)
 ; Segs except ES preserved, others destroyed
 
-	procedure   DISK_INFO,NEAR
-	DOSAssume   CS,<DS>,"Disk_Info"
+	procedure   GetDiskInfo,NEAR
+	DOSAssume   SS,<DS>,"GetDiskInfo"
 	ASSUME	ES:NOTHING
 
-	Invoke	TestNet
+	CallResident TestNet
 	JNC	LOCAL_INFO
 IF NOT Installed
 	transfer NET_DISK_INFO
 ELSE
 	MOV	AX,(multNET SHL 8) OR 12
-	INT	2FH
+	CallResident DiskInfoNetwork
 	return
 ENDIF
 
 LOCAL_INFO:
 	MOV	[EXTERR_LOCUS],errLOC_Disk
-	EnterCrit   critDisk
-	invoke	FATREAD_CDS		; perform media check.
+	CallResident ECritDisk
+	invoke ReadDirectoryFAT		; perform media check.
 	JC	CRIT_LEAVE
 	MOV	BX,2
-	invoke	UNPACK			; Get first FAT sector into CURBUF
+	invoke ReadClusterEntry			; Get first FAT sector into CURBUF
 	JC	CRIT_LEAVE
 	LDS	SI,[CURBUF]
 ASSUME	DS:NOTHING
@@ -95,12 +111,14 @@ ASSUME	DS:NOTHING
 ;
 	CMP	DX,CX			; is it in a reasonable range?
 	JB	GotVal			; yes, trust it.
-	fmt	TypInt,LevLog,<"Internal error: MaxClus <= FreeClus\n">
+	IF debug
+        CallResident LogDiskCount
+ENDIF
 DoScan:
 	XOR	DX,DX
 	DEC	CX
 SCANFREE:
-	invoke	UNPACK
+	invoke ReadClusterEntry
 	JC	Crit_Leave
 	JNZ	NOTFREECLUS
 	INC	DX			; A free one
@@ -116,7 +134,7 @@ ReturnVals:
 	MOV	ES:[BP.dpb_free_cnt],DX
 	CLC
 CRIT_LEAVE:
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 	return
 ;
 ; We have correctly computed everything previously.  Load up registers for
@@ -125,7 +143,13 @@ CRIT_LEAVE:
 GotVal: MOV	BX,CX			; get cluster count
 	JMP	ReturnVals
 
-EndProc DISK_INFO
+EndProc GetDiskInfo
 
-CODE	ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC DinfoEntries
+DinfoEntries LABEL WORD
+        DW OFFSET DOSGROUP:DISK_INFO_VECTOR, OFFSET DOSGROUP:GetDiskInfo
+        DW 0
+DOSEND ENDS
     END

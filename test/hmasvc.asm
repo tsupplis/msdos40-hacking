@@ -88,6 +88,46 @@ parent:
     jnc fail
     cmp ax,2
     jne fail
+    mov dl,2                    ; freshly formatted B: has 512-byte sectors
+    mov ah,36h
+    int 21h
+    cmp cx,512
+    jne fail
+    or ax,ax
+    jz fail
+    cmp bx,dx
+    ja fail
+    mov dx,flatname
+    xor cx,cx
+    mov ah,5bh
+    int 21h
+    jc fail
+    call close
+    mov dx,flatname
+    xor cx,cx
+    mov ah,5bh
+    int 21h
+    jnc fail
+    cmp ax,80
+    jne fail
+    mov dx,flatname
+    mov cx,1                    ; set and read back the read-only attribute
+    mov ax,4301h
+    int 21h
+    jc fail
+    mov ax,4300h
+    int 21h
+    jc fail
+    test cx,1
+    jz fail
+    xor cx,cx
+    mov ax,4301h
+    int 21h
+    jc fail
+    mov dx,flatname
+    mov ah,41h
+    int 21h
+    jc fail
     ; Load an MZ overlay and verify every relocated word in the owned block.
     mov bx,16
     mov ah,48h

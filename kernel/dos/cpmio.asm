@@ -78,18 +78,44 @@ ENDIF
 
 
 
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry $STD_CON_INPUT_NO_ECHO,146
+        DosCodeEntry $STD_CON_STRING_OUTPUT,147
+        DosCodeEntry $STD_CON_STRING_INPUT,148
+        DosCodeEntry $RAW_CON_IO,149
+        DosCodeEntry $RAW_CON_INPUT,150
+        DosCodeEntry CRLF,151
+IF DBCS
+LookSiz DB 0
+ELSE
+include editsw.inc
+IF LINEEDIT
+EditActive DB 0
+ENDIF
+ENDIF
+ConsoleIdle PROC NEAR
+        INT int_IBM
+        RET
+ConsoleIdle ENDP
+ConsoleFastOutput PROC NEAR
+        INT int_fastcon
+        RET
+ConsoleFastOutput ENDP
+CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
 Break
  IF  DBCS							  ;AN000;
 
 ;-------------------------------- Start of Korean Support 2/11/KK
-	procedure   $STD_CON_INPUT_NO_ECHO,NEAR   ;System call 8  ;AN000;
+	procedure   ReadConsoleNoEcho,NEAR   ;System call 8  ;AN000;
 ASSUME	DS:NOTHING,ES:NOTHING					  ;AN000;
 
 StdCILop:							  ;AN000;
 	invoke	INTER_CON_INPUT_NO_ECHO 			  ;AN000;
 	transfer InterApRet		; go to return fuction	  ;AN000;
 
-EndProc $STD_CON_INPUT_NO_ECHO					  ;AN000;
+EndProc ReadConsoleNoEcho					  ;AN000;
 
 	procedure   INTER_CON_INPUT_NO_ECHO,NEAR		  ;AN000;
 ASSUME	DS:NOTHING,ES:NOTHING					  ;AN000;
@@ -115,24 +141,24 @@ ASSUME	DS:NOTHING,ES:NOTHING					  ;AN000;
 ; Returns:
 ;	AL = character
 
-	procedure   $STD_CON_INPUT_NO_ECHO,NEAR   ;System call 8
+	procedure   ReadConsoleNoEcho,NEAR   ;System call 8
 ASSUME	DS:NOTHING,ES:NOTHING
 
  ENDIF
 	PUSH	DS
 	PUSH	SI
 INTEST:
-	invoke	STATCHK
+	CallResident STATCHK
 	JNZ	Get
 ;*************************************************************************
 	cmp	[Printer_Flag],0	; is printer idle?
 	jnz	no_sys_wait
 	mov	ah,5			; get input status with system wait
-	invoke	IOFUNC
+	CallResident IOFUNC
 no_sys_wait:
 ;**************************************************************************
 	MOV	AH,84h
-	INT	int_IBM
+	CallResident ConsoleIdle
 
 ;;; 7/15/86  update the date in the idle loop
 ;;; Dec 19, 1986 D.C.L. changed following CMP to Byte Ptr from Word Ptr
@@ -146,21 +172,21 @@ no_sys_wait:
 	PUSH	DX			; at that time, DEVCALL is used by
 					; other's READ or WRITE
 	PUSH	DS			; save DS = SFT's sgement
-	PUSH	CS			; READTIME must use DS=CS
+	PUSH SS			; READTIME requires DS=DOSGROUP
 	POP	DS
 
 	MOV	AX,0			; therefore, we save DEVCALL
 	CALL	Save_Restore_Packet	; save DEVCALL packet
-	invoke	READTIME		; readtime
+	CallResident READTIME		; readtime
 	MOV	AX,1
 	CALL	Save_Restore_Packet	; restore DEVCALL packet
 
 	PUSH	BX			; the follwing code is to
 	MOV	BX,OFFSET DOSGROUP:DATE_FLAG
 	ADD	BX,2			; check the TAG
-	CMP	word ptr CS:[BX],22642
+	CMP	word ptr ss:[BX],22642
 	JZ	check_ok
-	invoke	DOSINIT 		; should never come here
+	CallResident DOSINIT 		; should never come here
 check_ok:
 	POP	BX
 
@@ -176,7 +202,7 @@ NoUpdate:
 	JMP	Intest
 Get:
 	XOR	AH,AH
-	invoke	IOFUNC
+	CallResident IOFUNC
 	POP	SI
 	POP	DS
 ;;; 7/15/86
@@ -188,13 +214,13 @@ Get:
 noscan:
 ;;; 7/15/86
  IF  DBCS			    ;AN000;
-	cmp	cs:[InterChar],1    ;AN000; set the zero flag if the character3/31/KK ;AN000;
+	cmp	ss:[InterChar],1    ;AN000; set the zero flag if the character3/31/KK ;AN000;
  ENDIF				    ;AN000;
 	return
  IF  DBCS			    ;AN000;
 EndProc INTER_CON_INPUT_NO_ECHO     ;AN000;  ;2/11/KK				      ;AN000;
  ELSE				    ;AN000;
-EndProc $STD_CON_INPUT_NO_ECHO
+EndProc ReadConsoleNoEcho
  ENDIF				    ;AN000;
 
 Break
@@ -206,16 +232,16 @@ Break
 ; Returns:
 ;	None
 
-	procedure   $STD_CON_STRING_OUTPUT,NEAR   ;System call 9
+	procedure   WriteConsoleString,NEAR   ;System call 9
 ASSUME	DS:NOTHING,ES:NOTHING
 
 	MOV	SI,DX
 STRING_OUT1:
 	LODSB
  IF  DBCS				;AN000;
-	invoke	TESTKANJ		;AN000; 	      2/11/KK		 ;AN000;
+	CallResident TESTKANJ		;AN000; 	      2/11/KK		 ;AN000;
 	jz	SBCS00			;AN000; 	      2/11/KK		 ;AN000;
-	invoke	OUTT			;AN000; 	      2/11/KK		 ;AN000;
+	invoke	OutputChar			;AN000; 	      2/11/KK		 ;AN000;
 	LODSB				;AN000; 	      2/11/KK		 ;AN000;
 	JMP	NEXT_STR1		;AN000; 	      2/11/KK		 ;AN000;
 SBCS00: 				;AN000; 	      2/11/KK		 ;AN000;
@@ -223,15 +249,14 @@ SBCS00: 				;AN000; 	      2/11/KK		 ;AN000;
 	CMP	AL,'$'
 	retz
 NEXT_STR1:
-	invoke	OUTT
+	invoke	OutputChar
 	JMP	STRING_OUT1
 
-EndProc $STD_CON_STRING_OUTPUT
+EndProc WriteConsoleString
 
 IF  DBCS				;AN000;
 include kstrin.asm			;AN000;
 ELSE					;AN000;
-include editsw.inc
 include strin.asm
 ENDIF					;AN000;
 
@@ -245,29 +270,29 @@ Break
 ; Returns:
 ;	AL = character
 
-	procedure   $RAW_CON_IO,NEAR   ; System call 6
+	procedure   RawConsoleIO,NEAR   ; System call 6
 ASSUME	DS:NOTHING,ES:NOTHING
 
 	MOV	AL,DL
 	CMP	AL,-1
 	JZ	RAW22				      ;AN000;
-	JMP	RAWOUT				      ;AN000;
+	JMP	WriteRawCharacter				      ;AN000;
 RAW22:						      ;AN000;
 	LES	DI,DWORD PTR [user_SP]		      ; Get pointer to register save area
 	XOR	BX,BX
-	invoke	GET_IO_SFT
+	invoke GetConsoleSft
 	retc
  IF  DBCS				;AN000;
 	push	word ptr [Intercon]	;AN000;
 	mov	[Intercon],0		;AN000; disable interim characters
  ENDIF					;AN000;
 	MOV	AH,1
-	invoke	IOFUNC
+	CallResident IOFUNC
 	JNZ	RESFLG
  IF  DBCS				;AN000;
 	pop	word ptr [InterCon]	;AN000; restore interim flag
  ENDIF					;AN000;
-	invoke	SPOOLINT
+	CallResident SPOOLINT
 	OR	BYTE PTR ES:[DI.user_F],40H ; Set user's zero flag
 	XOR	AL,AL
 	return
@@ -276,13 +301,13 @@ RESFLG:
 	AND	BYTE PTR ES:[DI.user_F],0FFH-40H    ; Reset user's zero flag
  IF  DBCS				;AN000;
 	XOR	AH,AH			;AN000;
-	invoke	IOFUNC			;AN000; get the character
+	CallResident IOFUNC			;AN000; get the character
 	pop	word ptr [InterCon]	;AN000;
 	return				;AN000;
  ENDIF					;AN000; 				;AN000;
 
 RILP:
-	invoke	SPOOLINT
+	CallResident SPOOLINT
 
 ; Inputs:
 ;	None
@@ -291,22 +316,22 @@ RILP:
 ; Returns:
 ;	AL = character
 
-	entry	$RAW_CON_INPUT	      ; System call 7
+	entry	RawConsoleInput	      ; System call 7
 
 	PUSH	BX
 	XOR	BX,BX
-	invoke	GET_IO_SFT
+	invoke GetConsoleSft
 	POP	BX
 	retc
 	MOV	AH,1
-	invoke	IOFUNC
+	CallResident IOFUNC
 	JNZ	Got
 	MOV	AH,84h
-	INT	int_IBM
+	CallResident ConsoleIdle
 	JMP	RILP
 Got:
 	XOR	AH,AH
-	invoke	IOFUNC
+	CallResident IOFUNC
  IF  DBCS				;AN000;
 	cmp	[InterChar],1		;AN000;    2/11/KK
 ;								2/11/KK
@@ -339,12 +364,12 @@ sj0:					;AN000; 		2/11/KK
 ;
 ;	Output the character in AL to stdout
 ;
-	entry	RAWOUT
+	entry	WriteRawCharacter
 
 	PUSH	BX
 	MOV	BX,1
 
-	invoke	GET_IO_SFT
+	invoke GetConsoleSft
 	JC	RAWRET1
 
 	MOV	BX,[SI.sf_flags]
@@ -372,7 +397,7 @@ sj0:					;AN000; 		2/11/KK
 	TEST	BYTE PTR [BX+SDEVATT],ISSPEC
 	POP	DS
 	JZ	RAWNORM 			; if not, do normally
-	INT	int_fastcon			; quickly output the char
+	CallResident ConsoleFastOutput			; quickly output the char
 RAWRET:
 	CLC
 RAWRET1:
@@ -385,27 +410,27 @@ RAWNORM:
 ;
 ;	Output the character in AL to handle in BX
 ;
-	entry	RAWOUT2
+	entry	WriteRawHandle
 
-	invoke	GET_IO_SFT
+	invoke GetConsoleSft
 	retc
 RAWOUT3:
 	PUSH	AX
 	JMP	SHORT RAWOSTRT
 ROLP:
-	invoke	SPOOLINT
+	CallResident SPOOLINT
 	OR	[DOS34_FLAG],CTRL_BREAK_FLAG ;AN002; set control break
-	invoke	DSKSTATCHK		     ;AN002; check control break
+	CallResident DSKSTATCHK		     ;AN002; check control break
 RAWOSTRT:
 	MOV	AH,3
-	invoke	IOFUNC
+	CallResident IOFUNC
 	JZ	ROLP
 	POP	AX
 	MOV	AH,2
-	invoke	IOFUNC
+	CallResident IOFUNC
 	CLC			; Clear carry indicating successful
 	return
-EndProc $RAW_CON_IO
+EndProc RawConsoleIO
 
 ; Inputs:
 ;	AX=0 save the DEVCALL request packet
@@ -432,7 +457,7 @@ save_packet:
 	MOV	DI,OFFSET DOSGROUP:Packet_Temp	 ;destination
 	MOV	SI,OFFSET DOSGROUP:DEVCALL	 ;source
 set_seg:
-	MOV	AX,CS		; set DS,ES to DOSGROUP
+	MOV AX,SS		; set DS,ES to DOSGROUP
 	MOV	DS,AX
 	MOV	ES,AX
 	MOV	CX,11		; 11 words to move
@@ -444,6 +469,16 @@ set_seg:
 	POP	DS
 	return
 EndProc Save_Restore_Packet
-
-CODE	ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC CpmioEntries
+CpmioEntries LABEL WORD
+        DW OFFSET DOSGROUP:$STD_CON_INPUT_NO_ECHO_VECTOR, OFFSET DOSGROUP:ReadConsoleNoEcho
+        DW OFFSET DOSGROUP:$STD_CON_STRING_OUTPUT_VECTOR, OFFSET DOSGROUP:WriteConsoleString
+        DW OFFSET DOSGROUP:$STD_CON_STRING_INPUT_VECTOR, OFFSET DOSGROUP:ReadConsoleLine
+        DW OFFSET DOSGROUP:$RAW_CON_IO_VECTOR, OFFSET DOSGROUP:RawConsoleIO
+        DW OFFSET DOSGROUP:$RAW_CON_INPUT_VECTOR, OFFSET DOSGROUP:RawConsoleInput
+        DW OFFSET DOSGROUP:CRLF_VECTOR, OFFSET DOSGROUP:ConsoleNewLine
+        DW 0
+DOSEND ENDS
     END

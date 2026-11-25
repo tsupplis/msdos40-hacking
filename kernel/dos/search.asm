@@ -56,8 +56,18 @@ INCLUDE fastxxxx.inc
 ; Returns:
 ;	AL = -1 if no entries matched, otherwise 0
 
-	procedure $DIR_SEARCH_FIRST,NEAR
-ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry $DIR_SEARCH_FIRST,163
+        DosCodeEntry $DIR_SEARCH_NEXT,164
+        DosCodeEntry $FIND_FIRST,78
+        DosCodeEntry $FIND_NEXT,79
+        DosCodeEntry PackName,49
+CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+
+	procedure FindFirstFCB,NEAR
+ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 
 	MOV	WORD PTR [THISFCB],DX
 	MOV	WORD PTR [THISFCB+2],DS
@@ -69,13 +79,14 @@ NORMFCB4:
 	SaveReg <[SI]>			; Save original drive byte for later
 	Context ES			; get es to address DOSGroup
 	MOV	DI,OFFSET DOSGroup:OpenBuf  ; appropriate buffer
-	invoke	TransFCB		; convert the FCB, set SATTRIB EXTFCB
+	CallResident TransFCB		; convert the FCB, set SATTRIB EXTFCB
 	JNC	SearchIt		; no error, go and look
 	RestoreReg <BX> 		; Clean stack
 ;
 ; Error code is in AX
 ;
-	transfer FCB_Ret_Err		; error
+	CallResident FCB_Ret_Err
+        RET		; error
 
 SearchIt:
 	Context DS			; get ready for search
@@ -89,7 +100,8 @@ SearchIt:
 ;
 ; Error code is in AX
 ;
-	transfer FCB_Ret_Err
+	CallResident FCB_Ret_Err
+        RET
 
 ;
 ; The search was successful (or the search-next).  We store the information
@@ -143,9 +155,10 @@ NOTKTRAN:				; 2/13/KK				;AN000;
 	MOV	CX,16			; 32 / 2 words of dir entry		;AN000;
  ENDIF										;AN000;
 	REP	MOVSW
-	transfer FCB_Ret_OK
+	CallResident FCB_Ret_OK
+        RET
 
-EndProc $DIR_SEARCH_FIRST
+EndProc FindFirstFCB
 
 ; Inputs:
 ;	DS:DX points to unopenned FCB returned by $DIR_SEARCH_FIRST
@@ -155,8 +168,8 @@ EndProc $DIR_SEARCH_FIRST
 ; Returns:
 ;	AL = -1 if no entries matched, otherwise 0
 
-	procedure $DIR_SEARCH_NEXT,NEAR
-ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+	procedure FindNextFCB,NEAR
+ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 
 	MOV	WORD PTR [THISFCB],DX
 	MOV	WORD PTR [THISFCB+2],DS
@@ -182,7 +195,7 @@ NORMFCB6:
 	SaveReg <<WORD PTR [DMAAdd]>, <WORD PTR [DMAAdd+2]>>
 	MOV	WORD PTR [DMAAdd],OFFSET DOSGroup:SEARCHBUF
 	MOV	WORD PTR [DMAAdd+2],DS
-	invoke	DOS_SEARCH_NEXT 	; Find it
+	invoke SearchNext 	; Find it
 	RestoreReg <<WORD PTR [DMAAdd+2]>, <WORD PTR [DMAAdd]>>
 	JC	SearchNoMore
 	JMP	SearchSet		; Ok set return
@@ -199,24 +212,11 @@ NORMFCB8:
 ;
 ; error code is in AX
 ;
-	transfer FCB_Ret_Err
+	CallResident FCB_Ret_Err
+        RET
 
-EndProc $DIR_SEARCH_NEXT
+EndProc FindNextFCB
 
-	EXTRN	FCB_SELECTED:NEAR
-	PUBLIC	PACKNAME_VECTOR
-PACKNAME_VECTOR DW OFFSET DOSGROUP:PackNameFar
-
-	procedure PackName,NEAR
-	JMP	WORD PTR CS:[PACKNAME_VECTOR]
-PackNameFar:
-	PUSH	AX
-	MOV	AH,49
-	JMP	FCB_SELECTED
-EndProc PackName
-CODE	ENDS
-
-LAST	SEGMENT PARA PUBLIC 'LAST'
 ;   Assembler usage:
 ;	    MOV AH, FindFirst
 ;	    LDS DX, name
@@ -228,16 +228,17 @@ LAST	SEGMENT PARA PUBLIC 'LAST'
 ;	    AX = error_path_not_found
 ;	       = error_no_more_files
 
-	procedure $FIND_FIRST,NEAR
-ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+	procedure FindFirstFile,NEAR
+ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 
 	MOV	SI,DX			; get name in appropriate place
 	MOV	[SATTRIB],CL		; Search attribute to correct loc
 	MOV	DI,OFFSET DOSGroup:OpenBuf  ; appropriate buffer
-	invoke	TransPathSet		; convert the path
+	CallResident TransPathSet		; convert the path
 	JNC	Find_it 		; no error, go and look
 FindError:
-	error	error_path_not_found	; error and map into one.
+	MOV AL,error_path_not_found
+        JMP FindErrorExit
 Find_it:
 	Context DS
 	SaveReg <<WORD PTR [DMAAdd]>, <WORD PTR [DMAAdd+2]>>
@@ -246,7 +247,9 @@ Find_it:
 	invoke	GET_FAST_SEARCH 	; search
 	RestoreReg <<WORD PTR [DMAAdd+2]>, <WORD PTR [DMAAdd]>>
 	JNC	FindSet 		; no error, transfer info
-	transfer Sys_Ret_Err
+FindErrorExit:
+	CallResident Sys_Ret_Err
+        RET
 
 FindSet:
 	MOV	SI,OFFSET DOSGroup:SEARCHBUF
@@ -266,20 +269,21 @@ FindSet:
 	POP	SI			; Point back to dir_name
  IF  DBCS									;AN000;
 	PUSH	DI			; XXXX save dest name 2/13/KK		;AN000;
-	CALL	HMA_PACKNAME							;AN000;
+	CALL	PackSearchName							;AN000;
 	POP	DI			; XXXX Recover dest name 2/13/KK	;AN000;
 	CMP	BYTE PTR ES:[DI],05H	; XXXX Need fix?	 2/13/KK	;AN000;
 	JNZ	FNXXX			; XXXX No		 2/13/KK	;AN000;
 	MOV	BYTE PTR ES:[DI],0E5H	; XXXX Yes, Fix 	 2/13/KK	;AN000;
 FNXXX:					; 2/13/KK				;AN000;
  ELSE										;AN000;
-	CALL	HMA_PACKNAME
+	CALL	PackSearchName
  ENDIF
-	transfer    Sys_Ret_OK		; bye with no errors
-EndProc $FIND_FIRST
+	CallResident Sys_Ret_OK
+        RET		; bye with no errors
+EndProc FindFirstFile
 
-	procedure $FIND_NEXT,NEAR
-ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+	procedure FindNextFile,NEAR
+ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 
 ;   Assembler usage:
 ;	; dma points at area returned by find_first
@@ -300,12 +304,13 @@ ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	SaveReg <<WORD PTR [DMAAdd]>, <WORD PTR [DMAAdd+2]>>
 	MOV	WORD PTR [DMAAdd],OFFSET DOSGroup:SEARCHBUF
 	MOV	WORD PTR [DMAAdd+2],DS
-	invoke	DOS_SEARCH_NEXT 	; Find it
+	invoke SearchNext 	; Find it
 	RestoreReg <<WORD PTR [DMAAdd+2]>, <WORD PTR [DMAAdd]>>
 	JNC	FindSet 		; No error, set info
-	transfer Sys_Ret_Err
+	CallResident Sys_Ret_Err
+        RET
 
-EndProc $FIND_NEXT
+EndProc FindNextFile
 
 Break	<PackName - convert file names from FCB to ASCIZ>
 ;
@@ -316,8 +321,8 @@ Break	<PackName - convert file names from FCB to ASCIZ>
 ;		ES:DI points to a destination area (13 bytes)
 ;   Output:	Above pointers advanced
 ;   Registers modified: SI,DI,CX,AL
-	Procedure HMA_PACKNAME,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+	Procedure PackSearchName,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	MOV	CX,8			; Pack the name
 	REP	MOVSB			; Move all of it
 main_kill_tail:
@@ -346,18 +351,28 @@ find_done:
 	XOR	AX,AX
 	STOSB				; NUL terminate
 	return
-EndProc HMA_PACKNAME
-LAST	ENDS
+EndProc PackSearchName
 
-CODE	SEGMENT BYTE PUBLIC 'CODE'
+
 
 	procedure   GET_FAST_SEARCH,NEAR
 	ASSUME	DS:NOTHING,ES:NOTHING
 
 	OR	[DOS34_FLAG],SEARCH_FASTOPEN  ;FO.trigger fastopen		;AN000;
-	invoke	DOS_SEARCH_FIRST
+	invoke SearchFirst
 	return
 
 EndProc GET_FAST_SEARCH
-CODE ENDS
-END
+
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC SearchEntries
+SearchEntries LABEL WORD
+        DW OFFSET DOSGROUP:$DIR_SEARCH_FIRST_VECTOR, OFFSET DOSGROUP:FindFirstFCB
+        DW OFFSET DOSGROUP:$DIR_SEARCH_NEXT_VECTOR, OFFSET DOSGROUP:FindNextFCB
+        DW OFFSET DOSGROUP:$FIND_FIRST_VECTOR, OFFSET DOSGROUP:FindFirstFile
+        DW OFFSET DOSGROUP:$FIND_NEXT_VECTOR, OFFSET DOSGROUP:FindNextFile
+        DW OFFSET DOSGROUP:PackName_VECTOR, OFFSET DOSGROUP:PackSearchName
+        DW 0
+DOSEND ENDS
+    END
