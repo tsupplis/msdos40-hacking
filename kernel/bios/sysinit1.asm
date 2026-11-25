@@ -63,12 +63,9 @@ NOEXEC	EQU	TRUE
 NOEXEC	EQU	FALSE
 	ENDIF
 
-DOSSIZE EQU	0A000H
         INCLUDE fcbsizes.inc
-        IF FcbLinked+FcbLength GT DOSSIZE
-        .ERR    ; SYSIN must copy the complete linked DOSCODE
-        ENDIF
-;dossize equ	 0C000H 	;J.K. for the debugging version of IBMDOS.
+; The following DOSEND tables are consumed by LINK-time tooling only.
+DosCopyBytes EQU FcbLinked+FcbLength
 
 .xlist
 ;	INCLUDE dossym.INC
@@ -466,7 +463,17 @@ ASSUME	DS:SYSINITSEG
 	DEC     CX                      ; leave top paragraph for the UMB bridge
         CALL    ReserveDosCode
 	SUB	CX,AX			;Compute new sysinit location
-	MOV	ES,CX
+	JC      BootNoRoom
+        MOV     DX,[CURRENT_DOS_LOCATION]
+        ADD     DX,(DosCopyBytes+15)/16
+        JC      BootNoRoom
+        CMP     CX,DX                   ; preserve DOS source while moving SYSINIT
+        JAE     BootRoom
+BootNoRoom:
+        INT     18h                     ; BIOS boot failure
+        JMP     BootNoRoom
+BootRoom:
+        MOV     ES,CX
 	MOV	CX,OFFSET SYSSIZE + 1
 	SHR	CX,1			;Divide by 2 to get words
 	REP	MOVSW			;RELOCATE SYSINIT
@@ -497,8 +504,11 @@ SYSIN:
 	XOR	SI,SI
 	MOV	DI,SI
 
-	MOV	CX,DOSSIZE/2
+	MOV	CX,DosCopyBytes/2
 	REP	MOVSW
+        IF DosCopyBytes MOD 2
+        MOVSB
+        ENDIF
 
         CALL    InitDosCode
 	LDS	SI,[DEVICE_LIST]	; Set for call to DOSINIT
@@ -994,7 +1004,7 @@ MulTrk_Flag_Done:			    ;AN002;
 	CALL    PlaceDosCode
 	JNC     FcbPlacementDone
 	LES     DI,[DOSINFO]
-	MOV     ES:[DI.SYSI_HMA_ACTIVE],1
+	MOV     ES:[DI.SYSI_CODE_RESIDENCY],1    ; DOSCODE placed in HMA
 FcbPlacementDone:
 	CMP	WORD PTR CS:XMS_ENTRY+2,0
 	JNE	TryBuffers

@@ -40,7 +40,8 @@ NAME	FCBIO2
 ;
 include dosseg.asm
 
-LAST SEGMENT PARA PUBLIC 'LAST'
+CODE SEGMENT BYTE PUBLIC 'CODE'
+        EXTRN FCB_SELECTED:NEAR
 	ASSUME	SS:DOSGROUP,CS:DOSGROUP
 
 .xcref
@@ -50,8 +51,6 @@ include version.inc
 .cref
 .list
 
-	EXTRN	DOS_Read:NEAR, DOS_Write:NEAR
-	EXTRN	DOS_Open:NEAR, DOS_Create:NEAR
 
 	I_need	DMAAdd,DWORD		; current user's DMA address
 	I_need	OpenBuf,128		; buffer for translating paths
@@ -77,7 +76,7 @@ IF	BUFFERFLAG
 	I_need	LASTBUFFER,DWORD
 
 	extrn	restore_user_map:near
-	extrn	Setup_EMS_Buffers:near
+
 
 ENDIF
 
@@ -88,6 +87,17 @@ Random	=   2				; random operation
 FCBRead =   4				; doing a read
 Block	=   8				; doing a block I/O
 
+        DosCodeEntry $FCB_Open,15
+        DosCodeEntry $FCB_Create,22
+        DosCodeEntry $FCB_Random_Write_Block,40
+        DosCodeEntry $FCB_Random_Read_Block,39
+        DosCodeEntry $FCB_Seq_Read,20
+        DosCodeEntry $FCB_Seq_Write,21
+        DosCodeEntry $FCB_Random_Read,33
+        DosCodeEntry $FCB_Random_Write,34
+CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
 Break <GetRR - return the random record field in DX:AX>
 
 ;
@@ -100,7 +110,7 @@ Break <GetRR - return the random record field in DX:AX>
 ;   Registers modified: none
 
 Procedure   GetRR,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
 	MOV	AX,WORD PTR [SI.FCB_RR] ; get low order part
 	MOV	DX,WORD PTR [SI.FCB_RR+2]   ; get high order part
 	CMP	BX,64			; ignore MSB of RR if recsiz > 64
@@ -121,7 +131,7 @@ Break <GetExtent - retrieve next location for sequential IO>
 ;   Registers modified: none
 
 Procedure   GetExtent,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
 	MOV	AL,[SI.fcb_NR]		; get low order piece
 	MOV	DX,[SI.fcb_EXTENT]	; get high order piece
 	SHL	AL,1
@@ -145,7 +155,7 @@ Break <SetExtent - update the extent/NR field>
 ;   Registers modified: CX
 
 Procedure SetExtent,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	SaveReg <AX,DX>
 	MOV	CX,AX
 	AND	AL,7FH			; next rec field
@@ -171,7 +181,7 @@ Break <GetExtended - find FCB in potential extended fcb>
 ;   Registers modified: SI
 
 Procedure   GetExtended,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
 	MOV	SI,DX			; point to Something
 	CMP	BYTE PTR DS:[SI],-1	; look for extention
 	JNZ	GetBye			; not there
@@ -191,7 +201,7 @@ Break <GetRecSize - return in BX the FCB record size>
 ;   Registers modified: None
 
 Procedure   GetRecSize,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	MOV	BX,[SI.fcb_RECSIZ]	; get his record size
 	OR	BX,BX			; is it nul?
 	retnz
@@ -212,7 +222,7 @@ BREAK <FCBIO - do internal FCB I/O>
 ;   Registers modified: all
 
 Procedure   FCBIO,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 PUBLIC FCBIO001S,FCBIO001E
 FCBIO001S:
 	LocalVar    FCBErr,BYTE
@@ -290,7 +300,7 @@ DoGetExt:
 	invoke	SFTFromFCB		;	if (!SFTFromFCB (SFT,FCB))
 	JNC	ContinueOp
 FCBDeath:
-	invoke	FCB_Ret_Err		; signal error, map for extended
+	CallResident FCB_Ret_Err		; signal error, map for extended
 	MOV	cRecRes,0		; no bytes transferred
 	MOV	FCBErr,FEOF		;	    return FTRIM;
 	JMP	FCBSave 		; bam!
@@ -309,15 +319,15 @@ ContinueOp:
 
 ;	int	3
 
-	MOV	DI,OFFSET DOSGroup:DOS_Read ;	    *(OP&FCBRead ? DOS_Read
-	TEST	FCBOp,FCBRead		;			 : DOS_Write)(cRec);
-	JNZ	DoContext
-	MOV	DI,OFFSET DOSGroup:DOS_Write
-DoContext:
-	SaveReg <BP,DS,SI>
-	Context DS
-;; Fix for disk full
-	CALL	DI
+        SaveReg <BP,DS,SI>
+        Context DS
+        TEST    FCBOp,FCBRead
+        JZ      WriteRecords
+        invoke  ReadFileData
+        JMP     SHORT RecordsDone
+WriteRecords:
+        invoke  WriteFileData
+RecordsDone:
 	RestoreReg  <SI,DS,BP>
 	ASSUME	DS:NOTHING
 
@@ -328,7 +338,7 @@ IF	BUFFERFLAG
 
 	cmp	ss:[BUF_EMS_MODE], -1
 	jz	dos_fcb_call_done
-	call	restore_user_map
+	CallResident restore_user_map
 	mov	ax, word ptr ss:[BUF_EMS_LAST_PAGE]
 	cmp	ss:[BUF_EMS_PFRAME], ax
 	je	dos_fcb_call_done
@@ -337,7 +347,7 @@ IF	BUFFERFLAG
 	mov	ax, word ptr ss:[BUF_EMS_LAST_PAGE+2]
 	mov	ss:[BUF_EMS_PAGE_FRAME], ax
 	mov	ss:[BUF_EMS_SAFE_FLAG], 1
-	call	Setup_EMS_Buffers
+	invoke SetupBufferPages
 
 dos_fcb_call_done:
 	pop	bx
@@ -345,7 +355,9 @@ dos_fcb_call_done:
 	popf
 ENDIF
 
-	JC	FCBDeath
+	JNC	FcbDataDone
+	JMP	FCBDeath
+FcbDataDone:
 
 	CMP	BYTE PTR [DISK_FULL],0	; treat disk full as error
 	JZ	NODSKFULL
@@ -420,7 +432,7 @@ TryReturn:
 	TEST	FCBOP,FCBRead		;   if (!(FCBOP & FCBREAD)) {
 	JNZ	FCBSave
 	SaveReg <DS>			;	FCB->FDate = date;
-	Invoke	Date16			;	FCB->FTime = time;
+	CallResident Date16			;	FCB->FTime = time;
 	RestoreReg  <DS>
 	MOV	[SI].FCB_FDate,AX
 	MOV	[SI].FCB_FTime,DX	;	}
@@ -428,7 +440,7 @@ FCBSave:
 	TEST	FCBOp,BLOCK		;   if ((op&BLOCK) <> 0)
 	JZ	DoReturn
 	MOV	CX,cRecRes		;	user_CX = cRecRes;
-	invoke	Get_User_Stack
+	CallResident Get_User_Stack
 	MOV	[SI.User_CX],CX
 DoReturn:
 	MOV	AL,FCBErr		;   return (FCBERR);
@@ -447,10 +459,10 @@ Break <$FCB_Open - open an old-style FCB>
 ;		FCB has the following fields filled in:
 ;		    Time/Date Extent/NR Size
 
-Procedure $FCB_Open,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
+Procedure OpenFcb,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
 	MOV	AX,sharing_Compat+Open_For_Both
-	MOV	CX,OFFSET DOSGroup:DOS_Open
+	XOR	CX,CX                  ; open existing
 ;
 ; The following is common code for Creation and openning of FCBs.  AX is
 ; either attributes (for create) or open mode (for open)...  DS:DX points to
@@ -459,14 +471,15 @@ Procedure $FCB_Open,NEAR
 DoAccess:
 	SaveReg <DS,DX,CX,AX>		; save FCB pointer away
 	MOV	DI,OFFSET DOSGroup:OpenBuf
-	invoke	TransFCB		; crunch the fcb
+	invoke TranslateFcbPath		; crunch the fcb
 	RestoreReg  <AX,CX,DX,DS>	; get fcb
 	JNC	FindFCB 		; everything seems ok
 FCBOpenErr:
 ;
 ; AL has error code
 ;
-	transfer    FCB_Ret_Err
+	CallResident FCB_Ret_Err
+        RET
 FindFCB:
 	invoke	GetExtended		; DS:SI will point to FCB
 	invoke	LRUFCB			; get a sft entry (no error)
@@ -481,9 +494,13 @@ FindFCB:
 
 	MOV	ES:[DI].sf_mode,sf_ISFCB
 	SaveReg <DS,SI,BX>		; save fcb pointer
-	MOV	SI,CX
-	Context DS			; let DOS_Open see variables
-	CALL	SI			; go open the file
+        Context DS
+        JCXZ    OpenExistingFcb
+        invoke  CreateFile
+        JMP     SHORT FcbAccessDone
+OpenExistingFcb:
+        invoke  OpenFile
+FcbAccessDone:
 	RestoreReg  <BX,SI,DS>		; get fcb
 	ASSUME	DS:NOTHING
 	LES	DI,ThisSFT		; get sf pointer
@@ -503,11 +520,12 @@ HardMessage:
 	invoke	FCBHardErr
 	POP	AX
 DeadFCB:
-	transfer    FCB_Ret_Err
+	CallResident FCB_Ret_Err
+        RET
 FCBOK:
-	invoke	IsSFTNet		       ;AN007;F.C. >32mb  Non Fat file?
+	CallResident IsSFTNet		       ;AN007;F.C. >32mb  Non Fat file?
 	JNZ	FCBOK2			       ;AN007;F.C. >32mb  yes
-	invoke	CheckShare		       ;AN000;F.C. >32mb  share around?
+	CallResident CheckShare		       ;AN000;F.C. >32mb  share around?
 	JNZ	FCBOK2			       ;AN000;F.C. >32mb  yes
 	CMP	WORD PTR ES:[DI].sf_dirsec+2,0 ;AN000;F.C. >32mb  if dirsec >32mb
 	JZ	FCBOK2			       ;AN000;F.C. >32mb    then error
@@ -523,7 +541,7 @@ FCBOK2:
 	TEST	ES:[DI].sf_flags,devid_device
 	JNZ	FCBNoDrive		; do not munge drive on devices
 	MOV	AL,DS:[SI]		; get drive byte
-	invoke	GetThisDrv		; convert
+	CallResident GetThisDrv		; convert
 	INC	AL
 	MOV	DS:[SI],AL		; stash in good drive letter
 FCBNoDrive:
@@ -590,12 +608,12 @@ OpenFound:
 	context DS
 	LES	DI,ThisSFT
 	DEC	ES:[DI].sf_ref_count	; free the newly allocated SFT
-	invoke	ShareEnd
+	CallResident ShareEnd
 	Assert	ISSFT,<ES,DI>,"Open blasting"
 	MOV	AL,'C'
 	invoke	BlastSFT
 	JMP	OpenDone
-EndProc $FCB_Open
+EndProc OpenFcb
 
 BREAK	<$FCB_Create - create a new directory entry>
 
@@ -608,16 +626,16 @@ BREAK	<$FCB_Create - create a new directory entry>
 ;		FCB has the following fields filled in:
 ;		    Time/Date Extent/NR Size
 
-Procedure $FCB_Create,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGroup
-	MOV	CX,OFFSET DOSGroup:DOS_Create	; routine to call
+Procedure CreateFcb,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+	MOV	CX,1                   ; create
 	XOR	AX,AX			; attributes to create
 	invoke	GetExtended		; get extended FCB
 	JZ	DoAccessJ		; not an extended FCB
 	MOV	AL,[SI-1]		; get attributes
 DoAccessJ:
 	JMP	DoAccess		; do dirty work
-EndProc $FCB_Create
+EndProc CreateFcb
 
 BREAK <$FCB_Random_write_Block - write a block of records to a file >
 
@@ -630,11 +648,11 @@ BREAK <$FCB_Random_write_Block - write a block of records to a file >
 ;		AL <> 0 Not enough room on disk for the output
 ;
 
-Procedure $FCB_Random_Write_Block,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+Procedure WriteFcbBlock,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	MOV	AL,Random+Block
 	JMP	FCBIO
-EndProc $FCB_Random_Write_Block
+EndProc WriteFcbBlock
 
 BREAK <$FCB_Random_Read_Block - read a block of records to a file >
 
@@ -646,11 +664,11 @@ BREAK <$FCB_Random_Read_Block - read a block of records to a file >
 ;   Outputs:	AL = error codes defined above
 ;
 
-Procedure $FCB_Random_Read_Block,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+Procedure ReadFcbBlock,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	MOV	AL,Random+FCBRead+Block
 	JMP	FCBIO
-EndProc $FCB_Random_Read_Block
+EndProc ReadFcbBlock
 
 BREAK <$FCB_Seq_Read - read the next record from a file >
 
@@ -662,11 +680,11 @@ BREAK <$FCB_Seq_Read - read the next record from a file >
 ;   Outputs:	AL = error codes defined above
 ;
 
-Procedure $FCB_Seq_Read,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+Procedure ReadNextRecord,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	MOV	AL,FCBRead
 	JMP	FCBIO
-EndProc $FCB_Seq_Read
+EndProc ReadNextRecord
 
 BREAK <$FCB_Seq_Write - write the next record to a file >
 
@@ -678,11 +696,11 @@ BREAK <$FCB_Seq_Write - write the next record to a file >
 ;   Outputs:	AL = error codes defined above
 ;
 
-Procedure $FCB_Seq_Write,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+Procedure WriteNextRecord,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	MOV	AL,0
 	jmp	FCBIO
-EndProc $FCB_SEQ_WRITE
+EndProc WriteNextRecord
 
 BREAK <$FCB_Random_Read - Read a single record from a file >
 
@@ -694,11 +712,11 @@ BREAK <$FCB_Random_Read - Read a single record from a file >
 ;   Outputs:	AL = error codes defined above
 ;
 
-Procedure $FCB_Random_Read,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+Procedure ReadRandomRecord,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	MOV	AL,Random+FCBRead
 	jmp	FCBIO			; single block
-EndProc $FCB_RANDOM_READ
+EndProc ReadRandomRecord
 
 BREAK <$FCB_Random_Write - write a single record to a file >
 
@@ -710,15 +728,26 @@ BREAK <$FCB_Random_Write - write a single record to a file >
 ;   Outputs:	AL = error codes defined above
 ;
 
-Procedure $FCB_Random_Write,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+Procedure WriteRandomRecord,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	MOV	AL,Random
 	jmp	FCBIO
-EndProc $FCB_RANDOM_WRITE
+EndProc WriteRandomRecord
 
-        PUBLIC  FcbGroupEnd
-FcbGroupEnd LABEL BYTE
-LAST ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC FcbIo2Entries
+FcbIo2Entries LABEL WORD
+        DW OFFSET DOSGROUP:$FCB_Open_VECTOR, OFFSET DOSGROUP:OpenFcb
+        DW OFFSET DOSGROUP:$FCB_Create_VECTOR, OFFSET DOSGROUP:CreateFcb
+        DW OFFSET DOSGROUP:$FCB_Random_Write_Block_VECTOR, OFFSET DOSGROUP:WriteFcbBlock
+        DW OFFSET DOSGROUP:$FCB_Random_Read_Block_VECTOR, OFFSET DOSGROUP:ReadFcbBlock
+        DW OFFSET DOSGROUP:$FCB_Seq_Read_VECTOR, OFFSET DOSGROUP:ReadNextRecord
+        DW OFFSET DOSGROUP:$FCB_Seq_Write_VECTOR, OFFSET DOSGROUP:WriteNextRecord
+        DW OFFSET DOSGROUP:$FCB_Random_Read_VECTOR, OFFSET DOSGROUP:ReadRandomRecord
+        DW OFFSET DOSGROUP:$FCB_Random_Write_VECTOR, OFFSET DOSGROUP:WriteRandomRecord
+        DW 0
+DOSEND ENDS
 END
 
 

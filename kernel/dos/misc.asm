@@ -248,11 +248,9 @@ FreeDone:
 	return
 EndProc $DISK_RESET
 
-        PUBLIC  FCB_GATE,FCB_ENTRY,FcbReturn
+        PUBLIC  FCB_GATE,FcbReturn
 FCB_GATE DD     0
         PUBLIC  FCB_SELECTED
-FCB_ENTRY:
-        PUSH    AX
 FCB_SELECTED:
         JMP     CS:[FCB_GATE]
 
@@ -283,12 +281,17 @@ DosCallbackLow ENDP
 CODE ENDS
 
 DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ; A near service return reaches this far return in the same placement.
+        PUBLIC DosCodeFarReturn
+DosCodeFarReturn:
+        RETF
+
 ; Report the placement recorded by SYSINIT to the private MEM query.
         ASSUME CS:DOSCODE,SS:DOSGROUP
-        i_need HMA_ACTIVE,BYTE
+        i_need DOS_CODE_RESIDENCY,BYTE
         procedure QueryDosResidency,NEAR
         XOR     AX,AX
-        MOV     AL,SS:[HMA_ACTIVE]
+        MOV     AL,SS:[DOS_CODE_RESIDENCY]
         RET
 EndProc QueryDosResidency
 DOSCODE ENDS
@@ -302,8 +305,15 @@ DosCodeEnd LABEL BYTE
         EXTRN DupEntries:WORD,DiskEntries:WORD,Disk2Entries:WORD,Disk3Entries:WORD,ExtattrEntries:WORD
         EXTRN FileEntries:WORD,IsearchEntries:WORD,CpmioEntries:WORD,Cpmio2Entries:WORD
         EXTRN AbortEntries:WORD,SearchEntries:WORD,RenameEntries:WORD,OpenEntries:WORD,FatEntries:WORD
+        EXTRN DirEntries:WORD,Dir2Entries:WORD,DircallEntries:WORD
+        EXTRN Macro2Entries:WORD,FcbEntriesTable:WORD
+        EXTRN FcbIoEntries:WORD,FcbIo2Entries:WORD
         PUBLIC DosCodeModules
 DosCodeModules LABEL WORD
+        DW OFFSET DOSGROUP:FcbIoEntries
+        DW OFFSET DOSGROUP:FcbIo2Entries
+        DW OFFSET DOSGROUP:Macro2Entries
+        DW OFFSET DOSGROUP:FcbEntriesTable
         DW OFFSET DOSGROUP:ProcEntries
         DW OFFSET DOSGROUP:AllocEntries
         DW OFFSET DOSGROUP:CloseEntries
@@ -323,6 +333,9 @@ DosCodeModules LABEL WORD
         DW OFFSET DOSGROUP:RenameEntries
         DW OFFSET DOSGROUP:OpenEntries
         DW OFFSET DOSGROUP:FatEntries
+        DW OFFSET DOSGROUP:DirEntries
+        DW OFFSET DOSGROUP:Dir2Entries
+        DW OFFSET DOSGROUP:DircallEntries
         DW OFFSET DOSGROUP:FileEntries
         DW OFFSET DOSGROUP:IsearchEntries
         DW OFFSET DOSGROUP:CpmioEntries

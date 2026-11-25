@@ -143,7 +143,7 @@ SAVCH:
 	JAE	BUFFUL			; buffer is full.
 ;----------------------------- Start of DBCS 2/13/KK
 
-	CallResident TESTKANJ		;AN000;
+	invoke IsLeadByte		;AN000;
 	JZ	ISNORM			;AN000;
 	INC	DH			;AN000;
 	CMP	DH,DL			;AN000;
@@ -187,7 +187,7 @@ CONTIN1:				;AN000;; 2/13/KK
 
 	PUSH	AX			;
 	MOV	AL,BYTE PTR [SI-1]	;AN000;;		    2/13/KK
-	CallResident TESTKANJ		;AN000;;		    2/13/KK
+	invoke IsLeadByte		;AN000;;		    2/13/KK
 	POP	AX			;AN000;;		    2/13/KK
 	JZ	GETCH0			;AN000;; Wasn't a dual byte 2/13/KK
 	INC	SI			;AN000;; Was a dual byte,   2/13/KK
@@ -292,7 +292,7 @@ BackSpace:
 	JZ	OLDBAK		;No chars in line, do nothing to line
 	CALL	BACKUP		;Do the backup
 	MOV	AL,ES:[DI]	;Get the deleted char
-	CallResident TESTKANJ	;AN000;2/13/KK
+	invoke IsLeadByte	;AN000;2/13/KK
 	JNZ	OLDBAK		;AN000; Was a dual byte, done  2/13/KK
 	CMP	AL," "
 	JAE	OLDBAK		;Was a normal char
@@ -325,7 +325,7 @@ LOOKDUAL:			;AN000;
 	JAE	ATLOC		;AN000;
 	PUSH	AX		;AN000;
 	MOV	AL,BYTE PTR [SI];AN000;
-	CallResident TESTKANJ	;AN000;
+	invoke IsLeadByte	;AN000;
 	POP	AX		;AN000;
 	JZ	ONEINC		;AN000;
 	INC	SI		;AN000;
@@ -386,7 +386,7 @@ LOOKDUAL2:				;AN000;
 	JAE	ATLOC2			;AN000;
 	PUSH	AX			;AN000;
 	MOV	AL,BYTE PTR ES:[DI]	;AN000;
-	CallResident TESTKANJ		;AN000;
+	invoke IsLeadByte		;AN000;
 	POP	AX			;AN000;
 	JZ	ONEINC2 		;AN000;
 	INC	DI			;AN000;
@@ -428,7 +428,7 @@ BACKMES:
 	entry	COPYONE
 	MOV	CX,1			;AN000;;	       2/13/KK
 	MOV	AL,[SI] 		;AN000;; get char      2/13/KK
-	CallResident TestKanj		;AN000;; is it kanji?  2/13/KK
+	invoke IsLeadByte		;AN000;; is it kanji?  2/13/KK
 	JZ	CopyEach		;AN000;; no, go do copy2/13/KK
 	INC	CX			;AN000;; do 2 byte copy2/13/KK
 
@@ -444,7 +444,7 @@ COPYEACH:
 ;----------------------------- Start of DBCS 2/13/KK
 	INC	BH			;AN000;; Ahead in template
 	INC	DH			;AN000;; Ahead in line
-	CallResident TestKanj		;AN000;; 2 byte character?
+	invoke IsLeadByte		;AN000;; 2 byte character?
 	JZ	CopyLoop		;AN000;; no, go copy next
 	CMP	DH,DL			;AN000;; over boundary?
 	JNZ	CopyBoth		;AN000;; no, move both
@@ -480,7 +480,7 @@ GETCH2:
 	INC	SI
 	PUSH	AX			;AN000;; 2/13/KK
 	MOV	AL,BYTE PTR [SI-1]	;AN000;; 2/13/KK
-	CallResident TESTKANJ		;AN000;; 2/13/KK
+	invoke IsLeadByte		;AN000;; 2/13/KK
 	POP	AX			;AN000;; 2/13/KK
 	JZ	GETCH2			;AN000;; 2/13/KK
 	INC	BH			;AN000;; 2/13/KK
@@ -516,7 +516,7 @@ FINDOLD:
 	JMP	NotFnd			       ; go try again
 ;;;;;;;FindSetup:			;AN000;; 2/13/KK
 TryKanj:				;AN000;; 2/13/KK
-	CallResident TESTKANJ		;AN000;; 2/13/KK
+	invoke IsLeadByte		;AN000;; 2/13/KK
 	JZ	GOTLSIZ 		;AN000;; 2/13/KK
 	INC	[LOOKSIZ]		;AN000;; Gonna look for a word	2/13/KK
 	PUSH	AX			;AN000;; Save first byte	2/13/KK
@@ -533,7 +533,7 @@ GOTLSIZ:
 	JZ	NOTFND		;If only one char in template, forget it
 	PUSH	AX			;AN000;; 2/13/KK
 	MOV	AL,BYTE PTR [SI]	;AN000;; 2/13/KK
-	CallResident TESTKANJ		;AN000;; 2/13/KK
+	invoke IsLeadByte		;AN000;; 2/13/KK
 	POP	AX			;AN000;; 2/13/KK
 	JZ	NOTDUAL5		;AN000;; 2/13/KK
 	DEC	CX			;AN000;; And one more besides	2/13/KK
@@ -549,7 +549,7 @@ NOTDUAL5:				;AN000;; 2/13/KK
 ;--------------------- Start of DBCS 2/13/KK
 	PUSH	AX			;AN000;
 	MOV	AL,BYTE PTR ES:[DI]	;AN000;
-	CallResident TESTKANJ		;AN000;
+	invoke IsLeadByte		;AN000;
 	POP	AX			;AN000;
 	JZ	ONEINC5 		;AN000;
 	INC	DI			;AN000;; We will skip at least something
@@ -560,7 +560,7 @@ ONEINC5:				;AN000;
 LOOKBYTE:				;AN000;
 	PUSH	AX			;AN000;
 	MOV	AL,BYTE PTR ES:[DI]	;AN000;
-	CallResident TESTKANJ		;AN000;
+	invoke IsLeadByte		;AN000;
 	POP	AX			;AN000;
 	JZ	TESTITB 		;AN000;
 	INC	DI			;AN000;
@@ -596,7 +596,7 @@ NOTFND:
 LOOKWORD:			       ;AN000;
 	PUSH	AX		       ;AN000;
 	MOV	AL,BYTE PTR ES:[DI]    ;AN000;
-	CallResident TESTKANJ	       ;AN000;
+	invoke IsLeadByte	       ;AN000;
 	POP	AX		       ;AN000;
 	JNZ	TESTITW 	       ;AN000;
 	INC	DI		       ;AN000;

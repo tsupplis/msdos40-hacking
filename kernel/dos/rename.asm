@@ -223,7 +223,7 @@ REN_OK1:				;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	MOV	WORD PTR [CREATING],0E5FFH  ; Creating, not DEL *.*
 					; A rename is like a CREATE_NEW as far
 					; as the destination is concerned.
-	CallResident GetPathNoSet
+	invoke ResolvePathWithFlags
 ;   If this Getpath fails due to file not found, we know all renames will work
 ;   since no files match the destination name.	If it fails for any other
 ;   reason, the rename fails on a path not found, or whatever (also fails if
@@ -285,14 +285,14 @@ BUILDDEST:
 
 	MOV	[ATTRIB],attr_all	; Stop duplicates with any attributes
 	MOV	[CREATING],0FFH
-	CallResident DEVNAME 		; Check if we built a device name
+	invoke FindDeviceName 		; Check if we built a device name
 	ASSUME	ES:NOTHING
 	JNC	BAD_ACC
 	MOV	BX,[DESTSTART]
 	LES	BP,[THISDPB]
-	CallResident SetDirSrch		; Reset search to start of dir
+	invoke SetDirectorySearch		; Reset search to start of dir
 	JC	BAD_ACC 		; Screw up
-	CallResident FINDENTRY		; See if new name already exists
+	invoke FindDirectoryEntry		; See if new name already exists
 	JNC	BAD_ACCJ 		; Error if found
 	CMP	[FAILERR],0
 	JNZ	BAD_ACCJ		; Find failed because user FAILed to I 24
@@ -406,11 +406,11 @@ GET_SOURCE:
 
 	MOV	BX,WORD PTR [RENAMEDMA + 15]	; DirStart
 	LES	BP,ThisDPB
-	CallResident SetDirSrch
+	invoke SetDirectorySearch
 	retc
-	CallResident StartSrch
+	invoke StartDirectorySearch
 	MOV	AX,WORD PTR [RENAMEDMA + 13]	; Lastent
-	CallResident GetEnt
+	invoke ReadDirectoryPosition
 	return
 
 EndProc RenameDirectoryEntry

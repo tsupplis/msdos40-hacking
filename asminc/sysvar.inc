@@ -29,7 +29,7 @@ SYSI_EXT_MEM	    DW	    0		; Extended memory size in KB.
 SYSI_UMB_HEAD	    DW	    0		; First upper memory arena segment
 SYSI_UMB_BRIDGE     DW	    0		; Conventional-to-UMB gap segment
 SYSI_UMB_TOTAL      DW      0           ; Total paragraphs granted to DOS
-SYSI_HMA_ACTIVE     DB      0           ; DOS code successfully placed in HMA
+SYSI_CODE_RESIDENCY     DB      0           ; DOS code residency reported by INT 21h/58FEh
 SysInitVars ENDS
 
 ;This is added for more information exchage between DOS, BIOS.

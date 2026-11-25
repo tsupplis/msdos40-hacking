@@ -179,7 +179,7 @@ clook:
 ; ES:DI point to unpacked name
 ; DS:SI point to directory entry
 ;
-	CallResident MetaCompare
+	invoke CompareDirectoryName
 	CallResident XCHGP
 	RestoreReg  <SI,DI>
 	JZ	CLOSE_GO		; Name OK
@@ -198,7 +198,7 @@ CLOSE_GO:
 	MOV	CH,ES:[DI].dir_attr
 	MOV	AL,[SI].sf_attr
 	MOV	Attrib,AL
-	CallResident MatchAttributes
+	invoke MatchDirectoryAttributes
 	JNZ	Bye			; attributes do not match
 	JMP	SHORT setattr		;FT.
 nofcb:

@@ -233,7 +233,7 @@ LOCAL_SET:
 	CallResident ECritDisk
 	PUSH	AX			; Save new attributes
 	MOV	[NoSetDir],1		; if we find a dir, don't change to it
-	CallResident GetPath 		; get path through fastopen if there	 ;AC000;
+	invoke ResolvePath 		; get path through fastopen if there	 ;AC000;
 	JNC	set_check_device
 	POP	BX			; Clean stack (don't zap AX)
 	JMP	NO_PATH
@@ -288,7 +288,7 @@ EndProc SetFileAttribute
 	ASSUME	DS:NOTHING,ES:NOTHING
 
 	OR	[FastOpenFlg],FastOpen_Set ;FO. trigger fastopen		;AN000;
-	CallResident GetPath
+	invoke ResolvePath
 	PUSHF			       ;FO.					;AN000;
 	AND    [FastOpenFlg],Fast_yes  ;FO. clear all fastopen flags		;AN000;
 	POPF			       ;FO.					;AN000;

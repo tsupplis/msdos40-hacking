@@ -75,95 +75,34 @@ BREAK <DOS_MkDir - Make a directory entry>
 ;		error_access_denied
 ;			Already exists, device name
 ; DS preserved, Others destroyed
-
         EXTRN FCB_SELECTED:NEAR
-	procedure   DOS_MKDIR,NEAR
-	DOSAssume   CS,<DS>,"DOS_MkDir"
-	ASSUME	ES:NOTHING
-
-	Invoke	TestNet
-	JNC     DispatchMKDIR
-IF NOT Installed
-	transfer NET_MKDIR
-ELSE
-	MOV	AX,(multNET SHL 8) OR 3
-	INT	2FH
-	return
-ENDIF
-DispatchMKDIR:
-        JMP WORD PTR CS:[DOS_MKDIR_VECTOR]
-        PUBLIC DOS_MKDIR_VECTOR
-DOS_MKDIR_VECTOR DW OFFSET DOSGROUP:MKDIRFar
-MKDIRFar:
-        PUSH AX
-        MOV AH,72
-        JMP FCB_SELECTED
-EndProc DOS_MKDIR
-
-	procedure   DOS_CHDIR,NEAR
-	DOSAssume   CS,<DS>,"DOS_Chdir"
-	ASSUME	ES:NOTHING
-
-	Invoke	TestNet
-	JNC     DispatchCHDIR
-IF NOT Installed
-	transfer NET_CHDIR
-ELSE
-	MOV	AX,(multNET SHL 8) OR 5
-	INT	2FH
-	return
-ENDIF
-DispatchCHDIR:
-        JMP WORD PTR CS:[DOS_CHDIR_VECTOR]
-        PUBLIC DOS_CHDIR_VECTOR
-DOS_CHDIR_VECTOR DW OFFSET DOSGROUP:CHDIRFar
-CHDIRFar:
-        PUSH AX
-        MOV AH,73
-        JMP FCB_SELECTED
-EndProc DOS_CHDIR
-
-	procedure   DOS_RMDIR,NEAR
-	DOSAssume   CS,<DS>,"DOS_RmDir"
-	ASSUME	ES:NOTHING
-
-	Invoke	TestNet
-	JNC     DispatchRMDIR
-IF NOT Installed
-	transfer NET_RMDIR
-ELSE
-	MOV	AX,(multNET SHL 8) OR 1
-	INT	2FH
-	return
-ENDIF
-DispatchRMDIR:
-        JMP WORD PTR CS:[DOS_RMDIR_VECTOR]
-        PUBLIC DOS_RMDIR_VECTOR
-DOS_RMDIR_VECTOR DW OFFSET DOSGROUP:RMDIRFar
-RMDIRFar:
-        PUSH AX
-        MOV AH,74
-        JMP FCB_SELECTED
-EndProc DOS_RMDIR
-
+        DosCodeEntry DOS_MKDIR,72
+        DosCodeEntry DOS_CHDIR,73
+        DosCodeEntry DOS_RMDIR,74
 CODE ENDS
-LAST SEGMENT PARA PUBLIC 'LAST'
-	procedure   HMA_DOS_MKDIR,NEAR
-        JMP LOCAL_MKDIR
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+	procedure   MakeDirectory,NEAR
+        CallResident TestNet
+        JNC LOCAL_MKDIR
+        MOV AX,(multNET SHL 8) OR 3
+        CallResident DosMultiplex
+        RET
+
 
 NODEACCERRJ:
 	MOV	AX,error_access_denied
 BadRet:
 	STC
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 	return
 
 PATHNFJ:
-	LeaveCrit   critDisk
-	transfer SET_MKND_ERR		; Map the MakeNode error and return
+	CallResident LCritDisk
+	transfer MapCreateError		; Map the MakeNode error and return
 
 LOCAL_MKDIR:
-	EnterCrit   critDisk
+	CallResident ECritDisk
 ;
 ; MakeNode requires an SFT to fiddle with.  We Use a temp spot (RENBUF)
 ;
@@ -194,13 +133,13 @@ ASSUME	DS:NOTHING
 	MOV	[DIRSTART],AX	; Null directory
 	invoke	ExtendDirectory
 	JC	NODEEXISTSPOPDEL    ; No room
-	invoke	HMA_GETENT		; First entry
+	invoke	ReadDirectoryPosition		; First entry
 	JC	NODEEXISTSPOPDEL    ; Screw up
 	LES	DI,[CURBUF]
 
 	TEST	ES:[DI.buf_flags],buf_dirty  ;LB. if already dirty		;AN000;
 	JNZ	yesdirty		  ;LB.	  don't increment dirty count   ;AN000;
-	invoke	INC_DIRTY_COUNT 	  ;LB.					;AN000;
+	invoke	IncrementDirtyCount 	  ;LB.					;AN000;
 	OR	ES:[DI.buf_flags],buf_dirty
 yesdirty:
 	ADD	DI,BUFINSIZ	; Point at buffer
@@ -216,7 +155,7 @@ yesdirty:
 	POP	[HIGH_SECTOR]	;F.C. >32mb
 
 	XOR	AL,AL		; Pre read
-	invoke	GETBUFFR
+	invoke	ReadBuffer
 	JC	NODEEXISTSP
 	MOV	DX,[DIRSTART]
 	LDS	DI,[CURBUF]
@@ -231,14 +170,14 @@ ASSUME	DS:NOTHING
 DIRUP:
 	TEST	[DI.buf_flags],buf_dirty  ;LB. if already dirty 		;AN000;
 	JNZ	yesdirty2		  ;LB.	  don't increment dirty count   ;AN000;
-	invoke	INC_DIRTY_COUNT 	  ;LB.					;AN000;
+	invoke	IncrementDirtyCount 	  ;LB.					;AN000;
 	OR	[DI.buf_flags],buf_dirty	; Dirty buffer
 yesdirty2:
 	context DS
 	MOV	AL,ES:[BP.dpb_drive]
-	invoke	FLUSHBUF
+	invoke	FlushBuffers
 	MOV	AX,error_access_denied
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 	return
 
 NODEEXISTSPOPDEL:
@@ -249,7 +188,7 @@ NODEEXISTSPOPDEL:
 	LES	BP,[THISDPB]
 	MOV	[ALLOWED],allowed_FAIL + allowed_RETRY
 	XOR	AL,AL		; Pre read
-	invoke	GETBUFFR
+	invoke	ReadBuffer
 	JC	NODEEXISTSP
 	LDS	DI,[CURBUF]
 ASSUME	DS:NOTHING
@@ -266,9 +205,9 @@ NODEEXISTSP:
 	POP	SI		; Clean stack
 	JMP	NODEEXISTS
 
-EndProc HMA_DOS_MKDIR
+EndProc MakeDirectory
 
-BREAK <DOS_ChDir -- Verify a directory>
+BREAK <ChangeDirectory -- Verify a directory>
 
 ; Inputs:
 ;	[WFP_START] Points to WFP string ("d:/" must be first 3 chars, NUL
@@ -293,10 +232,14 @@ BREAK <DOS_ChDir -- Verify a directory>
 ;			device or file name
 ; DS preserved, Others destroyed
 
-	procedure   HMA_DOS_CHDIR,NEAR
-
+	procedure   ChangeDirectory,NEAR
+        CallResident TestNet
+        JNC LOCAL_CHDIR
+        MOV AX,(multNET SHL 8) OR 5
+        CallResident DosMultiplex
+        RET
 LOCAL_CHDIR:
-	EnterCrit   critDisk
+	CallResident ECritDisk
 	TEST	ES:[DI.curdir_flags],curdir_splice ;PTM.
 	JZ	nojoin				   ;PTM.
 	MOV	ES:[DI.curdir_ID],0FFFFH	   ;PTM.
@@ -307,7 +250,7 @@ nojoin:
 ; DOS 3.3  6/24/86 FastOpen
 
 	OR	[FastOpenFlg],FastOpen_Set	   ; set fastopen flag
-	invoke	HMA_GetPath
+	invoke	ResolvePath
 	PUSHF									;AN000;
 	AND	[FastOpenFlg],Fast_yes		   ; clear it all		;AC000;
 	POPF									;AN000;
@@ -318,10 +261,10 @@ nojoin:
 	MOV	CX,[DIRSTART]	; Get cluster number
 	CLC
 ChDirDone:
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 	return
 
-EndProc HMA_DOS_CHDIR
+EndProc ChangeDirectory
 
 BREAK <DOS_RmDir -- Remove a directory>
 
@@ -352,14 +295,18 @@ BREAK <DOS_RmDir -- Remove a directory>
 ;			Bad directory ('.' '..' messed up)
 ; DS preserved, Others destroyed
 
-	procedure   HMA_DOS_RMDIR,NEAR
-
+	procedure   RemoveDirectory,NEAR
+        CallResident TestNet
+        JNC LOCAL_RMDIR
+        MOV AX,(multNET SHL 8) OR 1
+        CallResident DosMultiplex
+        RET
 LOCAL_RMDIR:
-	EnterCrit   critDisk
+	CallResident ECritDisk
 	MOV	[NoSetDir],0
 	MOV	[SATTRIB],attr_directory+attr_system+attr_hidden
 				; Dir calls can find these
-	invoke	HMA_GetPath
+	invoke	ResolvePath
 	JC	NOPATH		; Path not found
 	JNZ	NOTDIRPATH	; Path not a DIR
 	MOV	DI,[DIRSTART]
@@ -394,8 +341,8 @@ ASSUME	DS:NOTHING
 	REP	STOSB
 	XOR	AL,AL
 	STOSB			; Nul terminate it
-	invoke	HMA_STARTSRCH	; Set search
-	invoke	HMA_GETENTRY	; Get start of directory
+	invoke	StartDirectorySearch	; Set search
+	invoke	ReadDirectoryEntry	; Get start of directory
 	JC	NOTDIRPATHPOP	; Screw up
 	MOV	DS,WORD PTR [CURBUF+2]
 ASSUME	DS:NOTHING
@@ -409,27 +356,29 @@ ASSUME	DS:NOTHING
 	JNZ	NOTDIRPATHPOP		; Nope
 	context DS
 	MOV	[LASTENT],2		; Skip . and ..
-	invoke	HMA_GETENTRY		; Get next entry
+	invoke	ReadDirectoryEntry		; Get next entry
 	JC	NOTDIRPATHPOP		; Screw up
 	MOV	[ATTRIB],attr_directory+attr_hidden+attr_system
-	invoke	HMA_SRCH			; Do a search
+	invoke	ScanDirectory			; Do a search
 	JNC	NOTDIRPATHPOP		; Found another entry!
 	CMP	[FAILERR],0
 	JNZ	NOTDIRPATHPOP		; Failure of search due to I 24 FAIL
 	LES	BP,[THISDPB]
 	MOV	BX,[DIRSTART]
 ;; FastSeek 10/27/86
-	invoke	Delete_FSeek		; delete the fastseek entry
+	CallResident Delete_FSeek		; delete the fastseek entry
 ;; FastSeek 10/27/86
-	invoke	RELEASE 		; Release data in sub dir
+	invoke	ReleaseClusters 		; Release data in sub dir
 	JC	NOTDIRPATHPOP		; Screw up
 	POP	DX			; Sector # of entry
 	POP	[HIGH_SECTOR]		; F.C. >32mb
 
 	MOV	[ALLOWED],allowed_FAIL + allowed_RETRY
 	XOR	AL,AL			; Pre read
-	invoke	GETBUFFR		; Get sector back
-	JC	NOTDIRPATHPOP2		; Screw up
+	invoke	ReadBuffer		; Get sector back
+	JNC     RemoveEntry
+        JMP     NOTDIRPATHPOP2
+RemoveEntry:
 	LDS	DI,[CURBUF]
 ASSUME	DS:NOTHING
 	OR	[DI.buf_flags],buf_isDIR
@@ -440,13 +389,20 @@ ASSUME	DS:NOTHING
 ;DOS 3.3 FastOpen  6/16/86  F.C.
 	PUSH	DS
 	context DS
-	invoke	FastOpen_Delete 	; call fastopen to delete an entry
+	CallResident FastOpen_Delete 	; call fastopen to delete an entry
 	POP	DS
 ;DOS 3.3 FastOpen  6/16/86  F.C.
 
 	JMP	DIRUP			; In MKDIR, dirty buffer and flush
 
-EndProc HMA_DOS_RMDIR
-
-LAST	ENDS
+EndProc RemoveDirectory
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC DircallEntries
+DircallEntries LABEL WORD
+        DW OFFSET DOSGROUP:DOS_MKDIR_VECTOR, OFFSET DOSGROUP:MakeDirectory
+        DW OFFSET DOSGROUP:DOS_CHDIR_VECTOR, OFFSET DOSGROUP:ChangeDirectory
+        DW OFFSET DOSGROUP:DOS_RMDIR_VECTOR, OFFSET DOSGROUP:RemoveDirectory
+        DW 0
+DOSEND ENDS
     END

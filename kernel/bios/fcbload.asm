@@ -2,8 +2,7 @@
 SYSINITSEG SEGMENT PUBLIC 'SYSTEM_INIT'
         ASSUME  CS:SYSINITSEG,DS:SYSINITSEG
         INCLUDE fcbsizes.inc
-        EXTRN   FcbNative:BYTE,FcbUpper:BYTE,FcbBridges:BYTE
-        EXTRN   FcbRelative:WORD,FcbSegments:WORD,FcbEntries:WORD,FcbVectors:WORD
+        EXTRN   FcbVectors:WORD
         EXTRN   ROUND:NEAR
         EXTRN   FINAL_DOS_LOCATION:WORD,MEMHI:WORD,HMA_REQUESTED:BYTE
         PUBLIC  InitDosCode,PlaceDosCode,GateBody,GateStart,GateXms
@@ -12,7 +11,7 @@ SYSINITSEG SEGMENT PUBLIC 'SYSTEM_INIT'
 ; CX is the first paragraph above the available boot workspace. SYSINIT
 ; relocates below the returned limit. DOS reclaims this space after boot.
 ReserveDosCode PROC NEAR
-        SUB     CX,(FcbHiLength+15)/16
+        SUB     CX,(FcbLength+15)/16
         MOV     DX,CX
         SUB     DX,10h                  ; temporary body starts at offset 100h
         MOV     [GateBody],DX
@@ -29,36 +28,13 @@ InitDosCode PROC NEAR
         MOV     [KernelSeg],BX
         MOV     ES,[GateBody]
         MOV     DI,100h
-        MOV     SI,OFFSET FcbUpper
-        MOV     CX,FcbLegacyLength
-        REP     MOVSB
-        MOV     DS,BX                   ; linked DOSCODE comes from MSDOS.SYS
-        MOV     SI,FcbLinked+FcbLegacyLength
-        MOV     CX,FcbLength-FcbLegacyLength
+        MOV     DS,BX
+        MOV     SI,FcbLinked
+        MOV     CX,FcbLength
         REP     MOVSB
         PUSH    CS
         POP     DS
-        MOV     SI,OFFSET FcbBridges
-        MOV     CX,FcbHiLength-FcbLength
-        REP     MOVSB
-        MOV     DX,OFFSET GateStart
-        MOV     CL,4
-        SHR     DX,CL
-        MOV     SI,CS
-        ADD     DX,SI
-        CALL    PatchCallbacks
-InitDispatch:
         MOV     ES,BX
-        MOV     SI,OFFSET FcbEntries
-InitSlot:
-        LODSW
-        CMP     AX,-1
-        JE      InitGate
-        MOV     DI,AX
-        MOV     WORD PTR ES:[DI],FcbEntryIP
-        LODSW
-        JMP     InitSlot
-InitGate:
         MOV     AX,OFFSET GateStart
         MOV     CL,4
         SHR     AX,CL
@@ -110,30 +86,15 @@ PlaceLow:
         ADD     [MEMHI],(FcbLength+15)/16
         CALL    ROUND
         MOV     DI,DX
-        MOV     SI,OFFSET FcbNative
-        MOV     CX,FcbLegacyLength
-        REP     MOVSB
         MOV     DS,[GateBody]
-        MOV     SI,100h+FcbLegacyLength
-        MOV     CX,FcbLength-FcbLegacyLength
+        MOV     SI,100h
+        MOV     CX,FcbLength
         REP     MOVSB
         PUSH    CS
         POP     DS
-        MOV     SI,OFFSET FcbRelative
-        MOV     BX,FcbLinked
-        SUB     BX,DX
-PlaceFix:
-        LODSW
-        CMP     AX,-1
-        JE      PlaceSlots
-        MOV     DI,AX
-        ADD     DI,DX
-        ADD     ES:[DI],BX
-        JMP     PlaceFix
-PlaceSlots:
         MOV     WORD PTR ES:[CallbackPtr],NativeCallback
         MOV     ES:[CallbackPtr+2],ES
-        MOV     SI,OFFSET FcbVectors       ; followed by FcbEntries
+        MOV     SI,OFFSET FcbVectors
 PlaceSlot:
         LODSW
         CMP     AX,-1
@@ -148,7 +109,7 @@ PlaceDone:
         RET
 PlaceFarLow:
         MOV     AX,[MEMHI]
-        ADD     [MEMHI],(FcbHiLength+15)/16
+        ADD     [MEMHI],(FcbLength+15)/16
         CALL    ROUND
         SUB     AX,10h
         JMP     SHORT PlaceCopy
@@ -159,14 +120,11 @@ PlaceCopy:
         MOV     DI,100h
         MOV     DS,[GateBody]
         MOV     SI,100h
-        MOV     CX,FcbHiLength
+        MOV     CX,FcbLength
         REP     MOVSB
         PUSH    CS
         POP     DS
-        MOV     DX,[MEMHI]
-        PUSH    AX
-        CALL    PatchCallbacks
-        POP     DX
+        MOV     DX,AX
         MOV     ES,[MEMHI]
         MOV     CX,(GateLength+15)/16
         ADD     [MEMHI],CX
@@ -192,21 +150,6 @@ PlaceA20Error:
         MOV     SI,OFFSET GateMsg       ; DS is the unnormalized SYSINIT segment
         JMP     GateDisplay
 PlaceDosCode ENDP
-
-; ES:100h = FCB overlay, DX = normalized conventional gateway segment.
-PatchCallbacks PROC NEAR
-        MOV     SI,OFFSET FcbSegments
-PatchNext:
-        LODSW
-        CMP     AX,-1
-        JE      PatchDone
-        MOV     DI,AX
-        MOV     WORD PTR ES:[DI-2],GateBack-GateStart
-        MOV     ES:[DI],DX
-        JMP     PatchNext
-PatchDone:
-        RET
-PatchCallbacks ENDP
 
 ; Normalized at offset zero. Only the far and HMA layouts retain this code.
         ALIGN   16
@@ -243,7 +186,8 @@ GateStart:
 GateCall:
         PUSH    WORD PTR [BP-2]
         POPF
-        CALL    DWORD PTR [BP-6]
+        PUSH    CS
+        CALL    GateService
 GateResult:
         POP     BP                      ; discard the saved input flags with the target
         POP     BP
@@ -260,11 +204,19 @@ GateResult:
         POP     AX
         POP     BP
         RETF
+; A service returns near to DosCodeFarReturn, which resumes GateResult.
+GateService:
+        PUSH    WORD PTR CS:[GateFarReturn-GateStart]
+        PUSH    WORD PTR [BP-4]
+        PUSH    WORD PTR [BP-6]
+        RETF
 GatePath:
+        PUSH    WORD PTR CS:[GateFarReturn-GateStart]
         PUSH    WORD PTR [BP-4]
         PUSH    WORD PTR [BP-6]
         MOV     BP,[BP]                 ; original BP on device paths
         RETF
+GateFarReturn DW FarReturnIP
 GateBack:
         ; A low call can switch stacks to abort or restart the operation.
         ; Release before entering it. Only a normal return reacquires A20.

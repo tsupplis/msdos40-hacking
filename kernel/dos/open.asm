@@ -246,7 +246,7 @@ EndProc OpenFile
 ; DOS 3.3 FastOPen 6/16/86
 
 	OR	[FastOpenFlg],FastOpen_Set+Special_Fill_Set   ;  only open can
-	CallResident GETPATH
+	invoke ResolvePath
 
 
 ; DOS 3.3 FastOPen 6/16/86

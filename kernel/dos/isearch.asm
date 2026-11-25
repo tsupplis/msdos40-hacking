@@ -176,7 +176,7 @@ NOFN:					      ;AN000;
 	JNC	norm_getpath		;AN000;;FO. no
 	AND	[FastOpenflg],Fast_yes	;AN000;;FO. reset fastopen
 norm_getpath:
-	CallResident GetPath
+	invoke ResolvePath
 getdone:
 	JNC	find_check_dev
 	JNZ	bad_path
@@ -337,17 +337,17 @@ cont_load:
 	MOV	BX,AX
 	context DS
 	LES	BP,[THISDPB]		; Recover ES:BP
-	CallResident SetDirSrch
+	invoke SetDirectorySearch
 	JNC	SEARCH_GOON
 	POP	AX			; Clean stack
 	JMP	No_files
 
 SEARCH_GOON:
-	CallResident StartSrch
+	invoke StartDirectorySearch
 	POP	AX
-	CallResident GetEnt
+	invoke ReadDirectoryPosition
 	JC	No_files
-	CallResident NextEnt
+	invoke NextDirectoryMatch
 	JC	No_files
 	XOR	AH,AH			; If Search_Next, can't be a DEV
 	JMP	found_it

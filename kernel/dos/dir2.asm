@@ -68,37 +68,26 @@ asmvar	Kanji
 	I_need	Next_Element_Start,WORD   ;DOS 3.3
 	I_need	HIGH_SECTOR,WORD	  ;AN000;>32mb
 	I_need	DOS34_FLAG,WORD 	  ;AN000;>32mb
-
-
-	EXTRN	FCB_SELECTED:NEAR
-	PUBLIC	GETPATH_VECTOR,GETPATHNOSET_VECTOR
-GETPATH_VECTOR	DW OFFSET DOSGROUP:PathFar
-GETPATHNOSET_VECTOR DW OFFSET DOSGROUP:PathNoSetFar
-
-	procedure GETPATH,NEAR
-	JMP	WORD PTR CS:[GETPATH_VECTOR]
-PathFar:
-	PUSH	AX
-	MOV	AH,45
-	JMP	FCB_SELECTED
-EndProc GETPATH
-
-	procedure GetPathNoSet,NEAR
-	JMP	WORD PTR CS:[GETPATHNOSET_VECTOR]
-PathNoSetFar:
-	PUSH	AX
-	MOV	AH,46
-	JMP	FCB_SELECTED
-EndProc GetPathNoSet
-
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry StartSrch,57
+        DosCodeEntry MatchAttributes,58
+        DosCodeEntry GetPath,45
+        DosCodeEntry GetPathNoSet,46
+        DosCodeEntry DevName,169
+        DosCodeEntry ValidateCDS,170
+        DosCodeEntry CheckThisDevice,171
 ; Enter the installed FASTOPEN callback from the resident kernel.
 	procedure PathLookup,NEAR
 	CALL	DWORD PTR [BX.FASTOPEN_NAME_CACHING]
 	RET
 EndProc PathLookup
-CODE	ENDS
-
-LAST	SEGMENT PARA PUBLIC 'LAST'
+PathInsert PROC NEAR
+        CALL DWORD PTR ES:[SI.FASTOPEN_NAME_CACHING]
+        RET
+PathInsert ENDP
+CODE ENDS
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
 Break	<GETPATH -- PARSE A WFP>
 
 ; Inputs:
@@ -155,14 +144,14 @@ Break	<GETPATH -- PARSE A WFP>
 ;	      which case [NXTCLUSNUM] and [SECCLUSPOS] need not be valid)
 ; DS preserved, Others destroyed
 
-	procedure   HMA_GETPATH,near
-	DOSAssume   CS,<DS>,"GetPath"
+	procedure   ResolvePath,near
+	DOSAssume SS,<DS>,"GetPath"
 	ASSUME	ES:NOTHING
 
 	MOV	WORD PTR [CREATING],0E500H  ; Not Creating, not DEL *.*
 
 ;Same as GetPath only CREATING and DELALL already set
-	entry	HMA_GETPATHNOSET
+	entry	ResolvePathWithFlags
 	MOV	[EXTERR_LOCUS],errLOC_Disk
 	MOV	WORD PTR CurBuf,-1	; initial setting
 ;
@@ -283,7 +272,7 @@ LOOK_SING:
 	MOV	AL,FONC_look_up
 	PUSH	DS
 	POP	ES
-	CALL	PathLookup
+	CallResident PathLookup
 	JC	GO_Chk_end1			;fastopen not installed, or wrong drive. Go to Got_Srch_cluster
 	CMP	BYTE PTR [SI],0 		;fastopen has current dir info?
 	JE	GO_Chk_end			;yes. Go to got_serch_cluster
@@ -316,7 +305,7 @@ NO_CURR_D:
 ;
 GOT_SEARCH_CLUSTER:
 	LES	BP,[THISDPB]		; Get ES:BP
-	invoke	HMA_SETDIRSRCH
+	invoke	SetDirectorySearch
 	JC	SETFERR
 	JMP	FINDPATH
 
@@ -325,7 +314,7 @@ SETFERR:
 	STC
 	Return
 
-EndProc HMA_GETPATH
+EndProc ResolvePath
 
 ; Check to see if the name at DS:DI is a device.  Returns carry set if not a
 ;   device.
@@ -342,9 +331,9 @@ Procedure   ChkDev,NEAR
 	MOV	DI,OFFSET DOSGROUP:NAME1
 	MOV	CX,9
 TESTLOOP:
-	invoke	GETLET
+	invoke ReadFileChar
  IF  DBCS				;AN000;
-	invoke	Testkanj		;AN000;; 2/13/KK
+	invoke IsLeadByte		;AN000;; 2/13/KK
 	jz	Notkanja		;AN000;; 2/13/KK
 	stosb				;AN000;; Skip second byte   2/13/KK
 	dec	cx			;AN000;; 2/13/KK
@@ -355,7 +344,7 @@ Notkanja:				;AN000;
  ENDIF					;AN000;
 	CMP	AL,'.'
 	JZ	TESTDEVICE
-	invoke	PATHCHRCMP
+	invoke ComparePathSeparator
 	JZ	NOTDEV
 	OR	AL,AL
 	JZ	TESTDEVICE
@@ -372,7 +361,7 @@ TESTDEVICE:
 	REP	STOSB
 	MOV	AX,SS
 	MOV	DS,AX
-	invoke	DEVNAME
+	invoke	FindDeviceName
 	return
 EndProc ChkDev
 
@@ -391,10 +380,10 @@ Break	<ROOTPATH, FINDPATH -- PARSE A PATH>
 
 	procedure   ROOTPATH,near
 
-	DOSAssume   CS,<DS>,"RootPath"
+	DOSAssume SS,<DS>,"RootPath"
 	ASSUME	ES:NOTHING
 
-	invoke	HMA_SETROOTSRCH
+	invoke	SetRootSearch
 	CMP	BYTE PTR [SI],0
 	JNZ	FINDPATH
 
@@ -463,7 +452,7 @@ Break	<ROOTPATH, FINDPATH -- PARSE A PATH>
 ; Destroys all other registers
 
     entry   FINDPATH
-	DOSAssume   CS,<DS>,"FindPath"
+	DOSAssume SS,<DS>,"FindPath"
 	ASSUME	ES:NOTHING
 
 	Assert	ISDPB,<ES,BP>,"FindPath"
@@ -509,7 +498,7 @@ NOIDS:
 	JNE	GetNam2 		;AN000;;IBMJ fix 9/04/86
 	PUSH	AX			;AN000;        ;IBMJ fix 9/04/86
 	MOV	AL,0E5h 		;AN000;;IBMJ fix 9/04/86
-	Invoke	TestKanj		;AN000;;IBMJ fix 9/04/86
+	invoke IsLeadByte		;AN000;;IBMJ fix 9/04/86
 	POP	AX			;AN000;        ;IBMJ fix 9/04/86
 	JZ	Notkanjb		;AN000;        ;IBMJ fix 9/04/86
 	JMP	SHORT GetNam3		;AN000;;IBMJ fix 9/04/86
@@ -520,7 +509,7 @@ GetNam:
 	LODSB
  IF  DBCS				;AN000;
 GetNam2:				;AN000;; 2/13/KK
-	invoke	Testkanj		;AN000;; 2/13/KK
+	invoke IsLeadByte		;AN000;; 2/13/KK
 	jz	Notkanjb		;AN000;; 2/13/KK
 GetNam3:				;AN000;; 2/13/KK
 	STOSB				;AN000;; 2/13/KK
@@ -553,7 +542,7 @@ SetExt:
 GetExt:
 	LODSB
  IF  DBCS				;AN000;
-	invoke	TestKanj		;AN000;; 2/13/KK
+	invoke IsLeadByte		;AN000;; 2/13/KK
 	jz	Notkanjc		;AN000;; 2/13/KK
 	STOSB				;AN000;; 2/13/KK
 	LODSB				;AN000;; 2/13/KK
@@ -598,7 +587,7 @@ NOT_LAST:
 ;
 	PUSH	ES			; Save ES:BP
 	context ES
-	invoke	DevName 		; blast BX
+	invoke	FindDeviceName 		; blast BX
 	POP	ES			; Restore ES:BP
 	ASSUME	ES:NOTHING
 	JC	FindFile		; Not a device
@@ -628,7 +617,7 @@ NOE5:
 	JNC	DIR_FOUND		; found dir entry
 
 ;DOS 3.3 FastOPen 6/12/86 F.C.
-	invoke	HMA_FINDENTRY
+	invoke	FindDirectoryEntry
 DIR_FOUND:
 	POP	CX
 	POP	ES
@@ -679,7 +668,7 @@ SetDir:
 	MOV	BX,DX		      ; not found
 	MOV	DI,[CLUSNUM]	      ; clusnum was set in LookupPath
 	PUSH	AX		      ; save device id (AH)
-	invoke	HMA_SETDIRSRCH
+	invoke	SetDirectorySearch
 	POP	AX		      ; restore device id (AH)
 	ADD	SP,2		      ; pop ds in stack
 	JMP	FAST_OPEN_SKIP
@@ -699,14 +688,14 @@ ASSUME	DS:NOTHING
 	PUSH	WORD PTR [DI.buf_sector+2]   ;AN000;>32mb
 	MOV	BX,DX
 	context DS
-	invoke	HMA_SETDIRSRCH		; This uses UNPACK which might blow
+	invoke	SetDirectorySearch		; This uses UNPACK which might blow
 					; the entry sector buffer
 	POP	[HIGH_SECTOR]
 	POP	DX
 	JC	SKIP_GETB
 	MOV	[ALLOWED],allowed_RETRY + allowed_FAIL
 	XOR	AL,AL
-	invoke	GETBUFFR		; Get the entry buffer back
+	invoke	ReadBuffer		; Get the entry buffer back
 SKIP_GETB:
 	POP	CX
 	POP	SI
@@ -737,7 +726,7 @@ FAST_OPEN_SKIP:
 	JZ	SETRET			; At end
 	INC	DI			; Skip over "/"
 	MOV	SI,DI			; Point with SI
-	invoke	PATHCHRCMP
+	invoke ComparePathSeparator
 	JNZ	find_bad_name		; oops
 	JMP	FINDPATH		; Next element
 
@@ -789,7 +778,7 @@ BADPRET:
 	STC
 	return
 EndProc ROOTPATH
-Break	<HMA_STARTSRCH -- INITIATE DIRECTORY SEARCH>
+Break	<StartDirectorySearch -- INITIATE DIRECTORY SEARCH>
 
 ; Inputs:
 ;	[THISDPB] Set
@@ -800,11 +789,11 @@ Break	<HMA_STARTSRCH -- INITIATE DIRECTORY SEARCH>
 ;	Sets up LASTENT, ENTFREE=ENTLAST=-1, VOLID=0
 ; Destroys ES,BP,AX
 
-	procedure   HMA_StartSrch,NEAR
-	DOSAssume   CS,<DS>,"HMA_StartSrch"
+	procedure   StartDirectorySearch,NEAR
+	DOSAssume SS,<DS>,"StartDirectorySearch"
 	ASSUME	ES:NOTHING
 
-	Assert	ISDPB,<<WORD PTR THISDPB+2>,<WORD PTR THISDPB>>,"HMA_StartSrch"
+	Assert	ISDPB,<<WORD PTR THISDPB+2>,<WORD PTR THISDPB>>,"StartDirectorySearch"
 	LES	BP,[THISDPB]
 	XOR	AX,AX
 	MOV	[LASTENT],AX
@@ -813,9 +802,9 @@ Break	<HMA_STARTSRCH -- INITIATE DIRECTORY SEARCH>
 	MOV	[ENTFREE],AX
 	MOV	[ENTLAST],AX
 	return
-EndProc HMA_StartSrch
+EndProc StartDirectorySearch
 
-BREAK <HMA_MatchAttributes - the final check for attribute matching>
+BREAK <MatchDirectoryAttributes - the final check for attribute matching>
 
 ;
 ; Input:    [Attrib] = attribute to search for
@@ -823,7 +812,7 @@ BREAK <HMA_MatchAttributes - the final check for attribute matching>
 ; Output:   JZ <match>
 ;	    JNZ <nomatch>
 ; Registers modified: noneski
-	procedure HMA_MatchAttributes,near
+	procedure MatchDirectoryAttributes,near
 	ASSUME	DS:NOTHING,ES:NOTHING
 	PUSH	AX
 	MOV	AL,Attrib		; AL <- SearchSet
@@ -837,13 +826,10 @@ BREAK <HMA_MatchAttributes - the final check for attribute matching>
 ;
 	POP	AX
 	return
-EndProc HMA_MatchAttributes
+EndProc MatchDirectoryAttributes
 
-LAST	ENDS
 
-CODE	SEGMENT BYTE PUBLIC 'CODE'
-
-Break <DevName - Look for name of device>
+Break <FindDeviceName - Look for name of device>
 
 ; Inputs:
 ;	DS,ES:DOSGROUP
@@ -860,8 +846,9 @@ Break <DevName - Look for name of device>
 ;	DEVPT = DWORD pointer to Device header of device
 ; BX destroyed, others preserved
 
-	procedure   DEVNAME,NEAR
-	DOSAssume   CS,<ES,DS>,"DevName"
+	procedure   FindDeviceName,NEAR
+	; INT 2Fh/1223h can enter on an application stack.
+	ASSUME DS:DOSGROUP,ES:DOSGROUP,SS:NOTHING
 
 	PUSH	SI
 	PUSH	DI
@@ -894,8 +881,8 @@ SKIPDEV:
 	CMP	SI,-1			; At end of list?
 	JNZ	LOOKIO
 RET31:	STC				; Not found
-RETNV:	MOV	CX,SS
-	MOV	DS,CX
+RETNV:	PUSH	ES
+	POP	DS
 	ASSUME	DS:DOSGroup
 	POP	WORD PTR [NAME1]
 	POP	AX
@@ -906,20 +893,21 @@ RETNV:	MOV	CX,SS
 
 IOCHK:
 ASSUME	DS:NOTHING
-	MOV	WORD PTR [DEVPT+2],DS	; Save pointer to device
+	MOV	WORD PTR ES:[DEVPT+2],DS	; Save pointer to device
 	MOV	BH,BYTE PTR [SI.SDEVATT]
 	OR	BH,0C0H
 	AND	BH,NOT 020H		; Clears Carry
-	MOV	WORD PTR [DEVPT],SI
+	MOV	WORD PTR ES:[DEVPT],SI
 	JMP	RETNV
-EndProc DevName
+EndProc FindDeviceName
+	ASSUME SS:DOSGROUP
 
 BREAK <Build_device_ent - Make a Directory entry>
 
 ; Inputs:
 ;	[NAME1] has name
-;	BH is attribute field (supplied by DEVNAME)
-;	[DEVPT] points to device header (supplied by DEVNAME)
+;	BH is attribute field (supplied by FindDeviceName)
+;	[DEVPT] points to device header (supplied by FindDeviceName)
 ; Function:
 ;	Build a directory entry for a device at DEVFCB
 ; Outputs:
@@ -932,7 +920,7 @@ BREAK <Build_device_ent - Make a Directory entry>
 ; DS,ES,BP preserved, others destroyed
 
 	procedure Build_device_ent,near
-	DOSAssume   CS,<ES,DS>,"Build_Device_Ent"
+	DOSAssume SS,<ES,DS>,"Build_Device_Ent"
 
 	MOV	AX,"  "
 	MOV	DI,OFFSET DOSGROUP:DEVFCB+8 ; Point to extent field
@@ -952,7 +940,7 @@ BREAK <Build_device_ent - Make a Directory entry>
 ; Fill dir_pad
 ;
 	REP	STOSW			; Fill rest with zeros
-	invoke	DATE16
+	CallResident DATE16
 	MOV	DI,OFFSET DOSGROUP:DEVFCB+dir_time
 	XCHG	AX,DX
 ;
@@ -981,11 +969,11 @@ BREAK <Build_device_ent - Make a Directory entry>
 	return
 EndProc Build_device_ent
 
-Break	<ValidateCDS - given a CDS, validate the media and the current directory>
+Break	<ValidateCurrentDirectory - given a CDS, validate the media and the current directory>
 
 ;
-;   ValidateCDS - Get current CDS.  Splice it.	Call FatReadCDS to check
-;   media.  If media has been changed, do DOS_Chdir to validate path.  If
+;   ValidateCurrentDirectory - Get current CDS.  Splice it.	Call FatReadCDS to check
+;   media.  If media has been changed, do ChangeDirectory to validate path.  If
 ;   invalid, reset original CDS to root.
 ;
 ;   Inputs:	ThisCDS points to CDS of interest
@@ -997,8 +985,8 @@ Break	<ValidateCDS - given a CDS, validate the media and the current directory>
 ;		Carry set if error (currently user FAILed to I 24)
 ;   Registers modified: all
 
-Procedure   ValidateCDS,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+Procedure   ValidateCurrentDirectory,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 Public DIR2001S,DIR2001E
 DIR2001S:
 	LocalVar    Temp,WORD
@@ -1009,7 +997,7 @@ DIR2001E:
 	LDS	SI,ThisCDS
 	MOV	SaveCDSL,SI
 	MOV	SaveCDSH,DS
-	EnterCrit   critDisk
+	CallResident ECritDisk
 	TEST	[SI].curdir_flags,curdir_isnet	; Clears carry
 	JZ	DoSplice
 	JMP	FatFail
@@ -1017,16 +1005,16 @@ DoSplice:
 	XOR	DL,DL
 	XCHG	DL,NoSetDir
 	Context ES
-	Invoke	FStrcpy
+	CallResident FStrcpy
 	MOV	SI,Temp
 	Context DS
-	Invoke	Splice
+	invoke SplicePath
 	ASSUME	DS:NOTHING
 	Context DS			;   FatReadCDS (ThisCDS);
 	MOV	NoSetDir,DL
 	LES	DI,ThisCDS
 	SaveReg <BP>
-	Invoke	FatRead_CDS
+	Invoke	ReadDirectoryFAT
 	RestoreReg  <BP>
 	JC	FatFail
 	LDS	SI,ThisCDS		;   if (ThisCDS->ID == -1) {
@@ -1039,11 +1027,11 @@ DoSplice:
 	JNZ	DoChdir
 	MOV	DI,Temp
 	MOV	wfp_Start,DI		;	wfp_start = d;
-	Invoke	FStrCpy 		;	strcpy (d, ThisCDS->Text);
+	CallResident FStrcpy 		;	strcpy (d, ThisCDS->Text);
 DoChdir:
 	Context DS
 	SaveReg <<WORD PTR SAttrib>,BP> ;	c = DOSChDir ();
-	Invoke	DOS_ChDir
+	Invoke	ChangeDirectory
 	RestoreReg  <BP,BX,wfp_start>	;	wfp_Start = t;
 	MOV	SAttrib,BL
 	LDS	SI,SaveCDS
@@ -1067,16 +1055,16 @@ RestoreCDS:
 	MOV	WORD PTR ThisCDS+2,ES
 	CLC
 FatFail:
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 	LES	DI,SaveCDS
 	Leave
 	return
-EndProc ValidateCDS
+EndProc ValidateCurrentDirectory
 
-Break	<CheckThisDevice - Check for being a device>
+Break	<CheckPathDevice - Check for being a device>
 
 ;
-;   CheckThisDevice - Examine the area at DS:SI to see if there is a valid
+;   CheckPathDevice - Examine the area at DS:SI to see if there is a valid
 ;   device specified.  We will return carry if there is a device present.  The
 ;   forms of devices we will recognize are:
 ;
@@ -1095,8 +1083,8 @@ Break	<CheckThisDevice - Check for being a device>
 ;   Registers Modified: all except ES:DI, DS
 
 if FALSE
-Procedure   CheckThisDevice,NEAR
-	DOSAssume CS,<ES>,"CheckThisDevice"
+Procedure   CheckPathDevice,NEAR
+	DOSAssume SS,<ES>,"CheckPathDevice"
 	ASSUME	DS:NOTHING
 	SaveReg <DI,SI>
 ;
@@ -1108,7 +1096,7 @@ PathSkip:
 	OR	AL,AL
 	JZ	FoundEnd
  IF  DBCS			;AN000;
-	invoke	Testkanj	;AN000;; 2/13/KK
+	invoke IsLeadByte	;AN000;; 2/13/KK
 	jz	Notkanje	;AN000;; 2/13/KK
 	lodsb			;AN000;; 2/13/KK
 	or	al,al		;AN000;; Skip second byte 2/13/KK  removed
@@ -1120,7 +1108,7 @@ NotKanje:			;AN000;
 IF Kanji
  kanji load of next char too
 ENDIF
-	invoke	PathChrCmp		; is it a path char?
+	invoke ComparePathSeparator		; is it a path char?
 	JNZ	PathSkip
 	MOV	DI,SI
 	JMP	PathSkip
@@ -1130,12 +1118,12 @@ FoundEnd:
 ; Parse the name
 ;
 	SaveReg <DS,SI> 		; preserve the source pointer
-	invoke	NameTrans		; advance DS:SI
+	invoke TranslateFcbName		; advance DS:SI
 	CMP	BYTE PTR [SI],0 	; parse entire string?
-	STC				; simulate a Carry return from DevName
+	STC				; simulate a Carry return from FindDeviceName
 	JNZ	SkipSearch		; no parse.  simulate a file return.
 	Context DS
-	Invoke	DevName
+	Invoke	FindDeviceName
 	ASSUME	DS:NOTHING
 SkipSearch:
 	RestoreReg  <SI,DS>
@@ -1152,8 +1140,8 @@ CheckDone:
 	CMC				; invert carry.  Carry => device
 	return
 else
-Procedure   CheckThisDevice,NEAR
-	DOSAssume CS,<ES>,"CheckThisDevice"
+Procedure   CheckPathDevice,NEAR
+	DOSAssume SS,<ES>,"CheckPathDevice"
 	ASSUME	DS:NOTHING
 	SaveReg <DI,SI>
 	MOV	DI,SI
@@ -1161,7 +1149,7 @@ Procedure   CheckThisDevice,NEAR
 ; Check for presence of \dev\ (Dam multiplan!)
 ;
 	MOV	AL,[SI]
-	Invoke	PathChrCmp		; is it a path char?
+	invoke ComparePathSeparator		; is it a path char?
 	JNZ	ParseDev		; no, go attempt to parse device
 	INC	SI			; simulate LODSB
 ;
@@ -1176,20 +1164,20 @@ Procedure   CheckThisDevice,NEAR
 	CMP	AL,"v"                  ; Not "v", assume not device
 	JNZ	NotDevice
 	LODSB
-	invoke	PathChrCmp		; do we have the last path separator?
+	invoke ComparePathSeparator		; do we have the last path separator?
 	JNZ	NotDevice		; no. go for it.
 ;
 ; DS:SI now points to a potential drive.  Preserve them as NameTrans advances
-; SI and DevName may destroy DS.
+; SI and FindDeviceName may destroy DS.
 ;
 ParseDev:
 	SaveReg <DS,SI> 		; preserve the source pointer
-	invoke	NameTrans		; advance DS:SI
+	invoke TranslateFcbName		; advance DS:SI
 	CMP	BYTE PTR [SI],0 	; parse entire string?
-	STC				; simulate a Carry return from DevName
+	STC				; simulate a Carry return from FindDeviceName
 	JNZ	SkipSearch		; no parse.  simulate a file return.
 	Context DS
-	Invoke	DevName
+	Invoke	FindDeviceName
 	ASSUME	DS:NOTHING
 SkipSearch:
 	RestoreReg  <SI,DS>
@@ -1211,7 +1199,7 @@ NotDevice:
 	JMP	CheckReturn
 endif
 
-EndProc CheckThisDevice
+EndProc CheckPathDevice
 
 BREAK <LookupPath - call fastopen to get dir entry info>
 
@@ -1245,7 +1233,7 @@ FASTINST:
 	MOV	AL,FONC_look_up 		    ; al = 1
 	PUSH	DS
 	POP	ES
-	CALL	DWORD PTR [BX.FASTOPEN_NAME_CACHING] ;call fastopen
+        CallResident PathLookup
 	JC	NOTFOUND			    ; fastopen not in memory
 
 	LEA	BX,[SI-2]
@@ -1259,7 +1247,7 @@ FASTINST:
 	MOV	CH,Sattrib			    ;AN000;FO.; attrib=sattrib
 	MOV	Attrib,CH			    ;AN000;FO.;
 	MOV	CH,ES:[DI.dir_attr]		    ;AN000;FO.;
-	invoke	Matchattributes 		    ;AN000;FO.;
+	invoke	MatchDirectoryAttributes 		    ;AN000;FO.;
 ;;;	MOV	Attrib,CL			    ;AN001;FO.; retore attrib
 	POP	CX				    ;AN000;FO.;
 	JNZ	NOLOOKUP			    ;AN000;FO.; not matched
@@ -1330,7 +1318,7 @@ INSERT_DIR_INFO:			      ; save registers
 ASSUME DS:NOTHING
 	MOV    SI,OFFSET DOSGROUP:FastOpen_Ext_Info
 	MOV    AX,WORD PTR [DI.buf_sector]  ; get directory sector
-	MOV    WORD PTR CS:[SI.FEI_dirsec],AX ;AN000; >32mb save dir sector
+	MOV    WORD PTR SS:[SI.FEI_dirsec],AX ;AN000; >32mb save dir sector
 	MOV    AX,WORD PTR [DI.buf_sector+2]  ;AN000; >32mb
 	context DS
 	MOV    WORD PTR [SI.FEI_dirsec+2],AX  ;AN000;>32mb save high dir sector
@@ -1363,7 +1351,7 @@ ASSUME DS:NOTHING
 
 	MOV    AL,FONC_insert		; call fastopen insert operation
 	MOV    SI,OFFSET DOSGROUP:FastOpenTable
-	CALL   DWORD PTR ES:[SI.FASTOPEN_NAME_CACHING]
+        CallResident PathInsert
 
 	CLC
 SKIP_INSERT:
@@ -1380,6 +1368,17 @@ GET_NEXT_ELEMENT:
 	POPF
 	RET
 EndProc InsertPath
-
-CODE	ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC Dir2Entries
+Dir2Entries LABEL WORD
+        DW OFFSET DOSGROUP:StartSrch_VECTOR, OFFSET DOSGROUP:StartDirectorySearch
+        DW OFFSET DOSGROUP:MatchAttributes_VECTOR, OFFSET DOSGROUP:MatchDirectoryAttributes
+        DW OFFSET DOSGROUP:GetPath_VECTOR, OFFSET DOSGROUP:ResolvePath
+        DW OFFSET DOSGROUP:GetPathNoSet_VECTOR, OFFSET DOSGROUP:ResolvePathWithFlags
+        DW OFFSET DOSGROUP:DevName_VECTOR, OFFSET DOSGROUP:FindDeviceName
+        DW OFFSET DOSGROUP:ValidateCDS_VECTOR, OFFSET DOSGROUP:ValidateCurrentDirectory
+        DW OFFSET DOSGROUP:CheckThisDevice_VECTOR, OFFSET DOSGROUP:CheckPathDevice
+        DW 0
+DOSEND ENDS
     END

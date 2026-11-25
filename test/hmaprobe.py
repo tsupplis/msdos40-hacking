@@ -17,9 +17,11 @@ def install_probe(root, folder, image):
     dos = map_symbols(root / "kernel/dos/msdos.map")
     bios = map_symbols(root / "kernel/bios/msbio.map")
     (folder / "hma.inc").write_text(
+        f"DeviceName EQU {dos['NAME1']}\nDeviceAttr EQU {dos['ATTRIB']}\n"
+        f"DevicePtr EQU {dos['DEVPT']}\nNullHeader EQU {dos['NULDEV']}\n"
         f"CurrentSFT EQU {dos['THISSFT']}\n"
         f"ShareTable EQU {dos['JShare']}\n"
-        f"OpenSlot EQU {dos['DISPATCH'] + 30}\nEntryIP EQU {dos['FCB_ENTRY']}\n"
+        f"CallbackSeg EQU {dos['DosCallbackPtr'] + 2}\n"
         f"GateSeg EQU {dos['FCB_GATE'] + 2}\nBodyOff EQU {bios['GateBody'] - bios['GateStart']}\n"
     )
     install_asm_probe(root, folder, image, "hmaio")

@@ -124,7 +124,7 @@ NULLDIR:
         MOV     DX,[DIRSTART]
         OR      DX,DX
         JNZ     ADDINGDIR
-        CallResident SETDIRSRCH
+        invoke SetDirectorySearch
         retc
         MOV     [LASTENT],-1
         JMP     SHORT GOTDIRREC
@@ -300,7 +300,7 @@ Break   <MAKENODE -- CREATE A NEW NODE>
         PUSH    AX              ; Save AH value
         MOV     [NoSetDir],0
         MOV     [SATTRIB],AL
-        CallResident GetPathNoSet
+        invoke ResolvePathWithFlags
         MOV     DL,CL           ; Save CL info
         MOV     CX,AX           ; Device ID to CH
         POP     AX              ; Get back AH
@@ -355,7 +355,7 @@ make_exists:
         MOV     CH,ES:[BX+dir_attr] ; Get file attributes
         TEST    CH,attr_read_only
         JNZ     make_err_ret_5P ; Cannot create on read only files
-        CallResident MatchAttributes
+        invoke MatchDirectoryAttributes
         POP     CX              ; Devid back in CH
         JNZ     make_err_ret_5  ; Attributes not ok
         XOR     AL,AL           ; AL = 0, Disk Node
@@ -508,7 +508,7 @@ ASSUME  ES:NOTHING
         retnz                   ; User FAILed, node might exist
         CALL    BuildDirectory        ; Try to build dir
         retc                    ; Failed
-        CallResident GETENT          ; Point at that free entry
+        invoke ReadDirectoryPosition          ; Point at that free entry
         retc                    ; Failed
         JMP     SHORT FREESPOT
 

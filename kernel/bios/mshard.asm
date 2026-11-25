@@ -122,7 +122,7 @@ PUBLIC	IBM_DISK_IO
 ;
 ;	WARNING: Uses OLD13 vector for non-read calls.
 ;		Does direct calls to the AT ROM.
-;		Does segment arithmatic.
+;		Does segment arithmetic.
 ;
 ;	EFFECTS: Performs DISK I/O operation.
 ;

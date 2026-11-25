@@ -79,7 +79,7 @@ NORMFCB4:
 	SaveReg <[SI]>			; Save original drive byte for later
 	Context ES			; get es to address DOSGroup
 	MOV	DI,OFFSET DOSGroup:OpenBuf  ; appropriate buffer
-	CallResident TransFCB		; convert the FCB, set SATTRIB EXTFCB
+	invoke TranslateFcbPath		; convert the FCB, set SATTRIB EXTFCB
 	JNC	SearchIt		; no error, go and look
 	RestoreReg <BX> 		; Clean stack
 ;
@@ -234,7 +234,7 @@ ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	MOV	SI,DX			; get name in appropriate place
 	MOV	[SATTRIB],CL		; Search attribute to correct loc
 	MOV	DI,OFFSET DOSGroup:OpenBuf  ; appropriate buffer
-	CallResident TransPathSet		; convert the path
+	invoke TranslatePathSet		; convert the path
 	JNC	Find_it 		; no error, go and look
 FindError:
 	MOV AL,error_path_not_found

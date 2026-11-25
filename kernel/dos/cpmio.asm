@@ -239,7 +239,7 @@ ASSUME	DS:NOTHING,ES:NOTHING
 STRING_OUT1:
 	LODSB
  IF  DBCS				;AN000;
-	CallResident TESTKANJ		;AN000; 	      2/11/KK		 ;AN000;
+	invoke IsLeadByte		;AN000; 	      2/11/KK		 ;AN000;
 	jz	SBCS00			;AN000; 	      2/11/KK		 ;AN000;
 	invoke	OutputChar			;AN000; 	      2/11/KK		 ;AN000;
 	LODSB				;AN000; 	      2/11/KK		 ;AN000;

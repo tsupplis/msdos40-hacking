@@ -22,8 +22,9 @@ CheckLayout:
         MOV     AX,3521h
         INT     21h
         MOV     AL,'n'
-        CMP     WORD PTR ES:[OpenSlot],EntryIP
-        JNE     Placed
+        MOV     BX,ES
+        CMP     ES:[CallbackSeg],BX
+        JE      Placed
         MOV     ES,ES:[GateSeg]
         MOV     AL,'h'
         CMP     WORD PTR ES:[BodyOff],0FFFFh
@@ -398,6 +399,14 @@ CallbackA20 DB  0
 
 ; These INT 2Fh interfaces also run on an application's stack.
 CheckMultiplex:
+        CALL    CheckDeviceName
+        MOV     AX,'q'                  ; INT 2Fh uppercase on the caller's stack
+        PUSH    AX
+        MOV     AX,1213h
+        INT     2Fh
+        POP     BX
+        CMP     AL,'Q'
+        Check   JE
         ; INT 2Fh/1205h takes the character in the stacked AX. Keep the
         ; application stack and capture its output through the redirected handle.
         PUSH    DS
@@ -446,6 +455,66 @@ CheckMultiplex:
         Check   JNC
         CMP     BYTE PTR MockBuffer+4,0FFh
         Check   JE
+        RET
+ ; INT 2Fh/1223h receives DOSGROUP in DS and ES on the application's stack.
+CheckDeviceName:
+        PUSH    DS
+        PUSH    ES
+        MOV     AX,1203h
+        PUSH    AX
+        INT     2Fh
+        POP     AX
+        PUSH    DS
+        POP     ES
+        PUSH    WORD PTR ES:[DevicePtr]
+        PUSH    WORD PTR ES:[DevicePtr+2]
+        PUSH    WORD PTR ES:[DeviceAttr]
+        XOR     SI,SI
+SaveDeviceName:
+        PUSH    WORD PTR ES:[DeviceName+SI]
+        MOV     WORD PTR ES:[DeviceName+SI],2020h
+        ADD     SI,2
+        CMP     SI,8
+        JB      SaveDeviceName
+        MOV     WORD PTR ES:[DeviceName],554Eh  ; NUL, blank padded
+        MOV     BYTE PTR ES:[DeviceName+2],'L'
+        MOV     BYTE PTR ES:[DeviceAttr],0
+        MOV     AX,1223h
+        PUSH    AX
+        INT     2Fh
+        POP     AX
+        MOV     CX,1
+        JC      RestoreDeviceName
+        MOV     AX,ES
+        MOV     DX,DS
+        CMP     AX,DX
+        JNE     RestoreDeviceName
+        CMP     AX,ES:[DevicePtr+2]
+        JNE     RestoreDeviceName
+        CMP     WORD PTR ES:[DevicePtr],NullHeader
+        JNE     RestoreDeviceName
+        MOV     BYTE PTR ES:[DeviceAttr],8      ; volume labels exclude devices
+        MOV     AX,1223h
+        PUSH    AX
+        INT     2Fh
+        POP     AX
+        JNC     RestoreDeviceName
+        MOV     DX,DS
+        MOV     AX,ES
+        MOV     CX,DX
+        SUB     CX,AX
+RestoreDeviceName:
+        SUB     SI,2
+        POP     WORD PTR ES:[DeviceName+SI]
+        OR      SI,SI
+        JNZ     RestoreDeviceName
+        POP     WORD PTR ES:[DeviceAttr]
+        POP     WORD PTR ES:[DevicePtr+2]
+        POP     WORD PTR ES:[DevicePtr]
+        POP     ES
+        POP     DS
+        OR      CX,CX
+        Check   JZ
         RET
  ; Supply a synthetic remote SFT and intercept only the redirector close.
  ; Restore the DOS pointer before calling DOS to remove the test hook.

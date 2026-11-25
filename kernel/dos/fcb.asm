@@ -52,29 +52,38 @@ include doscntry.inc			;AN000; 	2/12/KK
 
 	EXTRN	FCB_SELECTED:NEAR
 
-	PUBLIC	MAKEFCB_VECTOR
-MAKEFCB_VECTOR DW OFFSET DOSGROUP:MakeFcbFar
-	procedure MakeFcb,NEAR
-	JMP	WORD PTR CS:[MAKEFCB_VECTOR]
-MakeFcbFar:
-	PUSH	AX
-	MOV	AH,47
-	JMP	FCB_SELECTED
-EndProc MakeFcb
+        DosCodeEntry MakeFcb,47
+        DosCodeEntry NameTrans,48
+        DosCodeEntry GetLet,172
+        DosCodeEntry UpperFileEntry,173
+        DosCodeEntry UpperTableEntry,174
+        DosCodeEntry PathChrCmp,175
+ IF DBCS
+        DosCodeEntry TestKanj,176
+ ENDIF
+ ; Table pointers are DOSGROUP offsets. INT 2Fh/1213h retains the caller's SS.
+        procedure GetLet2,NEAR
+        PUSH    DS
+        PUSH    CS
+        POP     DS
+        CALL    UpperFileEntry
+        POP     DS
+        RET
+EndProc GetLet2
 
-	PUBLIC	NAMETRANS_VECTOR
-NAMETRANS_VECTOR DW OFFSET DOSGROUP:NameTransFar
-	procedure NameTrans,NEAR
-	JMP	WORD PTR CS:[NAMETRANS_VECTOR]
-NameTransFar:
-	PUSH	AX
-	MOV	AH,48
-	JMP	FCB_SELECTED
-EndProc NameTrans
-CODE	ENDS
+        procedure GetLet3,NEAR
+        PUSH    DS
+        PUSH    CS
+        POP     DS
+        CALL    UpperTableEntry
+        POP     DS
+        RET
+EndProc GetLet3
+CODE ENDS
 
-LAST	SEGMENT PARA PUBLIC 'LAST'
-	procedure   HMA_MAKEFCB,NEAR
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP,DS:NOTHING,ES:NOTHING
+	procedure   ParseFcb,NEAR
 ScanSeparator	=   1
 DRVBIT	EQU	2
 NAMBIT	EQU	4
@@ -115,10 +124,10 @@ FILLB2:
 SKPSPC:
 	CALL	SCANB		; Always kill preceding blanks and tabs
 NOSCAN:
-	CALL	GETLET
+	CALL	ReadFileChar
 	JBE	NODRV		; Quit if termination character
  IF  DBCS			;AN000;
-	CALL	TESTKANJ	;AN000;; 2/18/KK
+	CALL	IsLeadByte	;AN000;; 2/18/KK
 	JNE	NODRV		;AN000;; 2/18/KK
  ENDIF				;AN000;
 	CMP	BYTE PTR[SI],":"        ; Check for potential drive specifier
@@ -128,7 +137,7 @@ NOSCAN:
 	JBE	BADDRV		; Drive letter out of range
 
 	PUSH	AX
-	Invoke	GetVisDrv
+	CallResident GetVisDrv
 	POP	AX
 	JNC	HavDrv
 	CMP	[DrvErr],error_not_DOS_disk  ; if not FAt drive 		;AN000;
@@ -144,11 +153,8 @@ NODRV:
 	INC	DI		; Skip drive byte
 
 	JMP	NORMSCAN
-EndProc HMA_MAKEFCB
-LAST	ENDS
+EndProc ParseFcb
 
-; Keep the scan loop with GETLET so each character is handled in DOSGROUP.
-CODE	SEGMENT BYTE PUBLIC 'CODE'
 	procedure NORMSCAN,NEAR
 
 	MOV	CX,8
@@ -175,7 +181,7 @@ NONAM:
 	return
 
 GETWORD:
-	CALL	GETLET
+	CALL	ReadFileChar
 	JBE	NONAM		; Exit if invalid character
 	DEC	SI
 ;
@@ -183,7 +189,7 @@ GETWORD:
 ; If the name we are scanning is longer than CX, we keep on reading!
 ;
 MUSTGETWORD:
-	CALL	GETLET
+	CALL	ReadFileChar
 ;
 ; If spaceFlag is set then we allow spaces in a pathname
 ;
@@ -205,7 +211,7 @@ NOSTAR:
 	STOSB
 
  IF   DBCS							  ;AN000;
-	CALL	TESTKANJ					  ;AN000;
+	CALL	IsLeadByte					  ;AN000;
 	JZ	NOTDUAL3					  ;AN000;
 	JCXZ	BNDERR		; Attempt to straddle boundry	  ;AN000;
 	MOVSB			; Transfer second byte		  ;AN000;
@@ -247,7 +253,7 @@ SCANB:
  IF  DBCS			;AN000; 						;AN000;
 	CMP	AL,81H		;AN000;; 1ST BYTE OF DBCS BLANK 2/18/KK 		;AN000;
 	JNE	SCANB_EXIT	;AN000;; 2/18/KK  3/31/KK revoved			;AN000;
-	CALL	TESTKANJ	;AN000;; 2/23/KK  3/31/KK revoved			;AN000;
+	CALL	IsLeadByte	;AN000;; 2/23/KK  3/31/KK revoved			;AN000;
 	JE	SCANB_EXIT	;AN000;; 2/18/KK  3/31/KK revoved			;AN000;
 	CMP	BYTE PTR [SI],40H;AN000;H ; 2ND BYTE OF DBCS BLANK 2/18/KK 3/31/KK revove;AN000;
 	JNE	SCANB_EXIT	;AN000;; 2/18/KK  3/31/KK revoved			;AN000;
@@ -258,9 +264,6 @@ SCANB:
 	DEC	SI
 	return
 EndProc NORMSCAN
-CODE	ENDS
-
-LAST	SEGMENT PARA PUBLIC 'LAST'
 
 ;
 ; NameTrans is used by FindPath to scan off an element of a path.  We must
@@ -271,7 +274,7 @@ LAST	SEGMENT PARA PUBLIC 'LAST'
 ;		ES = DOSGroup
 ;		DS:SI advanced after name
 ;   Registers modified: DI,AX,DX,CX
-procedure   HMA_NAMETRANS,near
+procedure   TranslateFcbName,near
 	ASSUME	DS:NOTHING,ES:NOTHING
 	MOV	BYTE PTR [SpaceFlag],1
 	context ES
@@ -289,7 +292,7 @@ procedure   HMA_NAMETRANS,near
 	CALL	NORMSCAN
 IF DBCS 			;AN000;;KK.
 	MOV	AL,[NAME1]	;AN000;;KK. check 1st char
-	invoke	testkanj	;AN000;;KK. dbcs ?
+	invoke	IsLeadByte	;AN000;;KK. dbcs ?
 	JZ	notdbcs 	;AN000;;KK. no
 	return			;AN000;;KK. yes
 notdbcs:			;AN000;
@@ -301,12 +304,9 @@ TranslateDeleted:
 	MOV	[NAME1],5	; Magic name translation
 	return
 
-EndProc HMA_NAMETRANS
-LAST	ENDS
+EndProc TranslateFcbName
 
-CODE	SEGMENT BYTE PUBLIC 'CODE'
-
-Break	<GETLET, DELIM -- CHECK CHARACTERS AND CONVERT>
+Break	<ReadFileChar, DELIM -- CHECK CHARACTERS AND CONVERT>
 
 If TableLook
 ChType	Macro	ch,bits
@@ -375,9 +375,15 @@ ENDIF
 ; ZF set if a delimiter, CY set if a control character (other than TAB).
 ;
 ; DOS 3.3 modification for file char upper case.    F.C. 5/29/86
-	procedure   GetLet,NEAR
+	procedure   ReadFileChar,NEAR
 	LODSB
-  entry GetLet2 			    ;AN000;; called by uCase
+        PUSH    DS
+        PUSH    SS
+        POP     DS
+        CALL    UpperFileChar
+        POP     DS
+        RET
+  entry UpperFileChar 			    ;AN000;; called by uCase
 	PUSH	BX
 	MOV	BX,OFFSET DOSGROUP:FILE_UCASE_TAB+2
   getget:
@@ -391,18 +397,18 @@ CHK1:
 	JB	GOTIT		; DOS 3.3
 	SUB	AL,80H		;translate to upper case with this index
 ;
-	XLAT	BYTE PTR CS:[BX]
+	XLAT	BYTE PTR DS:[BX]
 If TableLook
 GOTIT:
 	PUSH	AX
 	MOV	BX,OFFSET DOSGROUP:CharType
-	XLAT	BYTE PTR CS:[BX]
+	XLAT	BYTE PTR DS:[BX]
 
 	TEST	AL,fChk
 	POP	AX
 	POP	BX
 	RET
-  entry GetLet3 			     ;AN000; called by uCase
+  entry UpperTableChar 			     ;AN000; called by uCase
 	PUSH	BX			     ;AN000;
 	JMP	getget			     ;AN000;
 
@@ -413,7 +419,7 @@ GOTIT:
 	retz
 	CMP	AL,'"'
 	retz
-	CALL	PATHCHRCMP
+	CALL	ComparePathSeparator
 	retz
 	CMP	AL,"["
 	retz
@@ -427,7 +433,7 @@ IF TableLook
 	PUSH	AX
 	PUSH	BX
 	MOV	BX,OFFSET DOSGroup:CharType
-	XLAT	BYTE PTR CS:[BX]
+	XLAT	BYTE PTR SS:[BX]
 	TEST	AL,fDelim
 	POP	BX
 	POP	AX
@@ -457,7 +463,7 @@ IF  TableLook
 	PUSH	AX
 	PUSH	BX
 	MOV	BX,OFFSET DOSGroup:CharType
-	XLAT	BYTE PTR CS:[BX]
+	XLAT	BYTE PTR SS:[BX]
 	TEST	AL,fSpChk
 	POP	BX
 	POP	AX
@@ -469,9 +475,9 @@ ELSE
 	CMP	AL," "
 	return
 ENDIF
-EndProc GetLet
+EndProc ReadFileChar
 
-Procedure   PATHCHRCMP,NEAR
+Procedure   ComparePathSeparator,NEAR
 	CMP	AL,'/'
 	JBE	PathRet
 	CMP	AL,'\'
@@ -482,7 +488,7 @@ GotFor:
 PathRet:
 	JZ	GotFor
 	return
-EndProc PathChrCMP
+EndProc ComparePathSeparator
 
 
  IF  DBCS
@@ -495,7 +501,7 @@ EndProc PathChrCMP
 ;
 ;  Register:  All registers are unchanged except FL
 ;
-procedure   TESTKANJ,NEAR							;AN000;
+procedure   IsLeadByte,NEAR							;AN000;
 	call	Chk_DBCS							;AN000;
 	jc	TK_DBCS 							;AN000;
 	cmp	AL,AL		; set ZF					;AN000;
@@ -506,7 +512,7 @@ TK_DBCS:
 	INC	AX		;Reset ZF					;AN000;
 	POP	AX								;AN000;
 	return									;AN000;
-EndProc TESTKANJ								;AN000;
+EndProc IsLeadByte								;AN000;
 ;
 Chk_DBCS	PROC								;AN000;
 	PUSH	DS								;AN000;
@@ -537,6 +543,20 @@ DBCS_EXIT:
 	RET									;AN000;
 Chk_DBCS	ENDP								;AN000;
  ENDIF										;AN000;
-CODE	ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC FcbEntriesTable
+FcbEntriesTable LABEL WORD
+        DW OFFSET DOSGROUP:MakeFcb_VECTOR, OFFSET DOSGROUP:ParseFcb
+        DW OFFSET DOSGROUP:NameTrans_VECTOR, OFFSET DOSGROUP:TranslateFcbName
+        DW OFFSET DOSGROUP:GetLet_VECTOR, OFFSET DOSGROUP:ReadFileChar
+        DW OFFSET DOSGROUP:UpperFileEntry_VECTOR, OFFSET DOSGROUP:UpperFileChar
+        DW OFFSET DOSGROUP:UpperTableEntry_VECTOR, OFFSET DOSGROUP:UpperTableChar
+        DW OFFSET DOSGROUP:PathChrCmp_VECTOR, OFFSET DOSGROUP:ComparePathSeparator
+ IF DBCS
+        DW OFFSET DOSGROUP:TestKanj_VECTOR, OFFSET DOSGROUP:IsLeadByte
+ ENDIF
+        DW 0
+DOSEND ENDS
     END
 										;AN000;

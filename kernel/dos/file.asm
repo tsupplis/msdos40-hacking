@@ -174,7 +174,7 @@ SaveJFN:
 	MOV	SI,DX			; get name in appropriate place
 	MOV	DI,OFFSET DOSGroup:OpenBuf  ; appropriate buffer
 	SaveReg <CX>			; save routine to call
-	CallResident TransPath		; convert the path
+	invoke TranslatePath		; convert the path
 	RestoreReg  <BX>		; restore routine to call
 	LDS	SI,ThisSFT
 	ASSUME	DS:NOTHING
@@ -330,7 +330,7 @@ BREAK <FileAttributes - change file attributes>
 	MOV	DI,OFFSET DOSGroup:OpenBuf  ; appropriate buffer
 	SaveReg <AX,CX> 		; save function and attributes
 	MOV	SI,DX			; get things in appropriate places
-	CallResident TransPathSet		; get correct path
+	invoke TranslatePathSet		; get correct path
 	RestoreReg  <CX,AX>		; and get function and attrs back
 	JC	ChModErr		; errors get mapped to path not found
 	Context DS			; set up for later possible calls
@@ -380,7 +380,7 @@ BREAK <UnlinkFile - delete a file entry>
 	SaveReg <CX>			; Save possible CX input parm
 	MOV	SI,DX			; Point at input string
 	MOV	DI,OFFSET DOSGroup:OpenBuf  ; temp spot for path
-	CallResident TransPathSet		; go get normalized path
+	invoke TranslatePathSet		; go get normalized path
 	RestoreReg <CX>
 	JC	ChModErr		; badly formed path
 	CMP	cMeta,-1		; meta chars?
@@ -425,7 +425,7 @@ BREAK <RenameFile - move directory entries around>
 	MOV	WORD PTR [NO_FILTER_DPATH],SI	;AN000;;IFS. save them for IFS
 	MOV	WORD PTR [NO_FILTER_DPATH+2],DS ;AN000;;IFS.
 
-	CallResident TransPathSet		; munge the paths
+	invoke TranslatePathSet		; munge the paths
 	PUSH	WFP_Start		; get pointer
 	POP	Ren_WFP 		; stash it
 	RestoreReg <SI,DS,CX>		; get back source and possible CX arg
@@ -434,7 +434,7 @@ epjc2:	JC	ChModErr		; get old error
 	JNZ	NotFound
 	SaveReg <CX>			; Save possible CX arg
 	MOV	DI,OFFSET DOSGroup:OpenBuf  ; appropriate buffer
-	CallResident TransPathSet		; wham
+	invoke TranslatePathSet		; wham
 	RestoreReg <CX>
 	JC	EPJC2
 	Context DS
@@ -583,7 +583,7 @@ Kloop:					;AN000;; 2/13/KK
 	INC	DI			;AN000;; 2/13/KK
 	OR	AL,AL			;AN000;; 2/13/KK
 	JZ	GOTEND			;AN000;; 2/13/KK
-	CallResident testkanj		;AN000;; 2/13/KK
+	invoke IsLeadByte		;AN000;; 2/13/KK
 	jz	Kloop			;AN000;; 2/13/KK
 	inc	di			;AN000;; Skip over second kanji byte 2/13/KK
 	CMP	BYTE PTR ES:[DI],0	;AN000;; 2/13/KK
@@ -601,7 +601,7 @@ okok:					;AN000;
  ENDIF					;AN000;
 	DEC	DI			; point back to the null
 	MOV	AL,ES:[DI-1]		; Get char before the NUL
-	CallResident PathChrCmp		; Is it a path separator?
+	invoke ComparePathSeparator		; Is it a path separator?
 	JZ	SETENDPTR		; Yes
 STOREPTH:
 	MOV	AL,'\'

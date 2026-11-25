@@ -59,29 +59,16 @@ asmvar	Kanji
 
 ; Resident near callers use the native address or the selected far gateway.
         EXTRN FCB_SELECTED:NEAR
-WalkerEntry MACRO routine,selector
-        LOCAL farEntry
-        PUBLIC routine,routine&_VECTOR
-routine&_VECTOR DW OFFSET DOSGROUP:farEntry
-routine LABEL NEAR
-        JMP WORD PTR CS:[routine&_VECTOR]
-farEntry:
-        PUSH AX
-        MOV AH,selector
-        JMP FCB_SELECTED
-        ENDM
-        WalkerEntry FindEntry,50
-        WalkerEntry Srch,51
-        WalkerEntry NextEnt,52
-        WalkerEntry MetaCompare,53
-        WalkerEntry GetEntry,54
-        WalkerEntry GetEnt,55
-        WalkerEntry SetDirSrch,56
-        WalkerEntry StartSrch,57
-        WalkerEntry MatchAttributes,58
+        DosCodeEntry FindEntry,50
+        DosCodeEntry Srch,51
+        DosCodeEntry NextEnt,52
+        DosCodeEntry MetaCompare,53
+        DosCodeEntry GetEntry,54
+        DosCodeEntry GetEnt,55
+        DosCodeEntry SetDirSrch,56
 CODE ENDS
-
-LAST SEGMENT PARA PUBLIC 'LAST'
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
 Break	<FINDENTRY -- LOOK FOR AN ENTRY>
 
 ; Inputs:
@@ -111,22 +98,22 @@ Break	<FINDENTRY -- LOOK FOR AN ENTRY>
 
 	procedure   SEARCH,near
 
-	entry	HMA_FindEntry
-	DOSAssume   CS,<DS>,"HMA_FindEntry"
+	entry	FindDirectoryEntry
+	DOSAssume SS,<DS>,"FindDirectoryEntry"
 	ASSUME	ES:NOTHING
 
-	invoke	HMA_STARTSRCH
+	invoke	StartDirectorySearch
 	MOV	AL,Attrib
 	AND	AL,NOT attr_ignore	; Ignore useless bits
 	CMP	AL,attr_volume_id	; Looking for vol ID only ?
 	JNZ	NOTVOLSRCH		; No
-	CALL	HMA_SETROOTSRCH		; Yes force search of root
+	CALL	SetRootSearch		; Yes force search of root
 NOTVOLSRCH:
-	CALL	HMA_GETENTRY
-	JNC	HMA_Srch
+	CALL	ReadDirectoryEntry
+	JNC	ScanDirectory
 	JMP	SETESRET
 
-	entry	HMA_Srch
+	entry	ScanDirectory
 
 	PUSH	DS
 	MOV	DS,WORD PTR [CURBUF+2]
@@ -153,23 +140,23 @@ CHKFNAM:
 	MOV	BYTE PTR [NAME1],05H
 NO_E5:
 ;;;;; 7/29/86
-	CALL	HMA_MetaCompare
+	CALL	CompareDirectoryName
 	JZ	FOUND
 	POP	DS
 
-	entry	HMA_NEXTENT
-	DOSAssume   CS,<DS>,"HMA_NextEnt"
+	entry	NextDirectoryMatch
+	DOSAssume SS,<DS>,"NextDirectoryMatch"
 
-	Assert	ISDPB,<<WORD PTR THISDPB+2>,<WORD PTR THISDPB>>,"HMA_NextEnt"
+	Assert	ISDPB,<<WORD PTR THISDPB+2>,<WORD PTR THISDPB>>,"NextDirectoryMatch"
 	LES	BP,[THISDPB]
 ASSUME	ES:NOTHING
 	CALL	NEXTENTRY
-	JNC	HMA_SRCH
+	JNC	ScanDirectory
 	JMP	SHORT SETESRET
 
 FREE:
 	POP	DS
-	DOSAssume   CS,<DS>,"DIR/Free"
+	DOSAssume SS,<DS>,"DIR/Free"
 	MOV	CX,[LASTENT]
 	CMP	CX,[ENTFREE]
 	JAE	TSTALL
@@ -177,7 +164,7 @@ FREE:
 TSTALL:
 	CMP	AH,BYTE PTR [DELALL]	; At end of directory?
 NextEntJ:
-	JZ	HMA_NEXTENT 		; No - continue search
+	JZ	NextDirectoryMatch 		; No - continue search
 	MOV	[ENTLAST],CX
 	STC
 	JMP	SHORT SETESRET
@@ -193,7 +180,7 @@ FOUND:
 ;
 	MOV	CH,[SI] 		; Attributes of file
 	POP	DS
-	DOSAssume   CS,<DS>,"DIR/found"
+	DOSAssume SS,<DS>,"DIR/found"
 	MOV	AH,Attrib		; Attributes of search
 	AND	AH,NOT attr_ignore
 	LEA	SI,[SI+Dir_First-Dir_Attr]  ; point to firclus field
@@ -206,7 +193,7 @@ FOUND:
 check_one_volume_id:
 	CMP	AH,attr_volume_id	; Looking only for Volume ID?
 	JZ	NEXTENTJ		; Yes, continue search
-	invoke	HMA_MatchAttributes
+	invoke	MatchDirectoryAttributes
 	JZ	RETFF
 	TEST	BYTE PTR [CREATING],-1	; Pass back mismatch if creating
 	JZ	NEXTENTJ		; Otherwise continue searching
@@ -230,7 +217,7 @@ EndProc Search
 ;	Zero if match else NZ
 ; Destroys CX,SI,DI all others preserved
 
-	procedure   HMA_MetaCompare,near
+	procedure   CompareDirectoryName,near
 ASSUME	DS:NOTHING,ES:NOTHING
 	MOV	CX,11
  IF  DBCS				;AN000;
@@ -248,7 +235,7 @@ cagain: 				;AN000;;KK.
 	CMP	CX,0			;AN000;;KK. end of compare ?
 	JLE	metaend2		;AN000;;KK. yes
 	MOV	AL,[SI] 		;AN000;;KK. is it a Kanji
-	invoke	testkanj		;AN000;;KK.
+	invoke IsLeadByte		;AN000;;KK.
 	JZ	notdb			;AN000;;KK. no
 	MOV	AX,'??'                 ;AN000;;KK.
 	CMP	ES:[DI],AX		;AN000;;KK. is es:di pointing to '??'
@@ -284,7 +271,7 @@ CHECK_META:
 MetaRet:
  ENDIF					;AN000;
 	return				; Zero set, Match
-EndProc HMA_MetaCompare
+EndProc CompareDirectoryName
 
 Break	<NEXTENTRY -- STEP THROUGH DIRECTORY>
 
@@ -295,7 +282,7 @@ Break	<NEXTENTRY -- STEP THROUGH DIRECTORY>
 ;	Carry set if no more.
 
 Procedure NextEntry
-	DOSAssume   CS,<DS>,"NextEntry"
+	DOSAssume SS,<DS>,"NextEntry"
 	ASSUME	ES:NOTHING
 
 	MOV	AX,[LASTENT]
@@ -314,7 +301,7 @@ Procedure NextEntry
 	JAE	NONE
 	CMP	BX,2
 	JB	NONE
-	JMP	HMA_GETENT
+	JMP	ReadDirectoryPosition
 
 NONE:
 	STC
@@ -338,7 +325,7 @@ ASSUME	DS:NOTHING
 	ADD	DX,1				;AN000; >32mb
 	ADC	[HIGH_SECTOR],0 		;AN000; >32mb
 	POP	DS
-	DOSAssume   CS,<DS>,"DIR/SameClus"
+	DOSAssume SS,<DS>,"DIR/SameClus"
 	invoke	FIRSTCLUSTER
 	XOR	BX,BX
 	JMP	SETENTRY
@@ -358,15 +345,15 @@ EndProc NextEntry
 ;	[NXTCLUSNUM],[SECCLUSPOS] set via DIRREAD
 ;	Carry set if error (currently user FAILed to I 24)
 
-Procedure HMA_GETENTRY,NEAR
-	DOSAssume   CS,<DS>,"HMA_GetEntry"
+Procedure ReadDirectoryEntry,NEAR
+	DOSAssume SS,<DS>,"ReadDirectoryEntry"
 	ASSUME	ES:NOTHING
 
 	MOV	AX,[LASTENT]
 
-	entry	HMA_GETENT
+	entry	ReadDirectoryPosition
 
-	Assert	ISDPB,<ES,BP>,"HMA_GetEntry/HMA_GetEnt"
+	Assert	ISDPB,<ES,BP>,"ReadDirectoryEntry/ReadDirectoryPosition"
 	MOV	[LASTENT],AX
 ;
 ; Convert the entry number in AX into a byte offset from the beginning of the
@@ -396,9 +383,9 @@ SETENTRY:
 	ADD	BX,DX
 	ADD	DX,ES:[BP.dpb_sector_size]  ; Always clears carry
 	return
-EndProc HMA_GetEntry
+EndProc ReadDirectoryEntry
 
-Break	<HMA_SETDIRSRCH HMA_SETROOTSRCH -- Set Search environments>
+Break	<SetDirectorySearch SetRootSearch -- Set Search environments>
 
 ; Inputs:
 ;	BX cluster number of start of directory
@@ -412,13 +399,13 @@ Break	<HMA_SETDIRSRCH HMA_SETROOTSRCH -- Set Search environments>
 ;	Carry set if error (currently user FAILed to I 24)
 ; destroys AX,DX,BX
 
-	procedure HMA_SETDIRSRCH
-	DOSAssume   CS,<DS>,"HMA_SetDirSrch"
+	procedure SetDirectorySearch
+	DOSAssume SS,<DS>,"SetDirectorySearch"
 	ASSUME	ES:NOTHING
 
-	Assert	ISDPB,<ES,BP>,"HMA_SetDirSrch"
+	Assert	ISDPB,<ES,BP>,"SetDirectorySearch"
 	OR	BX,BX
-	JZ	HMA_SETROOTSRCH
+	JZ	SetRootSearch
 	MOV	[DIRSTART],BX
 	MOV	AL,ES:[BP.dpb_cluster_mask]
 	INC	AL
@@ -449,8 +436,8 @@ UNP_OK:
 	CLC
 	return
 
-entry	HMA_SETROOTSRCH
-	DOSAssume   CS,<DS>,"HMA_SetRootSrch"
+entry	SetRootSearch
+	DOSAssume SS,<DS>,"SetRootSearch"
 	ASSUME	ES:NOTHING
 	XOR	AX,AX
 	MOV	[DIRSTART],AX
@@ -465,7 +452,18 @@ entry	HMA_SETROOTSRCH
 	MOV	WORD PTR [DIRSEC+2],0		      ;F.C. >32mb
 	CLC
 	return
-EndProc HMA_SETDIRSRCH
-
-LAST	ENDS
+EndProc SetDirectorySearch
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC DirEntries
+DirEntries LABEL WORD
+        DW OFFSET DOSGROUP:FindEntry_VECTOR, OFFSET DOSGROUP:FindDirectoryEntry
+        DW OFFSET DOSGROUP:Srch_VECTOR, OFFSET DOSGROUP:ScanDirectory
+        DW OFFSET DOSGROUP:NextEnt_VECTOR, OFFSET DOSGROUP:NextDirectoryMatch
+        DW OFFSET DOSGROUP:MetaCompare_VECTOR, OFFSET DOSGROUP:CompareDirectoryName
+        DW OFFSET DOSGROUP:GetEntry_VECTOR, OFFSET DOSGROUP:ReadDirectoryEntry
+        DW OFFSET DOSGROUP:GetEnt_VECTOR, OFFSET DOSGROUP:ReadDirectoryPosition
+        DW OFFSET DOSGROUP:SetDirSrch_VECTOR, OFFSET DOSGROUP:SetDirectorySearch
+        DW 0
+DOSEND ENDS
     END
