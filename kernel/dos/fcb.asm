@@ -5,7 +5,6 @@ NAME	FCB
 ; Low level routines for parsing names into FCBs and analyzing
 ;    filename characters
 ;
-;   MakeFcb
 ;   NameTrans
 ;   PATHCHRCMP
 ;   GetLet
@@ -52,7 +51,6 @@ include doscntry.inc			;AN000; 	2/12/KK
 
 	EXTRN	FCB_SELECTED:NEAR
 
-        DosCodeEntry MakeFcb,47
         DosCodeEntry NameTrans,48
         DosCodeEntry GetLet,172
         DosCodeEntry UpperFileEntry,173
@@ -547,7 +545,6 @@ DOSCODE ENDS
 DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
         PUBLIC FcbEntriesTable
 FcbEntriesTable LABEL WORD
-        DW OFFSET DOSGROUP:MakeFcb_VECTOR, OFFSET DOSGROUP:ParseFcb
         DW OFFSET DOSGROUP:NameTrans_VECTOR, OFFSET DOSGROUP:TranslateFcbName
         DW OFFSET DOSGROUP:GetLet_VECTOR, OFFSET DOSGROUP:ReadFileChar
         DW OFFSET DOSGROUP:UpperFileEntry_VECTOR, OFFSET DOSGROUP:UpperFileChar

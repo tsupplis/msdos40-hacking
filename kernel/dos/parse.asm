@@ -31,6 +31,13 @@ BOGUS =FALSE
 .lall
 	I_Need  chSwitch,BYTE
 
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry $PARSE_FILE_DESCRIPTOR,47
+CODE    ENDS
+
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+
 BREAK <$Parse_File_Descriptor -- Parse an arbitrary string into an FCB>
 
 ; Inputs:
@@ -50,18 +57,28 @@ BREAK <$Parse_File_Descriptor -- Parse an arbitrary string into an FCB>
 ;       AL = 1 if '*' or '?' in filename or extension, 0 otherwise
 ;       DS:SI points to first character after filename
 
-	procedure   $PARSE_FILE_DESCRIPTOR,NEAR
+	procedure   ParseFileDescriptor,NEAR
 ASSUME  DS:NOTHING,ES:NOTHING
 
-	invoke  MAKEFCB
+	invoke  ParseFcb
 	PUSH    SI
-	invoke  get_user_stack
+	CallResident get_user_stack
 	POP     [SI.user_SI]
 	return
-EndProc $PARSE_FILE_DESCRIPTOR
+EndProc ParseFileDescriptor
+DOSCODE ENDS
+
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC ParseEntries
+ParseEntries LABEL WORD
+        DW OFFSET DOSGROUP:$PARSE_FILE_DESCRIPTOR_VECTOR, OFFSET DOSGROUP:ParseFileDescriptor
+        DW 0
+DOSEND ENDS
 
 
 IF BOGUS
+CODE    SEGMENT BYTE PUBLIC 'CODE'
+        ASSUME CS:DOSGROUP,SS:DOSGROUP
 BREAK <$PathParse - Parse a string>
 
 ;------------------------------------------------------------------------------
@@ -441,7 +458,6 @@ diretc: cmp     ah,1                    ; Continue return
 	clc
 	ret
 dirdot  endp
-ENDIF
-
 CODE    ENDS
+ENDIF
     END

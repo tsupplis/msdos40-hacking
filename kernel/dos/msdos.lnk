@@ -6,9 +6,9 @@ msdisp.obj +
 mscode.obj +
 C:\common\msdosme.obj +
 time.obj +
-parse.obj +
 misc.obj +
 getset.obj +
+parse.obj +
 misc2.obj +
 crit.obj +
 cpmio.obj +
