@@ -1,6 +1,6 @@
 # MS-DOS 4.01 rebuild
 
-MS-DOS 4.01 rebuilt on Unix with GNU make and the original tools under `emu2`. The goal is a usable replacement for DOS 3.3 and 5.5. This project will carry on iteratively, also reviewing/fixing the original code to be both robust and dependable.
+MS-DOS 4.01 rebuilt on Unix with GNU make and the original tools under `emu2`. The goal is a usable replacement for DOS 3.3 and 5.5. This project will carry on iteratively, also reviewing/fixing the original code to be both robust and dependable. The version tag is 4.01N.
 
 **Status Summary v1.6.0**: _We already have HMA,UMB support with placement configurability for a large part of DOS and installed drivers and software (Up to 611KB of free application memory) and all common commands are in line with DOS 5.0 with a few DOS 6.22 commands added. Some deliverate choice are made no to close the following gaps (doskey replaced only by simple command line editing, undelete/unformat, 2.88MB floppy format). The remaining gaps are in the work:_
 - _himem.sys driver (XMS 2.0)_
