@@ -17,10 +17,8 @@
 :use 12 COMMON25	   ;"Invalid path"                               ;AN000;
 :use 13 EXTEND32	   ;"Sharing violation"                          ;AN000;
 :use 14 EXTEND4 	   ;"Too many open files"                        ;AN000;
-:def 15 CR,LF,CR,LF,"Enter primary filename",CR,LF                       ;AN000;
-:def 16 CR,LF,CR,LF,"Enter 2nd filename or drive id",CR,LF               ;AN000;
+:def 15 "COMP: Required parameters missing.",CR,LF
 :def 17 "Files are different sizes",CR,LF                                ;AN000;
-:def 18 "Compare more files (Y/N) ?"                                     ;AN000;
 :def 19 "%1 and %2",CR,LF                                                ;AN000;
 :def 20 CR,LF								 ;AN000;
 :use 21 EXTEND5 	   ;"Access Denied"                              ;AN000;

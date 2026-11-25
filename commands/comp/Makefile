@@ -28,6 +28,8 @@ $(MSGS): comp.skl $(MSGDIR)/$(COUNTRY).msg $(MSGDIR)/$(COUNTRY).idx
 %.obj: %.asm $(MSGS)
 	@echo | $(MASM) -Mx -t -I. -I'C:\asminc' '$<,$@;'
 
+compsm.obj: compms.inc
+
 comp.com: helptest.obj $(OBJS) comp.lnk
 	$(LINK) @comp.lnk
 	$(EXE2BIN) comp.exe comp.com

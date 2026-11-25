@@ -39,7 +39,6 @@ SearchF        equ  11H           ;FCB Search function call                     
 SEARCHN        EQU  12H           ;FCB SEARCH NEXT                              ;AN000;
 SetDTA         equ  1AH           ;Set DTA                                      ;AN000;
 DEFDRV         equ  19H           ;get default drive                            ;AN000;
-YESNO_CHECK    EQU  23H           ;CHECK (Y/N) RESPONSE ON INPUT (EXTENDED COUNTRY INFO) ;AN000;
 SETVECTOR      equ  25H           ;set interrupt vector in AL to DS:DX          ;AN000;
 FCBRndBlkRead  equ  27H           ;Read function call                           ;AN000;
 PARSE_FILENAME EQU  29H           ;PARSE FILENAME                               ;AN000;

@@ -29,10 +29,7 @@
 ;	 In all cases, after the comparing of 2 files ends, comparing
 ;	 will proceed with the next pair of files that match the 2
 ;	 filenames, until no more files can be found that match the
-;	 first filename.  You are then asked if you want to compare
-;	 any more files.  Replying "N" returns you to the DOS prompt
-;	 (such as A>); a reply of "Y" results in prompts for new
-;	 primary and secondary filenames.
+;	 first filename. COMP then returns to DOS.
 ;
 ;	 In all compares, COMP looks at the last byte of one of the
 ;	 files being compared to assure that it contains a valid
@@ -50,10 +47,6 @@
 ;	 Thus, the "EOF mark not found" message indicates that the
 ;	 compare errors may not have occurred in the usable data
 ;	 portion of the file.
-;
-;	 Multiple compare operations may be performed with one load
-;	 of COMP.  A prompt, "Compare more files (Y/N)?" permits additional
-;	 executions.
 ;
 ; ENTRY POINT: "INIT", jumped to by COMP1 at the DOS entry point.
 ;
@@ -86,15 +79,7 @@
 ;	 B:\LEVEL2 will compare all files in directory A:\LEVEL1 with
 ;	 the files of the same names in directory B:\LEVEL2.
 ;
-;	 If no parameters are entered with the COMP command, you will
-;	 be prompted for both.	If the second parm is omitted, COMP
-;	 will prompt for it.  If you simply press ENTER when prompted
-;	 for the second filename, COMP assumes *.* (all files
-;	 matching the primary filename), and will use the current
-;	 directory of the default drive.
-;
-;	 If no file matches the primary filename, COMP will prompt
-;	 again for both parameters.
+;	 Both operands are required on the command line.
 ;
 ; EXIT-NORMAL: Errorlevel = 0, Function completed successfully.
 ;
@@ -289,10 +274,8 @@ cseg	segment para public 'CODE'	;AC000;
 	extrn	msgnum_bad_path:word	;AN000;
 	extrn	msgnum_share:word	;AN000;
 	extrn	msgnum_too_many:word	;AN000;
-	extrn	msgnum_prinam:word	;AN000;
-	extrn	msgnum_secnam:word	;AN000;
+	extrn	msgnum_missing:word
 	extrn	msgnum_badsiz:word	;AN000;
-	extrn	msgnum_nother:word	;AN000;
 	extrn	msgnum_and_msg:word	;AN000;
 	extrn	msgnum_crlf:word	;AN000;
 	extrn	msgnum_accessdenied:word ;AN000;
@@ -328,9 +311,7 @@ cseg	segment para public 'CODE'	;AC000;
 stack_area db	512 dup ("S")		;Added in DOS 3.20 to support hardware requiring
 End_Stack_Area db 00h			;large stacks. DO NOT PUT DATA ABOVE THIS !
 
-clear	db	00h			;AN000; ;clear path2
 cur_name dw	00h			;AN000; ;ptr to current filename
-input_buf db	130 dup (0)		;AN000; ;input buffer for keyb input
 name1	db	130 dup (0)		;AN000; ;source file name
 name2	db	130 dup (0)		;AN000; ;target file name
 line_number dd 1
@@ -449,63 +430,15 @@ init	endp				;AN000;
 main	proc	near			;AN000;
 	public	main			;AN000;
 
-	mov	clear,0 		;clear it
-;	$do				;AN000;
-$$DO4:
-	    cmp     byte ptr path1,0	;was first parm given?
-;	$leave	ne			;AN000; ;Yes, LEAVE INPUT loop
-	JNE $$EN4
-	    mov     byte ptr path2,0	;AN000; ;make sure that we get the second file name
-rpt:
-	    mov     dx,offset msgnum_prinam ;AC000; ;to ask user for first parm
-	    mov     parm_count,FIRST_PARM_CT ;AN000; ;THIS IS FIRST PARM (ONLY ONE ACTUALLY)
-	    call    getnam		;get first parm from user in  path1  and  fcb
-	    mov     di,offset fcb	;AN000; ;es:di=ptr TO UNOPENED fcb
-	    mov     si,offset path1	;AN000; ;ds:si=ptr TO COMMAND LINE TO PARSE
-					;AN000; ;AL-BIT VALUE CONTROLS PARsiNG
-	    doscall PARSE_FILENAME,01H	;AN000; ;AND GO MAKE AN fcb, SCAN OFF LEAdiNG SEPARATORS
-	    cmp     AL,255		;AN000; ;INVALID DRIVE?
-;	    $if     e			;AN000; ;Yes
-	    JNE $$IF6
-		print_msg msgnum_baddrv,STDERR ;AN000; ;"Invalid drive spec."
-		mov	byte ptr path1,00 ;AN000; ;BLANK FIRST CHAR. SO TO loop AGAIN
-;	    $endif			;AN000;
-$$IF6:
-;	$enddo				;AC000; ;REPEAT UNTIL FIRST PARM OK
-	JMP SHORT $$DO4
-$$EN4:
-
-;chek2: 				;GET/SET SECOND FILENAME
-	cmp	clear,1
-;	$if	e
-	JNE $$IF9
-	    mov     byte ptr path2,0
-	    mov     clear,0
-;	$endif
-$$IF9:
-;	$do				;AN000;
-$$DO11:
-	    cmp     byte ptr path2,0	;was second parm given?
-;	$leave	ne			;AN000; ;Yes, LEAVE INPUT loop
-	JNE $$EN11
-	    mov     dx,offset msgnum_secnam ;AC000; ;to ask for second parm
-	    mov     parm_count,TRICK_PARM_CT ;AN000; ;THIS IS FIRST PARM (ONLY ONE ACTUALLY)
-					;AN000; ;BUT PUT FILENAME IN path2 INSTEAD OF path1
-	    call    getnam		;get second parm in path2 and fcb2
-	    mov     di,offset fcb2	;AN000; ;es:di=ptr TO UNOPENED fcb
-	    mov     si,offset path2	;AN000; ;ds:si=ptr TO COMMAND LINE TO PARSE
-					;AN000; ;AL-BIT VALUE CONTROLS PARsiNG
-	    doscall PARSE_FILENAME,01H	;AN000; ;AND GO MAKE AN fcb, SCAN OFF LEAdiNG SEPARATORS
-	    cmp     AL,255		;AN000; ;INVALID DRIVE?
-;	    $if     e			;AN000; ;Yes
-	    JNE $$IF13
-		print_msg msgnum_baddrv,STDERR ;AN000; ;"Invalid drive spec."
-		mov	byte ptr path2, 00 ;AN000; ;BLANK FIRST CHAR. SO TO loop AGAIN
-;	    $endif			;AN000;
-$$IF13:
-;	$enddo				;AC000; ;SECOND PARM?
-	JMP SHORT $$DO11
-$$EN11:
+        cmp byte ptr path1,0
+        je missing_operand
+        cmp byte ptr path2,0
+        jne compare_files
+missing_operand:
+        print_msg msgnum_missing,STDERR
+        mov exitfl,EXVER
+        ret
+compare_files:
 	mov	si,offset path1 	;AN000; ;si = ptr TO PATH NAME TO FIND "\" IN
 	call	findfs			;AN000; ;FIND LAST "\" AND SAVE ADDR
 	mov	si,offset path2 	;AN000; ;si = ptr TO PATH NAME TO FIND "\" IN
@@ -974,52 +907,6 @@ quit4:					;no more primary files
 	mov	dx,offset oldp1
 	doscall CHDIR			;AC000; ;no, restore it now
 quit5:
-	mov	byte ptr path2,0	;force get of second name - leave this here
-	mov	byte ptr swt,0
-;	$do				;AC000; ;REPEAT UNTIL A VALID Y/N REspONSE
-$$DO51:
-	    mov     dx,offset msgnum_nother ;AN000; ;dispLAY (Y/N) MEssAGE
-	    push    di			;AN007;  save DI
-	    mov     di,dx		;AN007;  DI -> message struct
-	    mov     [di].msg_handle,STDERR ;AN007; display to STDERR
-	    pop     di			;AN007; restore DI
-	    call    sendmsg		;AC000; ;dispLAY IT
-	    push    ax			;SAVE REspONSE
-	    print_msg msgnum_crlf,STDERR ;AC003; ;dispLAY CRLF
-	    print_msg msgnum_crlf,STDOUT ;AC009; ;dispLAY CRLF
-	    pop     dx			;AN000; ;GET REspONSE BACK
-	    doscall GET_EXT_CNTRY_INFO,YESNO_CHECK ;AC000; ;CHECK REspONSE, dx=REspONSE
-	    cmp     al,YES		;AN000; ;Yes REspONSE
-;	$leave	e			;AN000; ;LEAVE loop
-	JE $$EN51
-	    cmp     al,0		;AN000; ;NO REspONSE
-;	$leave	e
-	JE $$EN51
-;	$enddo				;AN000; ;REPEAT UNTIL A VALID Y/N REspONSE
-	JMP SHORT $$DO51
-$$EN51:
-	cmp	al,YES			;AC000; ;ax=0=NO, ax=1=Yes   (CHECK REspONSE)
-;	$if	e			;AC000; ;GOT A Yes REspONSE, REPEAT COMP
-	JNE $$IF55
-	    xor     ax,ax		;AN008; ;AN000; ;CHAR TO USE TO CLEAR BUFFER
-	    mov     di,offset path1	;AN000; ;CLEAR OLD PATH, FILE NAMes TO START AGAIN
-	    mov     cx,129		;AN000; ;LENGTH OF BUFFER
-;	    $do 			;AN000;
-$$DO56:
-		stosb			;AN000;
-;	    $enddo  loop		;AN000;
-	    LOOP $$DO56
-	    mov     di,offset path2	;AN000; ;CLEAR OLD PATH, FILE NAMes TO START AGAIN
-	    mov     cx,129		;AN000; ;LENGTH OF BUFFER
-;	    $do 			;AN000;
-$$DO58:
-		stosb			;AN000;
-;	    $enddo  loop		;AN000;
-	    LOOP $$DO58
-	    mov     clear,1		;set clear
-	    jmp     rpt 		;AC000; ;REPEAT COMP
-;	$endif				;AC000;
-$$IF55:
 	ret				;AN000; ;QUIT
 
 
@@ -1097,30 +984,7 @@ findfs	endp				;AN000;
 
 
 ;------------------------------------------------------------------------------
-; GETNAM - Inputs a filename from STDIN to be used as either the first or second
-;	   parameter for COMP.
-;
-;   INPUT  - PARM_COUNT = ordinal number for parser
-;	     DX = ptr to msg descriptor of message to display
-;	     BX = ptr to FCB of file
-;	     SI = ptr to FCB structure
-;------------------------------------------------------------------------------
-getnam	proc	near
-	mov	input_buf,INPUT_LEN	;AN000; ;PUT LENGTH OF BUFFER AS FIRST byte OF BUFFER
-	mov	di,dx			;AN000; ;FILL IN offset OF INPUT BUFFER IN MSG DesC.
-	mov	[di].msg_input, offset input_buf ;AN000; ;ptr TO INPUT BUFFER
-	mov	[di].msg_handle, STDERR
-	push	ax			;AN000;
-	call	sendmsg 		;AC000; ;dispLAY MEssAGE, GET BUFFERED INPUT
-	pop	ax			;AN000;
-	xor	ch,ch			;AN000; ;CLEAR HIGH byte OF cx
-	mov	cl,input_len		;AN000; ;CL = LENGTH OF INPUT BUFFER
-					;get offset into input buffer (to skip length word)
-	mov	current_parm,offset INPUT_BUF+2 ;AN000; ;CURRENT_PARM = offset OF INPUT BUFFER
-	mov	ordinal,ZERO_PARM_CT	;AN000; ;TELL PARSER THAT THIS IS FIRST PARAMETER (ONLY ONE)
-	call	parser			;PUT NEW STRING AT WHERE di POINTS TO
-	ret				;then go back
-getnam	endp				;AC000;
+
 
 
 ;------------------------------------------------------------------------------
@@ -2038,11 +1902,19 @@ invalid_parsed_drive:
 $$IF146:
 	    mov     dx,offset CBExit
 	    doscall SETVECTOR,23H	;AC000; ;change control break vector, #23h
+	    mov     dx,offset disk_failure
+	    doscall SETVECTOR,24H
 ;	$endif				;AC000;
 $$EN146:
 
 	ret				;AN000; ;return to main
 more_init endp				;AN000;
+
+; Return disk errors to COMP without the DOS critical-error prompt.
+disk_failure proc far
+	mov al,3
+	iret
+disk_failure endp
 
 cseg	ends
 	end

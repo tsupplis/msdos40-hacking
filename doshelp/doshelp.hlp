@@ -140,7 +140,7 @@ COMMENT=     Change the CONFIG.SYS comment character.
    character       Character that marks a comment in CONFIG.SYS.
 COMP         Compare files.
 
- COMP [file1] [file2] [/D] [/A] [/L] [/N=n] [/C]
+ COMP file1 file2 [/D] [/A] [/L] [/N=n] [/C]
 
    file1, file2    Files or groups of files to compare.
    /D              Display differing bytes as decimal numbers.

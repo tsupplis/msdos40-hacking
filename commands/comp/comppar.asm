@@ -45,15 +45,7 @@
 ;	 B:\LEVEL2 will compare all files in directory A:\LEVEL1 with
 ;	 the files of the same names in directory B:\LEVEL2.
 ;
-;	 If no parameters are entered with the COMP command, you will
-;	 be prompted for both.	If the second parm is omitted, COMP
-;	 will prompt for it.  If you simply press ENTER when prompted
-;	 for the second filename, COMP assumes *.* (all files
-;	 matching the primary filename), and will use the current
-;	 directory of the default drive.
-;
-;	 If no file matches the primary filename, COMP will prompt
-;	 again for both parameters.
+;	 Both operands are required on the command line.
 ;
 ;
 ;	Upon entry to PARSER in this module,

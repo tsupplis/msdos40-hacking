@@ -27,10 +27,7 @@
 ;	 In all cases, after the comparing of 2 files ends, comparing
 ;	 will proceed with the next pair of files that match the 2
 ;	 filenames, until no more files can be found that match the
-;	 first filename.  You are then asked if you want to compare
-;	 any more files.  Replying "N" returns you to the DOS prompt
-;	 (such as A>); a reply of "Y" results in prompts for new
-;	 primary and secondary filenames.
+;	 first filename. COMP then returns to DOS.
 ;
 ;	 In all compares, COMP looks at the last byte of one of the
 ;	 files being compared to assure that it contains a valid
@@ -48,10 +45,6 @@
 ;	 Thus, the "EOF mark not found" message indicates that the
 ;	 compare errors may not have occurred in the usable data
 ;	 portion of the file.
-;
-;	 Multiple compare operations may be performed with one load
-;	 of COMP.  A prompt, "Compare more files (Y/N)?" permits additional
-;	 executions.
 ;
 ; ENTRY POINT: "START" at ORG 100h, jumps to "INIT".
 ;
@@ -84,15 +77,7 @@
 ;	 B:\LEVEL2 will compare all files in directory A:\LEVEL1 with
 ;	 the files of the same names in directory B:\LEVEL2.
 ;
-;	 If no parameters are entered with the COMP command, you will
-;	 be prompted for both.	If the second parm is omitted, COMP
-;	 will prompt for it.  If you simply press ENTER when prompted
-;	 for the second filename, COMP assumes *.* (all files
-;	 matching the primary filename), and will use the current
-;	 directory of the default drive.
-;
-;	 If no file matches the primary filename, COMP will prompt
-;	 again for both parameters.
+;	 Both operands are required on the command line.
 ;
 ; EXIT-NORMAL: Errorlevel = 0, Function completed successfully.
 ;

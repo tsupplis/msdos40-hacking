@@ -18,10 +18,8 @@
 ;:use 12 COMMON25           ;"Invalid path"                                     ;AN000;
 ;:use 13 EXTEND32           ;"Sharing violation"                                ;AN000;
 ;:use 14 EXTEND4            ;"Too many open files"                              ;AN000;
-;:def 15 CR,LF,CR,LF,"Enter primary file name",CR,LF                            ;AN000;
-;:def 16 CR,LF,CR,LF,"Enter 2nd file name or drive id",CR,LF                    ;AN000;
+;:def 15 "COMP: Required parameters missing.",CR,LF
 ;:def 17 "Files are different sizes",CR,LF                                      ;AN000;
-;:def 18 "Compare more files? (Y/N)",CR,LF                                      ;AN000;
 ;:def 19 "%1 and %2",CR,LF                                                      ;AN000;
 ;:def 20 CR,LF                                                                  ;AN000;
 ;:use 21 EXTEND5            ;"Access Denied"                                    ;AN000;
@@ -104,25 +102,11 @@ SUBLIST_13  SUBLIST <,,FILL_OFF,FILL_SEG,PC_ID_0,SF_BITS<SF_LEFT,,SF_ASCIIZ,SF_C
 MSGNUM_TOO_MANY MSG_DESC <14>                                                   ;AN000;
             PUBLIC MSGNUM_TOO_MANY                                              ;AN000;
 ;                                                                               ;AN000;
-;           CR,LF,CR,LF,"Enter primary file name",CR,LF                         ;AN000;
-MSGNUM_PRINAM MSG_DESC <15,,,,(CLASS_A SHL 8) OR DOS_BUF_KEYB_INP>              ;AN000;
-            DW     ?             ;DEFINE EXTRA WORD FOR PTR TO INPUT BUFFER     ;AN000;
-                                 ;IT WILL BE ACCESSED AS A FIELD OF THE ABOVE STRUCT ;AN000;
-            PUBLIC MSGNUM_PRINAM                                                ;AN000;
-;                                                                               ;AN000;
-;           CR,LF,CR,LF,"Enter 2nd file name or drive id",CR,LF                 ;AN000;
-MSGNUM_SECNAM MSG_DESC <16,,,,(CLASS_A SHL 8) OR DOS_BUF_KEYB_INP>              ;AN000;
-            DW     ?             ;DEFINE EXTRA WORD FOR PTR TO INPUT BUFFER     ;AN000;
-                                 ;IT WILL BE ACCESSED AS A FIELD OF THE ABOVE STRUCT ;AN000;
-            PUBLIC MSGNUM_SECNAM                                                ;AN000;
-;                                                                               ;AN000;
+            PUBLIC MSGNUM_MISSING
+MSGNUM_MISSING MSG_DESC <15,STDERR>
 ;           "Files are different sizes",CR,LF                                   ;AN000;
 MSGNUM_BADSIZ MSG_DESC <17>                                                     ;AN000;
             PUBLIC MSGNUM_BADSIZ                                                ;AN000;
-;                                                                               ;AN000;
-;           "Compare more files (Y/N) ?",CR,LF                                  ;AN000;
-MSGNUM_NOTHER MSG_DESC <18,STDOUT,,,(CLASS_A SHL 8) OR 0C1H>                    ;AC210;;AD176;
-            PUBLIC MSGNUM_NOTHER                                                ;AN000;
 ;                                                                               ;AN000;
 ;           "%1 and %2",CR,LF                                                   ;AN000;
 MSGNUM_AND_MSG MSG_DESC <19,,SUBLIST_19A,TWO_SUBS>                              ;AN000;
