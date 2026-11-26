@@ -410,8 +410,9 @@ system_not_found        equ  8          ; Invalid path or System files not found
 done                    equ  9          ; System transferred                       Old
 no_sys_on_def           equ  10         ; No system on default drive               Old
 not_on_default          equ  11         ; Can not specify default drive            New
+missing_target          equ  19
+boot_query_error        equ  20
 write_fail              equ  12         ; Write failure, diskette unusable         New
-bad_path                equ  19         ; Invalid path
                                         ; CLASS C
 
 cant_network            equ  13         ; Cannot %1 to a Network drive             Old

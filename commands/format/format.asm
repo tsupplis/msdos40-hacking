@@ -820,10 +820,9 @@ FATWRT:
 	call	AccessDisk			; note what is current logical drive
 	CALL	WRITEDOS			;Write the BIOS & DOS
 	JNC	SYSOK
-	Message msgNotSystemDisk		;				;AC000;
-	MOV	WORD PTR SYSSIZ+2,0		;No system transfered
-	MOV	WORD PTR SYSSIZ,0		;No system transfered
-	JMP	SHORT STATUS
+	Message msgNotSystemDisk
+	call	Reset_Ctrl_Break
+	jmp	FEXIT				; /S requested a bootable disk.
 
 SYSOK:
 
@@ -1366,11 +1365,13 @@ GOTALLBIO:
 	CALL	WRITEFILE
 	pop	ds
 	assume	ds:data
+	retc
 BIOSDONE:
 	MOV	BX,[TempHandle]
 	MOV	CX,bios.fileTime
 	MOV	DX,bios.fileDate
 	CALL	CLOSETARG
+	retc
 	MOV	CX,DosAttributes
 	MOV	DX,OFFSET DosFile
 	push	es
@@ -1420,11 +1421,13 @@ GOTALLDOS:
 	CALL	WRITEFILE
 	pop	ds
 	assume	ds:data
+	retc
 DOSDONE:
 	MOV	BX,[TempHandle]
 	MOV	CX,dos.fileTime
 	MOV	DX,dos.fileDate
 	CALL	CLOSETARG
+	retc
 	MOV	CX,CommandAttributes
 	call	Command_Root			;an011; dms;adjust path for
 						;COMMAND.COM creation
@@ -1475,11 +1478,13 @@ GOTALLCOM:
 	CALL	WRITEFILE
 	pop	ds
 	assume	ds:data
+	retc
 COMDONE:
 	MOV	BX,[TempHandle]
 	MOV	CX,command.fileTime
 	MOV	DX,command.fileDate
 	CALL	CLOSETARG
+	retc
 ;****************************************************************
 ; I don't see the need for the following code!! - RS 3.20
 ;	CMP	BYTE PTR [FILSTAT],00101010B
@@ -1545,6 +1550,15 @@ CheckMany:
 CLOSETARG:
 	MOV	AX,(FILE_TIMES SHL 8) OR 1
 	INT	21H
+	JNC	CloseTarget
+	; Release the handle even if setting the timestamp failed.
+	PUSH	AX
+	CALL	CloseTarget
+	POP	AX
+	STC
+	return
+
+CloseTarget:
 	MOV	AH,CLOSE
 	INT	21H
 	return

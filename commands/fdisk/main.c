@@ -152,6 +152,15 @@
 /*                                                                        */
 /**************************************************************************/
 /*  */
+/* An empty extent has no last cylinder. Reject it before changing the table. */
+static void check_partition_size(unsigned cylinders)
+{
+    if (cylinders == 0) {
+        display_msg(8, DosStdEr, 0, 0, 0, Utility_Msg_Class);
+        exit(ERR_LEVEL_1);
+    }
+}
+
 void main(argc,argv)                                                    /* AC000 */
 
 int     argc;                                                           /* AN000 */
@@ -289,6 +298,7 @@ BEGIN
                             else                                                /* AN000 */
                                 input = (unsigned)mbytes_to_cylinders(primary_buff,
                                                                       cur_disk_buff);   /* AN004 */
+                            check_partition_size(input);
                             make_partition(input,temp,uc(ACTIVE),(char)PRIMARY);        /* AN000 */
                             END
 
@@ -309,6 +319,7 @@ BEGIN
                                else                                                /* AN000 */
                                    input = (unsigned)mbytes_to_cylinders(extended_buff,
                                                                          cur_disk_buff);    /* AN004 */
+                               check_partition_size(input);
                                make_partition(input,temp,(unsigned char) NUL,(char) EXTENDED);      /* AN000 */
                                END
                             END
@@ -323,6 +334,7 @@ BEGIN
                             else                                                /* AN000 */
                                 input = (unsigned)mbytes_to_cylinders(logical_buff,
                                                                       cur_disk_buff);    /* AN004 */
+                            check_partition_size(input);
                             make_volume(input,temp);                            /* AN000 */
                             END
 
@@ -331,6 +343,11 @@ BEGIN
                         END                                                     /* AN000 */
                     /* This is the end of compare cur_disk_buff for valid drive */
                     END
+                else {
+                    display_msg(number_of_drives ? 6 : 5, DosStdEr, 0, 0, 0,
+                                Utility_Msg_Class);
+                    exit(ERR_LEVEL_1);
+                }
                 /* This is the end of just disk_flag set */
                 END
             /* This is end of if switch is present */

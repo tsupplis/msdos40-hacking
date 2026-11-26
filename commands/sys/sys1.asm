@@ -433,10 +433,16 @@ BEGIN			PROC NEAR
        mov  ax,(util_B shl 8) + done	; load return code (System transfered) ;AN000;
 
 ;  $endif				;				       ;AN000;
+   jmp short sys_report
 $$IF1:
+   call Message
+   mov ax,return_error
+   jmp short sys_exit
+sys_report:
 
    call Message 			; display message		       ;AN000;
 
+sys_exit:
    mov	ah,exit 			; just set function - RC set by MAIN
    int	21h				; if version is < DOS 2.0 the int 21
 
@@ -683,6 +689,7 @@ $$IF15:
 
 	   ASSUME ds:DATA,es:nothing
 
+	   jc $$EN15			; Reject a truncated source path.
 	   mov	SourceSize,bx		;				       ;AN021;
 	   mov	Spec_Flag,1		; set spec flag 		       ;AN021;
 ;      $else				; must be a drive id		       ;AN021;
@@ -761,7 +768,7 @@ $$DO35:
        cmp  bl,54			; are we past the maximum?	       ;AN021;
 ;  $exitif a				;				       ;AN021;
    JNA $$IF35
-       mov  ax,(util_B SHL 8) + bad_path ; Invalid path 		       ;AN021;
+       mov  ax,(util_B SHL 8) + system_not_found ; Invalid path 		       ;AN021;
        stc				;				       ;AN021;
 ;  $orelse				;				       ;AN021;
    JMP SHORT $$SR35
@@ -3065,9 +3072,14 @@ $$IF173:
 
    call Close_File			; finish off & close IBMBIOS and IBMDOS;AN000;
 
+   jc sys_finalize_failed
    call Write_Boot_Record		; update boot record		       ;AN000;
 
    ret					;				       ;AN000;
+
+sys_finalize_failed:
+   mov ax,(util_B shl 8) + write_fail
+   ret
 
    ENDPROC Do_End
 
@@ -3115,26 +3127,31 @@ $$IF173:
    mov	bx,BIOSOutFH			; load IBMBIOS handle
    mov	ax,(File_Times SHL 8) + set	; update file times
    INT	21h				; File_Times + 01 <5701>
+   jc close_file_done
    mov	ah,Close			; close file IBMBIO
    INT	21h				; Close + not_used <3Exx>
+   jc close_file_done
    mov	cx,DOSTime			; load IBMDOS time and date
    mov	dx,DOSTime+2
    mov	bx,DOSOutFH			; load IBMDOS handle
    mov	ax,(File_Times SHL 8) + set	; update file times
    INT	21h				; File_Times + 01 <5701>
+   jc close_file_done
    mov	ah,Close			; close file IBMDOS
    INT	21h				; Close + not_used <3Exx>
+   jc close_file_done
 
    mov	dx,offset BIOSName		;				       ;AN001;
    mov	ax,(CHMod shl 8) + SetAtrib	; set file attributes to 0
    mov	cx,DOS_system_atrib		; DOS system file atributes
    INT	21h				;   CHMod + SetAtrib <4301>)
+   jc close_file_done
 
    mov	dx,offset DOSName		;				       ;AN001;
    mov	ax,(CHMod shl 8) + SetAtrib	; set file attributes to 0
    mov	cx,DOS_system_atrib		; DOS system file atributes
    INT	21h				;   CHMod + SetAtrib <4301>)
-
+close_file_done:
    ret					;				       ;AN000;
 
    ENDPROC Close_File
@@ -3199,41 +3216,21 @@ $$IF173:
    mov	ax,(IOCtl shl 8) + generic_ioctl ; get BPB using Set Device Parm       ;AN000;
    INT	21h				; IOCtl + gen_IOCtl_request <440d>     ;AN000;
 
-   cmp	DOS_VER,0ffh			; is it DOS 3.3?		       ;AN019;
-;  $if	ne				; only do a GET if DOS 4.00		;AN019;
-   JE $$IF177
-       lea  dx,IOCtl_Buf		; point to output buffer	       ;AN000;
-       mov  ax,(GetSetMediaID shl 8) + 0 ; get volid, ser# and file type       ;AC008;
-       INT  21h 			; GetSetMediaID + 0  INT 21 <6900>     ;AC008;
+   jnc  boot_parameters_ready
+   jmp  boot_query_failed
+boot_parameters_ready:
+   cmp  DOS_VER,0ffh
+   je   build_media_id                 ; DOS 3.3 has no media ID query.
+   lea  dx,IOCtl_Buf
+   mov  ax,GetSetMediaID shl 8
+   int  21h
+   jnc  $$IF185
+   call Get_DOS_Error
+   cmp  ax,old_type_media
+   je   build_media_id
+   jmp  boot_query_failed
 
-;      $if  c				; error - see if its 'unknown media'   ;AN000;
-       JNC $$IF178
-
-	   call Get_DOS_Error		; get error			       ;AN000;
-	   cmp	al,old_type_media	;				       ;AN000;
-
-;	   $if	e			;				       ;AN019;
-	   JNE $$IF179
-	       stc			; do it all manually		       ;AN019;
-;	   $else			;				       ;AN019;
-	   JMP SHORT $$EN179
-$$IF179:
-	       clc			; some other dos error occured - le    ;AN019;
-;	   $endif			;	       it go by 	       ;AN019;
-$$EN179:
-
-;      $endif				;				       ;AN019;
-$$IF178:
-;  $else				;				       ;AN019;
-   JMP SHORT $$EN177
-$$IF177:
-       stc				; do it all manually		       ;AN019;
-;  $endif				;				       ;AN019;
-$$EN177:
-
-;  $if	c				; if it is pre 4.00 IBM format	       ;AN000;
-   JNC $$IF185
-
+build_media_id:
        call Create_Serial_ID		; compute serial id and put in field   ;AN000;
 
 					; find first with type = VOLUME ID
@@ -3276,9 +3273,6 @@ $$EN186:
        rep  movsb			;				       ;AN000;
 ;  $endif
 $$IF185:
-
-;  $if	nc				;				       ;AN000;
-   JC $$IF190
 
        lea  si,DeviceParameters.DP_BPB
        lea  di,boot.EXT_BOOT_BPB
@@ -3330,10 +3324,10 @@ $$IF194:
        call Direct_Access		;				       ;AN019;
 
 ;      $if  c				;				       ;AC000;
-       JNC $$IF196
-;      $endif				;				       ;AC000;
-$$IF196:
-
+       jnc boot_sector_written
+       mov ax,(util_B shl 8) + write_fail
+       ret
+boot_sector_written:
        cmp  DOS_VER,0			;				       ;AN019
 ;      $if  e				; only do a SET if DOS 4.00
        JNE $$IF198
@@ -3345,8 +3339,11 @@ $$IF196:
 $$IF198:
 
 ;  $endif				;				       ;AC000;
-$$IF190:
+   ret
 
+boot_query_failed:
+   mov  ax,(util_B shl 8) + boot_query_error
+   stc
    ret
 
    ENDPROC Write_Boot_Record
@@ -3567,6 +3564,10 @@ $$EN201:
 
    Message PROC NEAR
 
+   cmp  ax,(PARSE_Error shl 8) + reqd_missing
+   jne  message_class_ready
+   mov  ax,(util_B shl 8) + missing_target
+message_class_ready:
    xor	dx,dx				; reset response  (DL)		       ;AN000;
    xor	cx,cx				; reset insert	(CX)		       ;AC024;
    dec	dh				; assume CLASS is Utility	       ;AN000;

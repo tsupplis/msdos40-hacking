@@ -86,3 +86,49 @@ or `COMMAND: Invalid …`. Verify fixes before closing them.
 | Accept a space after the drive and reject invalid command-line labels | CLOSED |
 | Handle redirected Yes, No and EOF without unintended deletion | CLOSED |
 | Check deletion and close errors and restore the previous label on failed replacement | CLOSED |
+
+## SYS
+
+| Issue | Status |
+|---|---|
+| Propagate transfer failures to ERRORLEVEL, including target close and boot-sector write failures | CLOSED |
+| Reject overlong source paths and document the optional source operand | CLOSED |
+| Boot-record preparation can continue after a failed device-parameter or media-ID query | CLOSED |
+| Missing target uses the generic parser diagnostic without the command name | CLOSED |
+
+## FDISK
+
+| Issue | Status |
+|---|---|
+| Reject a zero-cylinder allocation before writing the partition table | CLOSED |
+| Report failed disk discovery during command-line partition creation | CLOSED |
+| Document partition creation and the effect of /MBR on an unsigned sector | CLOSED |
+
+## FORMAT
+
+| Issue | Status |
+|---|---|
+| Propagate resident system-file write and close failures through /S and return a fatal status | CLOSED |
+| Target timestamp failure can be masked by a successful close | CLOSED |
+
+## FIND
+
+| Issue | Status |
+|---|---|
+| Distinguish no match from I/O errors and preserve earlier failures across files | CLOSED |
+| Reset both bytes of the per-file match and line counters | CLOSED |
+
+## SORT
+
+| Issue | Status |
+|---|---|
+| Report failed input reads and output writes | CLOSED |
+| Produce no output for empty input or a leading Ctrl+Z | CLOSED |
+| Keep large column offsets out of the blank comparison buffer | CLOSED |
+| Preserve the final record without CRLF and move long records within the buffer | CLOSED |
+
+## MORE
+
+| Check | Status |
+|---|---|
+| Verify file and piped input, extra operands, missing files and read failures | CLOSED |

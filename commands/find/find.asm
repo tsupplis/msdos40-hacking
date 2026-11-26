@@ -31,13 +31,13 @@
 ;*     presently allowed.  The maximum line size is determined by buffer
 ;*     size.  Bigger lines will bomb the program.  If no file name is given
 ;*     then it will asssume the input is coming from the standard Input.
-;*     No errors are reported when reading from standard Input.
+;*     Input and output failures return errorlevel 2.
 ;*
 ;*
 ;*   EXIT:
 ;*    The program returns errorlevel:
 ;*      0 - OK, and some matches
-;*      1 -
+;*      1 - OK, but no matches
 ;*      2 - Some Error
 ;*
 ;*
@@ -166,9 +166,10 @@ ERRORLEVEL_TWO  equ     2               ;AN000; Termination error level
 msg_file_not_found      equ     2       ;AN000; File not found %s
 msg_access_denied       equ     5       ;AN000; Access denied %s
 msg_read_error          equ    30       ;AN000; Read error in %s
-msg_inv_num_parm        equ     2       ;AN000; Invalid number of parameters
 msg_inv_parm            equ    10       ;AN000; Invalid Parameter %s
-msg_required_missing    equ     2       ;AN005; Required parameter missing
+msg_required_missing    equ     2       ; Required parameter missing
+msg_stdin_error         equ     30
+msg_stdout_error        equ     29
 msg_find                equ     4       ;AN000; FIND:
 msg_code_page_mismatch  equ    37       ;AN005; Code Page mismatch
 msg_switch              equ     3       ;AN005; Invalid switch
@@ -288,7 +289,7 @@ ccolon  db      ": "
 n1_buf  db      "["
 n2_buf  db      8 dup(0)                ;buffer for number conversion
 
-errlevel        db      ERRORLEVEL_ZERO ;AN000; Errrorlevel save area
+errlevel        db      ERRORLEVEL_ONE ;AN000; Errrorlevel save area
 
 ;----- OPTION FLAGS ----
 ; If a flag is set (0ffh) then the option has been selected, if
@@ -509,8 +510,8 @@ Set_for_parse:
 ;--------------------------------------
         cmp     byte ptr ds:080h,0                      ;AN000; Check length of command line,
         jne     p_parse                                 ;AN005; Go process the parameters
-        mov     ax,msg_inv_num_parm                     ;AN000; No parms, too bad!
-        mov     dh,2                                    ;AN005; message class
+        mov     ax,msg_required_missing                     ;AN000; No parms, too bad!
+        mov     dh,2                                   ;AN005; message class
         call    display_and_die                         ;AN000; Tell the unfortunate user
 p_parse:
         mov     cs:got_filename,FALSE        ;AN004; input file default is STDIN
@@ -887,6 +888,11 @@ kmatch:
         jmp     comp_next_char          ; loop if chars left in arg.
 
 a_matchk:
+        ; Keep an earlier I/O failure, even when a later file matches.
+        cmp     cs:errlevel,ERRORLEVEL_ONE
+        jne     match_recorded
+        mov     cs:errlevel,ERRORLEVEL_ZERO
+match_recorded:
         pop     dx
         cmp     cs:v_flag,TRUE          ;is flag set?
         jne     prt_line                ;no, print the line
@@ -956,7 +962,11 @@ no_seek:
         jmp     refill                  ;no errors: refill the buffer
 read_error:
         and     bx,bx                   ;AN007; ;Using STD IN?
-        je      foo                     ;if so: all done, exit
+        jnz     file_read_error
+        mov     ax,msg_stdin_error
+        mov     dh,1
+        jmp     display_and_die
+file_read_error:
         mov     ah,close                ;close the file
         int     021h
 ;---------------
@@ -979,6 +989,7 @@ DoNorm:                                 ;AN000;
         mov     ax,msg_file_not_found   ;AN000; Message for File Not Found
 
 r_error:
+        mov     cs:errlevel,ERRORLEVEL_TWO
         call    prt_find                ;AN005;
         mov     cs:sl_ptr_s,ds          ;AN000; Save segment of subst text
         mov     cx,cs:file_name_buf     ;AN000;
@@ -1002,7 +1013,6 @@ scan_rest:
         jmp     parser
 
 foo:
-        mov     cs:errlevel,ERRORLEVEL_ZERO ;AN000; Proper code
         call    terminate               ;AN000; reset codepage and terminate
 
 
@@ -1010,8 +1020,8 @@ foo:
 ;       Clear Counters
 ;--------------------------
 clr_cntrs proc  near
-        mov     byte ptr cs:mtch_cntr,0
-        mov     byte ptr cs:line_cntr,0
+        mov     cs:mtch_cntr,0
+        mov     cs:line_cntr,0
         ret
 clr_cntrs endp
 
@@ -1069,6 +1079,14 @@ prout   proc    near
         mov     bx,STDOUT
         mov     ah,write
         int     021h
+        jc      stdout_error
+        cmp     ax,cx
+        je      output_done
+stdout_error:
+        mov     ax,msg_stdout_error
+        mov     dh,1
+        jmp     display_and_die
+output_done:
         ret
 prout   endp
 
@@ -1502,13 +1520,12 @@ end_parse:                                              ;AN000; A filename shoul
         cmp     cs:got_srch_str,TRUE                    ;AN000; Do we already have one?
         je      rett                                    ;AN000;
         mov     ax,msg_required_missing                 ;AN005;
-        mov     dh,-1                                   ;AN005; message class
+        mov     dh,2                                   ;AN005; message class
         call    display_and_die                         ;AN000; Yes, tell the poor user and terminate
 rett:                                                   ;AN000;
         ret                                             ;AN000;
 
 doexit:
-        mov     cs:errlevel,ERRORLEVEL_ZERO;AN000; Proper code
         call    terminate               ;AN000; reset codepage and terminate
 
 parse   endp                                            ;AN000;

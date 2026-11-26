@@ -145,7 +145,8 @@ STDOUT  equ     1
 STDERR  equ     2
 
 Msg_NoMem       equ     2               ;AC003;
-Msg_NoDisk      equ     4               ;AC003;
+Msg_WriteError  equ     29
+Msg_ReadError   equ     30
 Msg_sort        equ     5               ;AN003;
 Msg_switch      equ     3               ;AN003;
 
@@ -390,10 +391,13 @@ PARSER:                                 ;AN000;   message and terminate
 ; set up column for proper sort offset
 ;-----------------------------------
 
-        ADD     COLUMN,2
-        CMP     COLUMN,2
-        JZ      GOT_COL
-        DEC     COLUMN
+        ; Convert the one-based column to an offset past the link word.
+        cmp     COLUMN,0FFFFh
+        je      GOT_COL                 ; already beyond any record
+        inc     COLUMN
+        cmp     COLUMN,1
+        jne     GOT_COL
+        inc     COLUMN
 
 ;------------------------------------
 ; Get sorting area, no more than 64K
@@ -438,6 +442,8 @@ GOT_MEM:
         pop     ds                      ;Restore DS
         pop     ax                      ;Restore AX
 ;------------------------------------RussW:--End 3.3 addition
+        cmp     bp,(BUFFER+4)/16+1     ; Need room for links and input.
+        jb      SIZERR
         MOV     DS,AX                   ;Point DS to buffer
         MOV     ES,AX                   ;and point ES to buffer
         MOV     CL,4                    ;2^4 bytes per paragraph
@@ -461,16 +467,21 @@ GOT_MEM:
 ;---------------------------
         MOV     DX,BUFFER + 2           ;DX = place to begin reading
         MOV     CX,BP                   ;AN003; ;CX is the max number to read
-        SUB     CX,MAXREC + 2           ;remember offset of temp buffer
+        SUB     CX,BUFFER + 4           ;remember offset of temp buffer
 SORTL:
         XOR     BX,BX                   ;Standard input
         sys     READ                    ;Read it in
+        JC      ReadFailed
         ADD     DX,AX                   ;Bump pointer by count read
         SUB     CX,AX                   ;subtract from remaining the count read
         JZ      SIZERR                  ;if buffer is full then error
         OR      AX,AX                   ;no chars read -> end of file
         JNZ     SORTL                   ;there were chars read. go read again
         JMP     SHORT SIZOK             ;trim last ^Z terminated record
+ReadFailed:
+        mov     ax,Msg_ReadError
+        mov     dh,1
+        call    error_exit
 SIZERR:
         mov     ax,msg_NoMem            ;AN000;  not enough memory error
         mov     dh,-1                   ;AN003;  class: utility error
@@ -480,6 +491,15 @@ SIZERR:
 ; Look for a ^Z. Terminate buffer at 1st ^Z.
 ;---------------------------
 SIZOK:
+        cmp     dx,BUFFER+2
+        je      EmptyInput
+        mov     di,BUFFER+2
+        cmp     byte ptr [di],1Ah
+        jne     ScanEnd
+EmptyInput:
+        mov     al,RETCODE_NOERROR
+        sys     EXIT
+ScanEnd:
         MOV     BX,DX                   ;save end pointer
         MOV     CX,DX                   ;get pointer to end of text
         SUB     CX,BUFFER+2             ;dif in pointers is count
@@ -494,9 +514,6 @@ NoBack:
         CMP     WORD PTR [BX],0A0Dh     ;Was there one there?
         JZ      GOTEND                  ;yep, here is the end
         ADD     BX,2                    ;nope, bump back to SCASB spot
-        CMP     BYTE PTR [BX],AL        ;Was there ^Z there?
-        JZ      GOTEND                  ;yep, chop it
-        INC     BX                      ;Nope, skip last char
 GOTEND:
         MOV     BP,BX                   ;BP = filesize-2(CRLF)+temp buffer+2
         MOV     WORD PTR DS:[BP],0      ;0 at end of the file
@@ -558,20 +575,24 @@ INNER_SORT_LOOP:
         JA      AXOK                    ;more chars in tester than column?
         XOR     SI,SI                   ;AN004; ;point SI to blank area
         MOV     AX,MAXREC               ;make AX be max length
+        jmp     short CompareSecond
 AXOK:
+        ADD     SI,COLUMN
+CompareSecond:
         MOV     DX,[DI]                 ;get length of best guy
         SUB     DX,COLUMN               ;adjust length for column
         JA      DXOK                    ;there are more chars after column
         XOR     DI,DI                   ;AN004; ;point air to a space
         MOV     DX,MAXREC               ;really big record
+        jmp     short CompareLengths
 DXOK:
+        ADD     DI,COLUMN
+CompareLengths:
         MOV     CX,AX                   ;AX is shortest record
         CMP     AX,DX                   ;perhaps DX is shorter
         JB      SMALL                   ;nope, leace CX alone
         MOV     CX,DX                   ;DX is shorter, put length in CX
 SMALL:
-        ADD     DI,COLUMN               ;offset into record
-        ADD     SI,COLUMN               ;offset into other record
         push    bx
         push    ax
         mov     bx,offset dg:table
@@ -609,41 +630,24 @@ END_INNER_SORT_LOOP:
 ; DI is guaranteed to be < SI
 ; make room for line at destination
 ;---------------------------
-        MOV     DX,[SI]                 ;get length of line
-        save    <SI,DI>                 ;save positions of people
-        STD                             ;go right to left
-        MOV     CX,BP                   ;get end of file pointer
-        SUB     CX,DI                   ;get length from destination to end
-        MOV     SI,BP                   ;start from end
-        DEC     SI                      ;SI points to end of file
-        MOV     DI,SI                   ;destination is end of file
-        ADD     DI,DX                   ;DI points to new end of file
-        REP     MOVSB                   ;blam. Move every one up
-        CLD                             ;back left to right
-        restore <DI,SI>                 ;get old source and destination
-;---------------------------
-;  MOVE NEW LINE INTO PLACE
-;---------------------------
-        save    <DI>                    ;save destination
-        ADD     SI,DX                   ;adjust for previous movement
-        save    <SI>                    ;save this value
-        MOV     CX,DX                   ;get number to move
-        REP     MOVSB                   ;blam. move the new line in
-        restore <SI,DI>                 ;get back destination and new source
-;---------------------------
-;  DELETE LINE FROM OLD PLACE
-;---------------------------
-        save    <DI>                    ;save destination
-        MOV     CX,BP                   ;pointer to end
-        ADD     CX,DX                   ;remember bump
-        SUB     CX,SI                   ;get count of bytes to move
-        INC     CX                      ;turn it into a word
-        SHR     CX,1                    ;or a count of words
-        MOV     DI,SI                   ;new destination of move
-        ADD     SI,DX                   ;offset of block
-        REP     MOVSW                   ;blam, squeeze out the space
-        restore <DI>                    ;get back original destination
-        MOV     WORD PTR DS:[BP-2],0    ;remake the end of file mark
+        ; Rotate the two adjacent byte ranges in place. Reversing each
+        ; range and then their union moves the chosen record to DI and
+        ; restores the bytes of every record to their original order.
+        push    di
+        mov     dx,si
+        add     dx,[si]                 ; exclusive end of chosen record
+        dec     si
+        call    reverse_bytes           ; preceding records
+        mov     di,bx
+        mov     si,dx
+        dec     si
+        call    reverse_bytes           ; chosen record, including its link
+        pop     di
+        push    di
+        mov     si,dx
+        dec     si
+        call    reverse_bytes           ; combined range
+        pop     di
 
 END_INSERT:
         ADD     DI,[DI]                 ;link to next guy
@@ -673,14 +677,29 @@ WRITE_FILE:
         JZ      WRTOK                   ;yes, say bye bye
 BADWRT:
 
-;;;;;   mov     ax,msg_NoDisk           ;AN000; Strange write error
-;;;;;   mov     dh,-1                   ;AN003; class: extended error
-;;;;;   call    error_exit              ;AN000; Bye bye
-        mov     al,RETCODE_ERROR        ;AN000; return an error code (errorlevel)
-        sys     EXIT                    ;AN000;
+        mov     ax,Msg_WriteError
+        mov     dh,1
+        call    error_exit
 WRTOK:
         MOV     AL,RETCODE_NOERROR      ;AN000; Errorlevel 0 (No error!)
         sys     EXIT                    ;bye!
+
+; Reverse DS:[DI..SI] inclusive. DS and ES address the sort buffer.
+reverse_bytes proc near
+reverse_pair:
+        cmp     di,si
+        jae     reverse_done
+        mov     al,[di]
+        mov     ah,[si]
+        mov     [di],ah
+        mov     [si],al
+        inc     di
+        dec     si
+        jmp     short reverse_pair
+reverse_done:
+        ret
+reverse_bytes endp
+
 
         PAGE   ;
 ;************************************************************

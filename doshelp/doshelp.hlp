@@ -376,9 +376,15 @@ FDISK        Manage fixed-disk partitions.
 
  FDISK [/STATUS]
  FDISK /MBR
+ FDISK disk [/PRI:size] [/EXT:size] [/LOG:size] [/Q]
 
    /STATUS         Report disk usage.
-   /MBR            Rewrite the master boot code.
+   /MBR            Rewrite the first disk's master boot code. If the 55AAh
+                   signature is missing, this also clears the partition table.
+   disk            Fixed disk number, starting at 1.
+   /PRI, /EXT      Create a primary or extended DOS partition (size in MB).
+   /LOG            Create a logical drive in the extended partition.
+   /Q              Suppress the reboot prompt.
 FILES=       Set the maximum number of open files.
 
  FILES=count [/L]
@@ -395,6 +401,8 @@ FIND         Search for text in files or standard input.
    /C              Count matching lines.
    /N              Include line numbers.
    /I              Ignore differences in letter case.
+
+ ERRORLEVEL is 0 if the string occurs, 1 if absent, or 2 on error.
 FOR          Run a command for each item in a set.
 
  FOR %v IN (set) DO command
@@ -773,8 +781,9 @@ SWITCHES=    Configure DOS startup switches.
    /K              Use conventional keyboard handling.
 SYS          Transfer DOS system files to a disk.
 
- SYS drive:
+ SYS [source] drive:
 
+   source          Drive or path containing the DOS system files.
    drive           Destination disk for the DOS system files.
 TIME         Display or set the time.
 

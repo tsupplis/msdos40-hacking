@@ -33,6 +33,9 @@
 :def 11 "Can not specify default drive",CR,LF                  ; New
 :def 12 "Write failure, diskette unusable",CR,LF               ; New
 
+:def 19 "SYS: Required parameters missing.",CR,LF
+:def 20 "SYS: Cannot read target disk parameters.",CR,LF
+
 :class  C
 
 :use 13 COMMON12                 ; Cannot %1 to a Network drive  Old
