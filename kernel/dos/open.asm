@@ -228,7 +228,7 @@ LOCAL_OPEN:
 	ASSUME	ES:NOTHING
 
 	LES	DI,ThisSFT
-	CallResident DEV_OPEN_SFT,DS
+	invoke  OpenDeviceSft
 	TEST	ES:[DI.sf_mode],sf_isfcb; Clears carry
 	retz				; sf_mode correct
 	MOV	AX,[CurrentPDB]

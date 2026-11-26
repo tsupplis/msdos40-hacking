@@ -74,7 +74,29 @@ include version.inc
 	i_need	DOS34_FLAG,WORD ;AN000;
 	i_need	fshare,BYTE	;AN010; share flag
 
-Break	<IOFUNC -- DO FUNCTION 1-12 I/O>
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry IOFUNC,201
+        DosCodeEntry DEV_OPEN_SFT,202
+        DosCodeEntry DEV_CLOSE_SFT,203
+        DosCodeEntry DEVIOCALL2,204
+
+; A driver's strategy and interrupt entries return here with A20 released.
+CallDeviceDriver PROC NEAR
+	MOV	AX,[SI.SDEVSTRAT]
+	MOV	WORD PTR CS:[CALLDEVAD],AX
+	MOV	WORD PTR CS:[CALLDEVAD+2],DS
+	CALL	DWORD PTR CS:[CALLDEVAD]
+	MOV	AX,[SI.SDEVINT]
+	MOV	WORD PTR CS:[CALLDEVAD],AX
+	CALL	DWORD PTR CS:[CALLDEVAD]
+        RET
+CallDeviceDriver ENDP
+CODE ENDS
+
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+
+Break	<DeviceFunction -- DO FUNCTION 1-12 I/O>
 
 ; Inputs:
 ;	DS:SI Points to SFT
@@ -105,10 +127,10 @@ Break	<IOFUNC -- DO FUNCTION 1-12 I/O>
 ;		Always ready
 ; AX altered, all other registers preserved
 
-	procedure   IOFUNC,NEAR
+	procedure   DeviceFunction,NEAR
 ASSUME	DS:NOTHING,ES:NOTHING
 
-	Assert	ISSFT,<DS,SI>,"IOFUNC"
+	Assert	ISSFT,<DS,SI>,"DeviceFunction"
 	MOV	WORD PTR [IOXAD+2],SS
 	MOV	WORD PTR [IOXAD],OFFSET DOSGROUP:DEVIOBUF
 	MOV	WORD PTR [IOSCNT],1
@@ -121,7 +143,15 @@ IOTO22:
 	JNZ	IOTo33								;AN000;
 	JMP	IOTOFILE							;AN000;
 IOTO33:
-	invoke	save_world
+	PUSH	ES
+	PUSH	DS
+	PUSH	BP
+	PUSH	DI
+	PUSH	SI
+	PUSH	DX
+	PUSH	CX
+	PUSH	BX
+	PUSH	AX
 	MOV	DX,DS
 	MOV	BX,SS
 	MOV	DS,BX
@@ -140,7 +170,7 @@ no_sys_wait:
 
 Table	Segment
 Public DEV001S, DEV001E 		; Pathgen labels
-DEV001s:
+DEV001s LABEL BYTE
 ;		length of packets
 LenTab	DB	DRDWRHL, DRDNDHL, DRDWRHL, DSTATHL, DFLSHL, DRDNDHL
 
@@ -152,7 +182,7 @@ CmdTab	DB	86h,	DEVRD		; 0 input
 	DB	87h,	DEVOST		; 3 output status
 	DB	86h,	DEVIFL		; 4 input flush
 	DB	86H,	DEVRDND 	; 5 input status with system WAIT
-DEV001E:
+DEV001E LABEL BYTE
 Table	ENDS
 
 	MOV	BL,AH			; get function
@@ -183,7 +213,7 @@ SETIN:					;AN000;
  ENDIF					;AN000;
 	MOV	DS,DX
 ASSUME	DS:NOTHING
-	CALL	DEVIOCALL
+	CALL	IssueSftRequest
 	MOV	DI,[IOCALL.REQSTAT]
 	TEST	DI,STERR
 	JNZ	DevErr
@@ -208,7 +238,15 @@ DNODRD: MOV	AH,BYTE PTR [IOCALL.REQSTAT+1]
 	AND	AH,STBUI SHR 8
 
 QuickReturn:				;AN000; 2/13/KK
-	invoke	restore_world
+	POP	AX
+	POP	BX
+	POP	CX
+	POP	DX
+	POP	SI
+	POP	DI
+	POP	BP
+	POP	DS
+	POP	ES
 ASSUME	DS:NOTHING
 	MOV	AX,WORD PTR [DEVIOBUF]
 	return
@@ -233,7 +271,7 @@ GOOD:					;AN000;
 ;------------------------------ End of DBCS 2/13/KK
  ENDIF					;AN000;
 DevErr:
-	TEST	CS:[DOS34_FLAG],X25_Special ;AN000; from disk.asm
+	TEST	SS:[DOS34_FLAG],X25_Special ;AN000; from disk.asm
 	JZ	notx25			 ;AN000; no
 	PUSH	AX			 ;AN000; unknown command ?
 	MOV	AX,DI			 ;AN000;
@@ -244,11 +282,19 @@ DevErr:
 	JMP	okDevIO 		 ;AN000;
 notx25:
 	MOV	AH,CL
-	invoke	CHARHARD
+	CallResident CHARHARD
 	CMP	AL,1
 	JNZ	NO_RETRY
-	invoke	restore_world
-	JMP	IOFUNC
+	POP	AX
+	POP	BX
+	POP	CX
+	POP	DX
+	POP	SI
+	POP	DI
+	POP	BP
+	POP	DS
+	POP	ES
+	JMP	DeviceFunction
 
 NO_RETRY:
 ;   Know user must have wanted Ignore OR Fail.	Make sure device shows ready
@@ -277,7 +323,7 @@ IOIST:
 
 IOUT:
 	CALL	SETXADDR
-	invoke	DOS_WRITE
+	invoke	WriteFileData
 	CALL	RESTXADDR		; If you change this into a jmp don't
 	return				; come crying to me when things don't
 					; work ARR
@@ -285,7 +331,7 @@ IOUT:
 IOIN:
 	CALL	SETXADDR
 	OR	[DOS34_FLAG],Disable_EOF_I24   ;AN000;
-	invoke	DOS_READ
+	invoke	ReadFileData
 	AND	[DOS34_FLAG],NO_Disable_EOF_I24   ;AN000;
 	OR	CX,CX			; Check EOF
 	CALL	RESTXADDR
@@ -296,7 +342,15 @@ IOIN:
 
 SETXADDR:
 	POP	WORD PTR [CALLSCNT]	; Return address
-	invoke	save_world
+	PUSH	ES
+	PUSH	DS
+	PUSH	BP
+	PUSH	DI
+	PUSH	SI
+	PUSH	DX
+	PUSH	CX
+	PUSH	BX
+	PUSH	AX
 	PUSH	WORD PTR [DMAADD]	; Save Disk trans addr
 	PUSH	WORD PTR [DMAADD+2]
 	MOV	WORD PTR [THISSFT+2],DS
@@ -310,16 +364,24 @@ SETXADDR:
 	JMP	SHORT RESTRET		; RETURN ADDRESS
 
 RESTXADDR:
-	DOSAssume   CS,<DS>,"RestXAddr"
+	DOSAssume   SS,<DS>,"RestXAddr"
 	POP	WORD PTR [CALLSCNT]	; Return address
 	POP	WORD PTR [DMAADD+2]	; Restore Disk trans addr
 	POP	WORD PTR [DMAADD]
-	invoke	restore_world
+	POP	AX
+	POP	BX
+	POP	CX
+	POP	DX
+	POP	SI
+	POP	DI
+	POP	BP
+	POP	DS
+	POP	ES
 ASSUME	DS:NOTHING
 RESTRET:JMP	WORD PTR [CALLSCNT]	; Return address
-EndProc IOFUNC
+EndProc DeviceFunction
 
-Break <DEV_OPEN_SFT, DEV_CLOSE_SFT - OPEN or CLOSE A DEVICE>
+Break <OpenDevice, CloseDevice - OPEN or CLOSE A DEVICE>
 
 ; Inputs:
 ;	ES:DI Points to SFT
@@ -329,15 +391,30 @@ Break <DEV_OPEN_SFT, DEV_CLOSE_SFT - OPEN or CLOSE A DEVICE>
 ;	None
 ; ALL preserved
 
-	procedure   DEV_OPEN_SFT,NEAR
-ASSUME	DS:NOTHING,ES:NOTHING
+	procedure   OpenDevice,NEAR
+        PUSH DS
+        PUSH SS
+        POP DS
+        CALL OpenDeviceSft
+        POP DS
+        RET
+        entry OpenDeviceSft
+ASSUME	DS:DOSGROUP,ES:NOTHING
 
-	Assert	ISSFT,<ES,DI>,"Dev_Open_SFT"
-	invoke	Save_World
+	Assert	ISSFT,<ES,DI>,"OpenDevice"
+	PUSH	ES
+	PUSH	DS
+	PUSH	BP
+	PUSH	DI
+	PUSH	SI
+	PUSH	DX
+	PUSH	CX
+	PUSH	BX
+	PUSH	AX
 	MOV	AL,DEVOPN
 	JMP	SHORT DO_OPCLS
 
-EndProc DEV_OPEN_SFT
+EndProc OpenDevice
 
 ; Inputs:
 ;	ES:DI Points to SFT
@@ -347,11 +424,26 @@ EndProc DEV_OPEN_SFT
 ;	None
 ; ALL preserved
 
-	procedure   DEV_CLOSE_SFT,NEAR
-ASSUME	DS:NOTHING,ES:NOTHING
+	procedure   CloseDevice,NEAR
+        PUSH DS
+        PUSH SS
+        POP DS
+        CALL CloseDeviceSft
+        POP DS
+        RET
+        entry CloseDeviceSft
+ASSUME	DS:DOSGROUP,ES:NOTHING
 
-	Assert	ISSFT,<ES,DI>,"Dev_Close_SFT"
-	invoke	Save_World
+	Assert	ISSFT,<ES,DI>,"CloseDevice"
+	PUSH	ES
+	PUSH	DS
+	PUSH	BP
+	PUSH	DI
+	PUSH	SI
+	PUSH	DX
+	PUSH	CX
+	PUSH	BX
+	PUSH	AX
 	MOV	AL,DEVCLS
 
 ;
@@ -364,7 +456,7 @@ ASSUME	DS:NOTHING,ES:NOTHING
 ;
 ; Is the SFT for the net?  If so, no action necessary.
 ;
-	invoke	Test_IFS_Remote 						;AC000;
+	CallResident Test_IFS_Remote,DS 						;AC000;
 	JNZ	OPCLS_DONE		; NOP on net SFTs
 	XOR	AH,AH			; Unit
 	TEST	ES:[DI.sf_flags],devid_device
@@ -375,7 +467,7 @@ ASSUME	DS:NOTHING,ES:NOTHING
 ; then just short circuit to done.
 ;
 ;;;;;	invoke	CheckShare
-	CMP	fshare,1		;AN010; /NC or no SHARE
+	CMP	DS:[fshare],1		;AN010; /NC or no SHARE
 	JBE	opCLs_Done		;AN010; yes
 	MOV	AH,ES:[DI.dpb_UNIT]
 	MOV	CL,ES:[DI.dpb_drive]
@@ -383,11 +475,14 @@ ASSUME	DS:NOTHING,ES:NOTHING
 GOT_DEV_ADDR:				; ES:DI -> device
 	TEST	ES:[DI.SDEVATT],DEVOPCL
 	JZ	OPCLS_DONE		; Device can't
+	PUSH	DS			; Keep DOSGROUP for the request packet
 	PUSH	ES
 	POP	DS
+	POP	ES
+	ASSUME DS:NOTHING
 	MOV	SI,DI			; DS:SI -> device
 OPCLS_RETRY:
-	Context ES
+	ASSUME ES:DOSGROUP
 	MOV	DI,OFFSET DOSGROUP:DEVCALL
 	MOV	BX,DI
 	PUSH	AX
@@ -400,10 +495,16 @@ OPCLS_RETRY:
 	STOSB				; Command
 	MOV	WORD PTR ES:[DI],0	; Status
 	PUSH	AX			; Save Unit,Command
-	invoke	DEVIOCALL2
+	invoke	IssueDeviceRequest
 	MOV	DI,ES:[BX.REQSTAT]
 	TEST	DI,STERR
 	JZ	OPCLS_DONEP		; No error
+	; INT 2Fh/120Ch can notify OPEN on the caller's stack.
+	; CHARHARD needs DOSGROUP in SS. Take the Fail exit otherwise.
+	MOV	DX,SS
+	MOV	BX,ES			; DOSGROUP for the request packet
+	CMP	DX,BX
+	JNE	OPCLS_DONEP
 	TEST	[SI.SDEVATT],DEVTYP
 	JZ	BLKDEV
 	MOV	AH,86H			; Read error in data, Char dev
@@ -413,7 +514,7 @@ BLKDEV:
 	MOV	AL,CL			; Drive # in AL
 	MOV	AH,6			; Read error in data, Blk dev
 HRDERR:
-	invoke	CHARHARD
+	CallResident CHARHARD,ES
 	CMP	AL,1
 	JNZ	OPCLS_DONEP		; IGNORE or FAIL
 					;  Note that FAIL is essentually IGNORED
@@ -423,12 +524,20 @@ HRDERR:
 OPCLS_DONEP:
 	POP	AX			; Clean stack
 OPCLS_DONE:
-	invoke	Restore_World
+	POP	AX
+	POP	BX
+	POP	CX
+	POP	DX
+	POP	SI
+	POP	DI
+	POP	BP
+	POP	DS
+	POP	ES
 	return
 
-EndProc DEV_CLOSE_SFT
+EndProc CloseDevice
 
-Break	<DEVIOCALL, DEVIOCALL2 - CALL A DEVICE>
+Break	<IssueSftRequest, IssueDeviceRequest - CALL A DEVICE>
 
 ; Inputs:
 ;	DS:SI Points to device SFT
@@ -439,15 +548,16 @@ Break	<DEVIOCALL, DEVIOCALL2 - CALL A DEVICE>
 ;	DS:SI -> Device driver
 ; DS:SI,AX destroyed, others preserved
 
-	procedure   DEVIOCALL,NEAR
+	procedure   IssueSftRequest,NEAR
 ASSUME	DS:NOTHING,ES:NOTHING
 
-	Assert	ISSFT,<DS,SI>,"DevIOCall"
+	Assert	ISSFT,<DS,SI>,"IssueSftRequest"
 	LDS	SI,[SI.sf_devptr]
 
-	entry	DEVIOCALL2
+	entry	IssueDeviceRequest
+        ASSUME ES:DOSGROUP
 
-	EnterCrit   critDevice
+	CallResident EcritDevice,ES
 
 	TEST	[SI.SDEVATT],DevTyp    ;AN000; >32mb   block device ?
 	JNZ	chardev2	       ;AN000; >32mb   no
@@ -478,19 +588,13 @@ chksector:			       ;AN000; >32mb
 
 chardev2:			       ;AN000;
 ; As above only DS:SI points to device header on entry, and DS:SI is preserved
-	MOV	AX,[SI.SDEVSTRAT]
-	MOV	WORD PTR [CALLDEVAD],AX
-	MOV	WORD PTR [CALLDEVAD+2],DS
-	CALL	DWORD PTR [CALLDEVAD]
-	MOV	AX,[SI.SDEVINT]
-	MOV	WORD PTR [CALLDEVAD],AX
-	CALL	DWORD PTR [CALLDEVAD]
+	CallResident CallDeviceDriver,ES
 	CALL	VIRREAD 		;AN000;LB. move data from SC to buffer
 	JC	chardev2		;AN000;LB. bad sector or exceeds max sec
 dev_exit:
-	LeaveCrit   critDevice
+	CallResident LcritDevice,ES
 	return
-EndProc DEVIOCALL
+EndProc IssueSftRequest
 
 Break	<SETREAD, SETWRITE -- SET UP HEADER BLOCK>
 
@@ -748,9 +852,9 @@ Break	<VIRREAD- virtually read data into buffer>
 ;		       0 if failed
 
 	procedure   VIRREAD,NEAR	    ;AN000;
-ASSUME	DS:NOTHING,ES:NOTHING		    ;AN000;
+ASSUME	DS:NOTHING,ES:DOSGROUP		    ;AN000;
 
-	CMP	[SC_FLAG],0		    ;AN000;;LB.  from SC fill
+	CMP	ES:[SC_FLAG],0		    ;AN000;;LB.  from SC fill
 	JZ	sc2end			    ;AN000;;LB.  no
 	MOV	AX,[TEMP_VAR2]		    ;AN000;;LB. restore buffer addr
 	MOV	WORD PTR [CALLXAD+2],AX     ;AN000;;LB.
@@ -836,6 +940,15 @@ sexit:					    ;AN000;
 	return				    ;AN000;    ;LB.
 
 EndProc SC2BUF
-CODE	ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC DevEntries
+DevEntries LABEL WORD
+        DW OFFSET DOSGROUP:IOFUNC_VECTOR, OFFSET DOSGROUP:DeviceFunction
+        DW OFFSET DOSGROUP:DEV_OPEN_SFT_VECTOR, OFFSET DOSGROUP:OpenDevice
+        DW OFFSET DOSGROUP:DEV_CLOSE_SFT_VECTOR, OFFSET DOSGROUP:CloseDevice
+        DW OFFSET DOSGROUP:DEVIOCALL2_VECTOR, OFFSET DOSGROUP:IssueDeviceRequest
+        DW 0
+DOSEND ENDS
     END
 

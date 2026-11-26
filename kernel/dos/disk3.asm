@@ -330,7 +330,7 @@ NEXTBUFF:			; Search for buffers
 	PUSH	AX			    ;LB. save reg			;AN000;
 	PUSH	CX			    ;LB. save reg			;AN000;
 	PUSH	DX			    ;LB. save reg			;AN000;
-	CallResident INVALIDATE_SC		    ;LB. invalidate SC			;AN000;
+	invoke  INVALIDATE_SC		    ;LB. invalidate SC			;AN000;
 	POP	DX			    ;LB. save reg			;AN000;
 	POP	CX			    ;LB. save reg			;AN000;
 	POP	AX			    ;LB. save reg			;AN000;

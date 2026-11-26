@@ -120,7 +120,7 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	MOV	AL,ES:[BP.dpb_UNIT]
 	PUSH	BX
 	PUSH	ES
-	CallResident SETREAD
+	invoke  SETREAD
 	JMP	DODSKOP
 
 Break	<DWRITE -- SEE ABOUT WRITING>
@@ -183,13 +183,13 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	MOV	AL,ES:[BP.dpb_UNIT]
 	PUSH	BX
 	PUSH	ES
-	CallResident SETWRITE
+	invoke  SETWRITE
 DODSKOP:
 	MOV	CX,DS		; Save DS
 	POP	DS		; DS:BP points to DPB
 	PUSH	DS
 	LDS	SI,DS:[BP.dpb_driver_addr]
-	CallResident DEVIOCALL2
+	invoke  IssueDeviceRequest
 	MOV	DS,CX		; Restore DS
 	POP	ES		; Restore ES
 	POP	BX

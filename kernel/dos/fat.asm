@@ -493,7 +493,7 @@ FAT_GOT_DPB:
 	LDS	SI,ES:[BP.dpb_driver_addr]  ; DS:SI Points to device header
 ASSUME	DS:NOTHING
 	POP	ES			; ES:BX Points to call header
-	CallResident DEVIOCALL2
+	invoke  IssueDeviceRequest
 	Context DS
 	POP	ES			; Restore ES:BP
 	MOV	DI,[DEVCALL.REQSTAT]
@@ -669,7 +669,7 @@ GOTGETBUF:
 	POP	DS			; DS:SI Points to device header
 ASSUME	DS:NOTHING
 	POP	ES			; ES:BX Points to call header
-	CallResident DEVIOCALL2
+	invoke  IssueDeviceRequest
 	POP	ES			; Restore ES:BP
 	Context DS
 	MOV	DI,[DEVCALL.REQSTAT]

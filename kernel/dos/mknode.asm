@@ -594,7 +594,7 @@ yesdirty3:
         MOV     BX,DS
         MOV     word ptr ES:[DI.sf_devptr+2],BX
         RestoreReg <BX,DS>      ; need to use DS for segment later on
-        CallResident Dev_Open_SFT    ; increment ref. count
+        invoke  OpenDevice    ; increment ref. count
         mov     [VIRTUAL_OPEN],1; set flag
 GotADevice:
         RestoreReg <DI,ES>
@@ -887,7 +887,7 @@ EndProc FREEENT
         mov     [VIRTUAL_OPEN],0        ; reset flag
         SaveReg <ES,DI>
         LES     DI,[THISSFT]
-        CallResident DEV_CLOSE_SFT
+        invoke  CloseDevice
         RestoreReg <DI,ES>
 
 ALL_CLOSED:

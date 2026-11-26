@@ -567,12 +567,35 @@ CheckNetworkClose:
         MOV     WORD PTR DS:[CurrentSFT+2],CS
         MOV     WORD PTR CS:[RemoteSFT+5],80h ; local character device for open
         MOV     WORD PTR CS:[RemoteSFT+9],CS
+        MOV     CS:PacketSegment,DS
         MOV     AX,120Ch                ; set SFT mode on the application stack
         PUSH    AX
         INT     2Fh
         POP     BX
-        MOV     WORD PTR CS:[RemoteSFT+5],8000h ; remote SFT for close
         JC      BadOpenMode
+        ; Repeat on the application stack with a driver that rejects OPEN.
+        ; 120Ch must finish SFT initialization and unwind to this exact stack.
+        MOV     CS:OpenStack,SP
+        MOV     AX,120Ch
+        PUSH    AX
+        INT     2Fh
+        POP     BX
+        JC      BadOpenMode
+        CMP     SP,CS:OpenStack
+        JNE     BadOpenMode
+        ; A DOSGROUP-relative write through SS lands in this guard.
+        PUSH    ES
+        PUSH    DI
+        PUSH    SS
+        POP     ES
+        XOR     DI,DI
+        MOV     CX,GuardWords
+        MOV     AX,0A5A5h
+        REPE    SCASW
+        POP     DI
+        POP     ES
+        JNE     BadOpenMode
+        MOV     WORD PTR CS:[RemoteSFT+5],8000h ; remote SFT for close
         MOV     AX,1201h
         PUSH    AX
         INT     2Fh
@@ -601,6 +624,8 @@ RestoreSFT:
         Check   JNZ
         CMP     AX,1234h
         Check   JE
+        CMP     OpenSeen,3
+        Check   JE
         RET
 NetworkHook:
         PUSHF
@@ -617,8 +642,38 @@ OldMultiplex DD 0
 RemoteSFT DB 5 DUP (0)                 ; sf_flags at offset 5
           DW 8000h
           DW OFFSET MockDevice,0        ; sf_devptr
+          DB 48 DUP (0)                 ; remaining DOS 4 SFT fields
 MockDevice DD -1
-          DW 0                          ; no device open/close requests
+          DW 8800h                      ; character driver with open/close
+          DW OFFSET MockStrategy,OFFSET MockInterrupt
+          DB 'TESTDEV '
+OpenStack DW 0
+PacketSegment DW 0
+OpenSeen DB 0
+MockStrategy PROC FAR
+        PUSH AX
+        MOV AX,ES
+        CMP AX,CS:PacketSegment
+        JNE EndStrategy
+        CMP BYTE PTR ES:[BX],13         ; open packet length
+        JNE EndStrategy
+        CMP BYTE PTR ES:[BX+2],13       ; open command
+        JNE EndStrategy
+        INC CS:OpenSeen
+EndStrategy:
+        POP AX
+        RET
+MockStrategy ENDP
+MockInterrupt PROC FAR
+        CMP CS:OpenSeen,1
+        JE FirstOpen
+        MOV WORD PTR ES:[BX+3],810Ch    ; done, error, general failure
+        RET
+FirstOpen:
+        INC CS:OpenSeen
+        MOV WORD PTR ES:[BX+3],0100h    ; request complete
+        RET
+MockInterrupt ENDP
 OutputReturned DB ' OUTT PASS',13,10,'$'
 MockSft DW 1
 MockBuffer DB 6 DUP (0)
@@ -887,6 +942,8 @@ Fcb     DB      0,'HMATEST TMP',25 DUP (0)
 Cache   DB      4096 DUP (0)
 CODE    ENDS
 STACK   SEGMENT PARA STACK 'STACK'
+GuardWords EQU 1024
+        DW      GuardWords DUP (0A5A5h)
         DW      128 DUP (?)
 STACK   ENDS
         END     Start

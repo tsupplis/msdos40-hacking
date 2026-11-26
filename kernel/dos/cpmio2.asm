@@ -264,10 +264,10 @@ AUXILP:
 	CallResident SPOOLINT
 TAISTRT:
 	MOV	AH,1
-	CallResident IOFUNC
+	invoke  DeviceFunction
 	JZ	AUXILP
 	XOR	AH,AH
-	CallResident IOFUNC
+	invoke  DeviceFunction
 	return
 EndProc ReadAuxChar
 
@@ -357,7 +357,7 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	invoke GetConsoleSft
 	JC	BADJFNCON
 	MOV	AH,4
-	CallResident IOFUNC
+	invoke  DeviceFunction
 
 BADJFNCON:
 	POP	DX

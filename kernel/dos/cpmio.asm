@@ -160,7 +160,7 @@ INTEST:
 	cmp	[Printer_Flag],0	; is printer idle?
 	jnz	no_sys_wait
 	mov	ah,5			; get input status with system wait
-	CallResident IOFUNC
+	invoke  DeviceFunction
 no_sys_wait:
 ;**************************************************************************
 	MOV	AH,84h
@@ -208,7 +208,7 @@ NoUpdate:
 	JMP	Intest
 Get:
 	XOR	AH,AH
-	CallResident IOFUNC
+	invoke  DeviceFunction
 	POP	SI
 	POP	DS
 ;;; 7/15/86
@@ -293,7 +293,7 @@ RAW22:						      ;AN000;
 	mov	[Intercon],0		;AN000; disable interim characters
  ENDIF					;AN000;
 	MOV	AH,1
-	CallResident IOFUNC
+	invoke  DeviceFunction
 	JNZ	RESFLG
  IF  DBCS				;AN000;
 	pop	word ptr [InterCon]	;AN000; restore interim flag
@@ -307,7 +307,7 @@ RESFLG:
 	AND	BYTE PTR ES:[DI.user_F],0FFH-40H    ; Reset user's zero flag
  IF  DBCS				;AN000;
 	XOR	AH,AH			;AN000;
-	CallResident IOFUNC			;AN000; get the character
+	invoke  DeviceFunction			;AN000; get the character
 	pop	word ptr [InterCon]	;AN000;
 	return				;AN000;
  ENDIF					;AN000; 				;AN000;
@@ -330,14 +330,14 @@ RILP:
 	POP	BX
 	retc
 	MOV	AH,1
-	CallResident IOFUNC
+	invoke  DeviceFunction
 	JNZ	Got
 	MOV	AH,84h
 	CallResident ConsoleIdle
 	JMP	RILP
 Got:
 	XOR	AH,AH
-	CallResident IOFUNC
+	invoke  DeviceFunction
  IF  DBCS				;AN000;
 	cmp	[InterChar],1		;AN000;    2/11/KK
 ;								2/11/KK
@@ -429,11 +429,11 @@ ROLP:
 	CallResident DSKSTATCHK		     ;AN002; check control break
 RAWOSTRT:
 	MOV	AH,3
-	CallResident IOFUNC
+	invoke  DeviceFunction
 	JZ	ROLP
 	POP	AX
 	MOV	AH,2
-	CallResident IOFUNC
+	invoke  DeviceFunction
 	CLC			; Clear carry indicating successful
 	return
 EndProc RawConsoleIO

@@ -71,7 +71,7 @@ DuplicateSft:
 	Assert	ISSFT,<ES,DI>,"DOSDup"
 	CallResident IsSFTNet,DS
 	JNZ	DO_INC
-	CallResident DEV_OPEN_SFT,DS
+	invoke  OpenDeviceSft
 DO_INC:
 	Assert	ISSFT,<ES,DI>,"DOSDup/DoInc"
 	INC	ES:[DI.sf_ref_count]	; Clears carry (if this ever wraps

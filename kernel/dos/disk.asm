@@ -265,11 +265,11 @@ ReadRawRetry:
 	MOV	BX,DI			; DS:BX transfer addr
 	XOR	AX,AX			; Media Byte, unit = 0
 	MOV	DX,AX			; Start at 0
-	CallResident SETREAD
+	invoke  SETREAD
 	PUSH	DS			; Save Seg part of Xaddr
 	LDS	SI,[THISSFT]
 	Assert	ISSFT,<DS,SI>,"ReadFileData/DvRdRawR"
-	CallResident DEVIOCALL
+	invoke  IssueSftRequest
 	MOV	DX,DI			; DS:DX is preserved by INT 24
 	MOV	AH,86H			; Read error
 	MOV	DI,[DEVCALL.REQSTAT]
@@ -319,14 +319,14 @@ ASSUME	DS:NOTHING
 	MOV	AX,DX
 	PUSH	CX
 	MOV	CX,1
-	CallResident SETREAD
+	invoke  SETREAD
 	POP	CX
 	LDS	SI,[THISSFT]
 	Assert	ISSFT,<DS,SI>,"ReadFileData/NotRdCon"
 	LDS	SI,[SI.sf_devptr]
 DVRDLP:
 	CallResident DSKSTATCHK
-	CallResident DEVIOCALL2
+	invoke  IssueDeviceRequest
 	PUSH	DI		; Save "count" done
 	MOV	AH,86H
 	MOV	DI,[DEVCALL.REQSTAT]
@@ -552,11 +552,11 @@ nocommit:				       ;AN000;
 DVWRTRAW:
 ASSUME	DS:NOTHING
 	XOR	AX,AX			; Media Byte, unit = 0
-	CallResident SETWRITE
+	invoke  SETWRITE
 	PUSH	DS			; Save seg of transfer
 	LDS	SI,[THISSFT]
 	Assert	ISSFT,<DS,SI>,"DosWrite/DvWrtRaw"
-	CallResident DEVIOCALL		; DS:SI -> DEVICE
+	invoke  IssueSftRequest		; DS:SI -> DEVICE
 	MOV	DX,DI			; Offset part of Xaddr saved in DX
 	MOV	AH,87H
 	MOV	DI,[DEVCALL.REQSTAT]
@@ -621,17 +621,17 @@ CheckNullOutput:
 	JZ	WRTCOOKJ		; Yes, transfer nothing
 	PUSH	CX
 	MOV	CX,1
-	CallResident SETWRITE
+	invoke  SETWRITE
 	POP	CX
 	LDS	SI,[THISSFT]
 	OR	SS:[DOS34_FLAG],X25_Special;AN000;;PTM. bad x25 driver
 	MOV	AH,3			;AN000;;PTM. prompt critical error ASAP
-	CallResident IOFUNC			;AN000;;PTM.
+	invoke  DeviceFunction			;AN000;;PTM.
 	Assert	ISSFT,<DS,SI>,"DosWrite/TestDevCon"
 	LDS	SI,[SI.sf_devptr]
 DVWRTLP:
 	CallResident DSKSTATCHK
-	CallResident DEVIOCALL2
+	invoke  IssueDeviceRequest
 	PUSH	DI
 	MOV	AH,87H
 	MOV	DI,[DEVCALL.REQSTAT]

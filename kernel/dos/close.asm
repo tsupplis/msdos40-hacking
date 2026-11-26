@@ -271,7 +271,7 @@ CloseFinish:
 ;
 ;;;; 7/21/86
 	PUSHF				; save flag from DirFromSFT
-	CallResident Dev_Close_SFT
+	invoke  CloseDevice
 	POPF
 ;;;; 7/21/86
 ;
@@ -408,7 +408,7 @@ LOCAL_COMMIT:
 	MOV	AX,-1
 	call	CloseEntry
 	PUSHF				;PTM.					;AN000;
-	CallResident DEV_OPEN_SFT		;PTM.  increment device count		;AN000;
+	invoke  OpenDevice		;PTM.  increment device count		;AN000;
 	POPF				;PTM.					;AN000;
 	CallResident LCritDisk		;PTM.					;AN000;
 	return

@@ -160,21 +160,21 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	XOR	DX,DX
 	MOV	AX,DX
 	PUSH	BX
-	CallResident SETREAD
+	invoke  SETREAD
 	DOSAssume   SS,<ES>,"TIME/SetRead"
 	PUSH	DS
 	LDS	SI,[BCLOCK]
 ASSUME	DS:NOTHING
-	CallResident DEVIOCALL2		;Get correct day count
+	invoke  IssueDeviceRequest		;Get correct day count
 	POP	DS
 	DOSAssume   SS,<DS>,"TIME/DevIOCall2"
 	POP	BX
-	CallResident SETWRITE
+	invoke  SETWRITE
 	POP	WORD PTR [TIMEBUF+4]
 	POP	WORD PTR [TIMEBUF+2]
 	LDS	SI,[BCLOCK]
 ASSUME	DS:NOTHING
-	CallResident DEVIOCALL2		;Set the time
+	invoke  IssueDeviceRequest		;Set the time
 	XOR	AL,AL
 	return
 EndProc SetTime
@@ -230,11 +230,11 @@ EndProc PackDateTime
 	MOV	CX,6
 	XOR	DX,DX
 	MOV	AX,DX
-	CallResident SETREAD
+	invoke  SETREAD
 	PUSH	DS
 	LDS	SI,[BCLOCK]
 ASSUME	DS:NOTHING
-	CallResident DEVIOCALL2		;Get correct date and time
+	invoke  IssueDeviceRequest		;Get correct date and time
 	POP	DS
 	DOSAssume   SS,<DS>,"ReadTime/DevIOCall2"
 	POP	BX
@@ -345,21 +345,21 @@ EndProc SETYEAR
 	XOR	DX,DX
 	MOV	AX,DX
 	PUSH	BX
-	CallResident SETREAD
+	invoke  SETREAD
 	DOSAssume   SS,<ES>,"DoDate/SetRead"
 	PUSH	DS
 	LDS	SI,[BCLOCK]
 ASSUME	DS:NOTHING
-	CallResident DEVIOCALL2		;Get correct date and time
+	invoke  IssueDeviceRequest		;Get correct date and time
 	POP	DS
 	POP	BX
 	DOSAssume   SS,<DS>,"DoDate/DevIOCall2"
-	CallResident SETWRITE
+	invoke  SETWRITE
 	POP	WORD PTR [TIMEBUF]
 	PUSH	DS
 	LDS	SI,[BCLOCK]
 ASSUME	DS:NOTHING
-	CallResident DEVIOCALL2		;Set the date
+	invoke  IssueDeviceRequest		;Set the date
 	POP	DS
 	DOSAssume   SS,<DS>,"DoDate/DevIOCall2(second)"
 	POP	BX
