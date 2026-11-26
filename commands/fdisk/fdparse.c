@@ -167,7 +167,7 @@ BEGIN                                                                   /* AN000
   p_val.p_range          =  uc(1);                                      /* AN000 - Number of ranges */
   p_val.p_range_one      =  uc(1);                                      /* AN000 - range number one */
   p_val.p_low_range      =  ul(1);                                      /* AN000 - low value for range */
-  p_val.p_high_range     =  ul(2);                                      /* AN000 - high value for range */
+  p_val.p_high_range     =  ul(MAX_FIXED_DISKS);                                      /* AN000 - high value for range */
 
   sp_val.p_values      =  uc(1);                                        /* AN000 - Number of values items returned */
   sp_val.p_range       =  uc(1);                                        /* AN000 - Number of ranges */

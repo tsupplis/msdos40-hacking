@@ -290,17 +290,14 @@ DiskTable2  dw	 0, 32680, 0803h, 512, 0	;For compatibility.
 ;******************************************************************************
 ;Variables for Mini disk initialization - J.K. 4/7/86
 ;******************************************************************************
-End_Of_BDSM	dw	?		;offset value of the ending address
+End_Of_BDSM	dw	offset BDSMs		;offset value of the ending address
 					;of BDSM table. Needed to figure out
 					;the Final_DOS_Location.
+PrimaryIndex	db	0		; ordinal among DOS primaries, active entries first
 numh		db	0		;number of hard files
-mininum 	db	0		;logical drive number for mini disk(s)
-num_mini_dsk	db	0		;# of mini disk installed
 Rom_Minidsk_num db	80h		;physical mini disk number
 Mini_HDLIM	dw	0
 Mini_SECLIM	dw	0
-Mini_BPB_ptr	dw	0		;temporary variable used to save the
-					;Mini Disk BPB pointer address in DskDrvs.
 ;J.K. 4/7/86 End of Mini Disk Init Variables **********************************
 
 
@@ -805,12 +802,6 @@ ORG_KEY:
 	XOR	AH,AH			; CHUCK FAT ID BYTE
 	MOV	HARDNUM,AL	      ;REMEMBER WHICH DRIVE IS HARD DISK
 	MOV	DRVMAX,AL	      ;AND SET INITIAL NUMBER OF DRIVES
-	SHL	AX,1			;TWO BYTES PER ADDRESS
-	MOV	DI,OFFSET DSKDRVS
-	ADD	DI,AX			;POINT TO HARDFILE LOCATION
-	MOV	SI,OFFSET HDSKTAB
-	MOVSW				;TWO ADDRESSES TO MOVE
-	MOVSW
 	MESSAGE FTESTINIT,<"BEFORE INT 13",CR,LF>
 ;SB33021********************************************************************
 	mov	DL, 80h     ;SB 	; tell rom bios to look at hard drives
@@ -818,7 +809,7 @@ ORG_KEY:
 	int	13h	    ;SB 	; call ROM-BIOS to get number of drives
 ;SB33021********************************************************************
 	JC	ENDDRV			;CARRY INDICATES OLD ROM, SO NO HARDFILE
-	MOV	HNUM,DL
+	MOV	numh,DL			; BIOS count; HNUM counts installed primaries
 ENDDRV:
 	MESSAGE FTESTINIT,<"SETTING UP BDSS",CR,LF>
 
@@ -1044,60 +1035,14 @@ DONE_DRIVES:
 ; SET UP ALL THE HARD DRIVES IN THE SYSTEM
 
 DOHARD:
-	MNUM	FTESTINIT+FTESTHARD,AX
-	MESSAGE FTESTINIT+FTESTHARD,<" HARD DISK(S) TO INITIALIZE",CR,LF>
-	MESSAGE FTESTINIT+FTESTHARD,<"HARD DISK 1",CR,LF>
+	CMP	numh,0
+	JE	STATIC_CONFIGURE
+	CALL	ScanPrimaries
+	CALL	DoMini
+	INC	PrimaryIndex
+	CALL	ScanPrimaries
 
-	CMP	HNUM,0		      ; IF (NO_HARD_FILES)
-	JLE	STATIC_CONFIGURE      ;   THEN EXIT TO CONFIGURE
 
-	MOV	DL,80H
-	MOV	DI,OFFSET BDSH		; SET UP FIRST HARD FILE.
-	MOV	BL,HARDNUM
-	CALL	SETHARD
-	assume	es:nothing
-	JNC	HARDFILE1_OK
-
-	DEC	HNUM		      ; FIRST HARD FILE IS BAD.
-	CMP	HNUM,0		      ; IF (SECOND_HARD_FILE)
-	JG	SECOND_HARD		;   THEN SET UP SECOND HARD FILE
-	JMP	SHORT STATIC_CONFIGURE
-
-HARDFILE1_OK:
-	CALL	INSTALL_BDS		; INSTALL BDS INTO LINKED LIST
-	CMP	HNUM,2		      ; IF (ONLY_ONE_HARDFILE)
-	JB	SETIT			;   THEN SETIT "IN PLACE"
-
-	MOV	BL,HARDNUM
-	INC	BL			; NEXT DRIVE LETTER
-	MOV	DI,OFFSET BDSX
-
-SECOND_HARD:				; SETUP SECOND HARD FILE
-
-	MESSAGE FTESTINIT+FTESTHARD,<"HARD DISK 2",CR,LF>
-	MOV	DL,81H			; NEXT HARD FILE
-	CALL	SETHARD
-	assume	es:nothing
-	JNC	HARDFILE2_OK
-	DEC	HNUM
-	JMP	SHORT SETIT
-
-HARDFILE2_OK:
-	CALL	INSTALL_BDS
-
-SETIT:
-	MOV	AL,HNUM
-	OR	AL,AL
-	JZ	STATIC_CONFIGURE
-	ADD	AL,HARDNUM
-	MOV	DRVMAX,AL
-
-; End of physical drive initialization.
-; *** Do not change the position of the following statement.-J.K.4/7/86
-; *** DoMini routine will use [DRVMAX] value for the start of the logical
-; *** drive number of Mini disk(s).
-
-       call    DoMini			       ;For setting up mini disks, if found -J.K.
 
 	assume	es:nothing
 ; END OF DRIVE INITIALIZATION.
@@ -1131,7 +1076,7 @@ SETIT:
 ; *** For mini disk configuration. -J.K. 4/7/86
 ; *** END_OF_BDSM will contains the ending address(offset) of BDSM table for
 ; *** mini disks which is located right after the label END96TPI.
-; *** The variable NUM_MINI_DSK will indicate the existance of the mini disk.-J.K. 4/7/86
+; *** Extra primary partitions and logical drives share this pool.
 
 
 STATIC_CONFIGURE:
@@ -1190,18 +1135,6 @@ CONFIGTWOHARD:
 
 CONFIGONEHARD:
 
-; ADJUST THE NUMBER OF DRIVES TO INCLUDE THE HARD DISKS.
-
-	PUSH	AX
-
-	MOV	AL,HARDNUM
-	ADD	AL,HNUM
-	add	al, num_mini_dsk		;J.K. 4/7/86 for mini disks installed
-						;if not installed, then num_mini_dsk = 0.
-	MOV	DRVMAX,AL
-	POP	AX				;now, static config is done.
-
-
 DYNAMIC_CONFIGURE:
 	call	Get_Para_Offset 		;For dynamic allocation, we are
 						;going to use offset address that
@@ -1211,7 +1144,7 @@ DYNAMIC_CONFIGURE:
 	assume	es:code
 	cld					;clear direction
 
-	cmp	[num_mini_dsk], 0		;Mini disk(s) installed ?
+	cmp	End_Of_BDSM, offset BDSMs	; Any pooled descriptors in use?
 	jz	CheckATROM			;No.
 	mov	ax, End_Of_BDSM 		;set the new ending address
 	call	Get_Para_Offset
@@ -1481,12 +1414,78 @@ NORM_RET:
 	RET
 GETBOOT ENDP
 
+; First pass installs one preferred primary per BIOS disk. After DoMini,
+; the second pass appends that disk's remaining primaries in table order
+; within each active/inactive group. Only mounted volumes consume slots.
+ScanPrimaries PROC NEAR
+	XOR	CX,CX
+	MOV	CL,numh
+	MOV	DL,80h
+PrimaryNextDisk:
+	PUSH	CX
+	PUSH	DX
+PrimaryNext:
+	CMP	DRVMAX,26
+	JAE	PrimaryEnd
+	MOV	DI,End_Of_BDSM
+	CMP	PrimaryIndex,0
+	JNE	PrimaryPool
+	CMP	HNUM,2
+	JAE	PrimaryPool
+	MOV	DI,OFFSET BDSH
+	CMP	HNUM,0
+	JE	PrimaryProbe
+	MOV	DI,OFFSET BDSX
+	JMP	SHORT PrimaryProbe
+PrimaryPool:
+	CMP	DI,OFFSET BDSMs + Max_mini_dsk_num * TYPE BDSM_type
+	JAE	PrimaryEnd
+	MOV	WORD PTR [DI].IsMini,0
+PrimaryProbe:
+	POP	DX
+	PUSH	DX
+	MOV	BL,DRVMAX
+	CALL	SETHARD
+	JC	PrimaryDone
+	; Hard disk volumes share a disk without floppy media-swap semantics.
+	CALL	Install_BDSM
+	CALL	RecordVolume
+	CMP	DI,End_Of_BDSM
+	JNE	PrimaryCount
+	ADD	End_Of_BDSM,TYPE BDSM_type
+PrimaryCount:
+	CMP	PrimaryIndex,0
+	JNE	PrimaryAdvance
+	INC	HNUM
+	JMP	SHORT PrimaryDone
+PrimaryAdvance:
+	INC	PrimaryIndex
+	CMP	PrimaryIndex,4
+	JB	PrimaryNext
+PrimaryDone:
+	CMP	PrimaryIndex,0
+	JE	PrimaryDiskDone
+	MOV	PrimaryIndex,1
+PrimaryDiskDone:
+	POP	DX
+	POP	CX
+	INC	DL
+	JZ	PrimaryReturn
+	LOOP	PrimaryNextDisk
+PrimaryReturn:
+	RET
+PrimaryEnd:
+	POP	DX
+	POP	CX
+	RET
+ScanPrimaries ENDP
+
 ;   SETHARD - GENERATE BPB FOR A VARIABLE SIZED HARD FILE.  IBM HAS A
 ;   PARTITIONED HARD FILE; WE MUST READ PHYSICAL SECTOR 0 TO DETERMINE WHERE
 ;   OUR OWN LOGICAL SECTORS START.  WE ALSO READ IN OUR BOOT SECTOR TO
 ;   DETERMINE VERSION NUMBER
 
-;   INPUTS:	DL IS ROM DRIVE NUMBER (80 OR 81)
+;   INPUTS:	DL IS ROM HARD DISK NUMBER (80h AND ABOVE)
 ;		DS:DI POINTS TO BDS
 ;   OUTPUTS:	CARRY CLEAR -> BPB IS FILLED IN
 ;		CARRY SET   -> BPB IS LEFT UNINITIALIZED DUE TO ERROR
@@ -1505,9 +1504,11 @@ SETHARD PROC	NEAR
 	MOV	FBIGFAT,0		; ASSUME 12 BIT FAT
 	PUSH	DX
 ;SB33027***************************************************************
+	push	di			; AH=08h may return ES:DI
 	mov	AH, 8		 ;SB	; set command to get drive parameters
 	int	13h		 ;SB	; call rom-bios disk routine
 ;SB33027***************************************************************
+	pop	di
 ; DH IS NUMBER OF HEADS-1
 ; DL IS NUMBER OF HARD DISKS ATTACHED
 ; LOW 6 BITS OF CL IS SECTORS/TRACK
@@ -1521,7 +1522,35 @@ SETHARD PROC	NEAR
 	CALL	GETBOOT 		;   IF (GETBOOT ())
 	assume	es:nothing
 	JC	SETRET			;	RETURN -1;
-	MOV	BX,1C2H+BOOTBIAS	;   P = &BOOT[0X1C2];
+	MOV	CL,PrimaryIndex
+	MOV	AH,80h			; active DOS primaries precede inactive ones
+PrimaryGroup:
+	MOV	BX,1C2h+BOOTBIAS
+PrimaryEntry:
+	MOV	AL,ES:[BX-4]
+	AND	AL,80h
+	CMP	AL,AH
+	JNE	PrimarySkip
+	MOV	AL,ES:[BX]
+	CMP	AL,1
+	JE	PrimaryMatch
+	CMP	AL,4
+	JE	PrimaryMatch
+	CMP	AL,6
+	JNE	PrimarySkip
+PrimaryMatch:
+	OR	CL,CL
+	JZ	SET2
+	DEC	CL
+PrimarySkip:
+	ADD	BX,16
+	CMP	BX,202h+BOOTBIAS
+	JB	PrimaryEntry
+	XOR	AH,80h
+	JZ	PrimaryGroup
+	JMP	SHORT SETRET
+
+; SetMini enters here with BX at the first EBR entry.
 SET1:
 	CMP	BYTE PTR ES:[BX],1	;   WHILE (P->PARTITIONTYPE != 1 &&
 	JZ	SET2
@@ -2381,7 +2410,7 @@ PURGE_96TPI ENDP
 ; Input: DRVMAX, DSKDRVS
 ;
 ; Output: MiniDisk installed. BDSM table established and installed to BDS.
-;	  num_mini_dsk -  the number of mini disks installed in the system.
+;	  DRVMAX - next available DOS drive letter.
 ;	  End_Of_BDSM - ending offset address of BDSM.
 ;
 ;
@@ -2389,7 +2418,7 @@ PURGE_96TPI ENDP
 ;		  GetBoot, WRMSG, int 13h (AH=8, Rom)
 ;		  FIND_MINI_PARTITION (new), Install_BDSM (new),
 ;		  SetMini (new, it will use SET1 routine)
-; Variables used: End_Of_BDSM, numh, mininum, num_mini_dsk,
+; Variables used: End_Of_BDSM, numh, DRVMAX,
 ;		  Rom_Minidsk_num, Mini_HDLIM, Mini_SECLIM
 ;		  BDSMs, BDSM_type (struc), Start_BDS
 ;******************************************************************************
@@ -2405,31 +2434,17 @@ DoMini:
 
 	push	ax			;Do I need to do this?
 
-	mov	di, offset BDSMs	;from now on, DI points to BDSM
-;SB33028********************************************************************
-	mov	dl, 80h 		;look at first hard drive     ;SB ;3.30*
-	mov	ah, 8h			;get drive parameters	      ;SB ;3.30*
-	int	13h			;call ROM-Bios		      ;SB ;3.30*
-;SB33028********************************************************************
-	cmp	dl, 0
-	jz	DoMiniRet		;no hard file? Then exit.
-	mov	numh, dl		;save the number of hard files.
-	xor	ax,ax
-	mov	al, drvmax
-	mov	mininum, al		;this will be the logical drive letter
-					;for mini disk to start with.
-
-	shl	ax, 1			;ax=number of devices. make it to word boundary
-	push	bx
-	mov	bx, offset DSKDRVS
-	add	bx, ax
-	mov	Mini_BPB_ptr, BX	;Mini_BPB_ptr points to the first available
-					;spot in DskDrvs for Mini disk which
-					;points to BPB area of BDSM.
-	pop	bx
-
+	mov	di, End_Of_BDSM	; first unused volume descriptor
 	mov	Rom_Minidsk_num, 80h
 DoMiniBegin:
+	cmp	DRVMAX, 26
+	jae	DoMiniRet
+	mov	dl, Rom_Minidsk_num
+	mov	ah, 8
+	push	di
+	int	13h
+	pop	di
+	jc	DoMiniNext
 	inc	dh			;Get # of heads (convert it to 1 based)
 	xor	ax, ax
 	mov	al, dh
@@ -2445,15 +2460,12 @@ DoMiniBegin:
 	jc	DoMiniNext
 	call	FIND_MINI_PARTITION
 DoMiniNext:
-	dec	numh
-	jz	DoMiniRet
 	inc	Rom_MiniDsk_Num 	;Next hard file
-;SB33028********************************************************************
-	mov	dl, Rom_MiniDsk_Num	;look at next hard drive      ;SB ;3.30*
-	mov	ah, 8h			;get drive parameters	      ;SB ;3.30*
-	int	13h			;call ROM-Bios		      ;SB ;3.30*
-;SB33028********************************************************************
-	jmp	DoMiniBegin
+	jz	DoMiniRet		; do not wrap FFh to a floppy drive
+	mov	al,Rom_MiniDsk_Num
+	sub	al,80h
+	cmp	al,numh
+	jb	DoMiniBegin
 
 DoMiniRet:
 	pop	ax
@@ -2464,7 +2476,7 @@ DoMiniRet:
 ;At entry:	DI -> BDSM entry
 ;		ES:BX -> 07c0:BootBias - Master Boot Record
 ;		Rom_MiniDsk_Num  - ROM drive number
-;		MiniNum - Logical drive number
+;		DRVMAX - Next logical drive number
 ;		Mini_HDLIM, Mini_SECLIM
 ;
 ;Called routine: SETMINI which uses SET1 (in SETHARD routine)
@@ -2483,7 +2495,15 @@ FmpNext:
 	jnz	FmpNext
 	jmp	FmpRet			;not found extended partition
 
-FmpGot: 				;found my partition.
+FmpGot:
+	cmp	DRVMAX, 26		; both a drive letter and a BDS are required
+	jae	FmpFull
+	cmp	di, offset BDSMs + Max_mini_dsk_num * type BDSM_type
+	jb	FmpHaveSlot
+FmpFull:
+	ret
+FmpHaveSlot:
+	mov	word ptr [di].IsMini, 1
 	Message ftestHard,<"Found my partition...",cr,lf>
 	xor	ax,ax
 	or	al, fNon_Removable
@@ -2496,7 +2516,7 @@ FmpGot: 				;found my partition.
 	mov	[DI].SECLIM, ax
 	mov	al, Rom_MiniDsk_Num
 	mov	[DI].DRIVENUM, al	;set physical number
-	mov	al, Mininum
+	mov	al, DRVMAX
 	mov	[DI].DRIVELET, al	;set logical number
 
 	cmp	word ptr es:[bx+10], 0	;AN000;
@@ -2535,16 +2555,7 @@ FmpGot_Cont:				;AN000;
 
 	call	Install_BDSM		;install the BDSM into the BDS table
 ;	 call	 Show_Installed_Mini	 ;show the installed message. 3/35/86 - Don't show messages. J.K.
-	inc	mininum 		;increase the logical drive number for next
-	inc	num_mini_dsk		;increase the number of mini disk installed.
-
-	push	bx			;now, set the DskDrvs pointer to BPB info.
-	mov	bx, Mini_BPB_ptr
-	lea	si, [di].BYTEPERSEC	;points to BPB of BDSM
-	mov	[bx], si
-	inc	Mini_BPB_ptr		;advance to the next address
-	inc	Mini_BPB_ptr
-	pop	bx
+	call	RecordVolume
 
 	add	DI, type BDSM_type	;adjust to the next BDSM table entry.
 	mov	End_OF_BDSM, DI 	;set the ending address of BDSM table to this.
@@ -2552,6 +2563,19 @@ FmpGot_Cont:				;AN000;
 FmpnextChain: jmp FmpNext		;let's find out if we have any chained partition
 FmpRet:
 	ret
+
+; Publish the mounted volume's BPB at the next DOS drive letter.
+RecordVolume proc near
+	push	bx
+	xor	bx,bx
+	mov	bl,DRVMAX
+	shl	bx,1
+	lea	ax,[di].BYTEPERSEC
+	mov	DSKDRVS[bx],ax
+	inc	DRVMAX
+	pop	bx
+	ret
+RecordVolume endp
 
 SetMini:
 	push	di
@@ -2577,9 +2601,7 @@ assume	ds:code,es:nothing
 I_BDSM_Next:
 	cmp	word ptr es:[si], -1		;end of the list?
 	jz	I_BDSM_New
-	mov	si, word ptr es:[si].LINK
-	mov	ax, word ptr es:[si].LINK+2	;next pointer
-	mov	es, ax
+	les	si, dword ptr es:[si].LINK	; both words belong to the current BDS
 	jmp	short I_BDSM_Next
 I_BDSM_New:
 	mov	ax, ds

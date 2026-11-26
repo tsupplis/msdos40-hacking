@@ -1,4 +1,4 @@
-/DOSSEG /MAP /CPA:1000 /SEG:1024 /E+
+/DOSSEG /MAP /CPA:2000 /SEG:1024 /E+
  main.obj       +
  mainmenu.obj   +
  d_menus.obj    +

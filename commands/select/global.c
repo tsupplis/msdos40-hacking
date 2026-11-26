@@ -35,7 +35,7 @@ unsigned       input_col;						/* ;AN000; */
 char	       insert[800];						/* ;AC000; */
 char	       *pinsert = insert;					/* ;AN000; */
 
-extern unsigned char   master_boot_record[2][512];			/* ;AN000; */
+unsigned char          master_boot_record[2][512];			/* ;AN000; */
 unsigned char	boot_record[512];					/* ;AN000; */
 
 char		next_letter;						/* ;AN000; */

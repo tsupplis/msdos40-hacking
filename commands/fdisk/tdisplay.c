@@ -22,6 +22,7 @@ char        ThisPartitionLetter[3];
 FLAG        partition_found;
 char        partition_num;
 
+     assign_drive_letters();
      /* initialize all the inserts to blanks */
      memset(insert,c(' '),4*21);
      io = u(0);
@@ -48,7 +49,6 @@ char        partition_num;
                  case DOS16:
                  case DOS12:
                      ThisPartitionType = DOS_part;
-                     part_table[cur_disk][sort[i]].drive_letter = table_drive_letter();         /* AN000 */
                      sprintf(ThisPartitionLetter,"%c%c",
                              part_table[cur_disk][sort[i]].drive_letter,
                              ( part_table[cur_disk][sort[i]].drive_letter == c(' ') ) ? ' ' : ':');
@@ -100,35 +100,4 @@ char        partition_num;
 
 END
 
-/*  */
-char table_drive_letter()
-
-BEGIN
-char drive_letter;
-
-      /* Put in drive letter in display */
-      if (cur_disk == c(0))                                             /* AC000 */
-         BEGIN
-          /* There is a primary partition on 80h, so drive C: */
-          drive_letter = c('C');                                        /* AC000 */
-         END
-      else
-         BEGIN
-          /* We are on drive 81h, so assume D: */
-          drive_letter = c('D');                                        /* AC000 */
-
-          /* See if primary exists on 80h drive */
-          /* First, set cur_drive to 0 */
-          cur_disk = c(0);                                              /* AC000 */
-
-          /* Check for primary on drive 80h */
-          if (!(find_partition_type(uc(DOS12)) || find_partition_type(uc(DOS16)) || find_partition_type(uc(DOSNEW)))) /* AC000 */
-             BEGIN
-              drive_letter = c('C');                                    /* AC000 */
-             END
-          /* restore cur_disk to normal */
-          cur_disk = c(1);                                              /* AC000 */
-         END
-      return(drive_letter);
-END
 

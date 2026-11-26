@@ -6,7 +6,7 @@ import sys
 root = Path(__file__).resolve().parents[1]
 
 
-def write_config(folder, hard_disk=None):
+def write_config(folder, *hard_disks):
     folder = Path(folder).resolve()
     boot = folder / "boot.img"
     if not boot.is_file():
@@ -21,9 +21,9 @@ def write_config(folder, hard_disk=None):
         config = config.replace(old, new)
     for name in ("ser1.out", "par1.out", "par2.out"):
         config = config.replace("file=" + name, f"file={folder / name}")
-    if hard_disk:
+    for drive, hard_disk in enumerate(hard_disks, 0x80):
         disk = Path(hard_disk).resolve(strict=True)
-        config += f'\ndisk {{\n drive = 0x80\n type = "auto"\n file = "{disk}"\n}}\n'
+        config += f'\ndisk {{\n drive = {drive:#x}\n type = "auto"\n file = "{disk}"\n}}\n'
     (folder / "pce.cfg").write_text(config)
 
 

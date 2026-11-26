@@ -1491,25 +1491,23 @@ Procedure SetPartitionTable			;				;AN000;
 	   JNE $$IF71
 	      lea     bx, boot2.PartitionTable	;Yes, point at partition table	;AN000;
 ;	      $SEARCH				;Look for DOS partition 	;AN000;
-$$DO72:
-		 cmp	 [bx].sysind,FAT12_File_System ;			;AC000;
-;		 $IF	 NE,AND 		;				;AN000;
-		 JE $$IF73
-		 cmp	 [bx].sysind,FAT16_File_System ;		     ;AC000;
-;		 $IF	 NE,AND 		;				;AN000;
-		 JE $$IF73
-		 cmp	 [bx].sysind,New_File_System ;			  ;AC000;
-;		 $IF	 NE			;				;AN000;
-		 JE $$IF73
-		    stc 			;We didn't find partition       ;AN000;
-;		 $ELSE				;				;AN000;
-		 JMP SHORT $$EN73
-$$IF73:
-		    clc 			;Indicate found partition	;AN000;
-;		 $ENDIF 			;				;AN000;
-$$EN73:
-;	      $EXITIF NC			;Get correct id for it		;AN000;
-	      JC $$IF72
+PartitionEntry:
+		 mov     al,[bx].sysind
+		 cmp     al,FAT12_File_System
+		 je      CheckPartitionStart
+		 cmp     al,FAT16_File_System
+		 je      CheckPartitionStart
+		 cmp     al,New_File_System
+		 jne     NextPartitionEntry
+CheckPartitionStart:
+		 ; Hidden sectors are relative to the table read through this unit
+		 ; (the MBR for a primary, the EBR for a logical volume).
+		 mov     ax,word ptr [bx].RelSec
+		 cmp     ax,word ptr DeviceParameters.DP_BPB.BPB_HiddenSectors
+		 jne     NextPartitionEntry
+		 mov     ax,word ptr [bx].RelSec+2
+		 cmp     ax,word ptr DeviceParameters.DP_BPB.BPB_HiddenSectors+2
+		 jne     NextPartitionEntry
 		 CALL	 Determine_Partition_Type ;				;AN000;
 		 mov	 ax, 0			;Head				;     ;
 		 mov	 bx, 0			;Cylinder			;     ;
@@ -1528,11 +1526,11 @@ $$IF77:
 $$EN77:
 ;	      $ORELSE				;				;AN000;
 	      JMP SHORT $$SR72
-$$IF72:
+NextPartitionEntry:
 		 add	 bx,size a_PartitionTableEntry ;			;     ;
 		 cmp	 bx,(offset Boot2.PartitionTable)+4*size a_PartitionTableEntry ;     ;
 ;	      $ENDLOOP				;Checked all 4 partition entries;AN000;
-	      JMP SHORT $$DO72
+	      JB      PartitionEntry
 		 MESSAGE msgBadPartitionTable	;Tell user bad table		;AC000;
 		 stc				;Set CY for exit		;     ;
 ;	      $ENDSRCH				;				;AN000;

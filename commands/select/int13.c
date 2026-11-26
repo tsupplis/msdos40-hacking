@@ -84,7 +84,7 @@ BEGIN									/* ;AN000; */
 	else								/* ;AN000; */
 	   BEGIN							/* ;AN000; */
 	    /* Save the number of drives */				/* ;AN000; */
-	    number_of_drives = regs.h.dl;				/* ;AN000; */
+	    number_of_drives = regs.h.dl > 2 ? 2 : regs.h.dl;				/* ;AN000; */
 		if (number_of_drives < 2) good_disk[1] = FALSE; 	/* ;AN000; */
 		if (number_of_drives < 1) good_disk[0] = FALSE; 	/* ;AN000; */
 	    return(TRUE);						/* ;AN000; */

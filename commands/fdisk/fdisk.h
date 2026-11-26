@@ -31,6 +31,7 @@
 #define CR        0x0D
 #define BACKSPACE 0x08
 #define ACTIVE    0x80
+#define MAX_FIXED_DISKS 8
 #define DOS_MAX   65535                /* Allow exactly 32mb worth of partitions */
 #define SYSTEM_FILE_SECTORS 250
 #define BYTES_PER_SECTOR 512                                            /* AN000 */

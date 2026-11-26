@@ -181,7 +181,6 @@ BEGIN
         if (status_flag || mbr_flag)
         {
             int error = 0;
-            good_disk[0] = good_disk[1] = TRUE;
             /* A report cannot be combined with a write. /MBR targets BIOS 80h. */
             if ((status_flag && mbr_flag) || primary_flag || extended_flag ||
                 logical_flag || (disk_flag && (status_flag || cur_disk_buff != 0)))
@@ -193,8 +192,9 @@ BEGIN
             else
             {
                 init_partition_tables();
-                if (!good_disk[0] || !good_disk[1]) error = 6;
-                else display_disk_status();
+                for (input = 0; input < number_of_drives; ++input)
+                    if (!good_disk[input]) error = 6;
+                if (!error) display_disk_status();
             }
             if (error) display_msg(error,DosStdEr,0,0,0,Utility_Msg_Class);
             exit(error ? ERR_LEVEL_1 : ERR_LEVEL_0);
@@ -215,8 +215,6 @@ BEGIN
                 clear_screen(u(0),u(0),u(24),u(79));                    /* AC006 */
 
                 /* Get disk size information */
-                good_disk[0] = TRUE;
-                good_disk[1] = TRUE;
 
                 if (get_disk_info())
                     BEGIN
@@ -259,8 +257,6 @@ BEGIN
                 BEGIN
                 reboot_flag = FALSE;                                        /* AN000 */
                 /* Get disk size information */                             /* AN000 */
-                good_disk[0] = TRUE;                                        /* AN000 */
-                good_disk[1] = TRUE;                                        /* AN000 */
                 if (get_disk_info())                                        /* AN000 */
                     BEGIN
                     if (number_of_drives < (cur_disk_buff+1)) {
@@ -299,7 +295,7 @@ BEGIN
                         /* If /EXT: was specified, create extended partition */
                         /* Check and see if there is a primary partition before you create an extended */
                         if ( (extended_flag == TRUE)        &&                             /* AN000 */
-                           ( (cur_disk == c(1))             ||
+                           ( (cur_disk != c(0))             ||
                            (find_partition_type(uc(DOS12))) ||
                            (find_partition_type(uc(DOS16))) ||
                            (find_partition_type(uc(DOSNEW))) ) )        /* AC000 */

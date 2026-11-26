@@ -129,6 +129,8 @@ PUBLIC	IBM_DISK_IO
 IBM_DISK_IO PROC FAR
 	CMP DL, 80h
 	JB  ATD1		;Pass through floppy disk calls.
+	CMP DL, 81h
+	JA  ATD1		; The AT controller workaround supports two disks.
 	CMP AH, 02
 	JE  ATD2		;Intercept call 02 (read sectors).
 	CMP AH, 0Ah

@@ -4,7 +4,6 @@
 
 ROOT     ?= $(CURDIR)/../..
 SDKBIN   ?= $(ROOT)/sdk/bin
-FDISK    ?= $(ROOT)/commands/fdisk
 MSGDIR   ?= $(ROOT)/messages
 
 export EMU2_DRIVE_C ?= $(ROOT)
@@ -46,13 +45,6 @@ $(ASM_OBJS) $(SVC_OBJS) sstub.obj: %.obj: %.asm $(MSGS) $(INCS)
 $(C_OBJS): %.obj: %.c $(wildcard *.h)
 	$(CL) -c -AS -Os -Zp -I. -I'C:\include' -Fo$@ $< -- INCLUDE='C:\sdk\include' PATH='C:\sdk\bin'
 
-# bootrec.obj is the FDISK boot record, built by the fdisk Makefile
-bootrec.obj: $(FDISK)/bootrec.obj
-	cp $< $@
-
-$(FDISK)/bootrec.obj:
-	$(MAKE) -C $(FDISK) bootrec.obj
-
 services.lib: $(SVC_OBJS)
 	rm -f services.lib services.bak services.lst services.lbr
 	@printf "services.lib\r\ny\r\n" > services.lbr
@@ -68,7 +60,7 @@ services.lib: $(SVC_OBJS)
 	rm -f services.lbr
 
 # /NOE: symbols defined in the sources supersede library routines
-select.exe: helptest.obj $(ASM_OBJS) $(C_OBJS) bootrec.obj services.lib select.lnk
+select.exe: helptest.obj $(ASM_OBJS) $(C_OBJS) services.lib select.lnk
 	$(LINK) /NOE @select.lnk -- LIB='C:\sdk\lib'
 
 # --- select.com (stub) --------------------------------------------------------

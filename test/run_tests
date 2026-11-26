@@ -52,7 +52,8 @@ case "${1:-}" in
     # Schedule the independent disk layouts first; reboots within one layout
     # share its disk and must observe the previous boot's writes.
     set -- check_hma.high check_hma.near check_hma.far check_hma.umb check_hma.upperfallback check_hma.fragmented check_ems.active check_ems.low check_placement.tables check_dir32.near check_dir32.high check_fat16.high check_fat16.near \
-      check_fat16.far check_ifs.low check_ifs.high check_edit.high check_edit.near check_edit.far $(list_cases)
+      check_fat16.far check_harddisks.one check_harddisks.two check_harddisks.four check_harddisks.gap \
+      check_harddisks.extended check_harddisks.logical check_harddisks.limit check_harddisks.chains check_harddisks.primaries check_harddisks.mixed check_harddisks.format check_harddisks.fdisk check_ifs.low check_ifs.high check_edit.high check_edit.near check_edit.far $(list_cases)
     status=0
     printf '%s\n' "$@" | xargs -n 1 -P 10 "$PWD/test/run_tests" --regression-job "$suite" || status=1
     for job do
@@ -105,8 +106,9 @@ mcopy -D o -i "$WORK"/boot.img "$WORK"/cr.tmp ::CR.TXT
   if [ -f "$CFG" ]; then LC_ALL=C tr -d '\r' < "$CFG" | sed 's/$/\r/'; fi; } > "$WORK"/config.tmp
 mcopy -D o -i "$WORK"/boot.img "$WORK"/config.tmp ::CONFIG.SYS
 
-# PCE_TEST_HD optionally attaches a generated scratch hard disk.
-python3 test/pcecfg.py "$WORK" ${PCE_TEST_HD:+"$PCE_TEST_HD"}
+# Additional arguments attach scratch hard disks in BIOS order.
+shift
+python3 test/pcecfg.py "$WORK" ${PCE_TEST_HD:+"$PCE_TEST_HD"} "$@"
 
 pce-ibmpc -c "$WORK"/pce.cfg -t null -g vga -r > "$WORK"/pce.log 2>&1 &
 pid=$!

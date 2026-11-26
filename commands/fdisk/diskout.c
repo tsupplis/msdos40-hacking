@@ -7,7 +7,7 @@
 
 
 /*  */
-/* Invoked before partition discovery, while the built-in template is intact.
+/* Use the built-in bootstrap.
  * A signed sector retains all four partition entries, including unused slots. */
 int repair_master_boot(void)
 {
@@ -15,7 +15,7 @@ int repair_master_boot(void)
     if (!read_boot_record(0,0,0,1)) return 6;
     length = boot_record[510] == 0x55 && boot_record[511] == 0xaa
            ? 446 : BYTES_PER_SECTOR;
-    memcpy(boot_record, master_boot_record[0], length);
+    memcpy(boot_record, master_boot_template, length);
     return write_boot_record(0,0) ? 0 : 7;
 }
 

@@ -2,7 +2,14 @@
 
 MS-DOS 4.01 rebuilt on Unix with GNU make and the original tools under `emu2`. The goal is a usable replacement for DOS 3.3 and 5.5. This project will carry on iteratively, also reviewing/fixing the original code to be both robust and dependable. The version tag is 4.01N.
 
-**Status Summary v1.6.0**: _We already have HMA,UMB support with placement configurability for a large part of DOS and installed drivers and software (Up to 611KB of free application memory) and all common commands are in line with DOS 5.0 with a few DOS 6.22 commands added. Some deliverate choice are made no to close the following gaps (doskey replaced only by simple command line editing, undelete/unformat, 2.88MB floppy format). The remaining gaps are in the work:_
+**Status Summary v1.6.0**: _We already have:
+- HMA,UMB support with placement configurability for a large part of DOS and installed drivers and software (Up to 611KB of free application memory)
+- all common commands are in line with DOS 5.0 with a few DOS 6.22 commands added.
+- support for up to 8 hard drives
+
+Some deliverate choice are made no to close the following gaps (doskey replaced only by simple command line editing, undelete/unformat, 2.88MB floppy format).
+
+The remaining gaps are in the work:_
 - _himem.sys driver (XMS 2.0)_
 - _completion of emm386 functionalities in line with DOS 5.0_
 - _setver_
@@ -59,11 +66,12 @@ The 4.01 reconstruction changes 12 source files and corrects encoding in 17 othe
 
 | Component | Fix |
 |---|---|
+| `io.sys` | Assign letters through Z: to one DOS primary per BIOS disk (active first), then logical volumes, then remaining DOS primaries. |
 | `fdisk` | Return errorlevel 1 for invalid switches or a missing or out-of-range disk number. |
 | `fdisk` | Clear the last deleted logical drive and skip logical writes after extended partition deletion. |
 | `fdisk` | Stop on partition-record write errors and return errorlevel 1. |
 | `fdisk` | Prevent logical-drive table overflow by rejecting partition chains longer than 23 entries. |
-| `format` | Stop on a failed final FAT write. |
+| `format` | Stop on a failed final FAT write. Update the partition type only for the matching volume. |
 
 ## Command-line editing
 
@@ -100,7 +108,7 @@ The survey compares the commands shipped here with the command syntax and option
 | `dir` | No known gaps | `/B` prints bare names, one per line. `/L` displays ASCII letters in filenames in lowercase. `/A[:]` filters by D, R, H, S, or A. `/O[:]` orders by N (name), E (extension), S (size), D (date), or G (directories first). `/2Y` restores two-digit year display. Prefix a letter with `-` to exclude an attribute or reverse a key. `/P` pages console output. `DIRCMD` presets switches, and `/-` disables a preset switch on the command line. `/S` lists matching entries in subdirectories. With `/B`, it prints full paths. |  |
 | `diskcopy` | No known gaps | `/V` asks the disk driver to verify each destination track after writing it. |  |
 | `emm386` | Missing command |  | The EMM386.EXE command interface for querying and changing expanded-memory operation. The full floppy ships EMM386.SYS. |
-| `fdisk` | No known gaps | `/STATUS` reports disk usage and DOS volumes. `/MBR` restores the master boot code on the first fixed disk. It preserves partition entries when the boot signature is present and installs an empty table when it is absent. |  |
+| `fdisk` | No known gaps | Manage up to eight BIOS hard disks. `/STATUS` reports disk usage and DOS volumes. `/MBR` restores the master boot code on the first fixed disk. It preserves partition entries when the boot signature is present and installs an empty table when it is absent. |  |
 | `find` | No known gaps | `/I` ignores case when matching and preserves the spelling of displayed lines. |  |
 | `format` | Gaps identified | `/Q` quick format. | *won't implement — Recoverable formatting, `/U`, and `/F` for 2.88 MB media.* |
 | `help [command]` | Project extra | With no argument, HELP pages the topic index on the console. Specify a topic for a one-screen reference. |  |

@@ -691,6 +691,62 @@ END
 
 
 /*  */
+static int dos_volume(struct entry *entry)
+{
+    return entry->sys_id == DOS12 || entry->sys_id == DOS16 || entry->sys_id == DOSNEW;
+}
+
+static int preferred_primary(unsigned disk)
+{
+    int slot, first = -1;
+    for (slot = 0; slot < 4; ++slot) {
+        struct entry *entry = &part_table[disk][slot];
+        if (dos_volume(entry)) {
+            if (entry->boot_ind & ACTIVE) return slot;
+            if (first < 0) first = slot;
+        }
+    }
+    return first;
+}
+
+static char take_letter(void)
+{
+    return next_letter <= 'Z' ? next_letter++ : ' ';
+}
+
+/* Recalculate after menu edits as well as discovery. Return the letter
+ * preceding the next logical volume on the selected disk. */
+char assign_drive_letters(void)
+{
+    unsigned disk, slot;
+    int preferred, active;
+    char last = 'B';
+    next_letter = 'C';
+    for (disk = 0; disk < number_of_drives; ++disk) {
+        preferred = preferred_primary(disk);
+        if (preferred >= 0) part_table[disk][preferred].drive_letter = take_letter();
+    }
+    for (disk = 0; disk < number_of_drives; ++disk) {
+        for (slot = 0; slot < 23; ++slot) {
+            struct entry *entry = &ext_table[disk][slot];
+            if (dos_volume(entry)) entry->drive_letter = take_letter();
+        }
+        if (disk == cur_disk) last = next_letter - 1;
+    }
+    for (disk = 0; disk < number_of_drives; ++disk) {
+        preferred = preferred_primary(disk);
+        for (active = 1; active >= 0; --active) {
+            for (slot = 0; slot < 4; ++slot) {
+                struct entry *entry = &part_table[disk][slot];
+                if (slot != preferred && dos_volume(entry) &&
+                    !!(entry->boot_ind & ACTIVE) == active)
+                    entry->drive_letter = take_letter();
+            }
+        }
+    }
+    return last;
+}
+
 void init_partition_tables()
 BEGIN
 
@@ -730,6 +786,8 @@ unsigned index;
                         master_boot_record[j][i] = boot_record[i];
                        END
                    END
+                else
+                    memcpy(master_boot_record[j], master_boot_template, BYTES_PER_SECTOR);
                 /* We've now got a copy of the master boot record saved. Now we need */
                 /* to translate what in the boot record to the area that it's going  */
                 /* to be worked on (part_table) */
@@ -800,15 +858,10 @@ unsigned index;
                        cylinders_to_percent(((part_table[j][i].end_cyl-part_table[j][i].start_cyl)+1),
                         total_disk[cur_disk]);                                                                  /* AN000 */
 
-                    /* Set drive letter */
-                    if ( (part_table[j][i].sys_id == DOS12) ||                                                  /* AN000 */
-                         (part_table[j][i].sys_id == DOS16) ||                                                  /* AN000 */
-                         (part_table[j][i].sys_id == DOSNEW)   )                                                /* AN000 */
-                            part_table[j][i].drive_letter = next_letter++;                                      /* AN000 */
-
                     /* Set changed flag */
                     part_table[j][i].changed = FALSE;
                    END
+                if (preferred_primary(j) >= 0) take_letter();
                END
             else
                BEGIN
@@ -905,6 +958,7 @@ unsigned index;
                    END
                END
            END
+        assign_drive_letters();
         return;
 END
 
@@ -1006,10 +1060,10 @@ unsigned    partition_location;                                         /* AN000
                     if (status_flag && ext_table[drive][point].sys_id != DOS12 &&
                         ext_table[drive][point].sys_id != DOS16 &&
                         ext_table[drive][point].sys_id != DOSNEW) return;
-                    ext_table[drive][point].drive_letter = next_letter++;                                      /* AN000 */
+                    ext_table[drive][point].drive_letter = dos_volume(&ext_table[drive][point]) ? take_letter() : ' ';                                      /* AN000 */
 
                     /* Status needs only the EBR fields, including the next link. */
-                    if (status_flag) return;
+                    if (status_flag || ext_table[drive][point].drive_letter == ' ') return;
                     partition_location = ext_table[drive][point].start_cyl;
 
                     if (read_boot_record(ext_table[drive][point].start_cyl,

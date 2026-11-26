@@ -61,59 +61,7 @@ unsigned    insert_offset;
         third_display = FALSE;
         fourth_display = FALSE;
 
-        /* See what the starting drive letter is */
-        drive_letter = c(SEA);                                          /* AC000 */
-
-        /* See if primary on drive 1 */
-        temp = cur_disk;
-        cur_disk = c(0);                                                /* AC000 */
-        if ( (find_partition_type(uc(DOS12))) ||
-             (find_partition_type(uc(DOS16))) ||
-             (find_partition_type(uc(DOSNEW)))) /* AC000 */
-           BEGIN
-            /* There is a Primary partition on drive 1, so increment for first logical drive */
-                drive_letter++;
-           END
-         cur_disk = temp;
-
-        /* See if there is a second drive */
-        if (number_of_drives == uc(2))                                  /* AC000 */
-           BEGIN
-
-            /* Go see if DOS partition on drive 2 */
-            temp = cur_disk;
-            cur_disk = c(1);                                            /* AC000 */
-            if ( (find_partition_type(uc(DOS12))) ||
-                 (find_partition_type(uc(DOS16))) ||
-                 (find_partition_type(uc(DOSNEW)))) /*AC000*/
-                BEGIN
-
-                /* There is a Primary partition on drive 2, so increment for first logical drive */
-                drive_letter++;
-               END
-            /* Are we on drive 2? If so, we got to find all the drives on drive 1 */
-            if (temp == c(1))                                           /* AC000 */
-               BEGIN
-                /* Next, we need to see what is on drive 1 */
-                for (i=u(0); i < u(23); i++)                            /* AC000 */
-                   BEGIN
-                    /* See if there is a logical drive we understand in PC-DOS land */
-                    if ( (ext_table[0][i].sys_id == uc(DOS12)) ||
-                         (ext_table[0][i].sys_id == uc(DOS16)) ||
-                         (ext_table[0][i].sys_id == uc(DOSNEW)) )                    /* AC000  */
-                       BEGIN
-                        /* Found one, so kick up the first available drive letter */
-                        drive_letter++;
-                       END
-                   END
-               END
-
-            /* Reset the cur_drive to where it was */
-            cur_disk = temp;
-           END
-
-
-
+        drive_letter = assign_drive_letters();
 
         /* loop thru the partitions, only print stuff if it is there */
 
@@ -140,12 +88,6 @@ unsigned    insert_offset;
                 /* We found one, now get the info */
                 drive_found = TRUE;
 
-                /* Get the drive letter - make sure it is Z: or less*/
-                /* Put it in the message, and set it up for next time */
-                if (drive_letter > c('Z'))
-                        ext_table[cur_disk][sort[i]].drive_letter = c(' ');
-                   else ext_table[cur_disk][sort[i]].drive_letter = drive_letter;
-
                 insert_offset += sprintf(&insert[insert_offset],"%c%c%-11.11s%4.0d%-8.8s%3.0d%%",
                         ext_table[cur_disk][sort[i]].drive_letter,
                         ( ext_table[cur_disk][sort[i]].drive_letter == c(' ') ) ? ' ' : ':',
@@ -155,7 +97,6 @@ unsigned    insert_offset;
                         ext_table[cur_disk][sort[i]].percent_used );
 
 
-                drive_letter++;
                 drive_num++;
 
                END
@@ -203,7 +144,6 @@ unsigned    insert_offset;
                END
            END
         /* Return the highest drive letter found */
-        drive_letter--;
         return(drive_letter);
 
 END

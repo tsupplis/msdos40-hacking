@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""Check BIOS disk order, logical volumes and persisted writes after reboot."""
+import os
+import re
+from pathlib import Path
+import string
+import struct
+import subprocess
+import sys
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+track = 17
+cylinder = 4 * track
+span = 240 * cylinder
+
+
+def partition(kind, start, length, base=0, active=False):
+    def chs(lba):
+        cyl, rem = divmod(lba, cylinder)
+        head, sector = divmod(rem, track)
+        return bytes([head, (sector + 1) | ((cyl >> 2) & 0xc0), cyl & 255])
+    return struct.pack("<B3sB3sII", 0x80 if active else 0, chs(start), kind, chs(start + length - 1),
+                       start - base, length)
+
+
+def make_disk(folder, index, primary, logical_count, second_primary, kind):
+    raw = folder / f"disk{index}.img"
+    size = span * (1 + logical_count + int(second_primary))
+    volumes = []
+    with raw.open("wb") as f:
+        f.truncate(512 * size)
+        f.seek(446)
+        if primary:
+            f.write(partition(kind, track, span - track))
+            volumes.append((track, f"DISK{index}"))
+        if logical_count:
+            f.seek(478)
+            f.write(partition(5, span, logical_count * span))
+        for number in range(1, logical_count + 1):
+            ebr = number * span
+            f.seek(ebr * 512 + 446)
+            f.write(partition(kind, ebr + track, span - track, ebr))
+            if number < logical_count:
+                # EBR links are relative to the extended partition's base.
+                f.write(partition(5, ebr + span, span, base=span))
+            f.seek(ebr * 512 + 510)
+            f.write(b"\x55\xaa")
+            volumes.append((ebr + track, f"D{index}LOG{number}"))
+        if second_primary:
+            start = (1 + logical_count) * span + track
+            f.seek(462)
+            f.write(partition(kind, start, span - track, active=True))
+            volumes.append((start, f"D{index}EXTRA"))
+        f.seek(510)
+        f.write(b"\x55\xaa")
+    for sector, label in volumes:
+        subprocess.run(["mformat", "-i", f"{raw}@@{sector * 512}", "-T", str(span-track),
+                        "-h", "4", "-s", "17", "-H", str(track if "LOG" in label else sector), "-c", "2",
+                        "-v", label, "::"], check=True)
+        with raw.open("r+b") as f:
+            f.seek(sector * 512 + 3)
+            f.write(b"MSDOS4.0")
+    disk = raw.with_suffix(".pimg")
+    subprocess.run(["pce-img", "convert", "-q", "-g", str(size // cylinder), "4", "17",
+                    "-O", "pimg", raw, disk], check=True)
+    return disk
+
+
+def check(folder, count, skip=None, logical=None, extra=(), operation=None):
+    logical = logical or {}
+    disks = [make_disk(folder, i, i != skip, logical.get(i, 0), i in extra,
+                       6 if operation == "format" else 4)
+             for i in range(1, count + 1)]
+    locations = {}
+    for i in range(1, count + 1):
+        if i in extra:
+            locations[f"D{i}EXTRA"] = (i, (1 + logical.get(i, 0)) * span + track)
+        elif i != skip:
+            locations[f"DISK{i}"] = (i, track)
+    for i in range(1, count + 1):
+        for number in range(1, logical.get(i, 0) + 1):
+            locations[f"D{i}LOG{number}"] = (i, number * span + track)
+    for i in extra:
+        locations[f"DISK{i}"] = (i, track)
+    labels = list(locations)
+    letters = list(zip(string.ascii_uppercase[2:], labels))
+    batch = folder / "drives.bat"
+    batch.with_suffix(".cfg").write_text("LASTDRIVE=Z\n")
+    for boot in range(2):
+        lines = []
+        for letter, label in letters:
+            lines.append(f"vol {letter}:")
+            if boot == 0:
+                lines.append(f"echo {letter}-{label}>{letter}:\\DRIVE.TXT")
+            else:
+                lines.append(f"type {letter}:\\DRIVE.TXT")
+        if count == 1:
+            lines.append("mem")
+        batch.write_text("\n".join(lines) + "\n")
+        run = subprocess.run([root / "test/run_tests", batch, *disks], stdout=subprocess.PIPE,
+                                         env=dict(os.environ, PCE_TEST_WORK=str(folder / "run")))
+        output = run.stdout
+        if run.returncode:
+            raise RuntimeError(output.decode("cp437"))
+        for letter, label in letters:
+            if f"Volume in drive {letter} is {label}".upper().encode() not in output.upper():
+                raise RuntimeError(output.decode("cp437"))
+            if boot and f"{letter}-{label}".encode() not in output.splitlines():
+                raise RuntimeError(output.decode("cp437"))
+        if count == 1 and boot == 0:
+            print(next(line for line in output.splitlines() if b"Largest executable" in line).decode())
+    for letter, label in letters:
+        index, sector = locations[label]
+        raw = folder / "saved.img"
+        subprocess.run(["pce-img", "convert", "-q", "-O", "img", disks[index-1], raw], check=True)
+        actual = subprocess.check_output(["mtype", "-i", f"{raw}@@{sector * 512}", "::DRIVE.TXT"])
+        if actual.strip() != f"{letter}-{label}".encode():
+            raise RuntimeError(f"{letter}: write landed on the wrong volume")
+    if operation == "format":
+        # Format the second MBR slot on disk 3 and the second EBR on disk 4.
+        for letter, index, ebr, slot in [("E", 3, 0, 1), ("J", 4, 2 * span, 0)]:
+            label = dict(letters)[letter]
+            _, start = locations[label]
+            before = []
+            for disk in disks:
+                subprocess.run(["pce-img", "convert", "-q", "-O", "img", disk, raw], check=True)
+                before.append(raw.read_bytes())
+            batch.write_text(f"echo {label}>A:\\YES.TXT\necho Y>>A:\\YES.TXT\n"
+                             f"format {letter}: /Q /V:NEWVOL <A:\\YES.TXT\n"
+                             "if errorlevel 1 echo FAILED format\n")
+            run = subprocess.run([root / "test/run_tests", batch, *disks], stdout=subprocess.PIPE,
+                                 env=dict(os.environ, PCE_TEST_WORK=str(folder / "run")))
+            if run.returncode:
+                raise RuntimeError(run.stdout.decode("cp437"))
+            for number, disk in enumerate(disks, 1):
+                subprocess.run(["pce-img", "convert", "-q", "-O", "img", disk, raw], check=True)
+                after = raw.read_bytes()
+                expected = before[number - 1]
+                if number == index:
+                    listing = subprocess.check_output(["mdir", "-i", f"{raw}@@{start * 512}", "::"])
+                    if b"NEWVOL" not in listing or b"DRIVE" in listing:
+                        raise RuntimeError(f"{letter}: FORMAT missed target: {listing!r}")
+                    pos = ebr * 512 + 446 + slot * 16 + 4
+                    if expected[pos] != 6 or after[pos] not in (1, 4):
+                        raise RuntimeError("invalid partition type")
+                    end = (start + span - track) * 512
+                    if (after[:pos] != expected[:pos] or after[pos+1:start*512] != expected[pos+1:start*512]
+                            or after[end:] != expected[end:]):
+                        raise RuntimeError(f"{letter}: FORMAT modified a neighboring partition")
+                elif after != expected:
+                    raise RuntimeError(f"{letter}: FORMAT modified disk {number}")
+    if operation == "fdisk":
+        batch.write_text("fdisk /status\nif errorlevel 1 echo FAILED status\n"
+                         "fdisk 9 /pri:1 /q\nif not errorlevel 1 echo FAILED accepted disk 9\n"
+                         "fdisk 4 /pri:2 /q\nif errorlevel 1 echo FAILED create primary\n")
+        before = []
+        for disk in disks:
+            subprocess.run(["pce-img", "convert", "-q", "-O", "img", disk, raw], check=True)
+            before.append(raw.read_bytes())
+        output = subprocess.check_output([root / "test/run_tests", batch, *disks],
+                     env=dict(os.environ, PCE_TEST_WORK=str(folder / "run"))).decode("cp437")
+        reported = {}
+        for line in output.splitlines():
+            row = re.fullmatch(r"\s*(\d+)\s+\d+\s+\d+\s+\d+%", line)
+            if row:
+                disk_number = int(row[1])
+                reported[disk_number] = set()
+            volume = re.fullmatch(r"\s*([A-Z]):\s+\d+", line)
+            if volume:
+                reported[disk_number].add(volume[1])
+        for index, disk in enumerate(disks, 1):
+            expected_letters = {letter for letter, label in letters if locations[label][0] == index}
+            if reported.get(index) != expected_letters:
+                raise RuntimeError(f"FDISK letter mismatch on disk {index}: {output}")
+            subprocess.run(["pce-img", "convert", "-q", "-O", "img", disk, raw], check=True)
+            after = raw.read_bytes()
+            if index == 4:
+                if before[index-1] == after or after[450] not in (1, 4, 6) or after[510:512] != b"\x55\xaa":
+                    raise RuntimeError("FDISK did not create a primary on disk 4")
+            elif after != before[index-1]:
+                raise RuntimeError(f"FDISK modified disk {index} while editing disk 4")
+    if len(labels) > len(letters):
+        # Disk 25 falls beyond Z:. Check that no guest write reached it.
+        subprocess.run(["pce-img", "convert", "-q", "-O", "img", disks[-1], raw], check=True)
+        names = subprocess.check_output(["mdir", "-b", "-i", f"{raw}@@{track * 512}", "::"])
+        if names.strip():
+            raise RuntimeError("unassigned disk was modified")
+    print("PASS", ", ".join(f"{letter}: {label}" for letter, label in letters), flush=True)
+
+
+layouts = {"one": (1,), "two": (2,), "four": (4,), "gap": (4, 3),
+           "extended": (4, None, {1: 1}), "logical": (1, 1, {1: 1}),
+           "chains": (4, None, {3: 2, 4: 2}), "primaries": (4, None, {}, (3, 4)),
+           "format": (4, None, {3: 2, 4: 2}, (3, 4), "format"),
+           "fdisk": (8, 4, {2: 1, 3: 2}, (3,), "fdisk"),
+           "mixed": (4, None, {3: 2, 4: 2}, (3, 4)), "limit": (25,)}
+work = root / "test/work"
+work.mkdir(exist_ok=True)
+for layout in sys.argv[1:] or layouts:
+    with tempfile.TemporaryDirectory(dir=work) as folder:
+        check(Path(folder), *layouts[layout])

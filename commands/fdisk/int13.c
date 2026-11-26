@@ -19,12 +19,13 @@ unsigned char   i;
 
         /* Initialize values */
         number_of_drives = uc(0);                                       /* AC000 */
-        for (i=uc(0); i < uc(2); i++)                                   /* AC000 */
+        for (i=uc(0); i < MAX_FIXED_DISKS; i++)                                   /* AC000 */
            BEGIN
+            good_disk[i] = TRUE;
             total_disk[i] = u(0);                                       /* AC000 */
             total_mbytes[i] = f(0);                                     /* AC000 */
             max_sector[i] = uc(0);                                      /* AC000 */
-            max_head[0] = u(0);                                         /* AC004 */
+            max_head[i] = u(0);                                         /* AC004 */
            END
 
         /* See how many drives there are */
@@ -336,7 +337,7 @@ BEGIN
         else
            BEGIN
             /* Save the number of drives */
-            number_of_drives = regs.h.dl > 2 ? 2 : regs.h.dl; /* partition arrays have two slots */
+            number_of_drives = regs.h.dl > MAX_FIXED_DISKS ? MAX_FIXED_DISKS : regs.h.dl;
             return(TRUE);
            END
 END

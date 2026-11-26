@@ -23,11 +23,8 @@ _DATA   SEGMENT  WORD PUBLIC 'DATA'
 ;
 
 
-PUBLIC  _master_boot_record
-        public  _master_boot_record
-_master_boot_record label   byte
-
-include fdboot.inc
+PUBLIC  _master_boot_template
+_master_boot_template label byte
 include fdboot.inc
 
 _DATA      ENDS

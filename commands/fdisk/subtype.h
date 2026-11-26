@@ -86,7 +86,7 @@ char     volume_display(void);
 /* TDISPLAY.C ROUTINES                                       */
 /*************************************************************/
 char     table_display(void);
-char     table_drive_letter(void);
+char     assign_drive_letters(void);
 
 /*************************************************************/
 /* FDISK.C ROUTINES                                          */
