@@ -67,5 +67,22 @@ or `COMMAND: Invalid …`. Verify fixes before closing them.
 | Protect an active SUBST root and current-directory ancestors before descent | CLOSED |
 | Report missing and invalid operands on stderr and fail on unmatched targets | CLOSED |
 | Document wildcards, confirmation and rejected root or dot operands in DOSHELP | CLOSED |
-| Path splitting and trailing separator removal are byte-based on double-byte code pages | OPEN |
-| Verify redirector aliases and UNC share-root protection on a network drive | OPEN |
+| Preserve double-byte trailing 5Ch in path splitting and separator trimming | CLOSED |
+| Reject explicit UNC share roots, including repeated separators | CLOSED |
+| Protect the current directory and its ancestors across two NetMount drive letters for the same share | CLOSED |
+
+## MOVE
+
+| Issue | Status |
+|---|---|
+| Distinguish missing operands from invalid syntax on stderr | CLOSED |
+| Preserve source and original destination on disk-full and failed rename | CLOSED |
+| Report retained destination and preserve read-only source after failed deletion | CLOSED |
+
+## LABEL
+
+| Issue | Status |
+|---|---|
+| Accept a space after the drive and reject invalid command-line labels | CLOSED |
+| Handle redirected Yes, No and EOF without unintended deletion | CLOSED |
+| Check deletion and close errors and restore the previous label on failed replacement | CLOSED |
