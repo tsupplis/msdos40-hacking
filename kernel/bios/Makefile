@@ -16,7 +16,7 @@ NOSRVBLD = $(EMU2) $(SDKBIN)/nosrvbld.exe
 COUNTRY  = usa-ms
 
 OBJS     = msbio1.obj mscon.obj msaux.obj mslpt.obj msclock.obj msdisk.obj \
-           msbio2.obj mshard.obj msinit.obj sysinit1.obj sysconf.obj sysinit2.obj fcbpack.obj fcbload.obj sysimes.obj
+           msbio2.obj mshard.obj msinit.obj sysinit1.obj sysconf.obj bootmenu.obj sysinit2.obj fcbpack.obj fcbload.obj sysimes.obj
 
 .PHONY: all clean
 

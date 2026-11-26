@@ -139,6 +139,21 @@ The batch comparison covers `CALL` with arguments, `ECHO` and leading `@`, `FOR 
 
 ## Configuration enhancements
 
+An optional `\BOOT.SYS` on the boot drive selects a complete configuration at startup.
+
+```ini
+# File = menu description
+C:\CONFIG.SYS = Default
+C:\WIN30.SYS = Windows 3.0
+C:\BARE.SYS = Bare system
+default = 1
+timeout = 2
+```
+
+DOS lists up to nine entries in file order. A digit selects a file, Enter selects the default, and Esc skips configuration for this boot. The default is entry 1 and the timeout is 2 seconds. A single entry or a zero timeout starts immediately. An absent or empty menu uses the ordinary `\CONFIG.SYS`. If a selected file is missing, DOS displays its name and continues to the shell.
+
+AUTOEXEC.BAT can use `%DOSCFG%` to identify the configuration DOS loaded. For example, `A:\PROFILES\win30.sys` gives `WIN30`, and ordinary `CONFIG.SYS` gives `CONFIG`. Esc or a missing configuration file leaves the variable unset.
+
 | Directive | MS-DOS 5.0 comparison | Enhancement | Missing MS-DOS 5.0 features |
 |---|---|---|---|
 | `break=` | No known syntax gaps |  |  |

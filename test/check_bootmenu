@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""Boot the selector, send keys at the menu, and observe the chosen DEVICE line."""
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+import time
+
+from pcecfg import write_config
+
+root = Path(__file__).resolve().parents[1]
+work = root / "test/work"
+work.mkdir(exist_ok=True)
+entries = "# Boot choices\n A:\\CONFIG.SYS = Ordinary\n A:\\WIN30.SYS = Windows\n"
+cases = [
+    ("single", " A:\\WIN30.SYS = Windows", None, "WINPROBE.SYS"),
+    ("no config", None, None, None),
+    ("subdirectory", "A:\\PROFILES\\wIn30.sYs = Windows", None, "WINPROBE.SYS"),
+    ("shellhigh", "A:\\WIN30.SYS = High shell", None, "WINPROBE.SYS"),
+    ("absent", None, None, "ORDPROBE.SYS"),
+    ("empty", " # none\n\n", None, "ORDPROBE.SYS"),
+    ("zero", entries + "default=2\ntimeout=0", None, "WINPROBE.SYS"),
+    ("ninth", "A:\\CONFIG.SYS = First eight\n" * 8 +
+     "A:\\WIN30.SYS = Ninth\nA:\\ABSENT.SYS = Ignored\nDEFAULT=9\nTIMEOUT=0", None, "WINPROBE.SYS"),
+    ("invalid default", entries + "default=9\ntimeout=0", None, "ORDPROBE.SYS"),
+    ("digit", entries + "timeout=60", "2", "WINPROBE.SYS"),
+    ("enter", entries + "default=2\ntimeout=60", "Return", "WINPROBE.SYS"),
+    ("escape", entries + "timeout=60", "Esc", None),
+    ("timeout", entries, None, "ORDPROBE.SYS"),
+    ("missing", "A:\\ABSENT.SYS = Missing", None, "ABSENT.SYS"),
+]
+for name, menu, key, expected in cases:
+    with tempfile.TemporaryDirectory(dir=work) as tmp:
+        folder = Path(tmp)
+        image = folder / "boot.img"
+        shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+        def put(filename, content):
+            path = folder / filename
+            path.write_bytes(content.replace("\n", "\r\n").encode())
+            subprocess.run(["mcopy", "-o", "-i", image, path, "::" + filename], check=True)
+        put("CONFIG.SYS", "DEVICE=ORDPROBE.SYS\n")
+        put("WIN30.SYS", "DEVICE=WINPROBE.SYS\n")
+        if name == "no config":
+            subprocess.run(["mdel", "-i", image, "::CONFIG.SYS"], check=True)
+        if name == "subdirectory":
+            subprocess.run(["mmd", "-i", image, "::PROFILES"], check=True)
+            subprocess.run(["mcopy", "-i", image, folder / "WIN30.SYS",
+                            "::PROFILES/WIN30.SYS"], check=True)
+        child = ""
+        comspec = r"A:\COMMAND.COM"
+        if name == "shellhigh":
+            subprocess.run(["mcopy", "-i", image, root / "extra/pcehimem.sys", "::HIMEM.SYS"], check=True)
+            subprocess.run(["mmd", "-i", image, "::BIN"], check=True)
+            command = subprocess.check_output(["mtype", "-i", image, "::COMMAND.COM"])
+            (folder / "COMMAND.COM").write_bytes(command)
+            subprocess.run(["mcopy", "-i", image, folder / "COMMAND.COM", "::BIN/COMMAND.COM"], check=True)
+            put("WIN30.SYS", "DEVICE=HIMEM.SYS\nDOS=UMB\nDEVICE=WINPROBE.SYS\n"
+                "SHELLHIGH=A:\\BIN\\COMMAND.COM A:\\BIN /P\n")
+            comspec = r"A:\BIN\COMMAND.COM"
+            put("CHECK.BAT", "@echo off\necho CHILD=[%DOSCFG%]\n")
+            child = "%COMSPEC% /C CHECK.BAT\n"
+        put("AUTOEXEC.BAT", "@echo off\necho CFG=[%DOSCFG%]\necho SHELL=[%COMSPEC%]\n" + child + "echo SHELL-READY\n")
+        if menu is not None:
+            put("BOOT.SYS", menu)
+        write_config(folder)
+        screen = ""
+        with subprocess.Popen(["pce-ibmpc", "-c", "pce.cfg", "-t", "null", "-g", "vga"],
+                              cwd=folder, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL) as guest:
+            def send(cmd):
+                guest.stdin.write((cmd + "\n").encode())
+                guest.stdin.flush()
+            try:
+                deadline = time.monotonic() + 45
+                sent = False
+                while time.monotonic() < deadline:
+                    dump = folder / "screen.bin"
+                    dump.unlink(missing_ok=True)
+                    send('c 200000\nsave "screen.bin" bin b800:0 fa0')
+                    while not dump.exists() or dump.stat().st_size != 4000:
+                        if time.monotonic() >= deadline or guest.poll() is not None:
+                            raise RuntimeError(f"{name}: screen capture failed")
+                        time.sleep(.01)
+                    screen = dump.read_bytes()[::2].decode("cp437")
+                    if "SHELL-READY" in screen:
+                        break
+                    if key and not sent and "Esc to skip configuration." in screen:
+                        send("key " + key)
+                        sent = True
+                assert "SHELL-READY" in screen and (not key or sent), (name, screen)
+                cfg = {"WINPROBE.SYS": "WIN30", "ORDPROBE.SYS": "CONFIG"}.get(expected, "")
+                assert f"CFG=[{cfg}]" in screen and f"SHELL=[{comspec}]" in screen, (name, screen)
+                if child:
+                    assert "CHILD=[WIN30]" in screen, (name, screen)
+                for marker in ("ORDPROBE.SYS", "WINPROBE.SYS", "ABSENT.SYS"):
+                    assert (marker in screen) == (marker == expected), (name, screen)
+                assert ("Esc to skip configuration." in screen) == bool(key or name == "timeout"), name
+            finally:
+                guest.kill()
+        print("PASS", name, flush=True)

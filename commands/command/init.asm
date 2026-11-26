@@ -359,6 +359,8 @@ TPASET:
 	MOV	AX,DS:[PDB_environ]		; ax = environment segment
 	OR	AX,AX				; If there is no environment segment,
 	JZ	BUILDENV			;  go compute one.
+        call    GetBootConfig
+        jc      BUILDENV                 ; seed saved; initialize normal shell defaults
 	INC	BYTE PTR [CHUCKENV]		; Flag no new ENVIRONSEG to set up
 	JMP	SHORT ENVIRONPASSED		; Otherwise one was passed to us.
 
@@ -822,6 +824,7 @@ doprt:
 ;*********************************
 
 ARGSDONE:
+        call    AddBootConfig
 	mov	es,[envirseg]			;AC000; get environment back
 	ASSUME	ES:ENVIRONMENT			;AN000;
 ;AD060; cmp	ext_msg,set_extended_msg	;AN000; was /msg specified?
@@ -1268,6 +1271,75 @@ DRV0:						; Reset APPEND state
 	JMP	ENDINIT 			;G Finish initializing
 
 ;
+; IO.SYS passes just DOSCFG in the initial EXEC environment. Save this
+; seed before parsing the shell path, which can rebuild the default block.
+; All ordinary inherited environments follow the existing inheritance path.
+BootConfig db 'DOSCFG=',9 dup (0)
+GetBootConfig proc near
+        mov es,ax
+        xor di,di
+        mov si,offset RESGROUP:BootConfig
+        mov cx,7
+        repe cmpsb
+        jne InheritEnv
+        mov cx,9
+        xor al,al
+        repne scasb
+        jne InheritEnv
+        cmp di,8
+        je InheritEnv
+        cmp byte ptr es:[di],0
+        jne InheritEnv
+        ; SYSINIT supplies the seed explicitly and has no environment of
+        ; its own. A secondary COMMAND inherits its parent's environment.
+        mov ax,es
+        mov es,ds:[PDB_Parent_PID]
+        cmp word ptr es:[PDB_environ],0
+        mov es,ax
+        jne InheritEnv
+        mov cx,di
+        sub cx,7
+        push ds
+        push es
+        pop ds
+        push cs
+        pop es
+        mov di,offset RESGROUP:BootConfig+7
+        mov si,7
+        rep movsb
+        pop ds
+        mov es,ds:[PDB_environ]
+        mov ah,DEALLOC                  ; EXEC allocated this copy for us
+        int int_command
+        mov word ptr ds:[PDB_environ],0
+        stc
+        ret
+InheritEnv:
+        mov ax,es
+        clc
+        ret
+GetBootConfig endp
+
+; Append after COMSPEC is finalized, including an explicit shell search path.
+AddBootConfig proc near
+        cmp byte ptr [BootConfig+7],0
+        je BootConfigDone
+        mov es,[ENVIRSEG]
+        mov di,[ECOMLOC]
+        xor al,al
+        mov cx,ENVIRONSIZ
+        repne scasb
+        mov si,offset RESGROUP:BootConfig
+CopyBootConfig:
+        lodsb
+        stosb
+        or al,al
+        jnz CopyBootConfig
+        stosb
+BootConfigDone:
+        ret
+AddBootConfig endp
+
 ;	Get length of string pointed to by DS:SI.  Length includes NULL.
 ;	Length is returned in CX
 ;

@@ -117,6 +117,15 @@
 :def 23 SHAREWARNMSG db "WARNING! SHARE should be loaded for large media",13,10,"$"
 
 ;==================
+:def 25 MenuTitle db 13,10,"Select a DOS configuration",13,10,13,10,"$"
+:def 26 MenuKeys db " to select, Enter for default, or Esc to skip configuration.",13,10,"$"
+:def 27 MenuDefault db "Default: $"
+
+:def 28 MenuRange db "Press 1-$"
+:def 29 MenuTime db " (in $"
+:def 30 MenuSeconds db " seconds)",13,10,"$"
+
+;==================
 :class 4
 ;==================
 ;IBMBIO SYSINIT

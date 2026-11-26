@@ -24,6 +24,7 @@ SYSINITSEG	SEGMENT PUBLIC BYTE 'SYSTEM_INIT'
 	PUBLIC	INSUFMEMORY,BADCOUNTRYCOM
 	public	BadOrder,Errorcmd		;AN000;
 	public	BadParm 			;AN001;
+	public  MenuTitle,MenuKeys,MenuDefault,MenuRange,MenuTime,MenuSeconds
 	public	SHAREWARNMSG			;AN003;
 
 

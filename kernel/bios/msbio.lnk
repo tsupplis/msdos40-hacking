@@ -9,6 +9,7 @@ mshard.obj+
 msinit.obj+
 sysinit1.obj+
 sysconf.obj+
+bootmenu.obj+
 sysinit2.obj+
 fcbpack.obj+
 fcbload.obj+
