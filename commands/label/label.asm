@@ -62,10 +62,8 @@
 ;*	SETUP_NETDRIVE - "Cannot %1 a Network drive"			     *
 ;*	SETUP_NEWLABEL - "Volume label (11 characters, ENTER for none)?"     *
 ;*	SETUP_NOLABEL - "Volume in drive %1 has no label"		     *
-;*	SETUP_NOROOM - "Cannot make directory entry"			     *
 ;*	SETUP_SERIALNUM - "Volume Serial Number is %1-%2"		     *
 ;*	SETUP_SUBSTASGN - "Cannot %1 a SUBSTed or ASSIGNed drive"	     *
-;*	SETUP_TOOMANY - "Too many files open"				     *
 ;*									     *
 ;*    Data Areas:							     *
 ;*	CONTROL BLOCKS - SUBLISTS for message parameters		     *
@@ -189,12 +187,9 @@ VOL_ATTRIBUTE	   equ	8
 ;		ERROR CODES FROM DOS FUNCTIONS
 
 VOL_NOT_FOUND	   equ	0FFh
-TOO_MANY_FILES	   equ	4
 
 ;		ID IF MESSAGES DISPLAYED BY "LABEL"
 
-TOO_MANY_MSG	   equ	1	   ;AN000;M Too many files open
-NO_ROOM_MSG	   equ	2	   ;AN000;M Cannot make directory entry
 INV_CHAR_MSG	   equ	3	   ;AN000;M Invalid characters in volume label
 NEW_LABEL_MSG	   equ	4	   ;AN000;M Vol label (11 chars, ENTER for none)?
 INV_DRIVE_MSG	   equ	5	   ;AN000;M Invalid drive specification
@@ -215,7 +210,6 @@ SUBLIST_LENGTH	   equ	11	   ;AN000;M Length of sublist structure
 RESERVED	   equ	0	   ;AN000;M Reserved byte field
 CR		   equ	0Dh	   ;Carriage Return
 NO_INPUT	   equ	00h	   ;AN000;M No input characters
-DOS_CON_INPUT	   equ	00C8h	   ;AN000;M No input characters
 EXT_ERR_CLASS	   equ	01h	   ;AN000;M DOS Extended error class
 UTILITY_MSG_CLASS  equ	0FFh	   ;AN000;M Utility message class
 STDIN		   equ	0000h	   ;File handle
@@ -259,7 +253,6 @@ Program_Flag	   db	0	   ;Status Flag
 USER_INPUT	   equ	01h	   ;User has input already
 LABEL_FND	   equ	02h	   ;Volume label found
 NO_DELETE	   equ	04h	   ;No need for label delete
-GET_INPUT	   equ	08h	   ;Need user input
 CHAR_BAD	   equ	10h	   ;Invalid character in string
 FOUND_DBCS	   equ	20h	   ;AN000;K in process of handling DBCS chars
 
@@ -350,10 +343,10 @@ DBCSev_Seg	   dw	0	   ;AC000;D segment of DBCS EV
 ;*			  Drive_Setup		      Setup_NetDrive	     *
 ;*			  Error_Exit		      Setup_NewLabel	     *
 ;*			  Find_First_Char	      Setup_NoLabel	     *
-;*			  Find_Old_Label	      Setup_NoRoom	     *
+;*			  Find_Old_Label	                  	     *
 ;*			  Get_New_Label 	      Setup_SerialNum	     *
 ;*			  Get_Serial_Num	      Setup_SubstAsgn	     *
-;*			  Get_User_Input	      Setup_TooMany	     *
+;*			  Get_User_Input	                   	     *
 ;*									     *
 ;*****************************************************************************
    PUBLIC MAIN_BEGIN
@@ -498,11 +491,15 @@ $$DO11:
        mov  si,offset Parm_Area    ;Input buffer
        mov  di,offset New_Vol_Name ;Target Buffer
        call Find_First_Char	   ;Get first not blank char
-       test Program_Flag,GET_INPUT ;Find input?
-       jnz  Need_User_Input	   ;No, go get it
        call Process_String	   ;Scan string, move it
        test Program_Flag,CHAR_BAD  ;Invalid characters?
-       jnz  Need_User_Input	   ;Yes, get user to input
+       jz   Valid_Label
+       test Program_Flag,USER_INPUT
+       jnz  Need_User_Input        ; interactive errors may be corrected
+       call Setup_InvChar
+       call Display_Msg
+       jmp  Error_Exit
+Valid_Label:
        mov  al,END_OF_STRING	   ;Mark end of ASCIIZ string
        stosb
        cmp  New_Vol_Name,END_OF_STRING ;Any chars entered?
@@ -531,15 +528,12 @@ Get_New_Label ENDP
 ;  Find the first non blank character in input string
 ;*****************************************************************************
 ;  Input:  SI = pointer to next character
-;  Output: PROGRAM_FLAG = GET_INPUT if user input needed
 ;	   AL = First not blank character
-;  Notes:  GET_INPUT set if nothing follows drive letter
 
    PUBLIC FIND_FIRST_CHAR
 Find_First_Char PROC NEAR
 ;  $do				   ;AN000;K
 $$DO17:
-       and  Program_Flag,not GET_INPUT ;Clear flag
        lodsb			   ;Get char
        call Chk_DBCS		   ;AN000;D Check DBCS env
 ;      $if  c			   ;AN000;K
@@ -551,6 +545,7 @@ $$IF18:
 ;  $enddo ne			   ;AN000;K No, quit
    JE $$DO17
    call Check_For_Drive_Letter	   ;Parse out drive letter
+Find_Label_Text:
    call Chk_DBCS		   ;AN000;D Check DBCS env
 ;  $if	c			   ;AN000;K
    JNC $$IF21
@@ -561,8 +556,8 @@ $$IF21:
    cmp	al,BLANK		   ;Blank following drive letter?
 ;  $if	e			   ;AN000;K
    JNE $$IF23
-       or   Program_Flag,GET_INPUT
-;  $endif			   ;AN000;K
+   lodsb                           ; allow whitespace after the drive prefix
+   jmp  short Find_Label_Text
 $$IF23:
    ret
 Find_First_Char ENDP
@@ -874,13 +869,35 @@ $$IF54:
    mov	ax,NEW_LABEL_MSG	   ;Tell user to input new label
    call Setup_NewLabel		   ;AN000;M
    call Display_Msg		   ;AC000;M Set up msg and display
-   mov	dx,offset Parm_Area	   ;Point where to put new name
-   mov	cx,MAX_INPUT		   ;Number of characters to read
-   mov	bx,STDIN		   ;Read from keyboard
-   mov	ah,READ 		   ;(3FH)
-   INT	21H
+   mov  di,offset Parm_Area
+Read_Label_Char:
+   mov  dx,di
+   mov  cx,1                       ; leave the next input line for confirmation
+   mov  bx,STDIN
+   mov  ah,READ
+   int  21h
+   jc   Label_Input_Error
+   or   ax,ax
+   jnz  Have_Label_Char
+   cmp  di,offset Parm_Area
+   je   Label_Input_Error          ; EOF alone must never request deletion
+   jmp  short End_Label_Line
+Have_Label_Char:
+   cmp  byte ptr [di],CR
+   je   End_Label_Line
+   cmp  byte ptr [di],10
+   je   End_Label_Line
+   inc  di
+   cmp  di,offset Parm_Area+MAX_INPUT
+   jb   Read_Label_Char
+   jmp  short Label_Input_Error
+End_Label_Line:
+   mov  byte ptr [di],CR
    or	Program_Flag,USER_INPUT    ;Indicate user input has been received
    ret
+Label_Input_Error:
+   mov  ax,11                      ; missing or unreadable redirected input
+   jmp  Label_Diagnostic
 Get_User_Input ENDP
 
    HEADER <CHECK_DELETE - SEE IF OLD LABEL SHOULD BE DELETED>
@@ -901,7 +918,18 @@ Delete_Prompt:			   ;AN001;
    mov	ax,DEL_LABEL_MSG	   ;AN001; Point at Y/N prompt
    call Setup_DelLabel		   ;AN001;M Prepare message
    call Display_Msg		   ;AN001;M Call to Sysdispmsg
-   mov	dx,ax			   ;AN001; Char ret'd, prep for ck
+Read_Delete_Choice:
+   mov  dx,offset Parm_Area
+   mov  cx,1
+   mov  bx,STDIN
+   mov  ah,READ
+   int  21h
+   jc   Label_Input_Error
+   or   ax,ax
+   jz   Label_Input_Error
+   mov  dl,Parm_Area
+   cmp  dl,10                      ; optional LF after the preceding CR
+   je   Read_Delete_Choice
    mov	ax,YN_CHECK		   ;AN001; GetExtCtry,Y/NCheck
    INT	21H			   ;AN001;
    cmp	ax,YES			   ;AN001; Delete label ?
@@ -932,9 +960,14 @@ Delete_Old_Label PROC NEAR
    test Program_Flag,NO_DELETE	   ;Need to delete label ?
 ;  $if	z			   ;AN000;K
    JNZ $$IF56
+   test Program_Flag,LABEL_FND
+   jz   $$IF56
        lea  dx,Del_FCB		   ;Point at FCB to delete vol
        mov  ah,FCB_DELETE	   ;(13H) label and delete it
        INT  21H 		   ;Can't use handle cause Chmod won't find it
+       or   al,al
+       jz   $$IF56
+       jmp  Label_Write_Error
 ;  $endif			   ;AN000;K
 $$IF56:
    ret
@@ -960,47 +993,61 @@ Create_New_Label PROC NEAR
 	   mov	ah,CLOSE	   ;And close the file
 	   INT	21H
 ;      $else			   ;AN000;K since there was creation error,
-       JMP SHORT $$EN59
+       jnc  $$EN59
+Label_Write_Error:
+       xor  bx,bx
+       mov  ah,59h                 ; report the extended DOS error
+       int  21h
+       mov  bx,STDERR
+       xor  cx,cx
+       mov  dx,EXT_ERR_CLASS shl 8
+       call Display_Msg
+       jmp  Error_Exit
 $$IF59:
-	   cmp	ax,TOO_MANY_FILES  ;Is it
-;	   $if	ne		   ;AN000;K if not "too many files", then
-	   JE $$IF61
-	       mov  ax,NO_ROOM_MSG ;AN000;M
-	       call Setup_NoRoom   ;AN000;M
-	       call Display_Msg    ;AN000;M
-	       test Program_Flag,LABEL_FND ;AN000;K was an old label found?
-;	       $if  ne		   ;AN000;K if there was an old one,
-	       JE $$IF62
-				   ;need to restore the previous label
-				   ;because the new one did not stick
-		   mov	si,offset Label_Name ;AN000;K where old name was kept
-		   mov	di,offset New_Vol_Name ;AN000;K where to put old name
-		   mov	cx,8	   ;AN000;K count of filename up to "."
-		   rep	movsb	   ;AN000;K
-		   inc	di	   ;AN000;K skip the "."
-		   mov	cx,3	   ;AN000;K length of extension
-		   rep	movsb	   ;AN000;K
-		   mov	dx,offset New_Vol_Path ;AN000;K drive\path\filename
-		   mov	cx,VOL_ATTRIBUTE ;AN000;K make it a label
-		   mov	ah,CREATE_FILE ;AN000;K make a label
-		   INT	21H	   ;AN000;K at least, try to, anyway...
-;	       $endif		   ;AN000;K old label?
-$$IF62:
-;	   $else		   ;AN000;K since is "too many files", then...
-	   JMP SHORT $$EN61
-$$IF61:
-	       mov  ax,TOO_MANY_MSG ;AN000;M
-	       call Setup_TooMany  ;AN000;M
-	       call Display_Msg    ;AN000;M
-;	   $endif		   ;AN000;K
-$$EN61:
-	   jmp	Error_Exit	   ;Tell user bad news and quit
-;      $endif			   ;AN000;K
+       push ax                     ; retain the create error across rollback
+       test Program_Flag,LABEL_FND
+       jz   Report_Create_Error
+       mov  si,offset Label_Name
+       mov  di,offset New_Vol_Name
+       mov  cx,8
+       rep  movsb
+       mov  al,'.'
+       stosb
+       mov  cx,3
+       rep  movsb
+       xor  al,al
+       stosb
+       mov  dx,offset New_Vol_Path
+       mov  cx,VOL_ATTRIBUTE
+       mov  ah,CREATE_FILE
+       int  21h
+       jc   Restore_Failed
+       mov  bx,ax
+       mov  ah,CLOSE
+       int  21h
+       jnc  Report_Create_Error
+Restore_Failed:
+       pop  ax
+       mov  ax,12
+       jmp  Label_Diagnostic
+Report_Create_Error:
+       pop  ax
+       mov  dx,EXT_ERR_CLASS shl 8
+       jmp  Label_Report
 $$EN59:
 ;  $endif			   ;AN000;K
 $$IF58:
    ret
 Create_New_Label ENDP
+
+Label_Diagnostic:
+   mov  dx,UTILITY_MSG_CLASS shl 8
+Label_Report:
+   mov  bx,STDERR
+   xor  cx,cx
+   call Display_Msg
+   jmp  Error_Exit
+
 
    HEADER <PRELOAD_MESSAGES - SET UP SYS MSGS, DOS VERSION CHK>
 ;*****************************************************************************
@@ -1076,40 +1123,6 @@ $$IF70:
    ret				   ;AN000;M Bye,bye
 Display_Msg ENDP		   ;AN000;M
 
-   HEADER <SETUP_TOOMANY - "Too many files open">
-;*****************************************************************************
-;  Setup for utility messages
-;*****************************************************************************
-;  Input:  None
-;  Output: None
-
-   PUBLIC SETUP_TOOMANY
-Setup_TooMany PROC NEAR 	   ;AN000;M
-   mov	ax,4			   ;AN000;M Utility's message number
-   mov	bx,STDERR		   ;AN000;M Error msg, so stderr
-   mov	cx,0			   ;AN000;M Substitution count
-   mov	dl,NO_INPUT		   ;AN000;M No input characters
-   mov	dh,EXT_ERR_CLASS	   ;AN000;M DOS Extended error class
-   ret				   ;AN000;M Now display the message
-Setup_TooMany ENDP		   ;AN000;M
-
-   HEADER <SETUP_NOROOM - "Cannot make directory entry">
-;*****************************************************************************
-;  Setup for utility messages
-;*****************************************************************************
-;  Input:  None
-;  Output: None
-
-   PUBLIC SETUP_NOROOM
-Setup_NoRoom PROC NEAR		   ;AN000;M
-   mov	ax,82			   ;AN000;M Utility's message number
-   mov	bx,STDERR		   ;AN000;M Error msg, so stderr
-   mov	cx,0			   ;AN000;M Substitution count
-   mov	dl,NO_INPUT		   ;AN000;M No input characters
-   mov	dh,EXT_ERR_CLASS	   ;AN000;M DOS Extended error class
-   ret				   ;AN000;M
-Setup_NoRoom ENDP
-
    HEADER <SETUP_INVCHAR - "Invalid characters in volume label">
 ;*****************************************************************************
 ;  Setup for utility messages
@@ -1153,18 +1166,10 @@ Setup_NewLabel ENDP		   ;AN000;M
 
    PUBLIC SETUP_INVDRIVE
 Setup_InvDrive PROC NEAR	   ;AN000;M
-   mov	s1_offset,offset FCB_Drive_Char ;AN000;M
-   mov	s1_segment,ds		   ;AN000;M Setup segment
-   mov	s1_flags,CHAR_FIELD_CHAR   ;AN000;M Set up the parm formatting
-   mov	s1_maxwidth,MAXWIDTH	   ;AN000;M 0 ensures no padding
-   mov	s1_minwidth,MINWIDTH	   ;AN000;M At least 1 char to insert
-   mov	s1_padchar,BLANK	   ;AN000;M In case, pad with blanks
-   mov	ax,15			   ;AN000;M Utility's message number
-   mov	bx,STDERR		   ;AN000;M Error msg, so stderr
-   lea	si,sublist1		   ;AN000;M Display invalid drive
-   mov	cx,0			   ;AN000;M Substitution count
-   mov	dl,NO_INPUT		   ;AN000;M No input characters
-   mov	dh,EXT_ERR_CLASS	   ;AN000;M DOS Extended error class
+   mov  ax,13
+   mov  bx,STDERR
+   xor  cx,cx
+   mov  dx,UTILITY_MSG_CLASS shl 8
    ret				   ;AN000;M
 Setup_InvDrive ENDP		   ;AN000;M
 
@@ -1312,7 +1317,7 @@ Setup_DelLabel PROC NEAR	   ;AN001;M
    mov	ax,9			   ;AN001;M Utility's message number
    mov	bx,STDOUT		   ;AN001;M Info msg, so stdout
    mov	cx,0			   ;AN001;M Substitution count
-   mov	dl,DOS_CON_INPUT	   ;AN001;M Input Y/N character
+   mov	dl,NO_INPUT               ; Check_Delete reads the answer
    mov	dh,UTILITY_MSG_CLASS	   ;AN001;M Utility message class
    ret				   ;AN001;M
 Setup_DelLabel ENDP		   ;AN001;M

@@ -14,7 +14,7 @@ typedef unsigned short WORD;
 #define PATHLEN 128
 #define ALLATTR (_A_SUBDIR | _A_HIDDEN | _A_SYSTEM | _A_RDONLY)
 
-enum { usage = 1, bad = 2, failed = 3, make_dir = 4, replace_q = 5, saved = 6, arrow = 7, collision = 8 };
+enum { missing = 1, bad = 2, failed = 3, make_dir = 4, replace_q = 5, saved = 6, arrow = 7, collision = 8, retained = 9 };
 
 void sysloadmsg(union REGS *, union REGS *);
 void sysdispmsg(union REGS *, union REGS *);
@@ -67,21 +67,52 @@ static int question(int id, char *path)
     return first == 'y' || first == 'Y';
 }
 
+/* DOS returns pairs of inclusive lead-byte ranges, terminated by 0,0. */
+static unsigned char far *lead_ranges;
+
+static void load_lead_ranges(void)
+{
+    union REGS r;
+    struct SREGS seg;
+    segread(&seg);
+    r.x.ax = 0x6300;
+    r.x.si = 0;
+    intdosx(&r,&r,&seg);
+    if (!r.x.cflag && !r.h.al) {
+        FP_SEG(lead_ranges) = seg.ds;
+        FP_OFF(lead_ranges) = r.x.si;
+    }
+}
+
+static char *next_char(char *p)
+{
+    unsigned char far *r;
+    if ((unsigned char)*p >= 0x80 && p[1] && lead_ranges)
+        for (r = lead_ranges; *r; r += 2)
+            if ((unsigned char)*p >= r[0] && (unsigned char)*p <= r[1])
+                return p + 2;
+    return p + 1;
+}
+
 static char *leaf(char *path)
 {
-    char *p = strrchr(path, '\\');
-    if (!p) p = strrchr(path, ':');
-    return p ? p + 1 : path;
+    char *p, *name = path;
+    for (p = path; *p; p = next_char(p))
+        if (*p == '\\' || *p == ':') name = p + 1;
+    return name;
 }
 
 /* DOS TRUENAME also expands drive-relative paths and SUBST mappings. */
 static int canonical(char *input, char *out)
 {
     union REGS r;
+    struct SREGS seg;
+    segread(&seg);
+    seg.es = seg.ds;
     r.x.ax = 0x6000;
     r.x.si = (unsigned)input;
     r.x.di = (unsigned)out;
-    intdos(&r, &r);
+    intdosx(&r,&r,&seg);
     return !r.x.cflag;
 }
 
@@ -136,10 +167,13 @@ static int collect(char *path, unsigned attr)
 static unsigned dosrename(char *from, char *to)
 {
     union REGS r;
+    struct SREGS seg;
+    segread(&seg);
+    seg.es = seg.ds;
     r.h.ah = 0x56;
     r.x.dx = (unsigned)from;
     r.x.di = (unsigned)to;
-    intdos(&r,&r);
+    intdosx(&r,&r,&seg);
     return r.x.cflag ? r.x.ax : 0;
 }
 
@@ -220,7 +254,8 @@ static int moveone(struct source *s, char *dest)
     }
     if (copied && (((s->attr & _A_RDONLY) &&
         _dos_setfileattr(src,s->attr & ~_A_RDONLY)) || unlink(src))) {
-        _dos_setfileattr(src,s->attr);
+        if (s->attr & _A_RDONLY) _dos_setfileattr(src,s->attr);
+        message(stderr, retained, dest, NULL);
         if (old) message(stderr, saved, backup, NULL);
         return 0;
     }
@@ -240,7 +275,7 @@ static int make_path(char *dir)
     char *p;
     unsigned attr;
     if (dir[1] != ':' || dir[2] != '\\') return mkdir(dir) == 0;
-    for (p = dir + 3; ; ++p) {
+    for (p = dir + 3; ; p = next_char(p)) {
         char end = *p;
         if (end && end != '\\') continue;
         *p = 0;
@@ -265,6 +300,7 @@ int main(int argc, char **argv)
         if (!strcmp(argv[i], "/?")) show_help("MOVE");
     i = 1;
     load_messages();
+    load_lead_ranges();
     while (i < argc && argv[i][0] == '/') {
         if (!stricmp(argv[i], "/Y")) {
             quiet = 1;
@@ -275,7 +311,8 @@ int main(int argc, char **argv)
         } else goto invalid;
         ++i;
     }
-    if (argc - i < 2 || strpbrk(argv[argc-1], "*,?/") ||
+    if (argc - i < 2) { message(stderr, missing, NULL, NULL); return 1; }
+    if (strpbrk(argv[argc-1], "*,?/") ||
         !canonical(argv[argc-1],dest)) goto invalid;
     for (; i < argc-1; ++i) {
         unsigned size = strlen(argv[i]);
@@ -315,7 +352,7 @@ int main(int argc, char **argv)
         strcpy(target,dest);
         if (dir) {
             if (strlen(target)+strlen(leaf(s->path))+2 > PATHLEN) goto invalid;
-            if (target[strlen(target)-1] != '\\') strcat(target,"\\");
+            if (*leaf(target)) strcat(target,"\\");
             strcat(target,leaf(s->path));
         }
         if (!moveone(s,target)) {
@@ -326,6 +363,5 @@ int main(int argc, char **argv)
     return !ok;
 invalid:
     message(stderr, bad, NULL, NULL);
-    message(stderr, usage, NULL, NULL);
     return 1;
 }

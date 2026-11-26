@@ -69,11 +69,54 @@ static int question(char *path)
     return 0;
 }
 
+/* DOS returns pairs of inclusive lead-byte ranges, terminated by 0,0. */
+static unsigned char far *lead_ranges;
+
+static void load_lead_ranges(void)
+{
+    union REGS r;
+    struct SREGS seg;
+    segread(&seg);
+    r.x.ax = 0x6300;
+    r.x.si = 0;
+    intdosx(&r,&r,&seg);
+    if (!r.x.cflag && !r.h.al) {
+        FP_SEG(lead_ranges) = seg.ds;
+        FP_OFF(lead_ranges) = r.x.si;
+    }
+}
+
+static char *next_char(char *p)
+{
+    unsigned char far *r;
+    if ((unsigned char)*p >= 0x80 && p[1] && lead_ranges)
+        for (r = lead_ranges; *r; r += 2)
+            if ((unsigned char)*p >= r[0] && (unsigned char)*p <= r[1])
+                return p + 2;
+    return p + 1;
+}
+
 static char *leaf(char *path)
 {
-    char *p = strrchr(path, '\\');
-    if (!p) p = strrchr(path, ':');
-    return p ? p + 1 : path;
+    char *p, *name = path;
+    for (p = path; *p; p = next_char(p))
+        if (*p == '\\' || *p == ':') name = p + 1;
+    return name;
+}
+
+/* A UNC operand must name something below both server and share. */
+static int share_root(char *path)
+{
+    char *p;
+    int components = 0;
+    if (path[0] != '\\' || path[1] != '\\') return 0;
+    p = path + 2;
+    while (*p) {
+        if (*p == '\\') { ++p; continue; }
+        if (++components == 3) return 0;
+        do { p = next_char(p); } while (*p && *p != '\\');
+    }
+    return 1;
 }
 
 /* DOS TRUENAME also expands drive-relative paths and SUBST mappings. */
@@ -119,13 +162,24 @@ static int quiet;
 
 static int erase(char *path, unsigned attr)
 {
-    char search[PATHLEN];
-    int dir = attr & _A_SUBDIR;
+    struct find_t ent;
+    unsigned err, len = strlen(path);
+    int dir = attr & _A_SUBDIR, ok = 1;
     if (dir) {
-        if (strlen(path) + 4 >= PATHLEN) return 0;
-        strcpy(search, path);
-        strcat(search, "\\*.*");
-        if (!matches(search, erase, 1)) return 0;
+        /* Reuse the caller's path buffer. Each level owns its search state. */
+        if (len + 4 >= PATHLEN) return 0;
+        strcpy(path + len, "\\*.*");
+        err = _dos_findfirst(path, ALLATTR, &ent);
+        while (!err) {
+            if (strcmp(ent.name,".") && strcmp(ent.name,"..")) {
+                if (len + 1 + strlen(ent.name) >= PATHLEN) { ok = 0; break; }
+                strcpy(path + len + 1,ent.name);
+                if (!erase(path,ent.attrib)) ok = 0;
+            }
+            err = _dos_findnext(&ent);
+        }
+        path[len] = 0;
+        if (!ok || (err != 18 && err != 2)) return 0;
     }
     if (attr & (_A_HIDDEN | _A_SYSTEM | _A_RDONLY))
         if (_dos_setfileattr(path, attr & ~(_A_HIDDEN | _A_SYSTEM | _A_RDONLY)))
@@ -144,6 +198,23 @@ static int contains_path(char *parent, char *path)
            (!path[len] || path[len] == '\\');
 }
 
+/* Some redirectors return X:\path for TRUENAME on two mappings of the
+ * same volume. Compare paths below the share when either name is opaque. */
+static char *volume_path(char *p)
+{
+    int parts = 0;
+    if (p[0] && p[1] == ':' && p[2] == '\\') return p + 2;
+    if (p[0] != '\\' || p[1] != '\\') return NULL;
+    p += 2;
+    while (*p && parts < 2) {
+        while (*p == '\\') ++p;
+        if (!*p) break;
+        do { p = next_char(p); } while (*p && *p != '\\');
+        ++parts;
+    }
+    return parts == 2 ? p : NULL;
+}
+
 static int selected(char *path, unsigned attr)
 {
     char full[PATHLEN], current[PATHLEN];
@@ -153,7 +224,8 @@ static int selected(char *path, unsigned attr)
     struct SREGS seg;
     union REGS r;
     unsigned i, n;
-    if (!canonical(path, full) || !full[0] || !*leaf(full)) return 0;
+    int remote;
+    if (!canonical(path, full) || !full[0] || share_root(full) || !*leaf(full)) return 0;
     if (attr & _A_SUBDIR) {
         /* Read the DOS 4 current-directory table in memory. TRUENAME on
          * an unrelated floppy can ask the user to insert its disk. */
@@ -163,13 +235,16 @@ static int selected(char *path, unsigned attr)
         FP_SEG(vars) = seg.es;
         FP_OFF(vars) = r.x.bx;
         cds = (struct CDSType far *)vars->pCDS;
+        remote = full[0] == '\\' ||
+                 (full[0] >= 'A' && full[0] < 'A' + vars->cCDS &&
+                  full[1] == ':' && (cds[full[0]-'A'].flags & CDSNET));
         for (i = 0; i < vars->cCDS; ++i) {
             if (!(cds[i].flags & (CDSINUSE | CDSNET))) continue;
             drivecwd[0] = (char)('A' + i);
             /* SUBST stores its backing drive in the CDS path. Network
              * aliases may resolve to a UNC name through the redirector. */
             if (drivecwd[0] != full[0] && cds[i].text[0] != full[0] &&
-                !(full[0] == '\\' && (cds[i].flags & CDSNET))) continue;
+                !(remote && (cds[i].flags & CDSNET))) continue;
             /* A SUBST drive's root is protected even when DOS returns
              * the logical drive spelling for TRUENAME on that root. */
             if (cds[i].flags & CDSLOCAL) {
@@ -182,6 +257,11 @@ static int selected(char *path, unsigned attr)
             }
             if (!canonical(drivecwd, current) || contains_path(full, current))
                 return 0;
+            if (remote && (cds[i].flags & CDSNET) &&
+                (full[0] != '\\' || current[0] != '\\')) {
+                char *target = volume_path(full), *cwd = volume_path(current);
+                if (!target || !cwd || contains_path(target,cwd)) return 0;
+            }
         }
     }
     if (!quiet && !question(path))
@@ -196,6 +276,7 @@ int main(int argc, char **argv)
     char pattern[PATHLEN], *name;
     check_help();
     load_messages();
+    load_lead_ranges();
     while (i < argc && argv[i][0] == '/') {
         if (stricmp(argv[i], "/Y")) { message(stderr, bad, NULL, NULL); return 1; }
         quiet = 1;
@@ -210,10 +291,16 @@ int main(int argc, char **argv)
         }
         strcpy(pattern, argv[i]);
         /* A directory operand must name its target explicitly. */
-        while (*pattern && pattern[strlen(pattern)-1] == '\\')
-            pattern[strlen(pattern)-1] = 0;
+        {
+            char *p, *trailing = NULL;
+            for (p = pattern; *p; p = next_char(p)) {
+                if (*p != '\\') trailing = NULL;
+                else if (!trailing) trailing = p;
+            }
+            if (trailing) *trailing = 0;
+        }
         name = leaf(pattern);
-        if (!*name || !strcmp(name, ".") || !strcmp(name, "..")) {
+        if (share_root(pattern) || !*name || !strcmp(name, ".") || !strcmp(name, "..")) {
             message(stderr, bad, NULL, NULL);
             rc = 1;
             continue;

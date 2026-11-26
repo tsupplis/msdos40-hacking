@@ -490,10 +490,10 @@ KEYBOARD.SYS Keyboard layout data used by KEYB.
    file            Keyboard definition file read by KEYB.
 LABEL        Display, set, or remove a disk volume label.
 
- LABEL [drive:][label]
+ LABEL [drive:] [label]
 
    drive           Volume to label.
-   label           New label. Omit to change the label interactively.
+   label           New volume label (up to 11 bytes). Omit it for a prompt.
 LASTDRIVE=   Set the highest drive letter.
 
  LASTDRIVE=letter

@@ -2,12 +2,13 @@
 :class 1
 :class 2
 :class A
-:def 1 "MOVE [/Y | /-Y] source[,source...] destination",CR,LF
-:def 2 "Invalid parameter or path",CR,LF
-:def 3 "Cannot move %1",CR,LF
+:def 1 "MOVE: Required parameters missing.",CR,LF
+:def 2 "MOVE: Invalid parameter or path.",CR,LF
+:def 3 "MOVE: Cannot move %1",CR,LF
 :def 4 "Create directory %1 (Y/N)? "
 :def 5 "Overwrite %1 (Y/N)? "
 :def 6 "Original destination saved as %1",CR,LF
 :def 7 "%1 -> %2",CR,LF
-:def 8 "Both %1 and %2 would move to the same name",CR,LF
+:def 8 "MOVE: Both %1 and %2 would move to the same name",CR,LF
+:def 9 "MOVE: Destination copy retained at %1",CR,LF
 :end
