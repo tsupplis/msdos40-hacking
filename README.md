@@ -143,7 +143,7 @@ An optional `\BOOT.SYS` on the boot drive selects a complete configuration at st
 
 ```ini
 # File = menu description
-C:\CONFIG.SYS = Default
+C:\CONFIG.SYS = Default DOS
 C:\WIN30.SYS = Windows 3.0
 C:\BARE.SYS = Bare system
 default = 1
