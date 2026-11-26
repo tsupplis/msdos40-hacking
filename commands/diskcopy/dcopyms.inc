@@ -18,17 +18,11 @@
 ;;
 ;:def 2 CR,LF
 ;
-;:use 3 PARSE10 	    ;CR,LF,"Invalid parameter",CR,LF
 ;
-;:def 4 "Do not specify filename(s)",CR,LF
-;"Command Format: DISKCOPY d: d: [/1]",CR,LF
 ;;
-;:def 5 CR,LF,"Invalid drive specification",CR,LF
-;"Specified drive does not exist",CR,LF
-;"or is non-removable",CR,LF
+;:def 5 "DISKCOPY: Invalid drive. Specify a removable drive.",CR,LF
 ;
-;:def 6 CR,LF,"Cannot DISKCOPY to or from",CR,LF
-;"a network drive",CR,LF
+;:def 6 "DISKCOPY: Invalid drive. Network drives are unsupported.",CR,LF
 ;
 ;:def 7 CR,LF,"Formatting while copying",CR,LF
 ;
@@ -41,7 +35,6 @@
 ;
 ;:def 11 CR,LF,"Target diskette may be unusable",CR,LF
 ;
-;:def 12 CR,LF,"Target diskette unusable",CR,LF
 ;
 ;:use 13 EXTEND21	    ;CR,LF,Drive not ready",CR,LF
 ;
@@ -113,23 +106,16 @@ MSGNUM_CR_LF  MSG_DESC <2> ;AN000;
 	    PUBLIC MSGNUM_CR_LF ;AN000;
 ; = = = = = = = = = = = = = = = =
 		     ;CR,LF,"Invalid parameter",CR,LF
-MSGNUM_INVALID_PARM MSG_DESC <3> ;AN000;
-	    PUBLIC MSGNUM_INVALID_PARM ;AN000;
 ; = = = = = = = = = = = = = = = =
-		     ; "Do not specify filename(s)",CR,LF
-		     ; "Command Format: DISKCOPY d: d: [/1]",CR,LF
-MSGNUM_INVALID_PARM2 MSG_DESC <4> ;AN000;
-	    PUBLIC MSGNUM_INVALID_PARM2 ;AN000;
+MSGNUM_PARSE_PREFIX MSG_DESC <4,STDERR> ;AN000;
+	    PUBLIC MSGNUM_PARSE_PREFIX ;AN000;
 ; = = = = = = = = = = = = = = = =
-		     ;:def 5 CR,LF,"Invalid drive specification",CR,LF
-		     ;"Specified drive does not exist",CR,LF
-		     ;"or is non-removable",CR,LF
-MSGNUM_INVALID_DRV MSG_DESC <5> ;AN000;
+		     ;:def 5 "DISKCOPY: Invalid drive. Specify a removable drive.",CR,LF
+MSGNUM_INVALID_DRV MSG_DESC <5,STDERR> ;AN000;
 	    PUBLIC MSGNUM_INVALID_DRV ;AN000;
 ; = = = = = = = = = = = = = = = =
-		     ;CR,LF,"Cannot DISKCOPY to or from",CR,LF
-		     ;"a network drive",CR,LF
-MSGNUM_DRV_REDIRECTED MSG_DESC <6> ;AN000;
+		     ;"DISKCOPY: Invalid drive. Network drives are unsupported.",CR,LF
+MSGNUM_DRV_REDIRECTED MSG_DESC <6,STDERR> ;AN000;
 	    PUBLIC MSGNUM_DRV_REDIRECTED ;AN000;
 ; = = = = = = = = = = = = = = = =
 		     ;CR,LF,"Formatting while copying",CR,LF
@@ -162,12 +148,9 @@ MSGNUM_CLOSE_DOOR MSG_DESC <10> ;AN004;
 	    PUBLIC MSGNUM_CLOSE_DOOR ;AN004;
 ; = = = = = = = = = = = = = = = =
 		     ;CR,LF,"Target diskette may be unusable",CR,LF
-MSGNUM_TARGET_MB_UNUSABLE MSG_DESC <11> ;AN000;
+MSGNUM_TARGET_MB_UNUSABLE MSG_DESC <11,STDERR> ;AN000;
 	    PUBLIC MSGNUM_TARGET_MB_UNUSABLE ;AN000;
 ; = = = = = = = = = = = = = = = =
-		     ;CR,LF,"Target diskette unusable",CR,LF
-MSGNUM_TARGET_UNUSABLE MSG_DESC <12> ;AN000;
-	    PUBLIC MSGNUM_TARGET_UNUSABLE ;AN000;
 ; = = = = = = = = = = = = = = = =
 		     ;CR,LF,"Drive not ready - %0",CR,LF
 MSGNUM_GET_READY MSG_DESC <13,,SUBLIST_13,ONE_SUBS> ;AN000;
@@ -211,17 +194,17 @@ MSG_SIDES   DW	 0   ;AN000;NUMBER OF SIDES
 ; = = = = = = = = = = = = = = = =
 		     ;CR,LF,"Drive types or diskette types",CR,LF
 		     ;"not compatible",CR,LF
-MSGNUM_NOT_COMPATIBLE MSG_DESC <18> ;AN000;
+MSGNUM_NOT_COMPATIBLE MSG_DESC <18,STDERR> ;AN000;
 	    PUBLIC MSGNUM_NOT_COMPATIBLE ;AN000;
 ; = = = = = = = = = = = = = = = =
 		     ;CR,LF,"Unrecoverable read error on drive %1",CR,LF
 		     ;"Side %2, track %3",CR,LF
-MSGNUM_HARD_ERROR_READ MSG_DESC <19,,SUBLIST_19C,THREE_SUBS> ;AN000;
+MSGNUM_HARD_ERROR_READ MSG_DESC <19,STDERR,SUBLIST_19C,THREE_SUBS> ;AN000;
 	    PUBLIC MSGNUM_HARD_ERROR_READ ;AN000;
 
 		     ;CR,LF,"Unrecoverable write error on drive %1",CR,LF
 		     ;"Side %2, track %3",CR,LF
-MSGNUM_HARD_ERROR_WRITE MSG_DESC <20,,SUBLIST_19C,THREE_SUBS> ;AN000;
+MSGNUM_HARD_ERROR_WRITE MSG_DESC <20,STDERR,SUBLIST_19C,THREE_SUBS> ;AN000;
 	    PUBLIC MSGNUM_HARD_ERROR_WRITE ;AN000;
 
 SUBLIST_19C SUBLIST <,,DRIVE_LETTER,FILL_SEG,PC_ID_1,SF_BITS<SF_LEFT,,SF_ASCIIZ,SF_CHAR>,MAX_0,MIN_1> ;AN000;
@@ -241,20 +224,20 @@ ERROR_TRACK_NUMBER DW ? ;AN000;
 	    PUBLIC ERROR_TRACK_NUMBER ;AN000;
 ; = = = = = = = = = = = = = = = =
 		     ;CR,LF,"Copy process ended",CR,LF
-MSGNUM_FATAL_ERROR MSG_DESC <21> ;AN000;
+MSGNUM_FATAL_ERROR MSG_DESC <21,STDERR> ;AN000;
 	    PUBLIC MSGNUM_FATAL_ERROR ;AN000;
 ; = = = = = = = = = = = = = = = =
 		     ;CR,LF,"SOURCE diskette bad or incompatible"
-MSGNUM_BAD_SOURCE  MSG_DESC <22> ;AN000;
+MSGNUM_BAD_SOURCE  MSG_DESC <22,STDERR> ;AN000;
 	    PUBLIC MSGNUM_BAD_SOURCE ;AN000;
 
 ; = = = = = = = = = = = = = = = =
 		     ;CR,LF,"TARGET diskette bad or incompatible"
-MSGNUM_BAD_TARGET MSG_DESC <23> ;AN000;
+MSGNUM_BAD_TARGET MSG_DESC <23,STDERR> ;AN000;
 	    PUBLIC MSGNUM_BAD_TARGET ;AN000;
 ; = = = = = = = = = = = = = = = =
 		     ;CR,LF,"Insufficient memory",CR,LF
-MSGNUM_UNSUF_MEMORY MSG_DESC <25> ;AN000;
+MSGNUM_UNSUF_MEMORY MSG_DESC <25,STDERR> ;AN000;
 	    PUBLIC MSGNUM_UNSUF_MEMORY ;AN000;
 ; = = = = = = = = = = = = = = = =
 		     ;"Volume Serial Number is %1-%2"

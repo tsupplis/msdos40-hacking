@@ -5,17 +5,12 @@
 ;
 :use 2 EXTEND8             ;AN000;"Insufficient memory"
 ;
-:use 3 PARSE10             ;AN000;"Invalid parameter"
 ;
-:def 4 "Do not specify filename(s)",CR,LF                                       ;AN000;
-"Command format: DISKCOMP [drive1:] [drive2:] [/1] [/8]",LF,CR                                 ;AN000;
+:def 4 "DISKCOMP: "
 ;
-:def 5 CR,LF,"Invalid drive specification",CR,LF                                ;AN000;
-"Specified drive does not exist",CR,LF                                          ;AN000;
-"or is non-removable",CR,LF                                                     ;AN000;
+:def 5 "DISKCOMP: Invalid drive. Specify a removable drive.",CR,LF
 ;
-:def 6 CR,LF,"Cannot DISKCOMP to or from",CR,LF                                 ;AN000;
-"a network drive",CR,LF                                                         ;AN000;
+:def 6 "DISKCOMP: Invalid drive. Network drives are unsupported.",CR,LF
 ;
 :def 7 CR,LF,"Insert FIRST diskette in drive %1:",CR,LF                         ;AN000;
 

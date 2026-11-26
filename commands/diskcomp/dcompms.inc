@@ -19,17 +19,11 @@
 ;
 ;:use 2 EXTEND8 	    ;"Insufficient memory"
 ;
-;:use 3 PARSE10 	    ;"Invalid parameter"
 ;;
-;:def 4 "Do not specify filename(s)",CR,LF
-;"Command format: DISKCOMP d: d: [/1][/8]",LF,CR
 ;
-;:def 5 CR,LF,"Invalid drive specification",CR,LF
-;"Specified drive does not exist",CR,LF
-;"or is non-removable",CR,LF
+;:def 5 "DISKCOMP: Invalid drive. Specify a removable drive.",CR,LF
 ;
-;:def 6 CR,LF,"Cannot DISKCOMP to or from",CR,LF
-;"a network drive",CR,LF
+;:def 6 "DISKCOMP: Invalid drive. Network drives are unsupported.",CR,LF
 ;
 ;:def 7 CR,LF,"Insert FIRST diskette in drive %1:",CR,LF
 ;
@@ -94,29 +88,22 @@ SUBLIST_PARSE  SUBLIST <,,FILL_OFF,FILL_SEG,PC_ID_0,SF_BITS <SF_LEFT,,SF_ASCIIZ,
 ;		SPECIFICALLY DEFINED FOR THE DISKCOMP UTILITY
 
 		     ;"Insufficient memory"
-MSGNUM_UNSUF_MEMORY MSG_DESC <2> ;AN000;
+MSGNUM_UNSUF_MEMORY MSG_DESC <2,STDERR> ;AN000;
 	PUBLIC MSGNUM_UNSUF_MEMORY ;AN000;
 
 		     ;CR,LF,"Invalid parameter",CR,LF
-MSGNUM_INVALID_PARM MSG_DESC <3> ;AN000;
-	PUBLIC MSGNUM_INVALID_PARM ;AN000;
 
-		     ;"Do not specify filename(s)",CR,LF
-		     ;"Command format: DISKCOMP d: d: [/1][/8]",CR,LF
-MSGNUM_INVALID_PARM2 MSG_DESC <4> ;AN000;
-	    PUBLIC MSGNUM_INVALID_PARM2 ;AN000;
+MSGNUM_PARSE_PREFIX MSG_DESC <4,STDERR> ;AN000;
+	    PUBLIC MSGNUM_PARSE_PREFIX ;AN000;
 
 ; = = = = = = = = = = = = = = = =
-		     ;CR,LF,"Invalid drive specification",CR,LF
-		     ;"Specified drive does not exist",CR,LF
-		     ;"or is non-removable",CR,LF
-MSGNUM_INVALID_DRV MSG_DESC <5> ;AN000;
+		     ;"DISKCOMP: Invalid drive. Specify a removable drive.",CR,LF
+MSGNUM_INVALID_DRV MSG_DESC <5,STDERR> ;AN000;
 	    PUBLIC MSGNUM_INVALID_DRV ;AN000;
 
 ; = = = = = = = = = = = = = = = =
-		     ;CR,LF,"Cannot DISKCOMP to or from",CR,LF
-		     ;"a network drive",CR,LF
-MSGNUM_DRV_REDIRECTED MSG_DESC <6> ;AN000;
+		     ;"DISKCOMP: Invalid drive. Network drives are unsupported.",CR,LF
+MSGNUM_DRV_REDIRECTED MSG_DESC <6,STDERR> ;AN000;
 	    PUBLIC MSGNUM_DRV_REDIRECTED ;AN000;
 
 ; = = = = = = = = = = = = = = = =
@@ -141,11 +128,11 @@ ASCII_DRV2_ID DB LETTER_A-BYTE ;AN000;
 
 ; = = = = = = = = = = = = = = = =
 		     ;CR,LF,"FIRST diskette bad or incompatible",CR,LF
-MSGNUM_BAD_FIRST  MSG_DESC <9> ;AN000;
+MSGNUM_BAD_FIRST  MSG_DESC <9,STDERR> ;AN000;
 	    PUBLIC MSGNUM_BAD_FIRST ;AN000;
 ; = = = = = = = = = = = = = = = =
 		     ;CR,LF,"SECOND diskette bad or incompatible",CR,LF
-MSGNUM_BAD_SECOND  MSG_DESC <10> ;AN000;
+MSGNUM_BAD_SECOND  MSG_DESC <10,STDERR> ;AN000;
 	    PUBLIC MSGNUM_BAD_SECOND ;AN000;
 ; = = = = = = = = = = = = = = = =
 		     ;CR,LF,Drive not ready",CR,LF
@@ -190,14 +177,14 @@ MSG_SIDES   DW	 0   ;AN000;NUMBER OF SIDES
 ; = = = = = = = = = = = = = = = =
 		     ;CR,LF,"Drive types or diskette types",CR,LF
 		     ;"not compatible",CR,LF
-MSGNUM_NOT_COMPATIBLE MSG_DESC <16> ;AN000;
+MSGNUM_NOT_COMPATIBLE MSG_DESC <16,STDERR> ;AN000;
 	    PUBLIC MSGNUM_NOT_COMPATIBLE ;AN000;
 ; = = = = = = = = = = = = = = = =
 		     ;CR,LF,"Unrecoverable read error on drive %2",CR,LF
 		     ;"side %3, track %4",CR,LF
 		     ;%2 IS "DRIVE_LETTER", AND
 		     ;"MSG_SIDES" AND "MSG_TRACKS" ARE %3 AND %4.
-MSGNUM_HARD_ERROR_READ MSG_DESC <17,,SUBLIST_17B,THREE_SUBS> ;AN000;
+MSGNUM_HARD_ERROR_READ MSG_DESC <17,STDERR,SUBLIST_17B,THREE_SUBS> ;AN000;
 	    PUBLIC MSGNUM_HARD_ERROR_READ ;AN000;
 
 SUBLIST_17B SUBLIST <,,DRIVE_LETTER,FILL_SEG,PC_ID_2,SF_BITS<SF_LEFT,,SF_ASCIIZ,SF_CHAR>,MAX_0,MIN_1>;AN000;
@@ -208,7 +195,7 @@ SUBLIST_17D SUBLIST <,,MSG_TRACKS,FILL_SEG,PC_ID_4,SF_BITS<SF_LEFT,,SF_WORD,SF_U
 		     ;CR,LF,"Compare error on",CR,LF
 		     ;"side %3, track %4",CR,LF
 		     ;"MSG_SIDES" AND "MSG_TRACKS" ARE %3 AND %4.
-MSGNUM_HARD_ERROR_COMP MSG_DESC <18,,SUBLIST_17C,TWO_SUBS> ;AN000;
+MSGNUM_HARD_ERROR_COMP MSG_DESC <18,STDERR,SUBLIST_17C,TWO_SUBS> ;AN000;
 	    PUBLIC MSGNUM_HARD_ERROR_COMP ;AN000;
 ; = = = = = = = = = = = = = = = =
 		     ;:def 19 "Make sure a diskette is inserted into",CR,LF
@@ -217,7 +204,7 @@ MSGNUM_CLOSE_DOOR MSG_DESC <19> ;AN004;
 	    PUBLIC MSGNUM_CLOSE_DOOR ;AN004;
 ; = = = = = = = = = = = = = = = =
 		     ;CR,LF,"Compare process ended",CR,LF
-MSGNUM_FATAL_ERROR MSG_DESC <20> ;AN000;
+MSGNUM_FATAL_ERROR MSG_DESC <20,STDERR> ;AN000;
 	    PUBLIC MSGNUM_FATAL_ERROR ;AN000;
 ; = = = = = = = = = = = = = = = =
 		     ;CR,LF,"Compare OK",CR,LF

@@ -703,6 +703,13 @@ COMP_EXIT:
 
 ;  $ENDIF
 $$IF19:
+   CMP   COMP_STATUS,FATAL
+   JE    COMP_FAILED
+   CMP   COMP_ERROR,FALSE
+   JE    COMP_RETURN
+COMP_FAILED:
+   MOV   EXITFL,EXPAR              ; preserve failure across repeat prompts
+COMP_RETURN:
    RET
 
 COMP ENDP
@@ -824,6 +831,8 @@ $$DO32:
    JA $$EN32
 
        CALL  READ_TRACK 	   ;NO, GO READ ANOTHER TRACK
+       CMP   COMP_STATUS,FATAL
+       JE    RS_EXIT
 
        INC   TRACK_TO_READ
 ;  $ENDDO
@@ -835,6 +844,49 @@ RS_EXIT:
 
 READ_SOURCE ENDP
 ;  =  =  =  =  =  =  =	=  =  =  =  =
+   ; SI points to a floppy BPB. Return the cylinder count in AX, or carry
+   ; if a layout entry, a track-buffer offset or a cylinder cannot fit.
+MEDIA_CYLINDERS PROC NEAR
+   MOV   AX,[SI].CBYTE_SECT
+   OR    AX,AX
+   JZ    geometry_bad
+   CMP   AX,4080                   ; paragraph count must fit in a byte
+   JA    geometry_bad
+   MOV   DX,AX
+   DEC   DX
+   TEST  AX,DX                     ; sector size must be a power of two
+   JNZ   geometry_bad
+   MOV   CX,[SI].CSECT_TRACK
+   JCXZ  geometry_bad
+   CMP   CX,63                     ; entries reserved by MY_TRACKLAYOUT
+   JA    geometry_bad
+   CMP   [SI].CHEAD,1
+   JB    geometry_bad
+   CMP   [SI].CHEAD,2
+   JA    geometry_bad
+   MUL   CX
+   JC    geometry_bad
+   MUL   [SI].CHEAD
+   JC    geometry_bad
+   MOV   AX,CX
+   MUL   [SI].CHEAD
+   MOV   CX,AX                     ; sectors per cylinder
+   MOV   AX,[SI].CTOTSECT
+   XOR   DX,DX
+   DIV   CX
+   OR    DX,DX                     ; require whole cylinders
+   JNZ   geometry_bad
+   OR    AX,AX
+   JZ    geometry_bad
+   CMP   AX,255
+   JA    geometry_bad
+   CLC
+   RET
+geometry_bad:
+   STC
+   RET
+MEDIA_CYLINDERS ENDP
+
    HEADER <CHECK_SOURCE - DETERMINE FIRST DISKETTE TYPE> ;			;AN000;
 ;*****************************************************************************
 ;									     *
@@ -874,10 +926,11 @@ CS_NEW: 			   ;						;AN000;
    cmp	 ms_deviceBPB.chead,0	   ;cannot trust the info. from DOS.
    je	 cs_old 		   ;sanity check for devide by 0.
 
-   MOV	 AX, MS_deviceBPB.CTOTSECT
-   CWD				   ;CONVERT IT TO A DOUBLE WORD
-   DIV	 MS_deviceBPB.CSECT_TRACK
-   DIV	 MS_deviceBPB.CHEAD	   ;(TOTAL SECTORS / # OF TRACKS) / # OF HEADS
+   MOV   SI,OFFSET MS_deviceBPB
+   CALL  MEDIA_CYLINDERS
+   JNC   ms_geometry_ok
+   JMP   CS_FATAL
+ms_geometry_ok:
    CMP	 AL, T_DRV_TRACKS	   ;IF # OF TRACKS FOR SOURCE MEDIA > # OF
 				   ; TRACKS FOR TARGET DEVICE
    JA	 CS_FATAL		   ;THEN, NOT COMPATIBLE
@@ -1226,6 +1279,8 @@ $$IF50:
 ;  $DO
 $$DO52:
        CALL  COMP_TRACK 	   ;NO, GO READ ANOTHER TRACK
+       CMP   COMP_STATUS,FATAL
+       JE    CT_EXIT
 
        INC   TRACK_TO_READ
        MOV   AL,TRACK_TO_READ	   ;DID WE FINISH READING ALL TRACKS?
@@ -1280,10 +1335,11 @@ $$DO55:
    cmp	 mt_deviceBPB.chead,0	   ;cannot trust the info from DOS.
    je	 cht_old		   ;sanity check for devide by 0
 
-   MOV	 AX, MT_deviceBPB.CTOTSECT
-   CWD				   ;CONVERT IT TO A DOUBLE WORD
-   DIV	 MT_deviceBPB.CSECT_TRACK
-   DIV	 MT_deviceBPB.CHEAD	   ;(TOTAL SECTORS / # OF TRACKS) / # OF HEADS
+   MOV   SI,OFFSET MT_deviceBPB
+   CALL  MEDIA_CYLINDERS
+   JNC   mt_geometry_ok
+   JMP   CHT_FATAL
+mt_geometry_ok:
    DEC	 AX			   ;DECREASE BY 1 FOR THIS PROGRAM
    CMP	 LAST_TRACK, AL 	   ;COMPARE WITH SOURCE LAST TRACK
    JNE	 CHT_FATAL_BRIDGE	   ;IF LAST_TRACK IS DIFFERENT,
@@ -1440,6 +1496,10 @@ COMP_TRACK PROC NEAR		   ;COMPARE TRACK SPECIFIED IN TRACK_TO_COMP
    MOV	 AX,SEC_BUFFER		   ;READ IN THE TRACK TO BE COMPARED
    MOV	 BUFFER_PTR,AX		   ;INTO THE SECONDARY BUFFER
    CALL  READ_TRACK
+   CMP   COMP_STATUS,FATAL
+   JNE   compare_buffer_ready
+   RET                             ; no comparison of stale data
+compare_buffer_ready:
 
    MOV	 SIDE,0 		   ;START ON SIDE ZERO
    MOV	 CX,BYTES_IN_TRACK	   ;GET NUMBER TO COMPARE
@@ -1475,7 +1535,7 @@ $$IF57:
        MOV   OPERATION,COMPARE_FUNC
        CALL  ERROR_MESSAGE
 
-       INC   COMP_ERROR
+       MOV   COMP_ERROR,TRUE       ; latch failure across tracks
        POP   AX
 ;  $ENDIF
 $$IF59:
@@ -1500,7 +1560,7 @@ $$IF59:
 	   MOV	 OPERATION,COMPARE_FUNC
 	   CALL  ERROR_MESSAGE
 
-	   INC	 COMP_ERROR
+	   MOV   COMP_ERROR,TRUE       ; latch failure across tracks
 	   POP	 AX
 ;      $ENDIF
 $$IF62:
@@ -1558,6 +1618,8 @@ READ_TRACK PROC NEAR		   ;READ A TRACK AND STORE IT INTO MEMORY
 ;  $DO
 $$DO65:
        CALL  READ_OP
+       CMP   COMP_STATUS,FATAL
+       JE    read_track_done
 
        CMP   NO_OF_SIDES, 0	   ;SINGLE SIDE COPY?
 ;      $IF   E			   ;YES
@@ -1578,6 +1640,7 @@ $$EN66:
        CMP   AL, NO_OF_SIDES	   ;FINISHED WITH THE LAST SIDE?
 ;  $ENDDO G
    JNG $$DO65
+read_track_done:
    RET
 
 READ_TRACK ENDP
@@ -1614,13 +1677,14 @@ RO_AGAIN:
        CMP   IO_ERROR, SOFT_ERROR  ;TRY AGAIN?
 ;  $ENDLOOP NE
    JE $$DO70
+       MOV   COMP_STATUS,FATAL
 
        MOV   OPERATION, READ_FUNC
        PUSH  AX
        CALL  ERROR_MESSAGE
 
        POP   AX
-       INC   COMP_ERROR 	   ;INCREASE COPY_ERROR COUNT
+       MOV   COMP_ERROR,TRUE       ; latch failure across tracks
 ;  $ENDSRCH
 $$SR70:
    RET

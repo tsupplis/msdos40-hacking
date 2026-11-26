@@ -719,6 +719,13 @@ $$IF24:
 
 ;  $ENDIF			   ;
 $$EN24:
+   CMP   COPY_STATUS,FATAL
+   JE    COPY_FAILED
+   CMP   COPY_ERROR,FALSE
+   JE    COPY_RETURN
+COPY_FAILED:
+   MOV   EXITFL,EXPAR              ; preserve failure across repeat prompts
+COPY_RETURN:
    RET				   ;
 
 COPY ENDP			   ;
@@ -832,6 +839,8 @@ $$DO38:
        JA $$EN38
 	   MOV	 OPERATION,READ_FUNC ;
 	   CALL  READ_WRITE_TRACK  ;NO, GO READ ANOTHER TRACK
+           CMP   COPY_STATUS,FATAL
+           JE    $$EN38
 
 	   INC	 TRACK_TO_READ	   ;
 ;      $ENDDO			   ;
@@ -925,11 +934,11 @@ $$DO52:
 $$IF53:
 	   CALL  WRITE_OP	   ;
 
-	   CMP	 COPY_STATUS, FATAL ;
-	   JE	 RWT_EXIT	   ;
 
 ;      $ENDIF			   ;
 $$EN53:
+       CMP   COPY_STATUS,FATAL
+       JE    RWT_EXIT
        CMP   NO_OF_SIDES, 0	   ;SINGLE SIDE COPY?
 ;      $IF   E			   ;YES
        JNE $$IF56
@@ -997,6 +1006,7 @@ $$IF60:
        CMP   IO_ERROR, SOFT_ERROR  ;TRY AGAIN?
 ;  $ENDLOOP NE			   ;
    JE $$DO60
+       MOV   COPY_STATUS,FATAL     ; never write a partially read buffer
 
        CMP   MSG_FLAG, ON	   ;ELSE HARD ERROR. SEE IF
 				   ; MESSAGE TO BE DISPLAYED
@@ -1007,7 +1017,7 @@ $$IF60:
 	   mov	 dl, source_drive  ;
 	   CALL  ERROR_MESSAGE	   ;
 
-	   INC	 COPY_ERROR	   ;INCREASE COPY_ERROR COUNT
+	   MOV   COPY_ERROR,TRUE       ; latch failure across tracks
 	   MOV	 MSG_FLAG, OFF	   ;
 ;      $ENDIF			   ;
 $$IF66:
@@ -1121,7 +1131,11 @@ $$DO73:
        MOV   BL, TARGET_DRIVE
        MOV   CL, 62h               ; verify one track, same head and cylinder
        MOV   DX, OFFSET IOCTL_R_W
-       CALL  GENERIC_IOCTL
+       MOV   CH,MAJOR_CODE         ; verify errors must never trigger a format probe
+       DOSCALL IOCTL_FUNC,GENERIC_IOCTL_CODE
+       JNC   $$EN73
+       MOV   COPY_STATUS,FATAL     ; do not format after a failed verification
+       JMP   SHORT report_write_error
 check_write:
        CMP   IO_ERROR, NO_ERROR    ;OK?
 ;  $LEAVE E			   ;YES, SUCCESS. EXIT THIS ROUTINE
@@ -1136,7 +1150,8 @@ check_write:
    JNE $$IF73
 				   ; CHECK WHEN IT HAPPENDED.
 				   ;GIVE UP WRITING AND SHOW ERROR MESSAGE.
-       INC   COPY_ERROR 	   ;INDICATE ERROR OCCURS DURING COPY.
+report_write_error:
+       MOV   COPY_ERROR,TRUE       ; latch failure across tracks
        MOV   AH, WRITE_FUNC	   ;
        mov   dl, target_drive	   ;
        CALL  ERROR_MESSAGE	   ;SHOW MESSAGE 'WRITE ERROR SIDE, TRACK...'
@@ -1325,6 +1340,49 @@ $$DO79:
    RET				   ;
 FORMAT_TRACK ENDP		   ;
 ;  =  =  =  =  =  =  =	=  =  =  =  =
+   ; SI points to a floppy BPB. Return the cylinder count in AX, or carry
+   ; if a layout entry, a track-buffer offset or a cylinder cannot fit.
+MEDIA_CYLINDERS PROC NEAR
+   MOV   AX,[SI].CBYTE_SECT
+   OR    AX,AX
+   JZ    geometry_bad
+   CMP   AX,4080                   ; paragraph count must fit in a byte
+   JA    geometry_bad
+   MOV   DX,AX
+   DEC   DX
+   TEST  AX,DX                     ; sector size must be a power of two
+   JNZ   geometry_bad
+   MOV   CX,[SI].CSECT_TRACK
+   JCXZ  geometry_bad
+   CMP   CX,63                     ; entries reserved by MY_TRACKLAYOUT
+   JA    geometry_bad
+   CMP   [SI].CHEAD,1
+   JB    geometry_bad
+   CMP   [SI].CHEAD,2
+   JA    geometry_bad
+   MUL   CX
+   JC    geometry_bad
+   MUL   [SI].CHEAD
+   JC    geometry_bad
+   MOV   AX,CX
+   MUL   [SI].CHEAD
+   MOV   CX,AX                     ; sectors per cylinder
+   MOV   AX,[SI].CTOTSECT
+   XOR   DX,DX
+   DIV   CX
+   OR    DX,DX                     ; require whole cylinders
+   JNZ   geometry_bad
+   OR    AX,AX
+   JZ    geometry_bad
+   CMP   AX,255
+   JA    geometry_bad
+   CLC
+   RET
+geometry_bad:
+   STC
+   RET
+MEDIA_CYLINDERS ENDP
+
    HEADER <CHECK_SOURCE - CHECK SOURCE DISKETTE TYPE> ;AN000;
 ;*****************************************************************************
 ;									     *
@@ -1364,10 +1422,11 @@ $$DO81:
    cmp	 ms_deviceBPB.chead,0	   ;cannot trust the info from dos
    je	 cs_old 		   ;sanity check for divide by 0
 
-   MOV	 AX, MS_deviceBPB.CTOTSECT ;
-   CWD				   ;CONVERT IT TO A DOUBLE WORD
-   DIV	 MS_deviceBPB.CSECT_TRACK  ;
-   DIV	 MS_deviceBPB.CHEAD	   ;(TOTAL SECTORS / # OF TRACKS) / # OF HEADS
+   MOV   SI,OFFSET MS_deviceBPB
+   CALL  MEDIA_CYLINDERS
+   JNC   ms_geometry_ok
+   JMP   CS_FATAL
+ms_geometry_ok:
    CMP	 AL, T_DRV_TRACKS	   ;SOURCE MEDIA # OF TRACK > TARGET
 				   ; DEVICE # OF TRACKS?
    JA	 CS_FATAL		   ;THEN, NOT COMPATIBLE.
@@ -1780,10 +1839,11 @@ $$DO103:
    cmp	 mt_deviceBPB.chead,0	   ;cannot belive the info from dos
    je	 ct_old 		   ;sanity check for divide by 0.
 
-   MOV	 AX, MT_deviceBPB.CTOTSECT ;
-   CWD				   ;CONVERT IT TO A DOUBLE WORD
-   DIV	 MT_deviceBPB.CSECT_TRACK  ;
-   DIV	 MT_deviceBPB.CHEAD	   ;(TOTAL SECTORS / # OF TRACKS) / # OF HEADS
+   MOV   SI,OFFSET MT_deviceBPB
+   CALL  MEDIA_CYLINDERS
+   JNC   mt_geometry_ok
+   JMP   CT_FATAL
+mt_geometry_ok:
    DEC	 AX			   ;DECREASE BY 1 FOR THIS PROGRAM.
    CMP	 LAST_TRACK, AL 	   ;COMPARE WITH THE LAST TRACK OF SOURCE
    JE	 CT_SECTOR_TRACK	   ;IF SAME, THEN CHECK SECTOR PER TRACK
