@@ -1,5 +1,5 @@
 # UMBS.SYS
-ROOT     ?= $(CURDIR)/..
+ROOT     ?= $(CURDIR)/../..
 SDKBIN   ?= $(ROOT)/sdk/bin
 export EMU2_DRIVE_C ?= $(ROOT)
 
