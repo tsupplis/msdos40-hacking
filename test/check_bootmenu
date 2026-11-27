@@ -51,7 +51,7 @@ for name, menu, key, expected in cases:
         child = ""
         comspec = r"A:\COMMAND.COM"
         if name == "shellhigh":
-            subprocess.run(["mcopy", "-i", image, root / "extra/pcehimem.sys", "::PCEHIMEM.SYS"], check=True)
+            subprocess.run(["mcopy", "-i", image, root / "pce/pcehimem.sys", "::PCEHIMEM.SYS"], check=True)
             subprocess.run(["mmd", "-i", image, "::BIN"], check=True)
             command = subprocess.check_output(["mtype", "-i", image, "::COMMAND.COM"])
             (folder / "COMMAND.COM").write_bytes(command)

@@ -34,7 +34,7 @@ with tempfile.TemporaryDirectory(dir=work) as directory:
         defines.append(f"-D{name.upper()}=0x{match[1]}")
     probe = folder / "ifsprobe.com"
     subprocess.run(["nasm", "-f", "bin", *defines, root / "test/ifsprobe.asm", "-o", probe], check=True)
-    for source, target in [(probe, "::IFSPROBE.COM"), (root / "extra/pcehimem.sys", "::HIMEM.SYS")]:
+    for source, target in [(probe, "::IFSPROBE.COM"), (root / "pce/pcehimem.sys", "::HIMEM.SYS")]:
         subprocess.run(["mcopy", "-o", "-i", image, source, target], check=True)
     batch = folder / "ifs.bat"
     for mode, config, share in layouts:

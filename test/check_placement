@@ -13,7 +13,7 @@ with tempfile.TemporaryDirectory() as scratch:
     shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
     probe = folder / "tblplace.com"
     subprocess.run(["nasm", "-f", "bin", root / "test/tblplace.asm", "-o", probe], check=True)
-    for source, name in [(probe, "tblplace.com"), (root / "extra/pcehimem.sys", "himem.sys")]:
+    for source, name in [(probe, "tblplace.com"), (root / "pce/pcehimem.sys", "himem.sys")]:
         subprocess.run(["mcopy", "-o", "-i", image, source, "::" + name], check=True)
     batch = folder / "layout.bat"
     batch.write_text("tblplace\n")

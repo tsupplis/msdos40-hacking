@@ -16,7 +16,7 @@ with tempfile.TemporaryDirectory(dir=work) as scratch:
     shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
     probe = folder / "lfprobe.com"
     subprocess.run(["nasm", "-f", "bin", root / "test/lfprobe.asm", "-o", probe], check=True)
-    for source, name in [(probe, "lfprobe.com"), (root / "extra/pcehimem.sys", "himem.sys"),
+    for source, name in [(probe, "lfprobe.com"), (root / "pce/pcehimem.sys", "himem.sys"),
                          (root / "commands/loadfix/loadfix.com", "loadfix.com")]:
         subprocess.run(["mcopy", "-o", "-i", image, source, "::" + name], check=True)
     # A real one-page MZ executable that exits with ERRORLEVEL 19.

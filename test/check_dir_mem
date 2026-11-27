@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
 
     for name, source in [("COMMAND.COM", "commands/command/command.com"),
                          ("MEM.EXE", "commands/mem/mem.exe"),
-                         ("HIMEM.SYS", "extra/pcehimem.sys")]:
+                         ("HIMEM.SYS", "pce/pcehimem.sys")]:
         disk("mcopy", "-o", root / source, "::" + name)
     disk("mmd", "::DTEST")
     for name, size in [("ZZ.TXT", 12345), ("BB.BIN", 2), ("AA.TXT", 1)]:

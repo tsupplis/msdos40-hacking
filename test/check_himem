@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory() as tmp:
         umb = "DEVICE=UMBS.SYS D000-D100"
         if machine == "xt":
             batch = folder / "xt.bat"
-            subprocess.run(["mcopy", "-o", "-i", image, root / "extra/pcehimem.sys",
+            subprocess.run(["mcopy", "-o", "-i", image, root / "pce/pcehimem.sys",
                             "::PCEHIMEM.SYS"], check=True)
             for name, drivers, expected in (
                     ("refusal", native, 16),

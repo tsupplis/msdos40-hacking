@@ -29,7 +29,7 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
             raise SystemExit(f"{source_image}: {binary.name} differs from {binary}")
     install_probe(root, folder, image)
     install_asm_probe(root, folder, image, "umbcheck")
-    subprocess.run(["mcopy", "-o", "-i", image, root / "extra/pcehimem.sys", "::HIMEM.SYS"], check=True)
+    subprocess.run(["mcopy", "-o", "-i", image, root / "pce/pcehimem.sys", "::HIMEM.SYS"], check=True)
     for name in ("hmasvc", "procabrt"):
         probe = folder / (name + ".com")
         subprocess.run(["nasm", "-f", "bin", root / "test" / (name + ".asm"), "-o", probe], check=True)

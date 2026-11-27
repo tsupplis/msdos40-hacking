@@ -67,7 +67,7 @@ with tempfile.TemporaryDirectory(dir=work) as name:
     for binary in (root / "kernel/dos/msdos.sys", root / "kernel/bios/io.sys"):
         if subprocess.check_output(["mtype", "-i", boot, "::" + binary.name]) != binary.read_bytes():
             raise SystemExit(f"boot image differs from {binary}")
-    subprocess.run(["mcopy", "-o", "-i", boot, root / "extra/pcehimem.sys", "::HIMEM.SYS"], check=True)
+    subprocess.run(["mcopy", "-o", "-i", boot, root / "pce/pcehimem.sys", "::HIMEM.SYS"], check=True)
     batch = tmp / "fat.bat"
     install_probe(root, tmp, boot)
     workload = ("copy /b C:\\SOURCE.BIN C:\\RESULT.BIN\nfc /b C:\\SOURCE.BIN C:\\RESULT.BIN\n")

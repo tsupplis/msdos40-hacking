@@ -36,7 +36,7 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
                    "high": "dos=high,umb\ndevice=himem.sys"}
         (folder / "config.sys").write_bytes((configs[layout] + "\n").replace("\n", "\r\n").encode())
         if layout == "high":
-            run("mcopy", "-o", "-i", image, root / "extra/pcehimem.sys", "::HIMEM.SYS")
+            run("mcopy", "-o", "-i", image, root / "pce/pcehimem.sys", "::HIMEM.SYS")
         run("mcopy", "-o", "-i", image, "config.sys", "::CONFIG.SYS")
     shutil.copyfile(root / "test/editbuf.asm", folder / "editbuf.asm")
     env = dict(os.environ, EMU2_DRIVE_C=tmp)
