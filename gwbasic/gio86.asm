@@ -95,7 +95,7 @@ HAVMD1:	CALL	POFNUM		;[AL]=the file number
 	DB	OFFSET 54O	;skip comma before name
 	CALL	NAMSCN		;parse filename setting FILDEV, FILNM, FILEXT
 	CALL	PORLEN		;parse reclen parm
-	JMP	SHORT OPEN1	;branch to common code (with Fnum on stack)
+	JMP	OPEN1	;branch to common code (with Fnum on stack)
 
 ERBFM0:	JMP	DERBFM		;bad file mode error
 
@@ -126,6 +126,23 @@ NOTNSO:	CALL	NAMSC1		;parse filename setting FILDEV, FILNM, FILEXT
 	MOV	DH,LOW OFFSET MD_APP	;append file mode
 	JMP	SHORT GOTMOD	;allow it
 NTAPP:
+	CMP	AL,LOW "R"
+	JNE	OPENOUT
+	CALL	SYNCHR
+	DB	OFFSET "R"
+	CALL	SYNCHR
+	DB	OFFSET "A"
+	CALL	SYNCHR
+	DB	OFFSET "N"
+	CALL	SYNCHR
+	DB	OFFSET "D"
+	CALL	SYNCHR
+	DB	OFFSET "O"
+	CALL	SYNCHR
+	DB	OFFSET "M"
+	MOV	DH,LOW OFFSET MD_RND
+	JMP	SHORT GOTMOD
+OPENOUT:
 	CALL	SYNCHR
 	DB	OFFSET "O"	;it must be OUTPUT
 	CALL	SYNCHR
