@@ -4,7 +4,7 @@ Target: the project’s 3.23 DOS binary and 4.01N under identical inputs. The al
 
 Sources: [Microsoft GW-BASIC User’s Reference and Guide, July 1987](https://bitsavers.computerhistory.org/pdf/microsoft/msdos_3.3/MS-DOS_GW-BASIC_198707.pdf), [1989 guide and command-line reference](https://bitsavers.trailing-edge.com/pdf/microsoft/gw-basic/Microsoft_GW-BASIC_Users_Guide_and_Reference_1989.pdf). Supplementary syntax must be verified against the project’s executable.
 
-402 work items: 344 matched, 49 different, 6 inconclusive, 3 intentional.
+402 work items: 346 matched, 47 different, 6 inconclusive, 3 intentional.
 
 ## Evidence
 
@@ -21,11 +21,11 @@ Matched records an observed matching case. It does not qualify the entire form o
 
 ## Running the paired regression
 
-With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 85 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Each interpreter runs the BASIC fixtures in succession and writes one report on the scratch floppy.
+With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 87 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Each interpreter runs the BASIC fixtures in succession and writes one report on the scratch floppy.
 
 PCE is the default for the paired audit, including timer and PLAY handler delivery and single cases such as `test/check_gwaudit --check 216`. Set `PCE_VIDEO=ega` or `PCE_VIDEO=vga` to select the adapter. The full probe runner requires explicit `--qemu`; it covers additional observations such as BIOS keyboard input and cursor position.
 
-For the selected IDs, the gate checks each case marked **Matched** against both the live 3.23 run and its recorded output. Incomplete observations fail in every category. The 246 paired records cover 200 matched, 40 different and 6 inconclusive cases. A known difference that now matches is reported for review. After verifying a fix, update that case’s JSONL record, matrix status and counts together. The remaining inventory rows use the other evidence listed above.
+For the selected IDs, the gate checks each case marked **Matched** against both the live 3.23 run and its recorded output. Incomplete observations fail in every category. The 247 paired records cover 202 matched, 39 different and 6 inconclusive cases. A known difference that now matches is reported for review. After verifying a fix, update that case’s JSONL record, matrix status and counts together. The remaining inventory rows use the other evidence listed above.
 
 ## Differences by work area
 
@@ -38,7 +38,6 @@ Each row below groups failed observations for investigation. The count measures 
 | Disk files, sharing and locking | 8 | 53, 110, 249, 250, 374, 375, 376, 377 |
 | Command streams, prompts and diagnostics | 6 | 70, 81, 102, 120, 151, 277 |
 | Keyboard, editor and function keys | 12 | 182, 185, 294, 295, 297, 299, 301, 358, 359, 389, 390, 393 |
-| Text window | 2 | 220, 221 |
 | Drawing and tiled fill | 3 | 191, 348, 356 |
 | Video modes, pages and EGA memory | 2 | 215, 342 |
 | Serial I/O | 4 | 233, 395, 396, 397 |
@@ -257,7 +256,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 206 | `PUT graphics XOR` | Display | Matched | Q, case 206 |
 | 207 | `SCREEN(row,col)` | Display | Matched | Q, case 207 |
 | 208 | `SCREEN(row,col,1)` | Display | Matched | Q, case 208 |
-| 209 | `SCREEN 0` | Display | Matched | Q, case 209 |
+| 209 | `SCREEN 0` | Display | Matched | Q, case 209. PCE case 221 checks BIOS mode 3 at 80 columns and preservation of the text window on repeated SCREEN 0. |
 | 210 | `SCREEN 1` | Display | Matched | Q, case 210 |
 | 211 | `SCREEN 2` | Display | Matched | Q, case 211 |
 | 212 | `SCREEN 7` | Display | Matched | X |
@@ -268,8 +267,8 @@ Each row below groups failed observations for investigation. The count measures 
 | 217 | `VIEW graphics` | Display | Matched | PCE, case 217, reversed viewport corners, fill, border and bounded CGA flood fill |
 | 218 | `VIEW SCREEN` | Display | Matched | PCE, case 218, absolute screen coordinates and clipping |
 | 219 | `VIEW reset` | Display | Matched | PCE, case 219, viewport clear and clipped diagonal, followed by full-screen reset |
-| 220 | `VIEW PRINT range` | Display | Different | syntax error |
-| 221 | `VIEW PRINT reset` | Display | Different | Q, case 221; 3.23 1  / DONE, 4.01N ERROR 2  100 |
+| 220 | `VIEW PRINT range` | Display | Matched | PCE, case 220. Clearing and scrolling rows 5–10 preserve sentinel characters on rows 4 and 11. |
+| 221 | `VIEW PRINT reset` | Display | Matched | PCE, case 221. A single-row window scrolls in place. Reset homes the cursor and releases the LOCATE range restriction. |
 | 222 | `WIDTH screen` | Display | Matched | Q, case 222 |
 | 223 | `WINDOW` | Display | Matched | PCE, case 223, Cartesian Y, fractional STEP and physical pixel readback |
 | 224 | `WINDOW SCREEN` | Display | Matched | PCE, case 224, screen-oriented Y on a relative viewport |

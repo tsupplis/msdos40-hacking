@@ -103,12 +103,19 @@ DSEG	ENDS
 	EXTRN	CLRSCN:NEAR
 CLS:    extrn ClearViewport:near
 DSEG segment public 'DATASG'
-        extrn ViewActive:byte
+        extrn ViewActive:byte,WDOTOP:byte,WDOBOT:byte
+        public PrintRange
+PrintRange db 0                 ; Explicit VIEW PRINT also restricts LOCATE.
 DSEG ends
         CALL SCNINT		;Test for optional parameter
 	jnc ExplicitClear
         cmp ViewActive,0
+        jne DefaultGraphicsClear
+        cmp PrintRange,0
         je ExplicitClear
+        mov al,2
+        jmp short ExplicitClear
+DefaultGraphicsClear:
         mov al,1
 ExplicitClear:
         PUSH AX
@@ -134,7 +141,8 @@ ClearPhysical:
 LOCATE:	CALL	SCNINT		;Get optional Y parameter
 	JNB	YLCPRM		;Parameter present
 	CALL	GTLINE		;Get the current screen position
-YLCPRM:	MOV	DL,AL
+YLCPRM: call CheckPrintRow
+        MOV	DL,AL
 	OR	AL,AL		;Test for LOCATE 0
 	JZ	GOFCER
 	SUB	DL,BYTE PTR KEYSW	;Increment if PF-keys are displayed
@@ -173,7 +181,7 @@ LOCPR3:	PUSH	AX		;Push third parameter
 	POP	AX		;Recover three parameters
 	PUSH	DX		;Save text pointer
 	CALL	CSRATR		;Set Cursor Attribute (OEM routine)
-	JB	GFCERR		;Declare error from CSRATR
+	JB	GOFCER		;Declare error from CSRATR
 	POP	BX		;Text pointer
 SETLOC:	MOV	AX,BX
 	POP	CX
@@ -194,7 +202,50 @@ DSEG	ENDS
 	RET	
 
 
-GOFCER:	JMP	FCERR
+GOFCER: JMP FCERR
+
+CheckPrintRow: cmp PrintRange,0
+        je RowValid
+        cmp al,WDOTOP
+        jb InvalidRow
+        cmp al,WDOBOT
+        jbe RowValid
+InvalidRow: jmp FCERR
+RowValid: ret
+
+; VIEW PRINT [top TO bottom]. Install both bounds after parsing succeeds.
+        public ViewPrint
+        extrn $TO:abs
+ViewPrint:
+        call CHRGTR
+        jnz PrintRangeArgs
+        mov al,1
+        mov dl,byte ptr LINCNT
+        dec dl
+        mov PrintRange,0
+        jmp short SetPrintRange
+PrintRangeArgs:
+        call GETBYT
+        push dx
+        call SYNCHR
+        db offset $TO
+        call GETBYT
+        call EOSCHK
+        pop ax
+        or al,al
+        jz GOFCER
+        cmp al,dl
+        ja GOFCER
+        cmp dl,byte ptr LINCNT
+        jae GOFCER
+        mov PrintRange,1
+SetPrintRange:
+        mov WDOTOP,al
+        mov WDOBOT,dl
+        mov ah,1
+        call SCNLOC
+        mov al,3
+        jmp CSRDSP
 	PAGE	
 ;GWWID: Parsing for WIDTH [X] [, [Y]]
 ;ENTRY - WIDTH LPRINT is not a possibility at this point.
@@ -304,6 +355,7 @@ SCRENF:
 	DB	OFFSET OPAREN	;Check for "("
 	CALL	SCNINT		;Get Y parameter
 	JB	FCERGO		;Parameter not present
+        call CheckPrintRow
 	DEC	AL
 	CMP	AL,BYTE PTR LINCNT	;Check range [1,LINCNT]
 	JAE	FCERGO		;Out of range

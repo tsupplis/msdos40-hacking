@@ -2683,11 +2683,11 @@ SMMAP1	DB	0,0,0,0,1,1,2,0,5 dup (0),7,8D,10D,9D
 ; Internal data structure: mapping of BASIC video mode numbers to BIOS video
 ; mode numbers, given current screen width (40 or 80 characters) and
 ; COLORSWITCH parameter to SCREEN
-SMMAP2	DB	1,5,6			; COLORSWITCH = 0, width 40
-	DB	0,4,6			; COLORSWITCH <> 0, width 40
+SMMAP2	DB	0,5,6			; COLORSWITCH = 0, width 40
+	DB	1,4,6			; COLORSWITCH <> 0, width 40
 	DB	?,7			; Special case
-	DB	3,5,6			; COLORSWITCH = 0, width 80
-	DB	2,4,6			; COLORSWITCH <> 0, width 80
+	DB	2,5,6			; COLORSWITCH = 0, width 80
+	DB	3,4,6			; COLORSWITCH <> 0, width 80
 
 ; Internal data structure: total number of display pages for each video mode
 TOTPAG:	DB	8D,8D,4,4,1,1,1,8D

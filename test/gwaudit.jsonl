@@ -103,9 +103,10 @@
 {"exe": {"RESULT.TXT": " 1             3             2             2             0 \nDONE"}, "id": 217, "ref": {"RESULT.TXT": " 1             3             2             2             0 \nDONE"}}
 {"exe": {"RESULT.TXT": "-1             3 \n 0             3 \nDONE"}, "id": 218, "ref": {"RESULT.TXT": "-1             3 \n 0             3 \nDONE"}}
 {"exe": {"RESULT.TXT": " 2             0             3             160           100 \nDONE"}, "id": 219, "ref": {"RESULT.TXT": " 2             0             3             160           100 \nDONE"}}
-{"exe": {"RESULT.TXT": "ERROR 2  100 "}, "id": 221, "ref": {"RESULT.TXT": " 1 \nDONE"}}
+{"exe": {"RESULT.TXT": " 10            67            32 \n 65            66 \nDONE"}, "id": 220, "ref": {"RESULT.TXT": " 10            67            32 \n 65            66 \nDONE"}}
+{"exe": {"RESULT.TXT": " 3 \n 5             1 \n 1             1 \n 5             120 \n 25 \nDONE"}, "id": 221, "ref": {"RESULT.TXT": " 3 \n 5             1 \n 1             1 \n 5             120 \n 25 \nDONE"}}
 {"exe": {"RESULT.TXT": " 40 \nDONE"}, "id": 222, "ref": {"RESULT.TXT": " 40 \nDONE"}}
-{"exe": {"RESULT.TXT": " 241           47            .51           .53 \n 2 \nDONE"}, "id": 223, "ref": {"RESULT.TXT": " 241           47            .51           .53 \n 2 \nDONE"}}
+{"exe": {"RESULT.TXT": " 241           47            .51           .53 \n 2 \n 10 \n 11            30 \nDONE"}, "id": 223, "ref": {"RESULT.TXT": " 241           47            .51           .53 \n 2 \n 10 \n 11            30 \nDONE"}}
 {"exe": {"RESULT.TXT": " 20            40 \n 3 \nDONE"}, "id": 224, "ref": {"RESULT.TXT": " 20            40 \n 3 \nDONE"}}
 {"exe": {"RESULT.TXT": " 163           94            163           94            1 \nDONE"}, "id": 225, "ref": {"RESULT.TXT": " 163           94            163           94            1 \nDONE"}}
 {"exe": {"RESULT.TXT": "-1 \nDONE"}, "id": 226, "ref": {"RESULT.TXT": "-1 \nDONE"}}
@@ -129,7 +130,7 @@
 {"exe": {"RESULT.TXT": "DONE"}, "id": 244, "ref": {"RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 245, "ref": {"RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 246, "ref": {"RESULT.TXT": "DONE"}}
-{"exe": {"RESULT.TXT": " 3             3 \nDONE"}, "id": 247, "ref": {"RESULT.TXT": " 3             3 \nDONE"}}
+{"exe": {"RESULT.TXT": " 3             3 \n 32 \nDONE"}, "id": 247, "ref": {"RESULT.TXT": " 3             3 \n 32 \nDONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 248, "ref": {"RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 251, "ref": {"RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 252, "ref": {"RESULT.TXT": "DONE"}}

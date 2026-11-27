@@ -727,7 +727,7 @@ DSEG	ENDS
 ;Entry - none
 ;Exit  - all registers preserved
 ;
-GRPRST: extrn ResetCoords:near
+GRPRST:
         call ResetCoords
         PUSH	AX
 	PUSH	CX
@@ -768,6 +768,216 @@ FullHome: CALL	GRPSIZ		;Get screen pixel dimensions
         jmp SyncWorld
 GrpIniDone:
 	RET	
+
+; VIEW statement parsing and decoration call the existing graphics primitives.
+DSEG segment public 'DATASG'
+        extrn ViewX:word,ViewY:word,ClipLeft:word,ClipTop:word
+        extrn ClipRight:word,ClipBottom:word,Extent:word
+Rect    dw 4 dup (0)
+FillAttr dw 0
+EdgeAttr dw 0
+DSEG ends
+        extrn CheckGraphics:near,ScreenOption:near,RefreshScale:near,EOSCHK:near
+public ViewStmt
+ViewStmt:
+        extrn $PRINT:abs,ViewPrint:near
+        pushf                   ; Graphics VIEW uses the incoming EOS flag.
+        cmp al,low offset $PRINT
+        jne GraphicsView
+        popf
+        jmp ViewPrint
+GraphicsView:
+        popf
+        call CheckGraphics
+        jnz ViewArgs
+        call ClearView
+        jmp ViewHome
+ViewArgs:
+        call ScreenOption
+        push ax
+        mov di,offset Rect
+        call PixelPair
+        call SYNCHR
+        db offset MINUTK
+        mov di,offset Rect+4
+        call PixelPair
+        mov FillAttr,-1
+        mov EdgeAttr,-1
+        cmp byte ptr [bx],','
+        jne ViewEnd
+        call CHRGTR
+        cmp al,','
+        je ViewBorder
+        call ViewColor
+        mov FillAttr,dx
+        cmp byte ptr [bx],','
+        jne ViewEnd
+ViewBorder:
+        call CHRGTR
+        call ViewColor
+        mov EdgeAttr,dx
+ViewEnd:
+        call EOSCHK
+        push bx
+        call GRPSIZ
+        mov di,offset Rect
+        mov ax,cx
+        call OrderPixels
+        add di,2
+        mov ax,dx
+        call OrderPixels
+        call ClearView          ; Optional decoration uses full-screen coordinates.
+        mov ax,EdgeAttr
+        cmp ax,-1
+        je ViewFill
+        call SETATR
+        call RectPoints
+        dec cx
+        dec dx
+        inc GXPOS
+        inc GYPOS
+        mov ax,GXPOS
+        mov GRPACX,ax
+        mov ax,GYPOS
+        mov GRPACY,ax
+        call BOXLIN
+ViewFill:
+        mov ax,FillAttr
+        cmp ax,-1
+        je InstallView
+        call SETATR
+        call RectPoints
+        call DOBOXF
+InstallView:
+        pop bx
+        pop ax
+        mov di,ax
+        call RectPoints
+        mov ax,GXPOS
+        mov ClipRight,ax
+        mov ax,GYPOS
+        mov ClipBottom,ax
+        mov ClipLeft,cx
+        mov ClipTop,dx
+        or di,di
+        jnz ViewReady
+        mov ViewX,cx
+        mov ViewY,dx
+        sub ClipRight,cx
+        sub ClipBottom,dx
+        mov ClipLeft,0
+        mov ClipTop,0
+ViewReady:
+        mov ViewActive,1
+        ; Only relative VIEW changes the span used by WINDOW.
+        mov ax,di
+        or ax,ax
+        jnz ViewHome
+        mov ax,ClipRight
+        mov Extent,ax
+        mov ax,ClipBottom
+        mov Extent+4,ax
+ViewHome:
+        push bx
+        call RefreshScale
+        call GRPINI
+        pop bx
+        ret
+
+ViewColor:
+        call GETBYT
+        push bx
+        push dx
+        mov al,dl
+        call SETATR
+        jnc ColorValid
+        jmp FCERR
+ColorValid:
+        pop dx
+        pop bx
+        ret
+
+RectPoints:
+        mov cx,Rect
+        mov dx,Rect+2
+        mov ax,Rect+4
+        mov GXPOS,ax
+        mov ax,Rect+6
+        mov GYPOS,ax
+        ret
+
+PixelPair:
+        push di
+        call SYNCHR
+        db '('
+        pop di
+        push di
+        call GETIN2
+        pop di
+        mov [di],dx
+        push di
+        call SYNCHR
+        db ','
+        pop di
+        push di
+        call GETIN2
+        pop di
+        mov [di+2],dx
+        add di,4
+        call SYNCHR
+        db ')'
+        ret
+
+OrderPixels:
+        mov si,[di]
+        cmp si,[di+4]
+        jne OrderDistinct
+        jmp FCERR
+OrderDistinct:
+        jl OrderedPixels
+        xchg si,[di+4]
+        mov [di],si
+OrderedPixels:
+        test si,si
+        js InvalidPixels
+        cmp [di+4],ax
+        jb PixelsValid
+InvalidPixels: jmp FCERR
+PixelsValid: ret
+
+public ResetCoords
+ResetCoords:
+        mov WindowActive,0
+ClearView:
+        mov ViewActive,0
+        mov ViewX,0
+        mov ViewY,0
+        push cx
+        push dx
+        call GRPSIZ
+        dec cx
+        dec dx
+        mov Extent,cx
+        mov Extent+4,dx
+        pop dx
+        pop cx
+        ret
+
+; Erase the active graphics viewport using the current background.
+public ClearViewport
+ClearViewport:
+        stc
+        call GETFBC
+        mov al,bl
+        call SETATR
+        mov cx,ClipLeft
+        mov dx,ClipTop
+        mov ax,ClipRight
+        mov GXPOS,ax
+        mov ax,ClipBottom
+        mov GYPOS,ax
+        call DOBOXF
+        jmp HomeCoords
 
 CSEG	ENDS
 	END

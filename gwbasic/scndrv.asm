@@ -104,6 +104,7 @@ DSEG	SEGMENT PUBLIC 'DATASG'
 	ASSUME DS:DSEG
 	EXTRN	LINCNT:WORD	; Number of lines
 	EXTRN	CRTWID:WORD	; Characters per line
+        extrn PrintRange:byte
 	EXTRN	WDOTOP:WORD	; Top line in window(1-[LINCNT])
 	EXTRN	WDOBOT:WORD	; Bottom line in window([WDOTOP]-[LINCNT])
 	EXTRN	WDOLFT:WORD	; Leftmost column in window(1-[CRTWID])
@@ -197,7 +198,8 @@ SCNBRK:	MOV	BYTE PTR FSTLIN,LOW 0
 ;SUBROUTINE SCNSWI(WIDTH,HEIGHT):       ; Set screen width(logical/physical) and height
 ;**                     on entry:   AL=width, CL=height
 ;**
-SCNSWI:	MOV	BYTE PTR CRTWID,AL	; Save physical width
+SCNSWI: mov PrintRange,0
+        MOV	BYTE PTR CRTWID,AL	; Save physical width
 	MOV	BYTE PTR LINLEN,AL	; Set logical line length
 	MOV	BYTE PTR LINCNT,CL	; Save physical height
 	MOV	BYTE PTR WDOTOP,LOW 1	; Init window top

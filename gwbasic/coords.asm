@@ -3,7 +3,7 @@
         .radix 10
 DSEG    segment public 'DATASG'
         public ViewActive,ViewX,ViewY,ClipLeft,ClipTop,ClipRight,ClipBottom
-        public WindowActive,WorldPos
+        public Extent,WindowActive,WorldPos
 ViewActive db 0
 WindowActive db 0
 ViewX   dw 0                    ; Translation from viewport to hardware pixels.
@@ -19,17 +19,12 @@ Span    dd 2 dup (0)            ; Signed world span, negative for Cartesian Y.
 UnitsPerPixel dd 2 dup (0)
 ScaleBy dd 2 dup (0)            ; Pixels per world unit.
 Corners dd 4 dup (0)            ; Statement operands, validated before installing.
-Rect    dw 4 dup (0)
-FillAttr dw 0
-EdgeAttr dw 0
         extrn GRPACX:word,GRPACY:word,GXPOS:word,GYPOS:word
 DSEG    ends
 CSEG    segment public 'CODESG'
         assume cs:CSEG,ds:DSEG
         extrn CHRGTR:near,SYNCHR:near,GETIN2:near,GETBYT:near,FRMEVL:near
         extrn EOSCHK:near,FCERR:near,MINUTK:abs,$SCREEN:abs
-        extrn PIXSIZ:near,GRPSIZ:near,GRPINI:near,SETATR:near
-        extrn DOBOXF:near,BOXLIN:near
         extrn FRCINT:near,FRCSNG:near,CONSIH:near,MAKINT:near
         extrn MOVMF:near,MOVFM:near,MOVRF:near,MOVFR:near
         extrn FSUB:near,FADD:near,FDIV:near,FMULT:near,FCOMP:near,VALSNG:near
@@ -37,13 +32,11 @@ CSEG    segment public 'CODESG'
 BadCoord: jmp FCERR
 
 ; Entry for statements. Keep the EOS flags supplied by the dispatcher.
+public CheckGraphics,ScreenOption,RefreshScale
 CheckGraphics:
         pushf
-        push ax
-        call PIXSIZ
-        or al,al
-        jz BadCoord
-        pop ax
+        cmp Extent,-1
+        je BadCoord
         popf
         ret
 
@@ -55,183 +48,6 @@ ScreenOption:
         mov ax,1
         ret
 NoScreen: xor ax,ax
-        ret
-
-public ViewStmt
-ViewStmt:
-        call CheckGraphics
-        jnz ViewArgs
-        call ClearView
-        jmp ViewHome
-ViewArgs:
-        call ScreenOption
-        push ax
-        mov di,offset Rect
-        call PixelPair
-        call SYNCHR
-        db offset MINUTK
-        mov di,offset Rect+4
-        call PixelPair
-        mov FillAttr,-1
-        mov EdgeAttr,-1
-        cmp byte ptr [bx],','
-        jne ViewEnd
-        call CHRGTR
-        cmp al,','
-        je ViewBorder
-        call ViewColor
-        mov FillAttr,dx
-        cmp byte ptr [bx],','
-        jne ViewEnd
-ViewBorder:
-        call CHRGTR
-        call ViewColor
-        mov EdgeAttr,dx
-ViewEnd:
-        call EOSCHK
-        push bx
-        call GRPSIZ
-        mov di,offset Rect
-        mov ax,cx
-        call OrderPixels
-        add di,2
-        mov ax,dx
-        call OrderPixels
-        call ClearView          ; Optional decoration uses full-screen coordinates.
-        mov ax,EdgeAttr
-        cmp ax,-1
-        je ViewFill
-        call SETATR
-        call RectPoints
-        dec cx
-        dec dx
-        inc GXPOS
-        inc GYPOS
-        mov ax,GXPOS
-        mov GRPACX,ax
-        mov ax,GYPOS
-        mov GRPACY,ax
-        call BOXLIN
-ViewFill:
-        mov ax,FillAttr
-        cmp ax,-1
-        je InstallView
-        call SETATR
-        call RectPoints
-        call DOBOXF
-InstallView:
-        pop bx
-        pop ax
-        mov di,ax
-        call RectPoints
-        mov ax,GXPOS
-        mov ClipRight,ax
-        mov ax,GYPOS
-        mov ClipBottom,ax
-        mov ClipLeft,cx
-        mov ClipTop,dx
-        or di,di
-        jnz ViewReady
-        mov ViewX,cx
-        mov ViewY,dx
-        sub ClipRight,cx
-        sub ClipBottom,dx
-        mov ClipLeft,0
-        mov ClipTop,0
-ViewReady:
-        mov ViewActive,1
-        ; Only relative VIEW changes the span used by WINDOW.
-        mov ax,di
-        or ax,ax
-        jnz ViewHome
-        mov ax,ClipRight
-        mov Extent,ax
-        mov ax,ClipBottom
-        mov Extent+4,ax
-ViewHome:
-        push bx
-        call RefreshScale
-        call GRPINI
-        pop bx
-        ret
-
-ViewColor:
-        call GETBYT
-        push bx
-        push dx
-        mov al,dl
-        call SETATR
-        jnc ColorValid
-        jmp BadCoord
-ColorValid:
-        pop dx
-        pop bx
-        ret
-
-RectPoints:
-        mov cx,Rect
-        mov dx,Rect+2
-        mov ax,Rect+4
-        mov GXPOS,ax
-        mov ax,Rect+6
-        mov GYPOS,ax
-        ret
-
-PixelPair:
-        push di
-        call SYNCHR
-        db '('
-        pop di
-        push di
-        call GETIN2
-        pop di
-        mov [di],dx
-        push di
-        call SYNCHR
-        db ','
-        pop di
-        push di
-        call GETIN2
-        pop di
-        mov [di+2],dx
-        add di,4
-        call SYNCHR
-        db ')'
-        ret
-
-OrderPixels:
-        mov si,[di]
-        cmp si,[di+4]
-        jne OrderDistinct
-        jmp BadCoord
-OrderDistinct:
-        jl OrderedPixels
-        xchg si,[di+4]
-        mov [di],si
-OrderedPixels:
-        test si,si
-        js InvalidPixels
-        cmp [di+4],ax
-        jb PixelsValid
-InvalidPixels: jmp BadCoord
-PixelsValid: ret
-
-public ResetCoords
-ResetCoords:
-        mov WindowActive,0
-ClearView:
-        mov ViewActive,0
-        mov ViewX,0
-        mov ViewY,0
-        push cx
-        push dx
-        call GRPSIZ
-        dec cx
-        dec dx
-        mov Extent,cx
-        mov Extent+4,dx
-        pop dx
-        pop cx
         ret
 
  ; Keep the axis index and the other MBF operand across the string move.
@@ -410,23 +226,6 @@ PixelWorld:
         mov dx,word ptr Origin[di]
         call FADD
         jmp VALSNG
-
-; Erase the active graphics viewport using the current background.
-public ClearViewport
-ClearViewport:
-        extrn GETFBC:near
-        stc
-        call GETFBC
-        mov al,bl
-        call SETATR
-        mov cx,ClipLeft
-        mov dx,ClipTop
-        mov ax,ClipRight
-        mov GXPOS,ax
-        mov ax,ClipBottom
-        mov GYPOS,ax
-        call DOBOXF
-        jmp HomeCoords
 
 public SyncWorld,HomeCoords
 SyncWorld:
