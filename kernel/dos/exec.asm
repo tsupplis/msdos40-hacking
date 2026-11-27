@@ -343,7 +343,7 @@ exec_bomb:
 	CALL	exec_dealloc
 	CallResident LCritMem
 	SaveReg <AX,BP>
-	CallResident	$CLOSE
+	invoke CloseHandle
 	RestoreReg  <BP,AX>
 	JMP	Exec_Ret_Err
 
@@ -561,7 +561,7 @@ exec_set_PDB:
 	MOV	BX,exec_fh		; we are finished with the file.
 	CALL	exec_dealloc
 	PUSH	BP
-	CallResident	$CLOSE			; release the jfn
+	invoke CloseHandle			; release the jfn
 	POP	BP
 	CALL	exec_alloc
 	TEST	BYTE PTR exec_func,exec_func_overlay
@@ -739,7 +739,7 @@ exec_go:
 EndProc LoadProgram
 
 SeekExecFile PROC NEAR
-        CallResident $LSEEK
+        invoke SeekHandle
         RET
 SeekExecFile ENDP
 ; BP points at the conventional EXEC frame. Return carry on a seek/read error.
@@ -825,7 +825,7 @@ Procedure   ExecRead,NEAR
 	CALL	exec_dealloc
 	MOV	bx,exec_fh
 	PUSH	BP
-	CallResident	$READ
+	invoke ReadHandle
 	POP	BP
 	CALL	exec_alloc
 	return

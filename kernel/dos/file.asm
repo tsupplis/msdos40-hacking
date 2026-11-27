@@ -874,7 +874,7 @@ extexit2:				;AN000; ERROR RECOVERY
 	JMP	SHORT reserror		;AN000;EO.
 
 justopen:				;AN000;
-	CallResident $close			;AN000;EO. pretend never happend
+	invoke CloseHandle			;AN000;EO. pretend never happend
 reserror:				;AN000;
 	POP	AX			;AN000;EO. retore error code from set XA
 	JMP	SHORT extexit		;AN000;EO.

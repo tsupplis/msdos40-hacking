@@ -170,6 +170,9 @@ vector_wrong:
     jc fail
     cmp cx,2
     jne fail
+    mov bx,ax
+    call check_handles
+    mov ax,bx
     call close
     mov dx,1                    ; open an existing file
     call xopen
@@ -358,6 +361,85 @@ vector_handler:
 fail:
     mov ax,4c01h
     int 21h
+check_handles:
+    push bx                     ; preserve the original open handle
+    mov bx,32
+    mov ah,67h
+    int 21h
+    jc fail
+    pop bx
+    mov cx,25                   ; force a duplicate into the enlarged table
+    mov ah,46h
+    int 21h
+    jc fail
+    push bx
+    mov bx,25
+    mov cx,6241h
+    mov dx,285dh
+    mov ax,5701h                ; timestamp through the duplicate
+    int 21h
+    jc fail
+    mov bx,20
+    mov ah,67h                  ; shrinking would discard a live handle
+    int 21h
+    jnc fail
+    cmp ax,4
+    jne fail
+    ; NLS multiplex callers retain the application stack. Use a duplicate
+    ; so a read, a 32-bit seek and a close exercise all three entries.
+    mov bx,25
+    mov dx,flatname
+    mov cx,1
+    mov ax,1229h                ; read at EOF
+    push ax
+    int 2fh
+    pop di
+    jc fail
+    or ax,ax
+    jnz fail
+    xor bp,bp                   ; seek from start
+    mov cx,1
+    mov dx,1234h
+    mov ax,1228h
+    push ax
+    int 2fh
+    pop di
+    jc fail
+    cmp dx,1
+    jne fail
+    cmp ax,1234h
+    jne fail
+    mov ax,1227h
+    push ax
+    int 2fh
+    pop di
+    jc fail
+    mov ax,1229h                ; read from closed handle
+    push ax
+    int 2fh
+    pop di
+    jnc fail
+    cmp ax,6
+    jne fail
+    mov bx,20
+    mov ah,67h
+    int 21h
+    jc fail
+    mov bx,25
+    mov ah,68h                  ; committing the closed handle must fail
+    int 21h
+    jnc fail
+    cmp ax,6
+    jne fail
+    pop bx
+    mov ax,5700h
+    int 21h
+    jc fail
+    cmp cx,6241h
+    jne fail
+    cmp dx,285dh
+    jne fail
+    ret
 xopen:
     mov ax,6c00h
     mov bx,2

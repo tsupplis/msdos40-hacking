@@ -74,7 +74,7 @@ reset_free_jfn:
 	PUSH    CX
 	DEC     BX                      ; get jfn (start with last one)
 
-	CallResident $close
+	invoke CloseHandle
 	POP     CX
 	LOOP    reset_free_jfn          ; and do 'em all
 ;

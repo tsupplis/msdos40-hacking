@@ -71,8 +71,6 @@ include EA.inc				     ;AN000;
 										;AN000;
 										;AN000;
 										;AN000;
-        EXTRN FCB_SELECTED:NEAR
-        DosCodeEntry GetSet_XA,143
 CODE ENDS
 DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
         ASSUME CS:DOSCODE,SS:DOSGROUP
@@ -681,10 +679,4 @@ EndProc FileExtendedAttributes				 ;AN000;
 ;EndProc Get_max_EA_size		      ;FT. exit 			 ;AN000;				   ;AN000;
 										;AN000;
 DOSCODE ENDS
-DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
-        PUBLIC ExtattrEntries
-ExtattrEntries LABEL WORD
-        DW OFFSET DOSGROUP:GetSet_XA_VECTOR, OFFSET DOSGROUP:FileExtendedAttributes
-        DW 0
-DOSEND ENDS
     END

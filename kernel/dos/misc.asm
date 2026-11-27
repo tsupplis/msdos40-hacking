@@ -302,19 +302,20 @@ DosCodeEnd LABEL BYTE
 
         EXTRN ProcEntries:WORD,AllocEntries:WORD,CloseEntries:WORD,BufEntries:WORD,DinfoEntries:WORD,CreateEntries:WORD
         EXTRN RomEntries:WORD,MknodeEntries:WORD,FinfoEntries:WORD
-        EXTRN DupEntries:WORD,DiskEntries:WORD,Disk2Entries:WORD,Disk3Entries:WORD,ExtattrEntries:WORD
+        EXTRN DupEntries:WORD,DiskEntries:WORD,Disk2Entries:WORD,Disk3Entries:WORD
         EXTRN FileEntries:WORD,IsearchEntries:WORD,CpmioEntries:WORD,Cpmio2Entries:WORD
         EXTRN AbortEntries:WORD,SearchEntries:WORD,RenameEntries:WORD,OpenEntries:WORD,FatEntries:WORD
         EXTRN DirEntries:WORD,Dir2Entries:WORD,DircallEntries:WORD
         EXTRN Macro2Entries:WORD,FcbEntriesTable:WORD
         EXTRN FcbIoEntries:WORD,FcbIo2Entries:WORD
-        EXTRN GetsetEntries:WORD,ParseEntries:WORD,TimeEntries:WORD,DevEntries:WORD,PathEntries:WORD
+        EXTRN GetsetEntries:WORD,ParseEntries:WORD,TimeEntries:WORD,DevEntries:WORD,PathEntries:WORD,HandleEntries:WORD
         PUBLIC DosCodeModules
 DosCodeModules LABEL WORD
         DW OFFSET DOSGROUP:GetsetEntries
         DW OFFSET DOSGROUP:ParseEntries
         DW OFFSET DOSGROUP:TimeEntries
         DW OFFSET DOSGROUP:DevEntries
+        DW OFFSET DOSGROUP:HandleEntries
         DW OFFSET DOSGROUP:PathEntries
         DW OFFSET DOSGROUP:FcbIoEntries
         DW OFFSET DOSGROUP:FcbIo2Entries
@@ -333,7 +334,6 @@ DosCodeModules LABEL WORD
         DW OFFSET DOSGROUP:DiskEntries
         DW OFFSET DOSGROUP:Disk2Entries
         DW OFFSET DOSGROUP:Disk3Entries
-        DW OFFSET DOSGROUP:ExtattrEntries
         DW OFFSET DOSGROUP:AbortEntries
         DW OFFSET DOSGROUP:SearchEntries
         DW OFFSET DOSGROUP:RenameEntries

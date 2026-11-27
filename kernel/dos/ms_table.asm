@@ -458,9 +458,9 @@ DOSTable    LABEL   WORD
         Short_addr  Idle                ;   36  Idle
         Short_addr  DStrLen             ;   37  DStrLen
         Short_addr  NLS_OPEN            ;   38  NLS_OPEN      DOS 3.3
-        Short_addr  $CLOSE              ;   39  $CLOSE        DOS 3.3
+        Short_addr  NLS_Close           ;   39  $CLOSE        DOS 3.3
         Short_addr  NLS_LSEEK           ;   40  NLS_LSEEK     DOS 3.3
-        Short_addr  $READ               ;   41  $READ         DOS 3.3
+        Short_addr  NLS_Read            ;   41  $READ         DOS 3.3
         Short_addr  FastInit            ;   42  FastInit      DOS 3.4  ;AN000;
         Short_addr  NLS_IOCTL           ;   43  NLS_IOCTL     DOS 3.3
         Short_addr  GetDevList          ;   44  GetDevList    DOS 3.3

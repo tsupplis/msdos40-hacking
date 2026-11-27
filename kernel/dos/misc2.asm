@@ -423,6 +423,40 @@ Procedure   NLS_OPEN,NEAR
 	RET
 EndProc NLS_OPEN
 
+; Multiplex entries keep the caller's stack. NLSFUNC calls from DOS can
+; use the kernel service directly. INT 21h selects the DOS stack for an
+; application caller before HANDLE enters movable code.
+NlsCheckStack PROC NEAR
+        push ax
+        push bx
+        mov ax,ss
+        mov bx,cs
+        cmp ax,bx
+        pop bx
+        pop ax
+        ret
+NlsCheckStack ENDP
+
+Procedure NLS_Close,NEAR
+        call NlsCheckStack
+        jne NlsCloseApp
+        transfer $Close
+NlsCloseApp:
+        mov ah,3eh
+        int 21h
+        ret
+EndProc NLS_Close
+
+Procedure NLS_Read,NEAR
+        call NlsCheckStack
+        jne NlsReadApp
+        transfer $Read
+NlsReadApp:
+        mov ah,3fh
+        int 21h
+        ret
+EndProc NLS_Read
+
 Break	<NLS_LSEEK - do $LSEEK for NLSFUNC   >
 
 ;   DOS 3.3   6/10/86
@@ -435,6 +469,13 @@ Break	<NLS_LSEEK - do $LSEEK for NLSFUNC   >
 Procedure   NLS_LSEEK,NEAR
 	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:NOTHING
 
+        call NlsCheckStack
+        je NlsSeekInternal
+        mov ax,bp
+        mov ah,42h
+        int 21h
+        ret
+NlsSeekInternal:
 	PUSH	[user_SP]	 ; save user stack
 	PUSH	[user_SS]
 	CALL	Fake_User_Stack

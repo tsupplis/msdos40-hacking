@@ -45,12 +45,12 @@ include version.inc
 .list
 .sall
 
-	EXTRN	DOS_Read:NEAR, DOS_Write:NEAR
+	EXTRN	ReadFileData:NEAR, WriteFileData:NEAR
 
 IF	BUFFERFLAG
 	extrn	save_user_map:near
 	extrn	restore_user_map:near
-	extrn	Setup_EMS_Buffers:near
+	extrn	SetupBufferPages:near
 ENDIF
 
 	I_need	ThisSFT,DWORD		; pointer to SFT entry
@@ -94,6 +94,30 @@ if debug
 include bugtyp.asm
 endif
 
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry $Close,205
+        DosCodeEntry $Commit,206
+        DosCodeEntry $ExtHandle,207
+        DosCodeEntry $Read,208
+        DosCodeEntry $Write,209
+        DosCodeEntry $LSeek,210
+        DosCodeEntry $File_Times,211
+        DosCodeEntry $Dup,212
+        DosCodeEntry $Dup2,213
+
+HandleNetworkSeek PROC NEAR
+        CallInstall Net_Lseek,multNet,33
+        ret
+HandleNetworkSeek ENDP
+HandleNetworkXA PROC NEAR
+        int 2fh
+        ret
+HandleNetworkXA ENDP
+CODE ENDS
+
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+
 BREAK <$Close - return a handle to the system>
 
 ;
@@ -107,8 +131,8 @@ BREAK <$Close - return a handle to the system>
 ;
 ;   No registers returned
 
-Procedure   $Close,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
+Procedure   CloseHandle,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
 	fmt TypSysCall,LevLog,<"$p Close\n">
 	fmt TypSysCall,LevArgs,<"$p  Handle = $x\n">,<BX>
 ;
@@ -139,14 +163,14 @@ Procedure   $Close,NEAR
 ; -1.
 ;
 FreeJFN:
-	Invoke	pJFNFromHandle		;   d = pJFN (handle);
+	CallResident pJFNFromHandle		;   d = pJFN (handle);
 	fmt TypAccess,LevSFN,<"$p  Close jfn pointer $x:$x\n">,<es,di>
 	MOV	BYTE PTR ES:[DI],0FFh	; release the JFN
 PostFree:
 ;
 ; ThisSFT is correctly set, we have DS = DOSGROUP.  Looks OK for a DOS_CLOSE!
 ;
-	invoke	DOS_Close
+	invoke CloseSFT
 ;
 ; DOS_Close may return an error.  If we see such an error, we report it but
 ; the JFN stays closed because DOS_Close always frees the SFT!
@@ -154,12 +178,12 @@ PostFree:
 	JC	CloseError
 	fmt TypSysCall,LevLog,<"$p: Close ok\n">
 	MOV	AH,close		; MZ Bogus multiplan fix
-	transfer    Sys_Ret_OK
+	jmp HandleSuccess
 CloseError:
 	ASSUME	DS:NOTHING
 	fmt TypSysCall,LevLog,<"$p: Close error $x\n">,<AX>
-	transfer    Sys_Ret_Err
-EndProc $Close
+	jmp HandleError
+EndProc CloseHandle
 
 BREAK <$Commit - commit the file>
 
@@ -174,8 +198,8 @@ BREAK <$Commit - commit the file>
 ;
 ;   No registers returned
 
-Procedure   $Commit,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
+Procedure   CommitHandle,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
 ;
 ; Grab the SFT pointer from the JFN.
 ;
@@ -190,16 +214,16 @@ Procedure   $Commit,NEAR
 ;
 ; ThisSFT is correctly set, we have DS = DOSGROUP.  Looks OK for a DOS_COMMIT
 ;
-	invoke	DOS_COMMIT
+	invoke CommitSFT
 ;
 ;
 	JC	Commiterror
 	MOV	AH,Commit		;
-	transfer    Sys_Ret_OK
+	jmp HandleSuccess
 Commiterror:
 	ASSUME	DS:NOTHING
-	transfer    Sys_Ret_Err
-EndProc $Commit
+	jmp HandleError
+EndProc CommitHandle
 
 
 BREAK <$ExtHandle - extend handle count>
@@ -215,8 +239,8 @@ BREAK <$ExtHandle - extend handle count>
 ;		 or error_too_many_open_files
 ;   No registers returned
 
-Procedure   $ExtHandle,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
+Procedure   ResizeHandleTable,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
 ;
 ;
 ;
@@ -251,7 +275,10 @@ chck_handles:
 
 larger:
 	CMP	BX,-1			; 65535 is not allowed
-	JZ	invalid_func
+	jne	allocate_table
+	mov	al,error_invalid_function
+	jmp	HandleError
+allocate_table:
 	CLC
 	PUSH	BX			; save requested number
 	ADD	BX,0FH			; adjust to paragraph boundary
@@ -260,7 +287,7 @@ larger:
 	AND	BX,1FFFH		; clear most 3 bits
 
 	PUSH	BP
-	invoke	$ALLOC			; allocate memory
+	invoke AllocateBlock			; allocate memory
 	POP	BP
 	JC	no_memory		; not enough meory
 
@@ -275,10 +302,10 @@ movhandl:
 	PUSH	CX
 	JMP	copy_hand
 ok_done:
-	transfer    Sys_Ret_OK
+	jmp HandleSuccess
 too_many_files:
 	MOV	AL,error_too_many_open_files
-	transfer    Sys_Ret_Err
+	jmp HandleError
 enlarge:
 	MOV	CX,DS:[PDB_JFN_Length]	  ; get number of old handles
 copy_hand:
@@ -300,7 +327,7 @@ ASSUME DS:NOTHING
 	PUSH	DS			; save old table segment
 	PUSH	ES			; save new table segment
 	MOV	ES,WORD PTR DS:[PDB_JFN_Pointer+2] ; get old table segment
-	invoke	$DEALLOC		; deallocate old table meomory
+	invoke FreeBlock		; deallocate old table meomory
 	POP	ES			; restore new table segment
 	POP	DS			; restore old table segment
 	POP	BP
@@ -315,15 +342,12 @@ non_psp:
 final:
 	MOV	WORD PTR DS:[PDB_JFN_Pointer+2],ES  ; update table pointer segment
 	POP	DS:[PDB_JFN_Length]	 ; restore new number of handles
-	transfer   Sys_Ret_Ok
+	jmp HandleSuccess
 no_memory:
 	POP	BX			; clean stack
 	MOV	AL,error_not_enough_memory
-	transfer    Sys_Ret_Err
-invalid_func:
-	MOV	AL,error_invalid_function
-	transfer    Sys_Ret_Err
-EndProc $ExtHandle
+	jmp HandleError
+EndProc ResizeHandleTable
 
 BREAK <$READ - Read from a file handle>
 ;
@@ -340,20 +364,22 @@ BREAK <$READ - Read from a file handle>
 ;
 ;   Returns in register AX
 
-procedure   $READ,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
+procedure   ReadHandle,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
 	fmt TypSysCall,LevLog,<"Read\n">
 	fmt TypSysCall,LevArgs,<" Handle $x Cnt $x Buf $x:$x\n">,<BX,CX,DS,DX>
-	MOV	SI,OFFSET DOSGROUP:DOS_Read
-ReadDo:
-	invoke	pJFNFromHandle
+	; The return IP addresses the selected near jump in every placement.
+        call    ReadDo
+        jmp     ReadFileData
+ReadDo: pop     si
+	CallResident pJFNFromHandle
 	JC	ReadError
 	MOV	AL,ES:[DI]
 	call	CheckOwner		; get the handle
 	JNC	ReadSetup		; no errors do the operation
 ReadError:
 	fmt TypSysCall,LevLog,<"Read/Write error $x\n">,<AX>
-	transfer    SYS_RET_ERR 	; go to error traps
+	jmp HandleError 	; go to error traps
 ReadSetup:
 	MOV	WORD PTR [ThisSFT],DI	; save offset of pointer
 	MOV	WORD PTR [ThisSFT+2],ES ; save segment value
@@ -389,18 +415,18 @@ IF	BUFFERFLAG
 	push	ax
 	push	bx
 
-	cmp	cs:[BUF_EMS_MODE], -1
+	cmp	ss:[BUF_EMS_MODE], -1
 	jz	dos_call_done
-	call	restore_user_map
-	mov	ax, word ptr cs:[BUF_EMS_LAST_PAGE]
-	cmp	cs:[BUF_EMS_PFRAME], ax
+	CallResident restore_user_map
+	mov	ax, word ptr ss:[BUF_EMS_LAST_PAGE]
+	cmp	ss:[BUF_EMS_PFRAME], ax
 	je	dos_call_done
-	mov	word ptr cs:[LASTBUFFER], -1
-	mov	cs:[BUF_EMS_PFRAME], ax
-	mov	ax, word ptr cs:[BUF_EMS_LAST_PAGE+2]
-	mov	cs:[BUF_EMS_PAGE_FRAME], ax
-	mov	cs:[BUF_EMS_SAFE_FLAG], 1
-	call	Setup_EMS_Buffers
+	mov	word ptr ss:[LASTBUFFER], -1
+	mov	ss:[BUF_EMS_PFRAME], ax
+	mov	ax, word ptr ss:[BUF_EMS_LAST_PAGE+2]
+	mov	ss:[BUF_EMS_PAGE_FRAME], ax
+	mov	ss:[BUF_EMS_SAFE_FLAG], 1
+	invoke SetupBufferPages
 
 dos_call_done:
 	pop	bx
@@ -418,8 +444,8 @@ ENDIF
 
 	MOV	AX,CX			; get correct return in correct reg
 	fmt TypSysCall,LevLog,<"Read/Write cnt done $x\n">,<AX>
-	transfer    sys_ret_ok		; successful return
-EndProc $READ
+	jmp HandleSuccess		; successful return
+EndProc ReadHandle
 
 ;
 ;   Input: DS:DX points to user's buffer addr
@@ -429,7 +455,7 @@ EndProc $READ
 ;
 
 procedure   Align_Buffer,NEAR		;AN000;
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP  ;AN000;
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP  ;AN000;
 	MOV	BX,DX			; copy offset
 	SaveReg <CX>			; don't stomp on count
 	MOV	CL,4			; bits to shift bytes->para
@@ -460,13 +486,13 @@ BREAK <$WRITE - write to a file handle>
 ;
 ;   Returns in register AX
 
-procedure   $WRITE,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
+procedure   WriteHandle,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
 	fmt TypSysCall,LevLog,<"Write\n">
 	fmt TypSysCall,LevArgs,<" Handle $x Cnt $x Buf $x:$x\n">,<BX,CX,DS,DX>
-	MOV	SI,OFFSET DOSGROUP:DOS_Write
-	JMP	ReadDo
-EndProc $Write
+	call    ReadDo
+        jmp     WriteFileData
+EndProc WriteHandle
 
 BREAK <$LSEEK - move r/w pointer>
 
@@ -484,8 +510,8 @@ BREAK <$LSEEK - move r/w pointer>
 ;	       = error_invalid_function
 ;   Returns in registers DX:AX
 
-procedure   $LSEEK,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
+procedure   SeekHandle,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
 	call	CheckOwner		; get system file entry
 LSeekError:
 
@@ -497,7 +523,8 @@ ENDIF
 	CMP	AL,2			; is the seek value correct?
 	JBE	LSeekDisp		; yes, go dispatch
 	MOV	EXTERR_LOCUS,errLoc_Unk ; Extended Error Locus
-	error	error_invalid_function	; invalid method
+	mov	al,error_invalid_function
+	jmp	HandleError	; invalid method
 LSeekDisp:
 	CMP	AL,1			; best way to dispatch; check middle
 	JB	LSeekStore		; just store CX:DX
@@ -510,9 +537,9 @@ LSeekStore:
 LSeekSetpos:
 	MOV	WORD PTR ES:[DI.SF_Position],AX
 	MOV	WORD PTR ES:[DI.SF_Position+2],DX
-	invoke	Get_user_stack
+	CallResident Get_user_stack
 	MOV	DS:[SI.User_DX],DX	; return DX:AX
-	transfer    SYS_RET_OK		; successful return
+	jmp HandleSuccess		; successful return
 
 LSeekEOF:
 	TEST	ES:[DI.sf_flags],sf_isnet
@@ -534,11 +561,11 @@ Check_LSeek_Mode:
 NET_LSEEK:
 ;	 JMP	 LOCAL_LSeek
 ; REMOVE ABOVE INSTRUCTION TO ENABLE DCR 142
-	CallInstall Net_Lseek,multNet,33
+	CallResident HandleNetworkSeek
 	JNC	LSeekSetPos
-	transfer    SYS_RET_ERR
+	jmp HandleError
 
-EndProc $LSeek
+EndProc SeekHandle
 
 BREAK <FileTimes - modify write times on a handle>
 
@@ -577,14 +604,14 @@ BREAK <FileTimes - modify write times on a handle>
 ;	       = error_invalid_handle
 ;
 
-procedure   $File_Times,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
+procedure   HandleFileTimes,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
 	CMP	AL,2			; correct subfunction?
 	JAE	gsetxa
 	JMP	filetimes_ok		; Yes, continue
 ;;;; DOS 4.00				;AN000;
 gsetxa: 				;AN000;
-	EnterCrit   critSFT		;AN000;;FT. enter critical section
+	CallResident ECritSFT		;AN000;;FT. enter critical section
 	CMP	AL,4			;AN000;;FT. =4
 	JBE	gshandle		;AN000;;FT. 2,3,4   do get/set by handle
 funcerr:				;AN000;
@@ -601,7 +628,7 @@ gshandle:				;AN000;
 ;	MOV	[XA_handle],BX		;AN000;    ;FT. save handle
 	CALL	CheckOwner		;AN000;    ;FT. get sf pointer
 	JNC	getsetit		;AN000;    ;FT. good handle
-	LeaveCrit   critSFT		;AN000;    ;FT. leave critical section
+	CallResident LCritSFT		;AN000;    ;FT. leave critical section
 	JMP	LSeekError		;AN000;    ;FT. turkey handle
 					;AN000;
 getsetit:				;AN000;
@@ -613,14 +640,14 @@ getsetit:				;AN000;
 nomask: 				       ;AN000;
 	TEST	ES:[DI.sf_flags],sf_isnet      ;AN000;;FT. remote handle
 	JZ	localhandle		       ;AN000;;FT. no
-	LeaveCrit   critSFT		       ;AN000;;FT. doesn't support Network
+	CallResident LCritSFT		       ;AN000;;FT. doesn't support Network
 
 	MOV	BL,[XA_TYPE]		       ;AN000;;FT.
 IFSsearch:				       ;AN000;
 	MOV	AX,(multNET SHL 8) or 45       ;AN000;;FT. Get/Set XA support
-	INT	2FH			       ;AN000;
+	CallResident HandleNetworkXA			       ;AN000;
 	JC	getseterror		       ;AN000;;FT. error
-	transfer    SYS_RET_OK		       ;AN000;;FT.
+	jmp HandleSuccess		       ;AN000;;FT.
 localhandle:				       ;AN000;
 ;	TEST	ES:[DI.sf_flags],devid_device  ;AN000;;FT. device
 ;	JZ	getsetfile8		       ;AN000;;FT. no
@@ -635,7 +662,7 @@ doXA:					       ;AN000;
 ;	PUSH	[SAVE_ES]		       ;AN000;;FT. save XA list
 ;	PUSH	[SAVE_DI]		       ;AN000;;FT. save XA list
 
-	invoke	GetSet_XA		       ;AN000;;FT. issue Get/Set XA
+	invoke FileExtendedAttributes		       ;AN000;;FT. issue Get/Set XA
 ;	POP	SI			       ;AN000;;FT. DS:SI -> XA list
 ;	POP	DS			       ;AN000;
 	JC	getexit 		       ;AN000;;FT. error
@@ -651,16 +678,17 @@ doXA:					       ;AN000;
 ;	JNZ	do_share		       ;AN000;;FT. no
 	JMP	SHORT ftok		       ;AN000;;FT. return
 getexit:				       ;AN000;;FT.
-	LeaveCrit   critSFT		       ;AN000;;FT. leave critical section
+	CallResident LCritSFT		       ;AN000;;FT. leave critical section
 
 
 getseterror:				       ;AN000;
-	transfer    SYS_RET_ERR 	       ;AN000;;FT. mark file as dirty
+	jmp HandleError 	       ;AN000;;FT. mark file as dirty
 inval_func:
 
 ;;;;; DOS 4.00
 	MOV	EXTERR_LOCUS,errLoc_Unk ; Extended Error Locus
-	error	error_invalid_function	; give bad return
+	mov	al,error_invalid_function
+	jmp	HandleError	; give bad return
 filetimes_ok:
 	call	CheckOwner		; get sf pointer
 	JNC	gsdt
@@ -672,29 +700,25 @@ gsdt:
 	MOV	CX,ES:[DI.sf_Time]	; suck out time
 	MOV	DX,ES:[DI.sf_Date]	; and date
 	STI
-	invoke	Get_user_stack		; obtain place to return it
+	CallResident Get_user_stack		; obtain place to return it
 	MOV	[SI.user_CX],CX 	; and stash in time
 	MOV	[SI.user_DX],DX 	; and stask in date
 ext_done:
-	transfer    SYS_RET_OK		; and say goodnight
+	jmp HandleSuccess		; and say goodnight
 filetimes_set:
-	EnterCrit   critSFT
+	CallResident ECritSFT
 	MOV	ES:[DI.sf_Time],CX	; drop in new time
 	MOV	ES:[DI.sf_Date],DX	; and date
 	XOR	AX,AX
 do_share:
-if installed
-	Call	JShare + 14 * 4
-else
-	Call	ShSU
-endif
+        CallResident StampSharedSFT
 datetimeflg:
 	AND	ES:[DI.sf_Flags],NOT devid_file_clean
 	OR	ES:[DI.sf_Flags],sf_close_nodate
 ftok:
-	LeaveCrit   critSFT
-	transfer    SYS_RET_OK		; mark file as dirty and return
-EndProc $File_Times
+	CallResident LCritSFT
+	jmp HandleSuccess		; mark file as dirty and return
+EndProc HandleFileTimes
 
 BREAK <$DUP - duplicate a jfn>
 ;
@@ -706,10 +730,10 @@ BREAK <$DUP - duplicate a jfn>
 ;   Errors:
 ;	    AX = dup_invalid_handle
 ;	       = dup_too_many_open_files
-Procedure   $DUP,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
+Procedure   DuplicateHandle,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
 	MOV	AX,BX			; save away old handle in AX
-	invoke	JFNFree 		; free handle? into ES:DI, new in BX
+	CallResident JFNFree 		; free handle? into ES:DI, new in BX
 DupErrorCheck:
 	JC	DupErr			; nope, bye
 	SaveReg <ES,DI> 		; save away SFT
@@ -717,14 +741,14 @@ DupErrorCheck:
 	XCHG	AX,BX			; get back old handle
 	call	CheckOwner		; get sft in ES:DI
 	JC	DupErr			; errors go home
-	invoke	DOS_Dup_Direct
-	invoke	pJFNFromHandle		; get pointer
+	invoke DuplicateSelectedSft
+	CallResident pJFNFromHandle		; get pointer
 	MOV	BL,ES:[DI]		; get SFT number
 	MOV	DS:[SI],BL		; stuff in new SFT
-	transfer    SYS_RET_OK		; and go home
-DupErr: transfer    SYS_RET_ERR
+	jmp HandleSuccess		; and go home
+DupErr: jmp HandleError
 
-EndProc $Dup
+EndProc DuplicateHandle
 
 BREAK <$DUP2 - force a dup on a particular jfn>
 ;
@@ -736,15 +760,15 @@ BREAK <$DUP2 - force a dup on a particular jfn>
 ;   Error returns:
 ;	    AX = error_invalid_handle
 ;
-Procedure   $Dup2,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
+Procedure   ForceDuplicateHandle,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
 	SaveReg <BX,CX> 		; save source
 	MOV	BX,CX			; get one to close
-	invoke	$Close			; close destination handle
+	invoke CloseHandle			; close destination handle
 	RestoreReg  <BX,AX>		; old in AX, new in BX
-	invoke	pJFNFromHandle		; get pointer
+	CallResident pJFNFromHandle		; get pointer
 	JMP	DupErrorCheck		; check error and do dup
-EndProc $Dup2
+EndProc ForceDuplicateHandle
 
 Break	<CheckOwner - verify ownership of handles from server>
 
@@ -764,8 +788,8 @@ Break	<CheckOwner - verify ownership of handles from server>
 ;
 
 Procedure   CheckOwner,NEAR
-	ASSUME	CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
-	invoke	SFFromHandle
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
+	CallResident SFFromHandle
 	retc
 	push	ax
 	mov	ax,user_id
@@ -888,6 +912,27 @@ EndProc CheckOwner
 ;EndProc	choose_buf_page	
 ;
 
-CODE	ENDS
+HandleSuccess:
+        CallResident SYS_RET_OK
+        ret
+HandleError:
+        CallResident SYS_RET_ERR
+        ret
+DOSCODE ENDS
+
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC HandleEntries
+HandleEntries LABEL WORD
+        DW OFFSET DOSGROUP:$Close_VECTOR, OFFSET DOSGROUP:CloseHandle
+        DW OFFSET DOSGROUP:$Commit_VECTOR, OFFSET DOSGROUP:CommitHandle
+        DW OFFSET DOSGROUP:$ExtHandle_VECTOR, OFFSET DOSGROUP:ResizeHandleTable
+        DW OFFSET DOSGROUP:$Read_VECTOR, OFFSET DOSGROUP:ReadHandle
+        DW OFFSET DOSGROUP:$Write_VECTOR, OFFSET DOSGROUP:WriteHandle
+        DW OFFSET DOSGROUP:$LSeek_VECTOR, OFFSET DOSGROUP:SeekHandle
+        DW OFFSET DOSGROUP:$File_Times_VECTOR, OFFSET DOSGROUP:HandleFileTimes
+        DW OFFSET DOSGROUP:$Dup_VECTOR, OFFSET DOSGROUP:DuplicateHandle
+        DW OFFSET DOSGROUP:$Dup2_VECTOR, OFFSET DOSGROUP:ForceDuplicateHandle
+        DW 0
+DOSEND ENDS
 END
 

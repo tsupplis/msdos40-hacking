@@ -64,10 +64,11 @@ CommitNetwork PROC NEAR
         CallInstall NET_COMMIT,multNET,7
         RET
 CommitNetwork ENDP
+        PUBLIC StampSharedSFT
 StampSharedSFT PROC NEAR
-        ASSUME DS:DOSGROUP
+        ASSUME DS:NOTHING
 IF Installed
-        CALL JShare + 14 * 4
+        CALL DWORD PTR CS:[JShare + 14 * 4]
 ELSE
         invoke ShSU
 ENDIF
