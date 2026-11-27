@@ -1,6 +1,6 @@
 # MS-DOS 4.01 rebuild, distribution and extension 
 
-MS-DOS 4.01 rebuilt on Unix with GNU make and the original tools under `emu2`. The goal is a usable replacement for DOS 3.3 and 5.0. This project will carry on iteratively, also reviewing/fixing the original code to be both robust and dependable. The version tag is 4.01N.
+MS-DOS 4.01 rebuilt on Unix with GNU make and the original tools under `emu2`. The goal is a usable replacement for DOS 3.3 and 5.0. This project will carry on iteratively, also reviewing/fixing the original code to be both robust and dependable. It is a permissive opensource, lightweight, nimble cousin of freedos and opendos keeping close to the microsoft/ibm commercial dos versions. The version tag is 4.01N.
 
 _**Status Summary v1.7.0**: We already have:_
 - _native `HIMEM.SYS` for XMS 2.0 on AT-compatible 286 and later systems. and extended memory management of vdisk, ramdrive and smartdrv moved to XMS_
@@ -14,18 +14,18 @@ _The remaining gaps are in the work:_
 - _completion of emm386 functionalities in line with DOS 5.0_
 - _setver_
 - _more to UMB and HMA_
-- _fully fledged text editor ([vi]([mbasic](https://github.com/tsupplis/cpm86-vi) as a reasonable place holder)_
-- _fully fledged gwbasic ([mbasic](https://github.com/tsupplis/cpm86-msbasic) reconstructed msbasic as a solid place holder)_
+- _fully fledged text editor (currently shipped with [vi](https://github.com/tsupplis/cpm86-vi) as a reasonable place holder)_
+- _fully fledged gwbasic (currently shipped with a reconstructed [mbasic](https://github.com/tsupplis/cpm86-msbasic) 5.x as a solid place holder)_
 
 We are progressing along the following roles:
 
 | Goal | Details |
 |---|---|
 | **Stability** | Apply the documented Microsoft and IBM fixes and regression-test the rebuilt system. Progressive focused review of the whole code base |
-| **Memory** | Surpass DOS 3.3 and approach DOS 5.0, targeting at least 610 Kbytes free. UMB allocation and XMS reporting are available. Strong XMS, EMS, HMA, UMB implementation, Selected kernel services can run in the HMA or UMB and Main DOS to UMB |
+| **Memory** | Surpass DOS 3.3 and approach DOS 5.0, targeting at least 610 Kbytes free. UMB allocation and XMS reporting are available. Strong XMS, EMS, HMA, UMB implementations, Selected kernel services can run in the HMA or UMB and Main DOS to UMB |
 | **Storage** | Support for up to 8 physical disks, Integration of all patches, reliability testing |
 | **Usability** | Stay MS-DOS, smooth the angles. Command-line editing and recall, clearer memory diagnostics, BASIC (`mbasic.com`) and a screen editor (`vi.exe`) on the full floppy. |
-| **Compatibility** | Match closely or exceed DOS 5.0 commands and functionality. For example some 6.X DOS command have been reimplemented and Y2k has a stronger enforcement (4 digit dates are mandatory) |
+| **Compatibility** | Match closely or exceed DOS 5.0 commands and functionality. For example some 6.X DOS command have been reimplemented and Y2K has a stronger enforcement (4 digit dates are mandatory) |
 
 ![MS-DOS 4.01 running in PCE with upper memory enabled](images/mem.png)
 
