@@ -176,7 +176,7 @@ default = 1
 timeout = 2
 ```
 
-![DOS boot menu for choosing a system configuration](images/boot_menu.png)
+<img src="images/boot_menu.png" alt="DOS boot menu for choosing a system configuration" width="48%">
 
 DOS lists up to nine entries in file order. A digit selects a file, Enter selects the default, and Esc skips configuration for this boot. The default is entry 1 and the timeout is 2 seconds. A single entry or a zero timeout starts immediately. An absent or empty menu uses the ordinary `\CONFIG.SYS`. If a selected file is missing, DOS displays its name and continues to the shell.
 

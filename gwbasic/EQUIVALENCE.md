@@ -35,6 +35,8 @@ A separate handler using `IF ERL=65535 THEN RESUME 140` produced syntax diagnost
 
 Starting another program with RUN after the nested fault also leaves EXTERR(0) at 28 in 3.23 and 0 in 4.01N. The audit starts a fresh interpreter after case 46 so later fixtures have independent initial conditions.
 
+Case 396 holds CTS low from OPEN and checks the modem status before writing. Both interpreters report error 24. In a separate test that lowered CTS immediately before a one-byte write, 3.23 sometimes accepted the byte and 4.01N reported error 24. Timing equivalence during a signal transition remains open.
+
 Additional paired PCE startup probes found that 3.23 prints .8414709848078965 for SIN(1#) under /D and .841471 without it. The historical case 280 uses MKS$, which forces single precision. With /I/F:2/S:64, 3.23 rejects file number 7 with error 52 and random record length 129 with error 5. With /M:49152,3071 it reports out of memory, while /M:49152,3072 starts successfully. 4.01N matches that /M boundary. With the byte count omitted, a small program starts with /M:,300 in 4.01N and gives Out of memory in 3.23. Both execute it with /M:,384. The /D and /I switch probes remain different.
 
 Supplementary PCE VGA probes for cases 196 and 223 compared 3.23 with 4.01N before and after the graphics parser move. Both 4.01N builds produced identical reports. The numbered cases cover the successful graphics-mode forms. Two additional behaviors remain open.
