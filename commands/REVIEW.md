@@ -137,7 +137,7 @@ or `COMMAND: Invalid …`. Verify fixes before closing them.
 
 | Issue | Status |
 |---|---|
-| Return zero after a successful report, as in DOS 6.0 | CLOSED |
+| Return zero after a successful report, as in DOS 6.22 | CLOSED |
 | Honor the PSP command-tail length and report invalid input on stderr | CLOSED |
 | Read the environment segment from PSP:2Ch and bound the /D owner-name lookup by the environment MCB | CLOSED |
 | Send /C allocation failures to stderr and return failure while preserving the summary | CLOSED |
@@ -155,7 +155,7 @@ or `COMMAND: Invalid …`. Verify fixes before closing them.
 
 | Issue | Status |
 |---|---|
-| Apply DOS 6.0 fix M106 to the FAT-copy count. Verify a two-copy, 256-sector FAT repair byte for byte | CLOSED |
+| Apply DOS 6.22 fix M106 to the FAT-copy count. Verify a two-copy, 256-sector FAT repair byte for byte | CLOSED |
 | Propagate directory and individual FAT write failures to ERRORLEVEL | CLOSED |
 | Return immediately on failed intermediate reads and writes so the caller can use the alternate FAT | CLOSED |
 | Reject invalid switches and drives with command-prefixed errors on stderr | CLOSED |
@@ -173,6 +173,6 @@ or `COMMAND: Invalid …`. Verify fixes before closing them.
 | Send prefixed diagnostics to stderr and document required drive and optional cache counts in DOSHELP | CLOSED |
 | Suppress consecutive purges only when they address the same drive | CLOSED |
 
-DOS 6.0 retains the PSP environment lookup error in MEM, the page-rounded MZ
+DOS 6.22 retains the PSP environment lookup error in MEM, the page-rounded MZ
 header in EXE2BIN, the intermediate I/O error branches in CHKDSK and the
 50-byte initialization table in FASTOPEN. These paths use local corrections.
