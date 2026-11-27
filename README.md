@@ -148,10 +148,10 @@ The batch comparison covers `CALL` with arguments, `ECHO` and leading `@`, `FOR 
 | Driver | Functionality |
 |---|---|
 | `ANSI.SYS` | Cursor positioning and position reports use the active video page. `HELP ANSI.SYS` documents cursor control, position reporting and erase sequences. |
-| `HIMEM.SYS` | Native XMS 2.0 on AT-compatible 286 and later systems. Manages A20, the HMA for `DOS=HIGH`, and extended-memory blocks. |
+| `HIMEM.SYS` | Native XMS 2.0 on AT-compatible 286 and later systems. Manages A20, the HMA for `DOS=HIGH`, and extended-memory blocks. [MIT license](kernel/himem/LICENSE.md). |
 | `RAMDRIVE.SYS` | `/E` creates the RAM disk in XMS. `/A` selects EMS. |
 | `SMARTDRV.SYS` | Uses XMS for the disk cache by default. `/A` selects EMS. |
-| `UMBS.SYS` | Supplies upper memory from configured ranges of mapped RAM. Load after `HIMEM.SYS` to use XMS and UMBs together. |
+| `UMBS.SYS` | Supplies upper memory from configured ranges of mapped RAM. Load after `HIMEM.SYS` to use XMS and UMBs together. [Public domain, Marco van.Zwetselaar](kernel/umbs/LICENSE.md), Original USE!UMBS sources are in the component source directory in full and have been adapted to MASM |
 | `VDISK.SYS` | `/E` creates the virtual disk in XMS. `/X` uses a DOS-reserved EMS page. |
 
 ## Configuration enhancements
