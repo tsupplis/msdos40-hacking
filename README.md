@@ -292,5 +292,7 @@ MIT unless a subdirectory specifies otherwise. [license.md](LICENSE.md)
 
 ## Credits
 
+- **emu2** runs the original DOS build tools and command tests. Thanks to dmsc for the original emulator and to johnsonjh for the CP/M-86 fork. [emu2](https://github.com/dmsc/emu2) · [emu2-cpm86](https://github.com/johnsonjh/emu2-cpm86)
+- **PCE** by Hampa Hug boots the DOS images for end-to-end regression tests. [PCE project](http://www.hampa.ch/pce/)
 - **EDIT** derives from Kilo, written by Salvatore Sanfilippo (antirez) in 2016. Kilo is distributed under the BSD 2-Clause license. [Kilo source](https://github.com/antirez/kilo) · [License](edit/LICENSE.md)
 - **GW-BASIC** uses Microsoft's 1983 interpreter and the PC reconstruction by Diomidis Spinellis, Stjepan Gros and TK Chia, distributed under the MIT license. [Microsoft source](https://github.com/microsoft/GW-BASIC) · [Spinellis reconstruction](https://github.com/dspinellis/GW-BASIC) · [TK Chia fork](https://codeberg.org/tkchia/GW-BASIC) · [License](gwbasic/LICENSE.md)
