@@ -268,6 +268,8 @@ SCNOL2:
         mov ax,offset DERDFL
         jmp short StreamFailure
 StreamIOError:
+        extrn SaveDosError:near
+        call SaveDosError
         mov ax,offset DERIOE
 StreamFailure:
         cmp bl,2                ; Never recurse while reporting a failed write.

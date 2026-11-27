@@ -2179,20 +2179,136 @@ DSEG	ENDS
 
 	PUBLIC	SAVVEC,SETVEC
 
-;DSKERR - Processing for MSDOS interrupt &H23
+; DOS extended errors belong to the failed operation. Subsequent BASIC output
+; and error recovery can make DOS calls before the program evaluates EXTERR.
+DSEG SEGMENT PUBLIC 'DATASG'
+DosErrorFields dw 4 dup (0)     ; Code, class, action, locus
+DeviceStatus dw 0
+DeviceNameLen db 0
+DeviceName db 8D dup (0)
+DSEG ENDS
+        public SaveDosError,ResetDosErrors,ExtErrFunc,ErDevFunc
+SaveDosError:
+        push ax
+        push bx
+        push cx
+        push dx
+        push es
+        push di
+        push si
+        push bp
+        push ds
+        xor bx,bx
+        mov ax,5900h
+        int 21h
+        pop ds
+        mov DosErrorFields,ax
+        mov byte ptr DosErrorFields+2,bh
+        mov byte ptr DosErrorFields+4,bl
+        mov byte ptr DosErrorFields+6,ch
+        pop bp
+        pop si
+        pop di
+        pop es
+        pop dx
+        pop cx
+        pop bx
+        pop ax
+        ret
+
+ResetDosErrors:
+        xor ax,ax
+        mov DosErrorFields,ax
+        mov DosErrorFields+2,ax
+        mov DosErrorFields+4,ax
+        mov DosErrorFields+6,ax
+        mov DeviceStatus,ax
+        mov DeviceNameLen,al
+        ret
+
+ExtErrFunc:
+        call CONINT
+        cmp dl,3
+        jbe ExtErrField
+        jmp FCERR
+ExtErrField:
+        mov bx,dx
+        add bx,bx
+        mov bx,DosErrorFields[bx]
+        jmp MAKINT
+
+ErDevFunc:
+        call CHRGTR
+        cmp al,'$'
+        je ErDevName
+        push bx
+        mov bx,DeviceStatus
+        call MAKINT
+        pop bx
+        ret
+ErDevName:
+        call CHRGTR
+        push bx
+        mov al,DeviceNameLen
+        extrn STRINI:near,PUTNEW:near
+        call STRINI
+        mov di,dx
+        mov si,offset DeviceName
+        xor cx,cx
+        mov cl,DeviceNameLen
+        cld
+        rep movsb
+        jmp PUTNEW
+
+;DSKERR - Processing for MSDOS interrupt &H24
 ;         Exit is made through ERROR.  No IRET is executed.
 ;
 DSKERR:	STI	
-	MOV	AX,DI		;[AX]= Error code
+	MOV	CL,AL		; DOS drive number for a block device
 	ADD	SP,20D		;Adjust stack
 	POP	DS		;Get BASIC data segment
 	POP	ES		;Get BASIC extra segment
-	MOV	DL,LOW OFFSET ERRDWP
+	; BP:SI points to the DOS device header. Copy the status while it is live.
+        push es
+        mov es,bp
+        mov ax,es:[si+4]        ; 3.23 packs attribute bits 15..13 and 3..0.
+        and ax,0E00Fh
+        or ah,al
+        mov bx,di
+        mov al,bl
+        mov DeviceStatus,ax
+        test ah,80h
+        jnz CriticalChar
+        and cl,7fh
+        add cl,'A'
+        mov DeviceName,cl
+        mov DeviceName+1,':'
+        mov DeviceNameLen,2
+        jmp short CriticalSaved
+CriticalChar:
+        mov DeviceNameLen,8D
+        add si,10D
+        mov di,offset DeviceName
+        mov cx,8D
+CriticalCopy:
+        mov ah,es:[si]
+        mov [di],ah
+        inc di
+        inc si
+        loop CriticalCopy
+CriticalSaved:
+        pop es
+        call SaveDosError
+        MOV     DL,LOW OFFSET ERRDWP
 	OR	AL,AL		;Test for "Disk write protect"
 	JZ	DSKERX		;Disk write protect
 	MOV	DL,LOW OFFSET ERRDNR
 	CMP	AL,LOW 2D	;Test for "Disk not ready"
 	JZ	DSKERX		;Disk not ready
+	        extrn ERROTP:abs
+        mov dl,low offset ERROTP
+        cmp al,9D               ; DOS printer out of paper
+        je DSKERX
 	MOV	DL,LOW OFFSET ERRDME	;Else "Disk media error
 DSKERX:	JMP	ERROR		;Go report the error and return
 				;Extra stuff on stack is removed by ERROR

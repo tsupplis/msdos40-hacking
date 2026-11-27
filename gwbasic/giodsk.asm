@@ -31,7 +31,7 @@ CPM86=0
 
 	EXTRN	CHRGTR:NEAR,SYNCHR:NEAR,OUTDO:NEAR
 	EXTRN	DERNMF:NEAR,DERBFM:NEAR,DERBRN:NEAR,DERFAO:NEAR,FCERR:NEAR
-	EXTRN	DERTMF:NEAR
+	EXTRN	DERTMF:NEAR,SaveDosError:NEAR
 	EXTRN	DERFAE:NEAR,DERFNF:NEAR,DERIOE:NEAR,DERDFL:NEAR,DERFOV:NEAR
 	EXTRN	CONIA:NEAR,MAKINT:NEAR,MOVE1:NEAR,$NORMD:NEAR
 	EXTRN	DEVBOT:NEAR
@@ -229,7 +229,7 @@ MAKFIL:
 	CALLOS	C_MAKE		;Create file
 	INC	AL		;Too many files?
 	JNZ	OPNSET		;No, continue
-	JMP	DERTMF		;"Too many files"
+	JMP	ER_TMF		;"Too many files"
 OPNFIL:
 	CALLOS	C_OPEN		;Try OPEN
 	INC	AL
@@ -243,7 +243,7 @@ NTAPNF:
 	CMP	AL,LOW OFFSET MD_RND	;If not Random
 	JNZ	ER_FNF		; then File not found error
 	JMP	SHORT MAKFIL	;and create new
-ER_FNF:
+ER_FNF:	CALL	SaveDosError
 	JMP	DERFNF		;"File not found"
 OPNSET:
 	MOV	WORD PTR FCB_RC[SI],128	;Record len = 128
@@ -715,14 +715,17 @@ WriteStatus:
 	JNZ	WRITE1
 	MOV	BYTE PTR F_MODE[SI],LOW OFFSET MD_SQI	;So CLOSE won't give same error
 				;when it tries to output CTL-Z EOF
+	CALL	SaveDosError
 	JMP	DERDFL		;"Disk Full"
 WRITE1:
 	INC	WORD PTR F_CLOC[SI]	;Logical record +1
 	POP	AX
 	RET	
 
-ER_TMF:	JMP	DERTMF		;"Too many Files"
-ER_IOE:	JMP	DERIOE		;"Device I/O error"
+ER_TMF:	CALL	SaveDosError
+	JMP	DERTMF		;"Too many Files"
+ER_IOE:	CALL	SaveDosError
+	JMP	DERIOE		;"Device I/O error"
 
 ;Set OS I/O buffer address to DATOFS(.SI)
 ;
@@ -1026,7 +1029,7 @@ GOTNAM:
 	CALLOS	C_SEAR		;Search 1st
 	INC	AL
 	JNZ	FILNXT		;Brif found
-	JMP	DERFNF		; else complain
+	JMP	ER_FNF		; else complain
 FILNXT:
 	CALL	POLKEY		;Allow CTL-C, CTL-S between every filename
 	MOV	SI,OFFSET FILNA2+1	;Point at name
@@ -1081,7 +1084,7 @@ KILL:
 	CALLOS	C_OPEN		;Open file
 	INC	AL
 	JNZ	KILL2		;Brif file found
-	JMP	DERFNF		;File not found
+	JMP	ER_FNF		;File not found
 KILL2:	POP	DX		;DX points to FCB
 	PUSH	DX
 	CALLOS	C_CLOS		;Close file
@@ -1145,8 +1148,9 @@ SAMDRV:
 	POP	BX		;text pointer
 	RET	
 
-NA_FNF:	JMP	DERFNF		;file not found
-NA_FAE:	JMP	DERFAE		;file already exists
+NA_FNF:	JMP	ER_FNF		;file not found
+NA_FAE:	CALL	SaveDosError
+	JMP	DERFAE		;file already exists
 
 ; Directory statements adapted from TK Chia's GWBASICA DOS backend.
         PUBLIC MKDIR,RMDIR,CHDIR
@@ -1180,6 +1184,7 @@ DirectoryCall:
         je DirectoryError
         mov dl,offset ERRACC
 DirectoryError:
+        call SaveDosError
         jmp ERROR
 DirectoryDone:
         ret

@@ -14,12 +14,15 @@ import sys
 import tempfile
 import time
 
+import gweditpce
+
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("ids", nargs="*", type=int, help="inventory rows (default: all probes)")
 parser.add_argument("--jobs", default=1, type=int, help="concurrent DOS guests (maximum two)")
 backend = parser.add_mutually_exclusive_group()
 backend.add_argument("--qemu", action="store_true", help="use the historical QEMU audit, including interactive probes")
+backend.add_argument("--editor", action="store_true", help="run the batched PCE keyboard and screen comparisons")
 backend.add_argument("--quick", action="store_true", help="run the cases that share one BASIC session")
 parser.add_argument("--check", action="store_true",
                     help="enforce matched inventory cases against the recorded reference")
@@ -185,7 +188,7 @@ def read(image, name):
 # These probes report through #1 and return to the harness. They need no
 # interactive input, separate command line, or persistent device/file change.
 grouped = {
-    5, 8, 27, 30, 31, 32, 33, 35, 57, 58, 61, 63, 68, 69, 73, 105, 110,
+    5, 8, 27, 30, 31, 32, 33, 35, 45, 46, 51, 57, 58, 61, 63, 68, 69, 73, 105, 110,
     111, 119, 122, 123, 128, 133, 134, 135, 164, 166, 167, 168,
     192, 193, 194, 196, 198, 216, 217, 218, 219, 220, 221, 223, 224, 225, 226, 227, 228, 230, 231, 232, 234, 241, 242, 243, 247, 251, 255,
     259, 263, 264, 265, 266, 267, 271, 272, 273, 274, 305, 307, 308, 328, 329, 343, 344, 351, 354, 362, 373, 379, 381,
@@ -241,7 +244,7 @@ def pce_group(ids, folder, image, data):
     work = folder / "pce"
     run = subprocess.run([root / "test/run_tests", batch], cwd=root, capture_output=True,
                          env=dict(os.environ, IMG=str(image), PCE_TEST_WORK=str(work),
-                                  PCE_TEST_FLOPPY_B=str(data), SECS="25"))
+                                  PCE_TEST_FLOPPY_B=str(data), PCE_TEST_BOOT_READONLY="1", SECS="25"))
     if run.returncode:
         raise RuntimeError((run.stdout + run.stderr).decode("cp437") + "\n" +
                            (work / "pce.log").read_text(errors="replace")[-2000:])
@@ -349,8 +352,20 @@ def run_batch(ids, version, template, data):
 
 
 def main():
-    ids = args.ids or sorted(cases if args.qemu else grouped)
-    if not args.qemu and set(ids) - grouped:
+    available = grouped
+    if args.editor:
+        available = gweditpce.cases
+    elif args.qemu:
+        available = cases.keys() - gweditpce.cases - {45, 46}
+        if {45, 46}.intersection(args.ids):
+            parser.error("the critical-error probes require the write-protected PCE boot floppy")
+        if gweditpce.cases.intersection(args.ids):
+            parser.error("these interactive cases now run on PCE, omit --qemu")
+    ids = args.ids or sorted(available)
+    live_editor = args.editor or (not args.qemu and set(ids) <= gweditpce.cases)
+    if live_editor and set(ids) - gweditpce.cases:
+        parser.error("select PCE editor cases separately from BASIC program probes")
+    if not (args.qemu or live_editor) and set(ids) - grouped:
         parser.error("requested case has no PCE probe yet (historical runner: --qemu)")
     if args.jobs < 1:
         parser.error("--jobs must be positive")
@@ -380,7 +395,10 @@ def main():
         put(data, folder, "TARGET.BAS", '10 GOTO 20\n20 OPEN "VALUE.OUT" FOR OUTPUT AS #2:PRINT #2,"TARGET";X:CLOSE:SYSTEM\n')
         for ext in ("ref", "exe"):
             install(data, root / ("gwbasic/gwbasic." + ext), ext + ".EXE")
-        if not args.qemu:
+        if live_editor:
+            ref_results, exe_results = gweditpce.editor_results(
+                folder, template, data, {n: editor[n] for n in ids}, put, read)
+        elif not args.qemu:
             ref_results, exe_results = pce_group(ids, folder, template, data)
         else:
             with concurrent.futures.ThreadPoolExecutor(max_workers=min(args.jobs, 2)) as pool:

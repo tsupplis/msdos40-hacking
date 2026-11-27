@@ -577,12 +577,12 @@ STMDSX:
         PlayToken=0FE00h+QQ
 	R	TIMER
         TimerToken=0FE00h+QQ
-	R	ERDEV
+	R2	ERDEV,SNERR
 	R	IOCTL
 	R	CHDIR
 	R	MKDIR
 	R	RMDIR
-	R	SHELL
+	R2	SHELL,SNERR
 	R	ENVIRON
 	R2 VIEW,ViewStmt
 	R2 WINDOW,WindowStmt
@@ -593,6 +593,9 @@ STMDSX:
         dw 3 dup (offset SNERR)
         QQ=QQ+3
         R PCOPY
+        R2 DUMMY,SNERR          ; FE A6 is unassigned.
+        R2 LOCK,SNERR
+        R2 UNLOCK,SNERR
 ;*************************************************************************
 ;*** The DEBUG entry should be the last entry in the FE Dispatch table ***
 ;*************************************************************************
@@ -613,6 +616,7 @@ FUNDSX:
 	R2	JIS,SNERR
 	R2	KPOS,SNERR
 	R2	KLEN,SNERR
+        R2 EXTERR,ExtErrFunc
 
 	PAGE	
 PUBLIC	ALPTAX
@@ -667,6 +671,8 @@ DTABX:
 	Q	DRAW
 	DB	0
 ETABX:
+        Q ERDEV
+        QF EXTERR
 	Q	ENVIRON
 	DB	0
 FTABX:
@@ -687,6 +693,7 @@ KTABX:
 	Q	KILL
 	DB	0
 LTABX:
+        Q LOCK
 	Q	LSET
 	Q	LCOPY
 	DB	0
@@ -717,6 +724,7 @@ RTABX:
 	Q	RMDIR
 	DB	0
 STABX:
+        Q SHELL
 	Q	SYSTEM
 	DB	0
 TTABX:
@@ -724,6 +732,7 @@ TTABX:
 	Q	TIMER
 	DB	0
 UTABX:
+        Q UNLOCK
 	DB	0
 VTABX:
         Q VIEW
@@ -964,7 +973,12 @@ EVALX:	CMP	AL,LOW 376O
 
 EVALNS:	INC	BX
 	MOV	AL,BYTE PTR [BX]
-	cmp al,low offset $PMAP
+	cmp al,low offset $ERDEV
+        jne CheckPmap
+        pop cx
+        extrn ErDevFunc:near
+        jmp ErDevFunc
+CheckPmap: cmp al,low offset $PMAP
         jne CheckPlay
         pop cx
         extrn PmapFunc:near

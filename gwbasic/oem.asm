@@ -2113,6 +2113,37 @@ KEYSC2:	MOV	AX,0FEH			; IBM scan code
 	CLC
 	RET
 
+; Translate a BIOS key for the line editor. AL=FEh carries its scan code
+; in DL. Return AX in screen-driver form, or ZF set for an unbound key.
+PUBLIC EditKey
+EditKey:
+        CMP     AL,1BH
+        JNE     EditScan
+        MOV     AX,0FF15H       ; Esc deletes the logical line.
+        JMP     SHORT EditKeyDone
+EditScan:
+        CMP     AL,0FEH
+        JNE     EditKeyDone
+        CMP     DL,73H          ; Ctrl-Left through Ctrl-Home
+        JB      EditUnused
+        CMP     DL,77H
+        JA      EditUnused
+        PUSH    BX
+        MOV     AL,DL
+        MOV     BX,OFFSET EditCodes-73H
+        XLAT    CS:[BX]
+        POP     BX
+        OR      AL,AL
+        JZ      EditUnused
+        MOV     AH,0FFH
+EditKeyDone:
+        TEST    SP,SP
+        RET
+EditUnused:
+        CMP     SP,SP
+        RET
+EditCodes DB 2,6,5,0,12D       ; Word left/right, truncate, unbound, clear
+
 ; Map control character for editing
 ;
 ; INPUT

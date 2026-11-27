@@ -2477,6 +2477,8 @@ RESUME:
 	JNZ	SHORT ??L057
 	JMP	REERR		;Not in an ON ERROR routine
 ??L057:
+        extrn ResetDosErrors:near
+        call ResetDosErrors
 	XOR	AL,AL
 	MOV	BYTE PTR ERRFLG,AL	;CLEAR ERROR FLAG SO ^C DOESN'T GIVE ERROR
 	MOV	AL,BYTE PTR [BX]	;GET CURRENT CHAR BACK

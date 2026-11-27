@@ -4,7 +4,7 @@ Target: the project’s 3.23 DOS binary and 4.01N under identical inputs. The al
 
 Sources: [Microsoft GW-BASIC User’s Reference and Guide, July 1987](https://bitsavers.computerhistory.org/pdf/microsoft/msdos_3.3/MS-DOS_GW-BASIC_198707.pdf), [1989 guide and command-line reference](https://bitsavers.trailing-edge.com/pdf/microsoft/gw-basic/Microsoft_GW-BASIC_Users_Guide_and_Reference_1989.pdf). Supplementary syntax must be verified against the project’s executable.
 
-402 work items: 346 matched, 47 different, 6 inconclusive, 3 intentional.
+402 work items: 356 matched, 37 different, 6 inconclusive, 3 intentional.
 
 ## Evidence
 
@@ -21,11 +21,11 @@ Matched records an observed matching case. It does not qualify the entire form o
 
 ## Running the paired regression
 
-With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 87 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Each interpreter runs the BASIC fixtures in succession and writes one report on the scratch floppy.
+With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 90 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Each interpreter runs the BASIC fixtures in succession and writes one report on the scratch floppy. Root checks also run `test/check_gwaudit --editor --check`: seven interactive comparisons share a second PCE boot. They record VGA text cells and the BIOS cursor at the live Ok prompt. Case 301 also records all ten macro expansions through INKEY$.
 
-PCE is the default for the paired audit, including timer and PLAY handler delivery and single cases such as `test/check_gwaudit --check 216`. Set `PCE_VIDEO=ega` or `PCE_VIDEO=vga` to select the adapter. The full probe runner requires explicit `--qemu`; it covers additional observations such as BIOS keyboard input and cursor position.
+PCE is the default for the paired audit, including timer and PLAY handler delivery and single cases such as `test/check_gwaudit --check 216`. Set `PCE_VIDEO=ega` or `PCE_VIDEO=vga` to select the adapter. The remaining historical probe runner requires explicit `--qemu`; it covers additional observations such as BIOS keyboard input and cursor position.
 
-For the selected IDs, the gate checks each case marked **Matched** against both the live 3.23 run and its recorded output. Incomplete observations fail in every category. The 247 paired records cover 202 matched, 39 different and 6 inconclusive cases. A known difference that now matches is reported for review. After verifying a fix, update that case’s JSONL record, matrix status and counts together. The remaining inventory rows use the other evidence listed above.
+For the selected IDs, the gate checks each case marked **Matched** against both the live 3.23 run and its recorded output. Incomplete observations fail in every category. The 250 paired records cover 212 matched, 32 different and 6 inconclusive cases. A known difference that now matches is reported for review. After verifying a fix, update that case’s JSONL record, matrix status and counts together. The remaining inventory rows use the other evidence listed above.
 
 ## Differences by work area
 
@@ -34,10 +34,10 @@ Each row below groups failed observations for investigation. The count measures 
 | Work area | Rows | Inventory IDs |
 |---|---:|---|
 | DOS environment and command execution | 3 | 40, 145, 146 |
-| DOS error information and device control | 5 | 45, 46, 51, 231, 232 |
+| DOS error information and device control | 2 | 231, 232 |
 | Disk files, sharing and locking | 8 | 53, 110, 249, 250, 374, 375, 376, 377 |
 | Command streams, prompts and diagnostics | 6 | 70, 81, 102, 120, 151, 277 |
-| Keyboard, editor and function keys | 12 | 182, 185, 294, 295, 297, 299, 301, 358, 359, 389, 390, 393 |
+| Keyboard, editor and function keys | 5 | 182, 185, 358, 359, 393 |
 | Drawing and tiled fill | 3 | 191, 348, 356 |
 | Video modes, pages and EGA memory | 2 | 215, 342 |
 | Serial I/O | 4 | 233, 395, 396, 397 |
@@ -92,13 +92,13 @@ Each row below groups failed observations for investigation. The count measures 
 | 042 | `ENVIRON$(index)` | DOS | Matched | L |
 | 043 | `EOF` | DOS | Matched | L |
 | 044 | `ERASE` | DOS | Matched | L |
-| 045 | `ERDEV` | DOS | Different | reference token saved as ASCII identifier in 4.01N |
-| 046 | `ERDEV$` | DOS | Different | reference token saved as ASCII identifier in 4.01N |
+| 045 | `ERDEV` | DOS | Matched | PCE, case 45. Write-protected floppy: BASIC error 70 and ERDEV 512, cleared by RESUME. |
+| 046 | `ERDEV$` | DOS | Matched | PCE, case 46. Write-protected floppy: ERDEV$ reports A: and becomes empty on RESUME. |
 | 047 | `ERL` | DOS | Matched | L |
 | 048 | `ERR` | DOS | Matched | L |
 | 049 | `ERROR` | DOS | Matched | L |
 | 050 | `EXP` | DOS | Matched | L |
-| 051 | `EXTERR` | DOS | Different | reference token saved as ASCII identifier in 4.01N |
+| 051 | `EXTERR` | DOS | Matched | PCE, case 51. DOS code, class, action and locus after failed OPEN and CHDIR, invalid selector and RESUME. |
 | 052 | `FIELD` | DOS | Matched | L |
 | 053 | `FILES` | DOS | Different | Q, case 53; output differs |
 | 054 | `FIX` | DOS | Matched | L |
@@ -229,10 +229,10 @@ Each row below groups failed observations for investigation. The count measures 
 | 179 | `DRAW` | Display | Matched | Q, case 179 |
 | 180 | `GET graphics` | Display | Matched | X |
 | 181 | `INKEY$` | Display | Matched | Q, case 181 |
-| 182 | `KEY definition` | Display | Different | Q, case 182; output differs |
+| 182 | `KEY definition` | Display | Different | Q, case 182; redirected KEY LIST writes only labels to stdout in 3.23. Macro text appears on screen. 4.01N redirects the whole listing. |
 | 183 | `KEY ON` | Display | Matched | Q, case 183; statement accepted and returned |
 | 184 | `KEY OFF` | Display | Matched | Q, case 184; statement accepted and returned |
-| 185 | `KEY LIST` | Display | Different | Q, case 185; output differs |
+| 185 | `KEY LIST` | Display | Different | Q, case 185; redirected KEY LIST writes only labels to stdout in 3.23. Macro text appears on screen. 4.01N redirects the whole listing. |
 | 186 | `LINE` | Display | Matched | Q, case 186 |
 | 187 | `LINE B` | Display | Matched | Q, case 187 |
 | 188 | `LINE BF` | Display | Matched | Q, case 188 |
@@ -341,14 +341,14 @@ Each row below groups failed observations for investigation. The count measures 
 | 291 | `Replace numbered line` | Screen editor | Matched | Q, case 291 |
 | 292 | `Delete numbered line` | Screen editor | Matched | Q, case 292 |
 | 293 | `Direct command` | Screen editor | Matched | Q, case 293 |
-| 294 | `Cursor left/right/up/down` | Screen editor | Different | Q, case 294; screen or cursor differs |
-| 295 | `Word left/right` | Screen editor | Different | Q, case 295; screen or cursor differs |
+| 294 | `Cursor left/right/up/down` | Screen editor | Matched | PCE, case 294. Arrow sequence, including the cursor before and after Up. |
+| 295 | `Word left/right` | Screen editor | Matched | PCE, case 295. Word navigation and overwrite within ABC DEF. |
 | 296 | `Home and End` | Screen editor | Matched | Q, case 296 |
-| 297 | `Insert and Delete` | Screen editor | Different | Q, case 297; screen or cursor differs |
+| 297 | `Insert and Delete` | Screen editor | Matched | PCE, case 297. Intermediate ABCXDE after Insert and final ABCXE after Delete. |
 | 298 | `Backspace` | Screen editor | Matched | Q, case 298 |
-| 299 | `Escape line cancellation` | Screen editor | Different | Q, case 299; screen or cursor differs |
+| 299 | `Escape line cancellation` | Screen editor | Matched | PCE, case 299. Esc discards ABCDE before entering XYZ. |
 | 300 | `Tab and backtab` | Screen editor | Matched | Q, case 300 |
-| 301 | `Function keys F1–F10` | Screen editor | Different | Q, case 301; screen or cursor differs |
+| 301 | `Function keys F1–F10` | Screen editor | Matched | PCE, case 301. All ten default macro byte strings and the final Ok screen after F10. |
 | 302 | `Ctrl-Break and continuation` | Screen editor | Inconclusive | Ctrl-Pause produced a break in 4.01N. The reference had not reached a prompt at the snapshot; repeat with a guest-side completion marker. |
 | 303 | `Control-key editing shortcuts` | Screen editor | Matched | Q, case 303 |
 | 304 | `Logical line wrapping` | Screen editor | Inconclusive | Input and cursor snapshots did not establish that the intended full-length logical line was received. Repeat with BIOS-buffer synchronization. |
@@ -406,7 +406,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 356 | `PAINT background tile` | Display | Different | Q, case 356; 3.23 1  / DONE, 4.01N ERROR 13  100 |
 | 357 | `COLOR foreground/background/border` | Display | Matched | Q, case 357 |
 | 358 | `KEY user-defined event key` | Display | Different | Q, case 358; 3.23 DONE, 4.01N ERROR 5  100 |
-| 359 | `KEY macros` | Display | Different | Q, case 359; output differs |
+| 359 | `KEY macros` | Display | Different | Q, case 359; redirected KEY LIST writes only labels to stdout in 3.23. Macro text appears on screen. 4.01N redirects the whole listing. |
 | 360 | `SCREEN color switch` | Display | Matched | Q, case 360 |
 | 361 | `PLAY note and accidental` | Sound | Matched | Q, case 361; statement accepted and returned |
 | 362 | `PLAY octave and octave shifts` | Sound | Matched | Q, case 362; both accept relative octave shifts. Speaker output uncaptured. |
@@ -436,8 +436,8 @@ Each row below groups failed observations for investigation. The count measures 
 | 386 | `DATA quoted strings and empty fields` | DOS | Matched | Q, case 386 |
 | 387 | `Integer division rounding` | DOS | Matched | Q, case 387 |
 | 388 | `Single versus double precision promotion` | DOS | Matched | Q, case 388 |
-| 389 | `Clear to end of line` | Screen editor | Different | Q, case 389; screen or cursor differs |
-| 390 | `Clear screen and home cursor` | Screen editor | Different | Q, case 390; screen or cursor differs |
+| 389 | `Clear to end of line` | Screen editor | Matched | PCE, case 389. Ctrl-End truncates ABCDE at column four. |
+| 390 | `Clear screen and home cursor` | Screen editor | Matched | PCE, case 390. Ctrl-Home clears the screen and homes the cursor before typing Q. |
 | 391 | `Insert logical line break` | Screen editor | Matched | Q, case 391 |
 | 392 | `Pause and resume` | Screen editor | Inconclusive | Ctrl-S entered at the Ok prompt produced the same cells. This does not demonstrate suspension of a running program. |
 | 393 | `Printer echo and print screen` | Screen editor | Different | Q, case 393; screen or cursor differs |
@@ -453,13 +453,15 @@ Each row below groups failed observations for investigation. The count measures 
 
 ## Tokenizer cross-check
 
-Both alphabetic keyword dictionaries in the 3.23 executable were decoded (173 spellings including aliases and grammatical tokens). Both executables loaded the same ASCII lines and saved tokenized programs under emu2. Of 187 distinct spellings from those dictionaries, the inventory and the Q/QF tables in [ibmres.asm](ibmres.asm), 6 emitted different byte sequences. Equal bytes can also represent ordinary variable names. Runtime status requires a separate probe. These byte sequences exclude the record header and terminator.
+The original comparison covered 187 spellings from the 3.23 dictionaries, the inventory, and the Q/QF tables in [ibmres.asm](ibmres.asm). Six spellings differed. The bidirectional file regression now checks their token bytes and exchanges saved programs containing them, including quoted names in REM text. Each consumer reproduces the original ASCII lines.
 
-| Spelling | 3.23 hex | 4.01N hex |
-|---|---|---|
-| `ERDEV` | `fe 95` | `45 52 44 45 56` |
-| `ERDEV$` | `fe 95 24` | `45 52 44 45 56 24` |
-| `EXTERR` | `fd 8b` | `45 58 54 45 52 52` |
-| `LOCK` | `fe a7` | `4c 4f 43 4b` |
-| `SHELL` | `fe 9a` | `53 48 45 4c 4c` |
-| `UNLOCK` | `fe a8` | `55 4e 4c 4f 43 4b` |
+| Spelling | Token bytes in both versions |
+|---|---|
+| `ERDEV` | `fe 95` |
+| `ERDEV$` | `fe 95 24` |
+| `EXTERR` | `fd 8b` |
+| `LOCK` | `fe a7` |
+| `SHELL` | `fe 9a` |
+| `UNLOCK` | `fe a8` |
+
+Execution of SHELL, LOCK and UNLOCK remains open in the matrix above.

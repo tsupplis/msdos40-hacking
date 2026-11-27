@@ -44,6 +44,7 @@ check: all
 	$(MAKE) -C media check
 ifneq ($(wildcard gwbasic/gwbasic.ref),)
 	./test/check_gwaudit --quick --check
+	./test/check_gwaudit --editor --check
 endif
 
 tools-check:

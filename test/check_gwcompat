@@ -61,6 +61,12 @@ with tempfile.TemporaryDirectory() as tmp:
     baseline = report(expected, "lang.out")
     if not baseline.endswith(b"COMPLETE\r\n") or b"FAIL" in baseline:
         raise SystemExit(f"Reference failed the baseline fixture: {baseline!r}")
+    # Check the keyword payload independently of the relocated next-line links.
+    # String literals and REM text on the same lines must survive both listings.
+    tokens = {"ERDEV": "fe95", "ERDEV$": "fe9524", "EXTERR": "fd8b",
+              "SHELL": "fe9a", "LOCK": "fea7", "UNLOCK": "fea8"}
+    keywords = dos("".join(f'{i} {word}:REM "{word}"\n'
+                           for i, word in enumerate(tokens, 10)))
     sizes = {}
     for label, producer, consumer in (("4.01N-to-ref", build, reference),
                                       ("ref-to-4.01N", reference, build)):
@@ -79,6 +85,18 @@ with tempfile.TemporaryDirectory() as tmp:
             if actual != baseline:
                 raise SystemExit(f"{label}/{name}: {actual!r}")
             print(f"PASS {label} {name} load and run")
+        (source / "keys.bas").write_bytes(keywords + b"\x1a")
+        run(source, commands=dos('LOAD "KEYS.BAS"\nSAVE "KEYS.BIN"\nSYSTEM\n'))
+        binary = (source / "keys.bin").read_bytes()
+        for number, (word, code) in enumerate(tokens.items(), 10):
+            record = number.to_bytes(2, "little") + bytes.fromhex(code) + b":"
+            if record not in binary:
+                raise SystemExit(f"{label}: {word} did not encode as {code}")
+        shutil.copyfile(source / "keys.bin", target / "keys.bin")
+        run(target, commands=dos('LOAD "KEYS.BIN"\nSAVE "KEYS.LST",A\nSYSTEM\n'))
+        if report(target, "keys.lst") != keywords:
+            raise SystemExit(f"{label}: extended keyword listing changed")
+        print(f"PASS {label} six extended keyword encodings and listing")
         (source / "write.bas").write_bytes(dos(writer) + b"\x1a")
         run(source, ["write.bas"])
         sizes[label] = {name: (source / name).stat().st_size for name in

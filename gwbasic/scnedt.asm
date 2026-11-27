@@ -191,10 +191,9 @@ INLLOP:
 	JB	INL2BY		; BRIF 2-byte character, check for editor controls
 	CMP	AL,LOW OFFSET CHRRET
 	JZ	INLRET		; BRIF CR, terminate line input
-;** IF CURRENT_CHAR IS SPECIAL THREE BYTE CHAR
-	CMP	AL,LOW 254D	; Test for 3-byte character
-;** *** IGNORE THIS CHAR
-	JZ	INLLOP		; BRIF to ignore 3-byte character
+        EXTRN   EditKey:NEAR
+        CALL    EditKey         ; Map keyboard input only, leaving PRINT and INKEY$ alone.
+        JZ      INLLOP          ; Unassigned extended key
 	JMP	SHORT INLOP0	; Not 3-bytes, just echo single byte
 INL2BY:
 ;** IF CURRENT_CHAR IS CONTROL_CHAR
@@ -347,6 +346,8 @@ StreamGetNext:
         mov ah,3fh
         int 21h
         jnc StreamGetRead
+        extrn SaveDosError:near
+        call SaveDosError
         mov InputEOF,1
         jmp DERIOE
 StreamGetRead:

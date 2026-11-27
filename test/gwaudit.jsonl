@@ -16,6 +16,9 @@
 {"exe": {"RESULT.TXT": "DONE"}, "id": 35, "ref": {"RESULT.TXT": "DONE"}}
 {"exe": {"cursor": [0, 4], "screen": "READY\nOk\n10 rem OLD\nedit 10\n10 REM OLD"}, "id": 38, "ref": {"cursor": [0, 4], "screen": "READY\nOk\n10 rem OLD\nedit 10\n10 REM OLD"}}
 {"exe": {"RESULT.TXT": "BEFORE"}, "id": 39, "ref": {"RESULT.TXT": "BEFORE"}}
+{"exe": {"RESULT.TXT": " 0 \n 70            512           19            11            7             2 \n 0             0 \nDONE"}, "id": 45, "ref": {"RESULT.TXT": " 0 \n 70            512           19            11            7             2 \n 0             0 \nDONE"}}
+{"exe": {"RESULT.TXT": " 0 \n 70           [A:]\n 0 \nDONE"}, "id": 46, "ref": {"RESULT.TXT": " 0 \n 70           [A:]\n 0 \nDONE"}}
+{"exe": {"RESULT.TXT": " 0 \n 53            110           2             8             3             2 \n 76            120           3             8             3             2 \n 5             130           0             0             0             0 \nDONE"}, "id": 51, "ref": {"RESULT.TXT": " 0 \n 53            110           2             8             3             2 \n 76            120           3             8             3             2 \n 5             130           0             0             0             0 \nDONE"}}
 {"exe": {"CAPTURE.OUT": "SAMPLE  .TXT ", "RESULT.TXT": "DONE"}, "id": 53, "ref": {"CAPTURE.OUT": "B:\\\nSAMPLE  .TXT      \n 1318912 Bytes free", "RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "-1 \nDONE"}, "id": 57, "ref": {"RESULT.TXT": "-1 \nDONE"}}
 {"exe": {"RESULT.TXT": "-1            AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nDONE"}, "id": 58, "ref": {"RESULT.TXT": "-1            AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nDONE"}}
@@ -172,14 +175,14 @@
 {"exe": {"cursor": [0, 7], "screen": "READY\nOk\n10 print 1\n10 print 2\nrun\n 2\nOk"}, "id": 291, "ref": {"cursor": [0, 7], "screen": "READY\nOk\n10 print 1\n10 print 2\nrun\n 2\nOk"}}
 {"exe": {"cursor": [0, 8], "screen": "READY\nOk\n10 print 1\n20 print 2\n10\nrun\n 2\nOk"}, "id": 292, "ref": {"cursor": [0, 8], "screen": "READY\nOk\n10 print 1\n20 print 2\n10\nrun\n 2\nOk"}}
 {"exe": {"cursor": [0, 5], "screen": "READY\nOk\nprint 7\n 7\nOk"}, "id": 293, "ref": {"cursor": [0, 5], "screen": "READY\nOk\nprint 7\n 7\nOk"}}
-{"exe": {"cursor": [5, 2], "screen": "READY\nOk\nABCXE"}, "id": 294, "ref": {"cursor": [4, 2], "screen": "READY\nOk\nAXCDE"}}
-{"exe": {"cursor": [8, 2], "screen": "READY\nOk\nABC DEFX"}, "id": 295, "ref": {"cursor": [4, 2], "screen": "READY\nOk\nXBC DEF"}}
+{"exe": {"cursor": [5, 2], "screen": "READY\nOk\nABCXE", "steps": [{"cursor": [4, 2], "screen": "READY\nOk\nABCXE"}, {"cursor": [4, 1], "screen": "READY\nOk\nABCXE"}]}, "id": 294, "ref": {"cursor": [5, 2], "screen": "READY\nOk\nABCXE", "steps": [{"cursor": [4, 2], "screen": "READY\nOk\nABCXE"}, {"cursor": [4, 1], "screen": "READY\nOk\nABCXE"}]}}
+{"exe": {"cursor": [5, 2], "screen": "READY\nOk\nABC XEF", "steps": [{"cursor": [5, 2], "screen": "READY\nOk\nABC XEF"}]}, "id": 295, "ref": {"cursor": [5, 2], "screen": "READY\nOk\nABC XEF", "steps": [{"cursor": [5, 2], "screen": "READY\nOk\nABC XEF"}]}}
 {"exe": {"cursor": [5, 0], "screen": "READY\nOk\nABC"}, "id": 296, "ref": {"cursor": [5, 0], "screen": "READY\nOk\nABC"}}
-{"exe": {"cursor": [4, 2], "screen": "READY\nOk\nABCXE"}, "id": 297, "ref": {"cursor": [2, 2], "screen": "READY\nOk\nAXE"}}
+{"exe": {"cursor": [4, 2], "screen": "READY\nOk\nABCXE", "steps": [{"cursor": [4, 2], "screen": "READY\nOk\nABCXDE"}]}, "id": 297, "ref": {"cursor": [4, 2], "screen": "READY\nOk\nABCXE", "steps": [{"cursor": [4, 2], "screen": "READY\nOk\nABCXDE"}]}}
 {"exe": {"cursor": [5, 2], "screen": "READY\nOk\nABCDX"}, "id": 298, "ref": {"cursor": [5, 2], "screen": "READY\nOk\nABCDX"}}
-{"exe": {"cursor": [8, 2], "screen": "READY\nOk\nABCDEXYZ"}, "id": 299, "ref": {"cursor": [3, 2], "screen": "READY\nOk\nXYZ"}}
+{"exe": {"cursor": [3, 2], "screen": "READY\nOk\nXYZ"}, "id": 299, "ref": {"cursor": [3, 2], "screen": "READY\nOk\nXYZ"}}
 {"exe": {"cursor": [9, 2], "screen": "READY\nOk\nABC     X"}, "id": 300, "ref": {"cursor": [9, 2], "screen": "READY\nOk\nABC     X"}}
-{"exe": {"cursor": [0, 16], "screen": "READY\nOk\nLISTRUN\nSyntax error\nOk\nLOAD\"SAVE\"CONT\nFile not found\nOk\n,\"LPT1:\"TRON\nSyntax error\nOk\nTROFF\nOk\nKEYSCREEN 0,0,0\nSyntax error\nOk"}, "id": 301, "ref": {"cursor": [0, 1], "screen": "Ok"}}
+{"exe": {"cursor": [0, 1], "macros": ["LIST ", "RUN\r", "LOAD\"", "SAVE\"", "CONT\r", ",\"LPT1:\"\r", "TRON\r", "TROFF\r", "KEY ", "SCREEN 0,0,0\r"], "screen": "Ok"}, "id": 301, "ref": {"cursor": [0, 1], "macros": ["LIST ", "RUN\r", "LOAD\"", "SAVE\"", "CONT\r", ",\"LPT1:\"\r", "TRON\r", "TROFF\r", "KEY ", "SCREEN 0,0,0\r"], "screen": "Ok"}}
 {"exe": {"cursor": [0, 7], "screen": "READY\nOk\n10 goto 10\nrun\n\nBreak in 10\nOk"}, "id": 302, "ref": {"cursor": [0, 4], "screen": "READY\nOk\n10 goto 10\nrun"}}
 {"exe": {"cursor": [5, 2], "screen": "READY\nOk\nABC XEF"}, "id": 303, "ref": {"cursor": [5, 2], "screen": "READY\nOk\nABC XEF"}}
 {"exe": {"cursor": [4, 3], "screen": "READY\nOk\nabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefab\ncdeZ"}, "id": 304, "ref": {"cursor": [4, 3], "screen": "READY\nOk\nabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefab\ncdeZ"}}
@@ -231,8 +234,8 @@
 {"exe": {"RESULT.TXT": "A,B            0            C\nDONE"}, "id": 386, "ref": {"RESULT.TXT": "A,B            0            C\nDONE"}}
 {"exe": {"RESULT.TXT": " 3             2 \nDONE"}, "id": 387, "ref": {"RESULT.TXT": " 3             2 \nDONE"}}
 {"exe": {"RESULT.TXT": " 1.677722E+07 \n 16777217 \nDONE"}, "id": 388, "ref": {"RESULT.TXT": " 1.677722E+07 \n 16777217 \nDONE"}}
-{"exe": {"cursor": [3, 2], "screen": "READY\nOk\nABCDE"}, "id": 389, "ref": {"cursor": [1, 2], "screen": "READY\nOk\nA"}}
-{"exe": {"cursor": [6, 2], "screen": "READY\nOk\nABCDEQ"}, "id": 390, "ref": {"cursor": [1, 0], "screen": "Q"}}
+{"exe": {"cursor": [3, 2], "screen": "READY\nOk\nABC"}, "id": 389, "ref": {"cursor": [3, 2], "screen": "READY\nOk\nABC"}}
+{"exe": {"cursor": [1, 0], "screen": "Q"}, "id": 390, "ref": {"cursor": [1, 0], "screen": "Q"}}
 {"exe": {"cursor": [3, 3], "screen": "READY\nOk\nABC\nXYZ"}, "id": 391, "ref": {"cursor": [3, 3], "screen": "READY\nOk\nABC\nXYZ"}}
 {"exe": {"cursor": [8, 2], "screen": "READY\nOk\nABC\u0013 XYZ"}, "id": 392, "ref": {"cursor": [8, 2], "screen": "READY\nOk\nABC\u0013 XYZ"}}
 {"exe": {"LPT": "", "cursor": [3, 2], "screen": "READY\nOk\nABC"}, "id": 393, "ref": {"LPT": "", "cursor": [0, 2], "screen": "READY\nOk"}}

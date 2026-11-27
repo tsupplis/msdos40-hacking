@@ -204,6 +204,8 @@ RUNC:
 ;
 CLEARC:
 	MOV	TEMP,BX		;SAVE [H,L] IN TEMP
+	extrn ResetDosErrors:near
+        call ResetDosErrors
 	CALL	INITRP		;INIT TRAP TABLE
 	EXTRN	GRPRST:NEAR
 	CALL	GRPRST		;Reset graphics
