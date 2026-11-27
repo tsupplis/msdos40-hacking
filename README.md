@@ -106,9 +106,11 @@ The survey compares the commands shipped here with the command syntax and option
 | `copy` | No known gaps | `/Y` allows overwriting. `/-Y` prompts before overwriting. `COPYCMD` presets either switch. The last explicit overwrite switch wins. |  |
 | `debug` | No known gaps | Type `?` at the debugger prompt for a one-screen command reference, including the EMS commands in the shipped build. |  |
 | `del` (`erase`) | No known gaps | `/Q` skips the bulk-delete confirmation. An explicit `/P` still prompts for each file. |  |
-| `dir` | No known gaps | `/B` prints bare names, one per line. `/L` displays ASCII letters in filenames in lowercase. `/A[:]` filters by D, R, H, S, or A. `/O[:]` orders by N (name), E (extension), S (size), D (date), or G (directories first). `/2Y` restores two-digit year display. Prefix a letter with `-` to exclude an attribute or reverse a key. `/P` pages console output. `DIRCMD` presets switches, and `/-` disables a preset switch on the command line. `/S` lists matching entries in subdirectories. With `/B`, it prints full paths. |  |
+| `dir` | No known gaps | `/B` prints bare names, one per line. `/L` displays ASCII letters in filenames in lowercase. `/A[:]` filters by D, R, H, S, or A. `/O[:]` orders by N (name), E (extension), S (size), D (date), or G (directories first). `/2Y` restores two-digit year display. Prefix a letter with `-` to exclude an attribute or reverse a key. `/P` pages console output. `DIRCMD` presets switches, and `/-` disables a preset switch on the command line. `/W` displays dotted filenames and brackets directory names. `/S` lists matching entries in subdirectories. With `/B`, it prints full paths. |  |
 | `diskcopy` | No known gaps | `/V` asks the disk driver to verify each destination track after writing it. |  |
 | `emm386` | Missing command |  | The EMM386.EXE command interface for querying and changing expanded-memory operation. The full floppy ships EMM386.SYS. |
+| `fastopen` | No known gaps | Cache paths on up to 24 fixed-disk volumes (`C:` through `Z:`) across eight BIOS hard disks. |  |
+| `fc` | No known gaps | In text mode, `/Dcount` or `/number` sets the number of matching lines needed to resume comparison. `/N` shows line numbers. |  |
 | `fdisk` | No known gaps | Manage up to eight BIOS hard disks. `/STATUS` reports disk usage and DOS volumes. `/MBR` restores the master boot code on the first fixed disk. It preserves partition entries when the boot signature is present and installs an empty table when it is absent. |  |
 | `find` | No known gaps | `/I` ignores case when matching and preserves the spelling of displayed lines. |  |
 | `format` | Gaps identified | `/Q` quick format. | *won't implement — Recoverable formatting, `/U`, and `/F` for 2.88 MB media.* |
@@ -127,6 +129,7 @@ The survey compares the commands shipped here with the command syntax and option
 | `select` | No same-name DOS 5.0 utility | `SELECT MENU` installs DOS from the distribution or full floppy. Both install `HIMEM.SYS` and `UMBS.SYS` for optional configuration. The full floppy also installs `MBASIC.COM` and `VI.EXE`. |  |
 | `setver` | Missing command |  | Display or edit the per-program DOS version table. |
 | `sys` | Gaps identified |  | *won't implement — Transfer `COMMAND.COM`, recognize both IBM and Microsoft system-file names when replacing an installation, and allow the first three contiguous sectors of `IO.SYS` to reside later in the data area. The placement change also requires boot-loader support.* |
+| `tree` | No known gaps | `/L` displays directory names in lowercase. Combine it with `/A` for ASCII branches or `/F` to include files. |  |
 | `ver` | No known gaps | Displays the project version as `4.01N`. |  |
 | `vi` | Project extra | STevie-based screen editor on the full floppy. |  |
 | `xcopy` | No known gaps | `XCOPYCMD` presets XCOPY switches. Explicit switches take precedence. For example, `SET XCOPYCMD=/S /E` includes empty subdirectories and `XCOPY source dest /-S /-E` copies only the top level. |  |
@@ -134,9 +137,20 @@ The survey compares the commands shipped here with the command syntax and option
 | Status | Commands |
 |---|---|
 | *Won't implement* | *`cv`, `doskey`, `dosshell`, `edit`, `expand`, `mirror`, `msherc`, `qbasic`, `setup`, `undelete`, `unformat`*<br><br>*The full floppy provides `vi` for editing and `mbasic` for BASIC.* |
-| No known gaps | `append`, `assign`, `break`, `call`, `cd` (`chdir`), `chcp`, `chkdsk`, `cls`, `command.com`, `ctty`, `date`, `diskcomp`, `echo`, `edlin`, `exe2bin`, `exit`, `fastopen`, `fc`, `for`, `goto`, `graftabl`, `graphics`, `join`, `label`, `md` (`mkdir`), `mode`, `nlsfunc`, `path`, `pause`, `print`, `prompt`, `rd` (`rmdir`), `recover`, `rem`, `ren` (`rename`), `replace`, `set`, `share`, `shift`, `sort`, `subst`, `time`, `tree`, `truename`, `type`, `verify`, `vol` |
+| No known gaps | `append`, `assign`, `break`, `call`, `cd` (`chdir`), `chcp`, `chkdsk`, `cls`, `command.com`, `ctty`, `date`, `diskcomp`, `echo`, `edlin`, `exe2bin`, `exit`, `for`, `goto`, `graftabl`, `graphics`, `join`, `label`, `md` (`mkdir`), `mode`, `nlsfunc`, `path`, `pause`, `print`, `prompt`, `rd` (`rmdir`), `recover`, `rem`, `ren` (`rename`), `replace`, `set`, `share`, `shift`, `sort`, `subst`, `time`, `truename`, `type`, `verify`, `vol` |
 
 The batch comparison covers `CALL` with arguments, `ECHO` and leading `@`, `FOR %%v IN (...) DO`, `GOTO` and labels, `IF [NOT]` with ERRORLEVEL, string equality or EXIST, `PAUSE`, `REM`, `SHIFT`, positional arguments and environment expansion. All eight DOS 5.0 batch commands are present. A batch fixture booted on both systems produced identical output for CALL/SHIFT, FOR, IF, GOTO, environment expansion and a blank ECHO line. Individual command rows record project extensions.
+
+## Driver enhancements
+
+| Driver | Functionality |
+|---|---|
+| `ANSI.SYS` | Cursor positioning and position reports use the active video page. `HELP ANSI.SYS` documents cursor control, position reporting and erase sequences. |
+| `HIMEM.SYS` | Native XMS 2.0 on AT-compatible 286 and later systems. Manages A20, the HMA for `DOS=HIGH`, and extended-memory blocks. |
+| `RAMDRIVE.SYS` | `/E` creates the RAM disk in XMS. `/A` selects EMS. |
+| `SMARTDRV.SYS` | Uses XMS for the disk cache by default. `/A` selects EMS. |
+| `UMBS.SYS` | Supplies upper memory from configured ranges of mapped RAM. Load after `HIMEM.SYS` to use XMS and UMBs together. |
+| `VDISK.SYS` | `/E` creates the virtual disk in XMS. `/X` uses a DOS-reserved EMS page. |
 
 ## Configuration enhancements
 
