@@ -476,7 +476,8 @@ PlayLevel db 0
 PlayPending db 0
 
 ; DOS standard stream redirection state, shared by input, output and startup.
-PUBLIC FileOut,FileIn
+PUBLIC FileOut,FileIn,EchoCommands
+EchoCommands DB 0              ; Direct session with both DOS streams redirected.
 FileIn DB 0
 FileOut DB 0
 

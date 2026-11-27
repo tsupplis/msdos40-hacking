@@ -580,7 +580,7 @@ ErrorLine:
 	CALL	INPRT		;PRINT LINE NUMBER IN [H,L]
 ??L004:
 DSEG SEGMENT PUBLIC 'DATASG'
-        EXTRN FileOut:BYTE,FileIn:BYTE
+        EXTRN FileOut:BYTE,FileIn:BYTE,EchoCommands:BYTE
 DSEG ENDS
         cmp FileOut,0
         jne READY
@@ -3590,8 +3590,12 @@ PrintReady:
         cmp FileOut,0
         je ReadyText
         mov bx,offset StreamReady
+        cmp EchoCommands,0
+        je ReadyText
+        mov bx,offset EchoReady
 ReadyText: jmp STROUT
 StreamReady DB "Ok",13D,10D,0
+EchoReady DB "Ok",0ffh,13D,10D,0
 
 CSEG	ENDS
 	END

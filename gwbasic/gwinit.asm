@@ -470,13 +470,24 @@ SMLSTK:	MOV	AL,DL		;SUBTRACT STACK SIZE FROM TOP MEM
 
 	EXTRN	GETHED:NEAR	;OEM heading retrieval routine
 DSEG	SEGMENT PUBLIC 'DATASG'
-	EXTRN FileIn:BYTE,FileOut:BYTE
+	EXTRN FileIn:BYTE,FileOut:BYTE,EchoCommands:BYTE
 	EXTRN	KEYSW:WORD	;Function key on flag
 DSEG	ENDS
 	MOV	AL,LOW 255D	;if heading is printed, display Fn keys also
 	MOV	BYTE PTR KEYSW,AL
 	CMP	BYTE PTR FREFLG,0
 	JNE	QuietStart
+        mov bx,TEMP8
+        cmp byte ptr [bx],0
+        jne NormalHeading
+        cmp FileIn,0
+        je NormalHeading
+        cmp FileOut,1
+        jne NormalHeading
+        mov EchoCommands,1     ; /NOB has already branched to QuietStart.
+        mov byte ptr FREFLG,1
+        jmp short QuietStart
+NormalHeading:
 	CALL	GETHED		;Get OEM specific portion of the heading
 	JNZ	SHORT PRNTIT	;Always print the heading option
 	PUSH	BX		;Print heading if no program option

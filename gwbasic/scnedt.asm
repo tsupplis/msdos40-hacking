@@ -85,7 +85,7 @@ DSEG	SEGMENT PUBLIC 'DATASG'
 	EXTRN	SEMFLG:WORD	; Flag - zero indicates INPUT; statement(no crlf
 				;       at end of input line)
 	EXTRN	F_INST:WORD	; Flag - =^O377 indicates insert mode
-	EXTRN FileIn:BYTE,FileOut:BYTE
+	EXTRN FileIn:BYTE,FileOut:BYTE,EchoCommands:BYTE
         EXTRN	BUF:WORD	; Buffer where line of data is returned
 				;   NOTE: assumes non-blank at BUF-1
 	EXTRN	F_EDIT:WORD	; Flag - non-zero indicates INLIN active
@@ -159,12 +159,15 @@ INLIN0:
 ReadStreamLine:
         extrn StreamLine:near
         call StreamLine
-        cmp byte ptr F_EDPG,0   ; Direct commands have their own prompt loop.
+        cmp EchoCommands,0      ; Echo direct input only for ordinary redirected startup.
+        jne EchoStreamLine
+        cmp byte ptr F_EDPG,0
         jne StreamInputDone
         cmp FileIn,0            ; DOS console reads already echo typed input.
         je StreamInputDone
         cmp FileOut,1           ; Echo program input to redirected stdout.
         jne StreamInputDone
+EchoStreamLine:
         mov si,offset BUF
 StreamEcho:
         cmp si,di               ; DI points at the terminator written by StreamLine.
