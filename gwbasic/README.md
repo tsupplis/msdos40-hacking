@@ -31,12 +31,14 @@ The [numbered 3.23 equivalence inventory](EQUIVALENCE.md) records observed match
 | `/NOB[ANNER]` | Suppresses the heading, free-memory count and function-key labels. |
 | `/NOR[UN]` | Loads the named program and waits for an editor command. |
 | `/M:[bytes][,paragraphs]` | Limits the BASIC workspace in bytes and optionally the DOS allocation above the BASIC code in 16-byte paragraphs. For example, `/M:&HC000,4096` gives BASIC 49152 bytes in a 64 KiB data area. |
-| `/C:n` | Sets the serial buffer size. |
+| `/C:n` | Sets the receive buffer size per COM port (default 256 bytes). |
 | `/F:n`, `/S:n` | Accepts the MBASIC file-count and record-size options. This build allocates files and records dynamically. |
 
 Redirected startup preserves the existing display. For example, `GWBASIC DEMO.BAS >RESULT.TXT` sends ordinary `PRINT` output to the DOS handle. A short write raises BASIC error 61 (disk full), and other write failures raise error 57. Unhandled write errors go to standard error.
 
 Use `GWBASIC /NOB <COMMANDS.TXT` to execute commands from a DOS text file. `INPUT`, `LINE INPUT` and `INPUT$` also read redirected stdin. End of file at the command prompt returns to DOS. A program that requests more input at EOF can trap BASIC error 62.
+
+The IBM PC serial backend supports COM1 and COM2. It polls the UART during BASIC execution and serial reads. Long-running machine-code calls can therefore lose incoming bytes.
 
 An explicit `SCREEN` or `CLS` in the program still operates on the display.
 

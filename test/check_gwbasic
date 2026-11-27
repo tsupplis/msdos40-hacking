@@ -22,10 +22,11 @@ program = """10 OPEN "RESULT.TXT" FOR OUTPUT AS #1
 50 SOUND 440,1:PRINT #1,"SOUND"
 60 ON ERROR GOTO 100
 70 OPEN "COM1:9600,N,8,1" AS #2
-80 PRINT #1,"UNEXPECTED SERIAL OPEN":CLOSE:SYSTEM
+80 PRINT #1,"SERIAL OPEN":CLOSE:SYSTEM
 100 PRINT #1,ERR:CLOSE:SYSTEM
 """
-expected = b" 4 \r\n 3 \r\n 6 \r\nSOUND\r\n 57 \r\n"
+# PCE provides a UART. The emu2 smoke guest has no serial adapter.
+expected = b" 4 \r\n 3 \r\n 6 \r\nSOUND\r\n" + (b"SERIAL OPEN\r\n" if args.pce else b" 57 \r\n")
 
 
 def check_text(result, expected):
@@ -233,7 +234,7 @@ with tempfile.TemporaryDirectory() as tmp:
             if output != b"OK\r\n":
                 raise SystemExit(f"Numeric switches produced {output!r}")
     check_text(result, expected)
-    print("PASS program file, arithmetic, INSTR, FOR/NEXT, SOUND, COM error and SYSTEM")
+    print("PASS program file, arithmetic, INSTR, FOR/NEXT, SOUND, COM availability and SYSTEM")
 
     if not args.pce:
         # Script keystrokes through the BIOS. A file argument bypasses the editor.

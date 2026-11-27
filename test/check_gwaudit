@@ -193,9 +193,9 @@ share_cases = {249, 250}
 grouped = {
     5, 8, 27, 30, 31, 32, 33, 35, 45, 46, 51, 57, 58, 61, 63, 68, 69, 73, 105, 110,
     111, 119, 122, 123, 128, 133, 134, 135, 164, 166, 167, 168,
-    191, 192, 193, 194, 196, 198, 215, 216, 217, 218, 219, 220, 221, 223, 224, 225, 226, 227, 228, 230, 231, 232, 234, 241, 242, 243, 247, 251, 255,
+    191, 192, 193, 194, 196, 198, 215, 216, 217, 218, 219, 220, 221, 223, 224, 225, 226, 227, 228, 230, 231, 232, 233, 234, 241, 242, 243, 247, 251, 255,
     259, 263, 264, 265, 266, 267, 271, 272, 273, 274, 305, 307, 308, 328, 329, 343, 344, 348, 351, 354, 356, 362, 373, 374, 375, 376, 377, 379, 381,
-    385, 386, 387, 388, 399, 400, 401, 402,
+    385, 386, 387, 388, 395, 396, 397, 399, 400, 401, 402,
 }
 
 
@@ -241,13 +241,16 @@ def group_results(ids, drive, filename):
 
 # These cases need their own DOS command line, but share the program batch's boot.
 # A sentinel command makes a spurious return to the BASIC prompt observable.
-command_inputs = {40: "", 53: "", 70: "A,17", 81: "one, two", 102: "", 120: "203", 151: "CONT", 286: ""}
+command_inputs = {40: "", 53: "", 70: "A,17", 81: "one, two", 102: "", 120: "203", 151: "CONT", 277: direct[277], 286: ""}
 
 
 def prepare_commands(ids, folder, data):
     if 286 in ids:
         put(data, folder, "MTINY.BAS", '10 PRINT "OK":SYSTEM\n')
     for n in ids:
+        if n == 277:
+            put(data, folder, "C277.IN", command_inputs[n] + "\nSYSTEM\n")
+            continue
         lines = ['10 OPEN "REPORT.OUT" FOR OUTPUT AS #1']
         lines.extend(f"{100+i*10} {line}" for i, line in enumerate(cases[n].split("~")))
         lines.append('9800 PRINT #1,"DONE":CLOSE:SYSTEM')
@@ -257,9 +260,11 @@ def prepare_commands(ids, folder, data):
 
 def command_result(n, tag, work):
     drive = work / "b.img"
-    report = read(drive, f"{tag}{n}.DAT")
     capture = subprocess.check_output(["mtype", "-i", drive, f"::{tag}{n}.OUT"])
     capture = capture.decode("cp437").replace("\r\n", "\n")
+    if n == 277:
+        return {"CAPTURE.OUT": capture}
+    report = read(drive, f"{tag}{n}.DAT")
     if report is None:
         raise RuntimeError(f"{tag}{n}: missing BASIC report")
     if n == 53:
@@ -296,6 +301,9 @@ def pce_group(ids, folder, image, data):
     if 46 in ids and ids.index(46) + 1 < len(ids):
         starts.append(ids.index(46) + 1)
     commands = ["b:", "date 01-03-2001"]
+    serial = bool({233, 395, 396, 397}.intersection(ids))
+    if serial:
+        commands.append("ctty con")  # Release COM1 while BASIC configures the UART.
     if args.share:
         commands.append(r"A:\SHARE.EXE")
     for version in ("ref", "exe"):
@@ -304,6 +312,9 @@ def pce_group(ids, folder, image, data):
             commands.append(f"ren GROUP.OUT {version}.OUT")
         tag = version[0]
         for n in separate:
+            if n == 277:
+                commands.append(f"{version} <C277.IN >{tag}277.OUT")
+                continue
             option = " " + switches[n] if n in switches else ""
             commands += [f"{version} C{n}.BAS{option} <C{n}.IN >{tag}{n}.OUT",
                          f"ren REPORT.OUT {tag}{n}.DAT"]
@@ -314,6 +325,8 @@ def pce_group(ids, folder, image, data):
                 commands.append("del REPORT.OUT")
         if version == "ref":
             commands.append("if exist R.DAT del R.DAT")
+    if serial:
+        commands.append("ctty com1")
     batch.write_text("\n".join(commands) + "\n")
     work = folder / "pce"
     run = subprocess.run([root / "test/run_tests", batch], cwd=root, capture_output=True,

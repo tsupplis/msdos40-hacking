@@ -118,7 +118,7 @@
 {"exe": {"RESULT.TXT": " 11 \nDONE"}, "id": 230, "ref": {"RESULT.TXT": " 11 \nDONE"}}
 {"exe": {"RESULT.TXT": " 255 \n 0             1 \n 133           133 \nERROR 5  120 "}, "id": 231, "ref": {"RESULT.TXT": " 255 \n 0             1 \n 133           133 \nERROR 5  120 "}}
 {"exe": {"RESULT.TXT": " 1             0 \nERROR 5  110 "}, "id": 232, "ref": {"RESULT.TXT": " 1             0 \nERROR 5  110 "}}
-{"exe": {"RESULT.TXT": "ERROR 57  100 "}, "id": 233, "ref": {"RESULT.TXT": "DONE"}}
+{"exe": {"RESULT.TXT": " 0  256 \n 1  255  0 \n 1  255  255 \n 1  255  65 \nDONE"}, "id": 233, "ref": {"RESULT.TXT": " 0  256 \n 1  255  0 \n 1  255  255 \n 1  255  65 \nDONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 234, "ref": {"RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": " 1 \nDONE"}, "id": 235, "ref": {"RESULT.TXT": " 1 \nDONE"}}
 {"exe": {"LPT": "3131302052454d205052494e544d450d0a", "RESULT.TXT": ""}, "id": 236, "ref": {"LPT": "3131302052454d205052494e544d450d0a", "RESULT.TXT": ""}}
@@ -162,7 +162,7 @@
 {"exe": {"RESULT.TXT": " 0 \n 1 \nDONE"}, "id": 274, "ref": {"RESULT.TXT": " 0 \n 1 \nDONE"}}
 {"exe": {"CAPTURE.OUT": "RUNNING 4 ", "RESULT.TXT": "RUNNING\nDONE"}, "id": 275, "ref": {"CAPTURE.OUT": "RUNNING 4 ", "RESULT.TXT": "RUNNING\nDONE"}}
 {"exe": {"cursor": [0, 5], "screen": "READY\nOk\nprint 7\n 7\nOk"}, "id": 276, "ref": {"cursor": [0, 5], "screen": "READY\nOk\nprint 7\n 7\nOk"}}
-{"exe": {"CAPTURE.OUT": "Microsoft GWBASIC Version 4.01N\nCopyright 1977-1982 (C) by Microsoft         \nCopyright 2020-2022 (C) by D. Spinellis, S. Gros, T.K. Chia\nUnder MIT license\n62282 Bytes free\nOk\nSTDIN\nOk"}, "id": 277, "ref": {"CAPTURE.OUT": "Ok\u00a0\nPRINT \"STDIN\"\nSTDIN\nOk\u00a0\nSYSTEM"}}
+{"exe": {"CAPTURE.OUT": "Ok\u00a0\nPRINT \"STDIN\"\nSTDIN\nOk\u00a0\nSYSTEM\n"}, "id": 277, "ref": {"CAPTURE.OUT": "Ok\u00a0\nPRINT \"STDIN\"\nSTDIN\nOk\u00a0\nSYSTEM\n"}}
 {"exe": {"CAPTURE.OUT": "RUNNING 4 ", "RESULT.TXT": "RUNNING\nDONE"}, "id": 278, "ref": {"CAPTURE.OUT": "RUNNING 4 ", "RESULT.TXT": "RUNNING\nDONE"}}
 {"exe": {"CAPTURE.OUT": "PREFIX\nRUNNING 4 ", "RESULT.TXT": "RUNNING\nDONE"}, "id": 279, "ref": {"CAPTURE.OUT": "PREFIX\nRUNNING 4 ", "RESULT.TXT": "RUNNING\nDONE"}}
 {"exe": {"CAPTURE.OUT": "\nCopyright 1977-1982 (C) by Microsoft         \nCopyright 2020-2022 (C) by D. Spinellis, S. Gros, T.K. Chia\nUnder MIT license\n\nError detected in command line"}, "id": 280, "ref": {"CAPTURE.OUT": "RUNNING 4 ", "RESULT.TXT": "RUNNING\nDONE"}}
@@ -240,9 +240,9 @@
 {"exe": {"cursor": [8, 2], "screen": "READY\nOk\nABC\u0013 XYZ"}, "id": 392, "ref": {"cursor": [8, 2], "screen": "READY\nOk\nABC\u0013 XYZ"}}
 {"exe": {"LPT": "", "cursor": [3, 2], "screen": "READY\nOk\nABC"}, "id": 393, "ref": {"LPT": "", "cursor": [0, 2], "screen": "READY\nOk"}}
 {"exe": {"cursor": [0, 2], "screen": "READY\nOk"}, "id": 394, "ref": {"cursor": [0, 2], "screen": "READY\nOk"}}
-{"exe": {"RESULT.TXT": "ERROR 57  100 "}, "id": 395, "ref": {"RESULT.TXT": "DONE"}}
-{"exe": {"RESULT.TXT": "ERROR 57  100 "}, "id": 396, "ref": {"RESULT.TXT": "DONE"}}
-{"exe": {"RESULT.TXT": "ERROR 64  100 "}, "id": 397, "ref": {"RESULT.TXT": "DONE"}}
+{"exe": {"RESULT.TXT": " 30  48  9 \n 0 \nERROR 64  130 "}, "id": 395, "ref": {"RESULT.TXT": " 30  48  9 \n 0 \nERROR 64  130 "}}
+{"exe": {"RESULT.TXT": " 9 \nZ\n 24  160 \nDONE"}, "id": 396, "ref": {"RESULT.TXT": " 9 \nZ\n 24  160 \nDONE"}}
+{"exe": {"RESULT.TXT": " 81  13  10 \nDONE"}, "id": 397, "ref": {"RESULT.TXT": " 81  13  10 \nDONE"}}
 {"exe": {"RESULT.TXT": "ERROR 57  100 "}, "id": 398, "ref": {"RESULT.TXT": "WRITE\nDONE"}}
 {"exe": {"RESULT.TXT": "RETURN\nDONE"}, "id": 399, "ref": {"RESULT.TXT": "RETURN\nDONE"}}
 {"exe": {"RESULT.TXT": "VALID\nERROR 5  110 "}, "id": 400, "ref": {"RESULT.TXT": "VALID\nERROR 5  110 "}}

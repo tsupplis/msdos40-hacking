@@ -4,7 +4,7 @@ Target: the project’s 3.23 DOS binary and 4.01N under identical inputs. The al
 
 Sources: [Microsoft GW-BASIC User’s Reference and Guide, July 1987](https://bitsavers.computerhistory.org/pdf/microsoft/msdos_3.3/MS-DOS_GW-BASIC_198707.pdf), [1989 guide and command-line reference](https://bitsavers.trailing-edge.com/pdf/microsoft/gw-basic/Microsoft_GW-BASIC_Users_Guide_and_Reference_1989.pdf). Supplementary syntax must be verified against the project’s executable.
 
-399 work items: 378 matched, 12 different, 6 inconclusive, 3 intentional.
+399 work items: 383 matched, 7 different, 6 inconclusive, 3 intentional.
 
 ## Evidence
 
@@ -21,13 +21,13 @@ Matched applies to the input, configuration and observations listed in the row. 
 
 ## Running the paired regression
 
-With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 106 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Set `IMG` to pin all comparisons to a private DOS boot image. Each interpreter runs the BASIC fixtures in succession and writes its observations on the scratch floppy. Root checks also run `test/check_gwaudit --editor --check`: eight interactive comparisons share a second PCE boot. They record VGA text cells and the BIOS cursor at the live Ok prompt. Case 301 also records all ten macro expansions through INKEY$.
+With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 111 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Set `IMG` to pin all comparisons to a private DOS boot image. Each interpreter runs the BASIC fixtures in succession and writes its observations on the scratch floppy. Root checks also run `test/check_gwaudit --editor --check`: eight interactive comparisons share a second PCE boot. They record VGA text cells and the BIOS cursor at the live Ok prompt. Case 301 also records all ten macro expansions through INKEY$.
 
 Root checks repeat case 110 and run two locking fixtures together with DOS SHARE installed (`test/check_gwaudit --share --check`). Cases 374–377 exercise whole-file and range operations with SHARE absent. Ordinary disk I/O uses DOS handles in both configurations. The separate 4.01N regression `test/check_gwbasic --pce` checks handle exhaustion (BASIC error 67, DOS error 4), protection against deleting an open file, and byte-exact recovery after a disk-full write and RESUME.
 
 PCE is the default for the paired audit, including timer and PLAY handler delivery and single cases such as `test/check_gwaudit --check 216`. For program probes, `PCE_VIDEO=ega` or `PCE_VIDEO=vga` selects the adapter. Interactive editor probes use VGA. The remaining historical probe runner requires explicit `--qemu`; it covers additional observations such as BIOS keyboard input and cursor position.
 
-For the selected IDs, the gate checks each case marked **Matched** against both the live 3.23 run and its recorded output. Incomplete observations fail in every category. The three default PCE batches rerun 116 of the 250 recorded case IDs. The other 134 retain earlier observations. Across all 250 records the matrix lists 233 matched, 11 different and 6 inconclusive cases. The 12 Different rows count classified probes. Additional differences described within rows include the mode change after case 216 and extended-error state after case 46. A known difference that now matches is reported for review. After verifying a fix, update that case’s JSONL record, matrix status and counts together. Root checks also run `test/check_gwega` on both binaries with four EGA profiles (64K/256K, color/monochrome) and VGA. This requires a PCE build with configurable EGA memory. The remaining inventory rows use the other evidence listed above.
+For the selected IDs, the gate checks each case marked **Matched** against both the live 3.23 run and its recorded output. Incomplete observations fail in every category. The three default PCE batches rerun 121 of the 250 recorded case IDs. The other 129 retain earlier observations. Across all 250 records the matrix lists 238 matched, 6 different and 6 inconclusive cases. The 7 Different rows count classified probes. Additional differences described within rows include the mode change after case 216 and extended-error state after case 46. A known difference that now matches is reported for review. After verifying a fix, update that case’s JSONL record, matrix status and counts together. Root checks also run `test/check_gwega` on both binaries with four EGA profiles (64K/256K, color/monochrome) and VGA. This requires a PCE build with configurable EGA memory. The remaining inventory rows use the other evidence listed above.
 
 Case 46 exercises both a write-protected floppy and a DOS character driver that rejects writes. Under RESUME NEXT both interpreters report out of paper at PRINT and again at explicit CLOSE, with matching ERL, ERR, ERDEV, ERDEV$ and EXTERR(0). When the active handler issues an unqualified CLOSE, both invoke it again with ERL = 65535 and error 27. The paired regression checks both forms.
 
@@ -54,9 +54,7 @@ Each row below groups failed observations for investigation. The count measures 
 | Work area | Rows | Inventory IDs |
 |---|---:|---|
 | DOS environment and command execution | 3 | 40, 145, 146 |
-| Command streams, prompts and diagnostics | 1 | 277 |
 | Keyboard, editor and function keys | 1 | 393 |
-| Serial I/O | 4 | 233, 395, 396, 397 |
 | Startup switches | 3 | 280, 281, 286 |
 
 ## Numbered matrix
@@ -293,7 +291,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 230 | `POKE` | Devices | Matched | Q, case 230 |
 | 231 | `IOCTL` | Devices | Matched | PCE, case 231. Sends FFh to the control device and reads it back. A regular file raises error 5. |
 | 232 | `IOCTL$` | Devices | Matched | PCE, case 232. Reads a one-byte control reply containing NUL. A regular file raises error 5. |
-| 233 | `OPEN COM` | Devices | Different | Q, case 233; 3.23 DONE, 4.01N ERROR 57  100 |
+| 233 | `OPEN COM` | Devices | Matched | PCE, case 233. COM1 at 9600 N81. UART loopback returns 00h, FFh and 41h, with matching receive counts and free space. |
 | 234 | `OPEN device` | Devices | Matched | Q, case 234; statement accepted and returned |
 | 235 | `LPOS` | Devices | Matched | Q, case 235 |
 | 236 | `LLIST` | Devices | Matched | Q, case 236 |
@@ -337,7 +335,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 274 | `TIMER STOP` | Event source | Matched | PCE, case 274, STOP defers one handler until ON |
 | 275 | `Program filename` | DOS startup | Matched | Q, case 275 |
 | 276 | `Interactive start` | DOS startup | Matched | Q, case 276 |
-| 277 | `stdin redirection` | DOS startup | Different | Q, case 277; output differs |
+| 277 | `stdin redirection` | DOS startup | Matched | PCE, case 277. With stdin and stdout redirected at the direct prompt, both omit the banner, echo the commands and emit the same Ok prompts including byte FFh. |
 | 278 | `stdout redirection` | DOS startup | Matched | Q, case 278 |
 | 279 | `stdout append` | DOS startup | Matched | Q, case 279 |
 | 280 | `/D` | DOS startup | Different | Q, case 280; 3.23 RUNNING / DONE, 4.01N see transcript |
@@ -454,10 +452,10 @@ Each row below groups failed observations for investigation. The count measures 
 | 392 | `Pause and resume` | Screen editor | Inconclusive | Ctrl-S entered at the Ok prompt produced the same cells. This does not demonstrate suspension of a running program. |
 | 393 | `Printer echo and print screen` | Screen editor | Different | Q, case 393. After Ctrl-Print and ABC, the screen and cursor differed. Both printer captures were empty. Printer delivery remains unverified. |
 | 394 | `Bell` | Screen editor | Inconclusive | Q, case 394; speaker output uncaptured |
-| 395 | `COM port, baud, parity, data and stop bits` | RS-232 | Different | Q, case 395; 3.23 DONE, 4.01N ERROR 57  100 |
-| 396 | `COM RS, CS, DS and CD options` | RS-232 | Different | Q, case 396; 3.23 DONE, 4.01N ERROR 57  100 |
-| 397 | `COM LF and PE options` | RS-232 | Different | Q, case 397; 3.23 DONE, 4.01N ERROR 64  100 |
-| 398 | `Serial receive overflow and timeout` | RS-232 | Inconclusive | Q, case 398; serial open differs before overflow or timeout |
+| 395 | `COM port, baud, parity, data and stop bits` | RS-232 | Matched | PCE, case 395. COM2 at 2400 E72. Both set divisor 48 and line control 1Eh, drop modem control on CLOSE and reject baud rate 1234 with error 64. |
+| 396 | `COM RS, CS, DS and CD options` | RS-232 | Matched | PCE, case 396. RS suppresses RTS. CS0, DS0 and CD0 allow loopback with all three signals low. With CS100, a write with CTS held low reports error 24. |
+| 397 | `COM LF and PE options` | RS-232 | Matched | PCE, case 397. LF,PE opens successfully. UART loopback returns Q, CR and LF from PRINT. A physical parity error has yet to be injected. |
+| 398 | `Serial receive overflow and timeout` | RS-232 | Inconclusive | Historical case 398 did not induce a receive overflow. Case 396 now verifies a transmit timeout with CTS held low. |
 | 399 | `CALLS` | Reference dictionary | Matched | Q, case 399 |
 | 400 | `LCOPY` | Reference dictionary | Matched | PCE, case 400, optional byte accepted and negative argument gives error 5 |
 | 401 | `MOTOR` | Reference dictionary | Matched | PCE, case 401, toggle and explicit byte accepted and 256 gives error 5. Physical motor untested |
