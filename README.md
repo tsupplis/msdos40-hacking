@@ -15,7 +15,7 @@ _The remaining gaps are in the work:_
 - _completion of emm386 functionalities in line with DOS 5.0_
 - _setver_
 - _more to UMB and HMA_
-- _fully fledged text editor (currently shipped with [vi](https://github.com/tsupplis/cpm86-vi) as a reasonable place holder)_
+- _undo, Save As and search-and-replace for EDIT_
 
 We are progressing along the following roles:
 
@@ -24,7 +24,7 @@ We are progressing along the following roles:
 | **Stability** | Apply the documented Microsoft and IBM fixes and regression-test the rebuilt system. Progressive focused review of the whole code base |
 | **Memory** | Surpass DOS 3.3 and approach DOS 5.0, targeting at least 610 Kbytes free. UMB allocation and XMS reporting are available. Strong XMS, EMS, HMA, UMB implementations, Selected kernel services can run in the HMA or UMB and Main DOS to UMB |
 | **Storage** | Support for up to 8 physical disks, Integration of all patches, reliability testing |
-| **Usability** | Stay MS-DOS, smooth the angles. Command-line editing and recall, clearer memory diagnostics, GW-BASIC (`gwbasic.exe`) and a screen editor (`vi.exe`) on the full floppy. |
+| **Usability** | Stay MS-DOS, smooth the angles. Command-line editing and recall, clearer memory diagnostics, the EDIT screen editor and GW-BASIC on the full floppy. |
 | **Compatibility** | Match closely or exceed DOS 5.0 commands and functionality. For example some 6.X DOS command have been reimplemented and Y2K has a stronger enforcement (4 digit dates are mandatory) |
 
 <p align="center">
@@ -137,17 +137,16 @@ The survey compares the commands shipped here with the command syntax and option
 | `more [filename]` | No known gaps | Page a file by name. |  |
 | `printfix` | Missing command |  | Suppress printer status checks for printers that cannot answer them. |
 | `restore` | No known gaps | `/D` lists matching backup paths and preserves destination files. |  |
-| `select` | No same-name DOS 5.0 utility | `SELECT MENU` installs DOS from the distribution or full floppy. Both install `HIMEM.SYS` and `UMBS.SYS` for optional configuration. The full floppy also installs `GWBASIC.EXE` and `VI.EXE`. |  |
+| `select` | No same-name DOS 5.0 utility | `SELECT MENU` installs DOS from the distribution or full floppy. Both install `HIMEM.SYS` and `UMBS.SYS` for optional configuration. The full floppy also installs `GWBASIC.EXE`. |  |
 | `setver` | Missing command |  | Display or edit the per-program DOS version table. |
 | `sys` | Gaps identified |  | *won't implement — Transfer `COMMAND.COM`, recognize both IBM and Microsoft system-file names when replacing an installation, and allow the first three contiguous sectors of `IO.SYS` to reside later in the data area. The placement change also requires boot-loader support.* |
 | `tree` | No known gaps | `/L` displays directory names in lowercase. Combine it with `/A` for ASCII branches or `/F` to include files. |  |
 | `ver` | No known gaps | Displays the project version as `4.01N`. |  |
-| `vi` | Project extra | STevie-based screen editor on the full floppy. |  |
 | `xcopy` | No known gaps | `XCOPYCMD` presets XCOPY switches. Explicit switches take precedence. For example, `SET XCOPYCMD=/S /E` includes empty subdirectories and `XCOPY source dest /-S /-E` copies only the top level. |  |
 
 | Status | Commands |
 |---|---|
-| *Won't implement* | *`cv`, `doskey`, `dosshell`, `edit`, `expand`, `mirror`, `msherc`, `qbasic`, `setup`, `undelete`, `unformat`*<br><br>*The full floppy provides `vi` for editing and `gwbasic` for BASIC.* |
+| *Won't implement* | *`cv`, `doskey`, `dosshell`, `expand`, `mirror`, `msherc`, `qbasic`, `setup`, `undelete`, `unformat`* |
 | No known gaps | `append`, `assign`, `break`, `call`, `cd` (`chdir`), `chcp`, `chkdsk`, `cls`, `command.com`, `ctty`, `date`, `diskcomp`, `echo`, `edlin`, `exe2bin`, `exit`, `for`, `goto`, `graftabl`, `graphics`, `join`, `label`, `md` (`mkdir`), `mode`, `nlsfunc`, `path`, `pause`, `print`, `prompt`, `rd` (`rmdir`), `recover`, `rem`, `ren` (`rename`), `replace`, `set`, `share`, `shift`, `sort`, `subst`, `time`, `truename`, `type`, `verify`, `vol` |
 
 The batch comparison covers `CALL` with arguments, `ECHO` and leading `@`, `FOR %%v IN (...) DO`, `GOTO` and labels, `IF [NOT]` with ERRORLEVEL, string equality or EXIST, `PAUSE`, `REM`, `SHIFT`, positional arguments and environment expansion. All eight DOS 5.0 batch commands are present. A batch fixture booted on both systems produced identical output for CALL/SHIFT, FOR, IF, GOTO, environment expansion and a blank ECHO line. Individual command rows record project extensions.
@@ -278,7 +277,6 @@ the UMA, `UMBS.SYS` can supply unused mapped RAM for `DOS=UMB` and
 | [cpm86-hacking](https://github.com/tsupplis/cpm86-hacking)   | CP/M-86 miscellaneous tools and PCE emulator helpers |
 | [cpm86-cmdtools](https://github.com/tsupplis/cpm86-cmdtools) | CP/M-86 `.cmd` file manipulation tools |
 | [cpm86-ports](https://github.com/tsupplis/cpm86-ports)       | CP/M-86 application ports in C and assembler |
-| [cpm86-vi](https://github.com/tsupplis/cpm86-vi)             | STevie vi port for CP/M-86 and PC-DOS |
 | [cpm86-msbasic](https://github.com/tsupplis/cpm86-msbasic)   | A recreation of msbasic-86 for CP/M-86 and PC-DOS 1.1 from gwbasic sources |
 | [cpm86-menu](https://github.com/tsupplis/cpm86-menu)   | A submit replacement and a menu system for submit orchestration for CP/M-86 1.1 |
 | [cpm86-make](https://github.com/tsupplis/cpm86-make)   | A simple submit based make tool for CP/M-86 |
@@ -290,3 +288,8 @@ the UMA, `UMBS.SYS` can supply unused mapped RAM for `DOS=UMB` and
 ## License
 
 MIT unless a subdirectory specifies otherwise. [license.md](LICENSE.md)
+
+## Credits
+
+- **EDIT** derives from Kilo, written by Salvatore Sanfilippo (antirez) in 2016, via its CP/M-86 port. Kilo is distributed under the BSD 2-Clause license. [Kilo source](https://github.com/antirez/kilo) · [License](commands/edit/LICENSE.md)
+- **GW-BASIC** uses Microsoft's 1983 interpreter and the PC reconstruction by Diomidis Spinellis, Stjepan Gros and TK Chia, distributed under the MIT license. [Microsoft source](https://github.com/microsoft/GW-BASIC) · [Spinellis reconstruction](https://github.com/dspinellis/GW-BASIC) · [TK Chia fork](https://codeberg.org/tkchia/GW-BASIC) · [License](gwbasic/LICENSE.md)

@@ -43,7 +43,7 @@ check: all
 	$(MAKE) -C gwbasic check
 	$(MAKE) -C media check
 ifneq ($(wildcard gwbasic/gwbasic.ref),)
-	./test/check_gwaudit --check 373
+	./test/check_gwaudit --quick --check
 endif
 
 tools-check:

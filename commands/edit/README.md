@@ -47,13 +47,6 @@ of a 144,025-byte file under DOS 4.01N in a 640 KiB PCE machine.
   input, screen output and the saved file on a scratch FAT floppy.
 - The base, distribution and full images include EDIT.EXE and EDIT.LIC.
 
-## Replacement milestones
+## Planned editing features
 
-1. Ship named-file editing alongside VI. Use the port for batch files,
-   CONFIG.SYS and source files.
-2. For everyday DOS EDIT use, add untitled startup, Open and Save As, undo,
-   and find-and-replace. Exercise each with
-   the keyboard in PCE, including cancellation and low-memory paths.
-3. Revisit the default editor and the VI help entry after those workflows
-   pass. Modal commands, operators and repeat are a separate compatibility
-   target if vi keystrokes become a requirement.
+Undo, untitled startup, Open, Save As and find-and-replace.
