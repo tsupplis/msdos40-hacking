@@ -951,7 +951,6 @@ NOTCHN:
 NORUNC:	PUSH	BX
 	PUSH	CX
 	PUSH	DX
-	EXTRN	REDDY:NEAR,STROUT:NEAR
 	EXTRN PrintReady:NEAR
         CALL PrintReady
 	POP	DX
@@ -2125,13 +2124,17 @@ FINPRT:
 	EXTRN	SETCSR:NEAR
 DSEG	SEGMENT PUBLIC 'DATASG'
 	EXTRN	CSRY:WORD,CSRX:WORD,CSRTYP:WORD
-DSEG	ENDS
-	PUSH	DX
+        EXTRN QuietVideo:BYTE
+DSEG    ENDS
+        cmp QuietVideo,0
+        jne FinishFiles
+        PUSH    DX
 	MOV	DL,BYTE PTR CSRY
 	MOV	DH,BYTE PTR CSRX	;DX=current posn
 	MOV	BYTE PTR CSRTYP,LOW 3D	;Set to user cursor
 	CALL	SETCSR		;Display the cursor
 	POP	DX
+FinishFiles:
 	MOV	SI,WORD PTR FREFDB
 	OR	SI,SI
 	JZ	NFRFDB		;branch if no FDB needs to be released

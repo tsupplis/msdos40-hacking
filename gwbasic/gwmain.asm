@@ -603,15 +603,6 @@ READY:
 	JNZ	SHORT ??L005
 	CALL	ERREDT		;"EDIT" THE BAD LINE
 ??L005:
-        jmp short MAIN
-        PUBLIC PrintReady
-PrintReady:
-        mov bx,offset REDDY
-        cmp FileOut,0
-        je ReadyText
-        mov bx,offset StreamReady
-ReadyText: jmp STROUT
-StreamReady DB "Ok",13D,10D,0
 PUBLIC	MAIN
 MAIN:
 	MOV	BX,65535
@@ -3395,8 +3386,16 @@ STRPN1: MOV	AL,BYTE PTR [BX]	;GET BYTE FROM MESSAGE
 RANDOM: JZ	SHORT INPRG	;IF NO ARGUMENT ASK FROM TERMINAL
 	CALL	FRMEVL		;FETCH THE FORMULA ARGUMENT
 	PUSH	BX
-	CALL	FRCINT		;ALLOW NORMAL INTEGERS
-	JMP	SHORT STRNDS	;STORE THE NEW RANDOM SEED
+        cmp byte ptr VALTYP,2
+        je IntegerSeed
+        EXTRN $MOVRF:NEAR
+        call FRCSNG
+        call $MOVRF             ; Fold the MBF mantissa and exponent as in 3.23.
+        xor bx,dx
+        jmp short STRNDS
+IntegerSeed:
+        CALL    FRCINT
+        JMP     SHORT STRNDS	;STORE THE NEW RANDOM SEED
 INPRG:	PUSH	BX
 INPRAG:
 	MOV	BX,OFFSET RANMES	;ASK FOR SOME RANDOM INPUT
@@ -3574,5 +3573,14 @@ CLROVC: LAHF
 ;
 	DO_EXT
 ;
+        PUBLIC PrintReady
+PrintReady:
+        mov bx,offset REDDY
+        cmp FileOut,0
+        je ReadyText
+        mov bx,offset StreamReady
+ReadyText: jmp STROUT
+StreamReady DB "Ok",13D,10D,0
+
 CSEG	ENDS
 	END

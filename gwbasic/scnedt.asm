@@ -156,8 +156,10 @@ INLIN0:
 	SBB	AL,AL		; If INPUT statement AL=0, else AL=-1
 	MOV	BYTE PTR F_EDPG,AL	; Save flag
         cmp FileIn,0
+        jne ReadStreamLine
+        cmp FileOut,0
         je ScreenInput
-        jmp StreamLine
+ReadStreamLine: jmp StreamLine
 ScreenInput:
         or al,al                ; Restore the input mode flags for SCNMRK below.
 

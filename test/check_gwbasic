@@ -35,11 +35,35 @@ def check_text(result, expected):
         raise SystemExit(f"Expected {expected!r} and DOS EOF, got {result!r}")
 
 
+# The same fixtures and expected reports are used for the build and the DOS
+# reference. Compare through the DOS text EOF, including spaces from PRINT USING.
+def check_shared(read_file):
+    check_text(read_file("lang.out"),
+               b"arrays and control flow\r\nmath and conversions\r\n"
+               b"strings and garbage collection\r\n  3.14\r\n -5.0\r\nh\r\n"
+               b"sequential files\r\nrandom records\r\nresume and error line\r\nCOMPLETE\r\n")
+    check_text(read_file("prog.out"),
+               b"renumbered branch\r\nmerged line\r\nchain 5 hi 0 \r\nCOMPLETE\r\n")
+    listing = read_file("edit.bas").split(b"\x1a", 1)[0].splitlines()
+    if len(listing) != 2 or listing[0] != b"100 GOTO 130" or not listing[1].startswith(b"130 OPEN "):
+        raise SystemExit(f"Unexpected RENUM/DELETE listing {listing!r}")
+    if read_file("tok.bas")[:1] != b"\xff":
+        raise SystemExit("SAVE did not produce a tokenized DOS BASIC program")
+
+
+def dos_text(path):
+    return path.read_text(encoding="ascii").replace("\n", "\r\n").encode("ascii")
+
+
 with tempfile.TemporaryDirectory() as tmp:
     folder = Path(tmp)
     bas = folder / "smoke.bas"
     bas.write_bytes(program.replace("\n", "\r\n").encode("ascii") + b"\x1a")
     binary = root / "gwbasic/gwbasic.exe"
+    lang = folder / "gwlang.bas"
+    lang.write_bytes(dos_text(root / "test/gwlang.bas") + b"\x1a")
+    prog = folder / "gwprog.txt"
+    prog.write_bytes(dos_text(root / "test/gwprog.txt"))
     if args.pce:
         image = folder / "source.img"
         shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
@@ -52,22 +76,57 @@ with tempfile.TemporaryDirectory() as tmp:
         # Seed an off-cursor text cell. A BIOS mode reset or CLS erases it.
         seed = folder / "seed.asm"
         seed.write_text("bits 16\norg 100h\nmov ax,0b800h\nmov es,ax\n"
-                        "mov byte [es:1600],81\nret\n")
+                        "cmp byte [80h],0\njne verify\nmov byte [es:3840],81\nret\n"
+                        "verify: cmp byte [es:3840],81\nmov ax,4c00h\nje exit\ninc ax\n"
+                        "exit: int 21h\n")
         subprocess.run(["nasm", "-f", "bin", seed, "-o", folder / "seed.com"], check=True)
         probe = folder / "probe.bas"
-        probe.write_bytes(b'10 DEF SEG=&HB800:PRINT PEEK(1600):SYSTEM\r\n\x1a')
+        probe.write_bytes(b'10 DEF SEG=&HB800:PRINT PEEK(3840):SYSTEM\r\n\x1a')
         input_probe = folder / "input.bas"
         input_probe.write_bytes(b'10 DEF SEG=&HB800:OPEN "INPUT.TXT" FOR OUTPUT AS #1\r\n'
-                                b'20 PRINT #1,PEEK(1600):CLOSE:SYSTEM\r\n\x1a')
-        for file in (folder / "seed.com", probe, input_probe):
+                                b'20 PRINT #1,PEEK(3840):CLOSE:SYSTEM\r\n\x1a')
+        commands = folder / "lines.txt"
+        commands.write_bytes(b'10 LINE INPUT A$\r\n20 PRINT A$;INPUT$(3)\nRUN\r'
+                             b'READ-\r\nXYZ\r\nPRINT "LAST"')
+        # Exhaust only the disposable A: image. Report the BASIC error on B:.
+        full = folder / "full.bas"
+        full.write_bytes(b'10 OPEN "FULL.TXT" FOR OUTPUT AS #1\r\n'
+                         b'20 ON ERROR GOTO 50\r\n30 PRINT "LOST":PRINT #1,"MISSED":SYSTEM\r\n'
+                         b'50 PRINT #1,ERR:CLOSE:SYSTEM\r\n\x1a')
+        filler = folder / "fill.asm"
+        filler.write_text("bits 16\norg 100h\nmov ah,3ch\nxor cx,cx\nmov dx,name\n"
+                          "int 21h\njc done\nmov bx,ax\nmov dx,buffer\n"
+                          "next: mov ah,40h\nmov cx,512\nint 21h\njc done\n"
+                          "cmp ax,cx\nje next\ndone: ret\nname db 'A:FILL.TMP',0\n"
+                          "section .bss\nbuffer resb 512\n")
+        subprocess.run(["nasm", "-f", "bin", filler, "-o", folder / "fill.com"], check=True)
+        for file in (folder / "seed.com", probe, input_probe, commands, full, folder / "fill.com", lang, prog):
             subprocess.run(["mcopy", "-o", "-i", image, file, "::"], check=True)
         batch = folder / "check.bat"
         batch.write_text("b:\na:gwbasic a:smoke.bas\na:gwbasic a:gwvideo.bas\n"
+                         "a:gwbasic a:gwlang.bas\na:gwbasic /nob <a:gwprog.txt >nul\n"
                          "ctty con\na:seed\na:gwbasic /nob a:probe.bas >stream.txt\n"
-                         "a:seed\na:gwbasic a:input.bas <a:cr.txt\nctty com1\n")
+                         "a:seed check\nif errorlevel 1 goto screenfail\n"
+                         "a:seed\na:gwbasic a:input.bas <a:cr.txt\na:seed check\n"
+                         "if errorlevel 1 goto screenfail\n"
+                         "a:gwbasic /nob <a:lines.txt >lines.out\n"
+                         "a:fill\na:gwbasic a:full.bas >a:empty.txt\nctty com1\n"
+                         "a:gwbasic a:probe.bas <a:cr.txt >a:empty.txt\ngoto checked\n"
+                         ":screenfail\nctty com1\necho FAILED screen preservation\n:checked\n")
         work = folder / "guest"
         subprocess.run([root / "test/run_tests", batch], cwd=root, check=True,
                        env=dict(os.environ, IMG=str(image), PCE_TEST_WORK=str(work)))
+        check_shared(lambda name: subprocess.check_output(["mtype", "-i", work / "b.img", "::" + name]))
+        print("PASS shared MBASIC language, file and program-management cases under DOS")
+        lines = subprocess.check_output(["mtype", "-i", work / "b.img", "::LINES.OUT"])
+        if lines.splitlines() != [b"Ok", b"READ-XYZ", b"Ok", b"LAST", b"Ok"]:
+            raise SystemExit(f"Unexpected command stream output {lines!r}")
+        disk_error = subprocess.check_output(["mtype", "-i", work / "b.img", "::FULL.TXT"])
+        check_text(disk_error, b" 61 \r\n")
+        diagnostics = (work / "ser1.out").read_bytes().lower()
+        if b"disk full in 10" not in diagnostics:
+            raise SystemExit(f"Missing disk-full diagnostic on stderr: {diagnostics!r}")
+        print("PASS redirected commands, LINE INPUT, INPUT$, EOF and disk-full error 61")
         stream = subprocess.check_output(["mtype", "-i", work / "b.img", "::STREAM.TXT"])
         if stream != b" 81 \r\n":
             raise SystemExit(f"Redirected screen marker or output changed: {stream!r}")
@@ -78,10 +137,13 @@ with tempfile.TemporaryDirectory() as tmp:
         values, eof, _ = video.partition(b"\x1a")
         if not eof or [row.split() for row in values.splitlines()] != [
             [b"1", b"2", b"0"], [b"1", b"1", b"0"], [b"2", b"1", b"0"],
-            [b"1", b"1", b"0"], [b"14", b"0"], [b"13", b"13", b"0"], [b"11"], [b"12", b"12", b"9", b"0"], [b"3"],
+            [b"1", b"1", b"0"], [b"14", b"0"], [b"13", b"13", b"0"], [b"11"], [b"12", b"12", b"9", b"0"], *[
+                row for mode, color in ((b"8", b"14"), (b"9", b"14"), (b"10", b"3"))
+                for row in ([mode, color, b"0", b"0"], [b"2", b"1", b"0"], [color], [b"1"])
+            ], [b"3"],
         ]:
             raise SystemExit(f"Unexpected graphics pixel results {video!r}")
-        print("PASS SCREEN 1, 2 and 7 corner pixels, filled rectangles, COLOR, PAINT and return to text")
+        print("PASS CGA and EGA corner pixels and independent pages, filled rectangles, COLOR, PAINT and return to text")
         result = subprocess.check_output(["mtype", "-i", work / "b.img", "::RESULT.TXT"])
     else:
         shutil.copyfile(binary, folder / "gwbasic.exe")
@@ -89,8 +151,51 @@ with tempfile.TemporaryDirectory() as tmp:
         emu = os.environ.get("EMU2", "emu2")
         subprocess.run([emu, "gwbasic.exe", "smoke.bas"], cwd=folder, env=env,
                        check=True, timeout=10)
+        reference = binary.with_suffix(".ref")
+        interpreters = [binary]
+        if reference.is_file():
+            interpreters.append(reference)
+        else:
+            print("SKIP optional DOS reference comparison (gwbasic.ref absent)")
+        for interpreter in interpreters:
+            guest = folder / interpreter.suffix[1:]
+            guest.mkdir()
+            shutil.copyfile(interpreter, guest / "basic.exe")
+            shutil.copyfile(lang, guest / lang.name)
+            guest_env = dict(env, EMU2_DRIVE_C=str(guest))
+            for argv, stdin in [([lang.name], b""), ([], prog.read_bytes())]:
+                subprocess.run([emu, "basic.exe", *argv], cwd=guest, env=guest_env,
+                               input=stdin, stdout=subprocess.DEVNULL, check=True, timeout=15)
+            check_shared(lambda name: (guest / name).read_bytes())
+            print(f"PASS shared MBASIC cases with {interpreter.name}")
         result = (folder / "result.txt").read_bytes()
+        # A final line without CR/LF still executes. Ctrl-Z ends DOS text input.
+        batch_cases = [
+            (b'PRINT "OK"\r\nSYSTEM\r\n', b'Ok\r\nOK\r\nOk\r\n'),
+            (b'PRINT CHR$(255);\x1aPRINT "IGNORED"', b'Ok\r\n\xff\r\nOk\r\n'),
+            (b'10 ON ERROR GOTO 40\n20 INPUT A\n30 END\n40 PRINT ERR:SYSTEM\nRUN\n',
+             b'Ok\r\n?  62 \r\n'),
+            (b'?' * 256 + b'\rPRINT "NEXT"', b'Ok\r\nLine buffer overflow\r\nOk\r\nNEXT\r\nOk\r\n'),
+        ]
+        for source, want in batch_cases:
+            output = subprocess.check_output([emu, "gwbasic.exe", "/nob"], input=source,
+                                             cwd=folder, env=env, timeout=10)
+            if output != want:
+                raise SystemExit(f"Unexpected redirected input result {output!r}")
+        print("PASS command input, DOS text EOF, trapped input EOF and long-line recovery")
         (folder / "numeric.bas").write_bytes(b'10 PRINT "OK":SYSTEM\r\n\x1a')
+        # A read-only BIOS video query wakes emu2's terminal display too.
+        # Keep stdin on a terminal and redirect only stdout, as at a shell.
+        master, slave = pty.openpty()
+        with os.fdopen(master, "rb"), os.fdopen(slave, "rb") as keyboard:
+            with (folder / "capture.txt").open("wb") as capture:
+                subprocess.run([emu, "gwbasic.exe", "numeric.bas"], stdin=keyboard,
+                               stdout=capture, cwd=folder, check=True, timeout=10,
+                               env=dict(env, EMU2_DEBUG="int", EMU2_DEBUG_NAME="redirect"))
+        trace = (folder / "redirect-int.0.log").read_bytes()
+        if (folder / "capture.txt").read_bytes() != b"OK\r\n" or b"V-10" in trace or not trace:
+            raise SystemExit("Redirected PRINT failed or invoked the video BIOS")
+        print("PASS stdout-only redirect runs without a BIOS video call")
         for memory in ("/M:49152", "/M:&HC000"):
             command = [emu, "gwbasic.exe", "/F:4", memory, "numeric.bas", "/S:128", "/C:128"]
             output = subprocess.check_output(command, cwd=folder, env=env, timeout=10)

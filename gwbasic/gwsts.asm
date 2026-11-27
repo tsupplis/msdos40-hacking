@@ -2149,6 +2149,60 @@ TIMEF:
 	JMP	PUTNEW		;Put result and ret (Txt ptr on stack).
 
 	EXTRN	FMULT:NEAR,CONIA:NEAR,FRCSNG:NEAR,FADD:NEAR,PUSHF:NEAR
+; TIMER function from TK Chia's GWBASICA update.
+	EXTRN	$FDIVS:NEAR,$MOVFR:NEAR,VALSNG:NEAR
+
+	PUBLIC	TIMERF
+
+; X=TIMER returns no. of seconds since midnight.
+;
+TIMERF:
+	PUSH	BX
+	MOV	BX,8748H	;Set floating point accumulator to 100.0
+	XOR	DX,DX
+	CALL	$MOVFR
+	CALL	VALSNG
+	CALL	GETTIM		;CH=hour, CL=min, DH=sec, DL=.01sec
+	MOV	AL,60		;Combine hours with minutes
+	MUL	CH
+	ADD	AL,CL
+	ADC	AH,0
+	MOV	CX,DX
+	MOV	DX,60		;Combine with seconds, this may overflow
+	MUL	DX		;beyond 16 bits
+	ADD	AL,CH
+	ADC	AH,0
+	ADC	DX,0
+	PUSHF
+	MOV	DX,100		;Multiply by 100 to combine with centiseconds
+	MUL	DX
+	POPF
+	JZ	TIMFNC
+	ADD	DX,100
+TIMFNC:
+	ADD	AL,CL
+	ADC	AH,0
+	ADC	DX,0
+	MOV	BX,DX		;Convert to MBF single-precision, the hard way
+	MOV	DX,AX
+	OR	AX,BX		;If the value is zero, nothing to do
+	JZ	TIMZRO
+	MOV	BH,81H+23	;Adjust the exponent until the highest order
+	TEST	BL,BL		;bit is in the right place
+	JS	TIMDIV
+TIMSHF:
+	DEC	BH
+	SHL	DX,1
+	RCL	BL,1
+	TEST	BL,BL
+	JNS	TIMSHF
+TIMDIV:
+	AND	BL,01111111B	;Zot the highest order bit, which should now
+				;be interpreted as a sign bit
+TIMZRO:
+	CALL	$FDIVS		;Divide by the 100.0 we stored earlier
+	POP	BX		;We are done
+	JMP	CHRGTR
 
 
 ;PRSTIM parses a string containing "HH[:MM[:SS[.TT]]]
@@ -2322,12 +2376,6 @@ PUBLIC	ERDEV
 ERDEV:
 PUBLIC	IOCTL
 IOCTL:
-PUBLIC	CHDIR
-CHDIR:
-PUBLIC	MKDIR
-MKDIR:
-PUBLIC	RMDIR
-RMDIR:
 PUBLIC	SHELL
 SHELL:
 PUBLIC	ENVIRON

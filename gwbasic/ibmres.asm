@@ -37,6 +37,7 @@ GWLEV2=0			;GW BASIC version 2.0 features
 	EXTRN	PARCHK:NEAR,PENS:NEAR,PLOOP2:NEAR,PPSWRT:NEAR
 	EXTRN	RENCRN:NEAR
 	EXTRN	STRIGS:NEAR
+	EXTRN TIMERF:NEAR       ; TK Chia, GWBASICA keyword dispatch
 	EXTRN	TIMEF:NEAR,TSTANM:NEAR
 
 DSEG	SEGMENT PUBLIC 'DATASG'
@@ -653,6 +654,7 @@ CTABX:
 	Q	COM
 	Q	CIRCLE
 	Q	CALLS
+	Q	CHDIR
 	DB	0
 DTABX:
 	Q	DATE$
@@ -685,6 +687,7 @@ MTABX:
 	QF	MKI$
 	QF	MKS$
 	QF	MKD$
+	Q	MKDIR
 	DB	0
 NTABX:
 	Q	NAME
@@ -701,12 +704,14 @@ QTABX:
 RTABX:
 	Q	RSET
 	Q	RESET
+	Q	RMDIR
 	DB	0
 STABX:
 	Q	SYSTEM
 	DB	0
 TTABX:
 	Q	TIME$
+	Q	TIMER
 	DB	0
 UTABX:
 	DB	0
@@ -951,6 +956,8 @@ EVALNS:	INC	BX
 	JZ	SHORT DATEV	;Brif DATE$
 	CMP	AL,LOW OFFSET $TIME$
 	JZ	SHORT TIMEV	;Brif TIME$
+	CMP	AL,LOW OFFSET $TIMER
+	JZ	SHORT TIMERV	;Brif TIMER
 	DEC	BX
 	MOV	AL,BYTE PTR [BX]
 	RET	
@@ -960,6 +967,9 @@ DATEV:	POP	CX		;Get rid of the hook return address.
 
 TIMEV:	POP	CX		;Get rid of the hook return address.
 	JMP	TIMEF		;Do TIME$ function.
+
+TIMERV:	POP	CX		;Get rid of the hook return address.
+	JMP	TIMERF		;Do TIMER function.
 
 EVALNF:	POP	CX		;Get rid of the return address.
 	INC	BX

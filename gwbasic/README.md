@@ -14,6 +14,10 @@ The interpreter sources follow TK Chia's `tkchia/devel` at [1432e385](https://co
 
 Run `make gwbasic` at the repository root. On the full DOS floppy, type `GWBASIC` for the editor or `GWBASIC DEMO.BAS` to run a file. Type `SYSTEM` to return to DOS. On the host, run `emu2 gwbasic/gwbasic.exe`. Run `make -C gwbasic check` for the emu2 regressions.
 
+The shared language regressions adapt cases from `cpm86-msbasic/tests`. They check arithmetic, strings, arrays, error recovery, DOS files and program editing. If `gwbasic/gwbasic.ref` is present, the emu2 check runs the same cases with the reference interpreter in a separate directory. The PCE suite runs them against the executable on the full DOS floppy.
+
+With the 3.23 reference present, `make check` also exchanges ASCII, tokenized and protected programs, sequential data, random records and BSAVE blocks in both directions. The check covers the shared language subset. The suite checks matching physical file lengths. The directory commands and `TIMER` keyword use the 3.23 token values. Their implementation draws on TK Chia's GWBASICA updates.
+
 ## Startup and display
 
 `GWBASIC /NOB /NOR DEMO.BAS` loads the program and stops at the editor's `Ok` prompt. Type `LIST` to inspect it or `RUN` to execute it. The switches follow the CP/M-86 MBASIC 5.50 command-line extensions. They accept mixed case and may appear before or after the filename.
@@ -26,7 +30,11 @@ Run `make gwbasic` at the repository root. On the full DOS floppy, type `GWBASIC
 | `/C:n` | Sets the serial buffer size. |
 | `/F:n`, `/S:n` | Accepts the MBASIC file-count and record-size options. This build allocates files and records dynamically. |
 
-Redirected startup preserves the existing display. For example, `GWBASIC DEMO.BAS >RESULT.TXT` sends ordinary `PRINT` output to the DOS handle. An explicit `SCREEN` or `CLS` in the program still operates on the display.
+Redirected startup preserves the existing display. For example, `GWBASIC DEMO.BAS >RESULT.TXT` sends ordinary `PRINT` output to the DOS handle. A short write raises BASIC error 61 (disk full), and other write failures raise error 57. Unhandled write errors go to standard error.
+
+Use `GWBASIC /NOB <COMMANDS.TXT` to execute commands from a DOS text file. `INPUT`, `LINE INPUT` and `INPUT$` also read redirected stdin. End of file at the command prompt returns to DOS. A program that requests more input at EOF can trap BASIC error 62.
+
+An explicit `SCREEN` or `CLS` in the program still operates on the display.
 
 On a color EGA or VGA adapter, `SCREEN 7` selects 320 × 200 graphics with 16 colors on page zero. The regression exercises `COLOR`, `PSET`, `POINT`, `LINE`, and `PAINT`. Graphics array `GET` and `PUT`, additional pages and higher-resolution EGA modes are still unsupported.
 

@@ -19,6 +19,9 @@ math.obj: math1.asm math2.asm
 
 check: gwbasic.exe
 	../test/check_gwbasic
+ifneq ($(wildcard gwbasic.ref),)
+	../test/check_gwcompat
+endif
 
 clean:
 	$(RM) $(OBJS) gwbasic.exe gwbasic.map

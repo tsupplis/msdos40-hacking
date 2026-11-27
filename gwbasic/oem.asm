@@ -116,6 +116,16 @@ CLREOL:	PUSH	AX
 ;
 ; REGISTERS AFFECTED
 ;
+imul14 macro reg
+        push cx
+        mov cx,reg
+        shl reg,1
+        shl reg,1
+        shl reg,1
+        sub reg,cx
+        shl reg,1
+        pop cx
+endm
 PUBLIC	SCROLL
 SCROLL:	PUSH	BX
 	PUSH	CX
@@ -128,9 +138,16 @@ SCROLL:	PUSH	BX
 	PUSHF
 	PUSH	AX
 	cmp CRTMOD,0dh
-        jne LegacyScroll
+        jb LegacyScroll
         push ax
         mov bp,offset CSEG:EgaScroll
+        cmp CRTMOD,0dh
+        je EgaLatch
+        mov bp,offset CSEG:EgaWideScroll
+        cmp CRTMOD,0eh
+        je EgaLatch
+        mov bp,offset CSEG:EgaTallScroll
+EgaLatch:
         mov dx,03ceh
         mov al,5
         out dx,al
@@ -191,7 +208,11 @@ ScrollRect:
 SCLFWD:	MOV	BL,CL
 	XOR	BH,BH
 	MOV	CL,CS:4[BP]
-	SHL	BX,CL			; BX = count of graphics rows to move
+	shl bx,cl
+        cmp bp,offset CSEG:EgaTallScroll
+        jne ScrollRows
+        imul14 bx
+ScrollRows: ; BX = count of graphics rows to move
 	MOV	CH,CS:0[BP]		; Now move even-numbered graphics rows
 	XOR	CL,CL
 	MOV	DS,CX
@@ -219,7 +240,7 @@ SCLOT2:	MOV	CX,AX
 	DEC	BX
 	JNZ	SCLOT2
 SCLFIN: cmp bp,offset CSEG:EgaScroll
-        jne ScrollExit
+        jb ScrollExit
         mov dx,03cfh
         xor al,al               ; Restore the BIOS mode 0Dh graphics mode register.
         out dx,al
@@ -239,7 +260,6 @@ ScrollExit:
 ; Internal data structure: information for scrolling a portion of the screen,
 ; used by SCROLL
 ;
-EgaScroll DB 0a0h,0,40D,0,3
 SCLTAB	LABEL	BYTE		; For INT 10H video mode 0:
 	DB	0B8H		; * high byte of video memory address, for
 				;   even-numbered graphics rows
@@ -257,6 +277,10 @@ SCLTAB	LABEL	BYTE		; For INT 10H video mode 0:
 	DB	0B8H,0BAH,80D,1,2	; For mode 5
 	DB	0B8H,0BAH,80D,0,2	; For mode 6
 	DB	0B0H,0,160D,1,0		; For mode 7
+
+EgaScroll DB 0a0h,0,40D,0,3
+EgaWideScroll DB 0a0h,0,80D,0,3
+EgaTallScroll DB 0a0h,0,80D,0,0
 
 ; Internal function: convert a text (column, row), in the active display
 ; page, to an offset into video memory
@@ -280,7 +304,10 @@ POSOFF:	PUSH	AX
 	MUL	DH
 	MOV	CL,CS:4[BP]
 	SHL	AX,CL
-	XOR	DH,DH
+        cmp bp,offset CSEG:EgaTallScroll
+        jne PosRow
+        imul14 ax
+PosRow: XOR DH,DH
 	MOV	CL,CS:3[BP]
 	SHL	DX,CL
 	ADD	DX,AX
@@ -293,7 +320,10 @@ POSOFF:	PUSH	AX
 	XOR	AH,AH
 	MOV	CL,CS:4[BP]
 	SHL	AX,CL
-	SUB	AL,CS:2[BP]
+        cmp bp,offset CSEG:EgaTallScroll
+        jne PosEnd
+        imul14 ax
+PosEnd: SUB AL,CS:2[BP]
 	SBB	AH,0
 	ADD	DX,AX
 	MOV	AX,1
@@ -410,8 +440,8 @@ SWIDTH:	CMP	CL,25D
 SWDERR:	STC
 	RET
 SWIDT2: cmp CRTMOD,0dh
-        jne LegacyWidth
-        cmp al,40D
+        jb LegacyWidth
+        cmp al,CRTWID
         jne SWDERR
         clc
         ret
@@ -439,7 +469,7 @@ SMMP80	DB	2,3,2,3,6,6,6,7
 ;
 PUBLIC	NSETCX
 NSETCX: cmp CRTMOD,0dh
-        jne CgaSpan
+        jb CgaSpan
         push ax
         push bx
         or bx,bx
@@ -447,7 +477,8 @@ NSETCX: cmp CRTMOD,0dh
 EgaSpan: call SETC
         dec bx
         jz EgaSpanDone
-        inc PIXOFS
+        add PIXOFS,1
+        adc ATRMSK,0
         jmp short EgaSpan
 EgaSpanDone:
         pop bx
@@ -623,8 +654,9 @@ CBSPEC:	MOV	CBFSEG,CX		; Record the COM buffer location
 ;
 PUBLIC	LEFTC
 LEFTC: cmp CRTMOD,0dh
-        jne CgaLEFTC
-        dec PIXOFS
+        jb CgaLEFTC
+        sub PIXOFS,1
+        sbb ATRMSK,0
         ret
 CgaLEFTC:	MOV	AL,CL
 	MOV	CL,PIXBTS
@@ -640,8 +672,9 @@ LEFTC2:	DEC	PIXOFS
 ;
 PUBLIC	RIGHTC
 RIGHTC: cmp CRTMOD,0dh
-        jne CgaRIGHTC
-        inc PIXOFS
+        jb CgaRIGHTC
+        add PIXOFS,1
+        adc ATRMSK,0
         ret
 CgaRIGHTC:	MOV	AL,CL
 	MOV	CL,PIXBTS
@@ -663,12 +696,13 @@ RGHTC2:	INC	PIXOFS
 ;
 PUBLIC	MAPXYC
 MAPXYC: cmp CRTMOD,0dh
-        jne LegacyXY
-        mov ax,320D
+        jb LegacyXY
+        mov ax,EgaWidth
         mul dx
         add ax,cx
+        adc dl,0
         mov PIXOFS,ax
-        mov ATRMSK,0ffh
+        mov ATRMSK,dl
         ret
 LegacyXY:	MOV	BP,CX
 	SHR	DX,1
@@ -816,10 +850,19 @@ OEMHED:	DB	"Microsoft GWBASIC Version 4.01N",0
 ;
 PUBLIC	TUPC
 TUPC: cmp CRTMOD,0dh
-        jne CgaTUPC
-        cmp PIXOFS,320D
+        jb CgaTUPC
+        cmp ATRMSK,0
+        jne EgaUp
+        push ax
+        mov ax,EgaWidth
+        cmp PIXOFS,ax
+        pop ax
         jb TopEdge
-        sub PIXOFS,320D
+EgaUp:  push ax
+        mov ax,EgaWidth
+        sub PIXOFS,ax
+        sbb ATRMSK,0
+        pop ax
         clc
         ret
 TopEdge: stc
@@ -835,9 +878,8 @@ CgaTUPC:	MOV	AX,PIXOFS
 ;
 PUBLIC	UPC
 UPC: cmp CRTMOD,0dh
-        jne CgaUPC
-        sub PIXOFS,320D
-        ret
+        jb CgaUPC
+        jmp EgaUp
 CgaUPC:	MOV	AX,PIXOFS
 UPC1:	CMP	AH,20H
 	JB	UPC2
@@ -865,6 +907,9 @@ SCALXY:	MOV	AL,PIXBTS
 	JZ	SXYERR
 	OR	CH,CH
 	JS	SXYXNG
+	mov bx,EgaWidth
+        cmp CRTMOD,0dh
+        jae SXYWID
 	MOV	BX,640D
 	TEST	AL,1
 	JNZ	SXYWID
@@ -876,9 +921,14 @@ SXYWID:	CMP	CX,BX
 	MOV	CX,BX
 SXYXOK:	OR	DH,DH
 	JS	SXYYNG
-	CMP	DX,200D
-	JB	SXYYOK
-	MOV	DX,199D
+	mov bx,200D
+        cmp CRTMOD,0dh
+        jb CheckHeight
+        mov bx,EgaHeight
+CheckHeight: cmp dx,bx
+        jb SXYYOK
+        dec bx
+        mov dx,bx
 	RET
 SXYYOK:	SAHF
 	RET
@@ -915,9 +965,8 @@ ASPFIN:	RET
 ;
 PUBLIC	PNTINI
 PNTINI: cmp CRTMOD,0dh
-        jne CgaPaint
-        cmp al,16D
-        cmc
+        jb CgaPaint
+        call EgaCheckAttr
         mov BORPAT,al
         ret
 CgaPaint:	MOV	CH,ATRPAT
@@ -1005,7 +1054,8 @@ EgaScanStart:
         push dx
         mov ax,PIXOFS
         xor dx,dx
-        mov di,320D
+        mov dl,ATRMSK
+        mov di,EgaWidth
         div di
         mov di,dx
         pop dx
@@ -1021,19 +1071,21 @@ EgaPaintDone:
         inc bx
         ret
 SCANL:  cmp CRTMOD,0dh
-        jne CgaScanL
+        jb CgaScanL
         call EgaScanStart
 EgaLeft: or di,di
         jz EgaLeftDone
         dec di
-        dec PIXOFS
+        sub PIXOFS,1
+        sbb ATRMSK,0
         call READC
         cmp al,BORPAT
         je EgaLeftBorder
         call EgaPaintPixel
         jmp short EgaLeft
 EgaLeftBorder:
-        inc PIXOFS
+        add PIXOFS,1
+        adc ATRMSK,0
 EgaLeftDone:
         ret
 CgaScanL: PUSH	ES
@@ -1058,7 +1110,7 @@ SCL2:	CALL	SLRR
 ;
 PUBLIC	SCANR
 SCANR:  cmp CRTMOD,0dh
-        jne CgaScanR
+        jb CgaScanR
         call EgaScanStart
 EgaSkip:
         call READC
@@ -1066,10 +1118,11 @@ EgaSkip:
         jne EgaRightStart
         dec dx
         jz EgaRightDone
-        cmp di,319D
+        cmp di,EgaRightX
         je EgaRightEdge
         inc di
-        inc PIXOFS
+        add PIXOFS,1
+        adc ATRMSK,0
         jmp short EgaSkip
 EgaRightEdge:
         xor dx,dx
@@ -1077,13 +1130,16 @@ EgaRightEdge:
 EgaRightStart:
         mov si,PIXOFS
         mov CSAVEA,si
-        mov byte ptr CSAVEM,0ffh
+        mov al,ATRMSK
+        mov CSAVEM,al
+        call READC
 EgaRight:
         call EgaPaintPixel
-        cmp di,319D
+        cmp di,EgaRightX
         je EgaRightDone
         inc di
-        inc PIXOFS
+        add PIXOFS,1
+        adc ATRMSK,0
         call READC
         cmp al,BORPAT
         jne EgaRight
@@ -1161,7 +1217,7 @@ SEGINI:	CALL	SNDSTA			; _Really_ start sound support
 ; REGISTERS AFFECTED
 ;	BX, CX, SI, DI (?)
 ;
-; For SCREEN 7 PIXOFS is the linear pixel index (0..63999).
+; ATRMSK:PIXOFS holds the linear EGA pixel index (up to 223999).
 EgaPixel:
         push bx
         push cx
@@ -1169,12 +1225,13 @@ EgaPixel:
         push ax
         mov ax,PIXOFS
         xor dx,dx
-        mov cx,320D
+        mov dl,ATRMSK
+        mov cx,EgaWidth
         div cx
         mov cx,dx
         mov dx,ax
         pop ax
-        xor bh,bh
+        mov bh,ACTPAG
         int 10h
         pop dx
         pop cx
@@ -1182,7 +1239,7 @@ EgaPixel:
         ret
 PUBLIC	READC
 READC: cmp CRTMOD,0dh
-        jne LegacyRead
+        jb LegacyRead
         mov ah,0dh
         jmp EgaPixel
 LegacyRead:	MOV	AL,ATRMSK
@@ -1215,7 +1272,7 @@ READC1:	INC	CX
 ;
 PUBLIC	SETC
 SETC: cmp CRTMOD,0dh
-        jne LegacySet
+        jb LegacySet
         mov al,ATRPAT
         mov ah,0ch
         jmp EgaPixel
@@ -1443,10 +1500,22 @@ NRWBEG:	MOV	DX,MAXDEL
 ;
 PUBLIC	TDOWNC
 TDOWNC: cmp CRTMOD,0dh
-        jne CgaTDOWNC
-        cmp PIXOFS,63680D
+        jb CgaTDOWNC
+        push ax
+        mov al,ATRMSK
+        cmp al,EgaLastHi
+        jb EgaDownPop
+        mov ax,EgaLastLo
+        cmp PIXOFS,ax
+        pop ax
         jae VerticalEdge
-        add PIXOFS,320D
+        jmp EgaDown
+EgaDownPop: pop ax
+EgaDown: push ax
+        mov ax,EgaWidth
+        add PIXOFS,ax
+        adc ATRMSK,0
+        pop ax
         clc
         ret
 VerticalEdge: stc
@@ -1462,9 +1531,8 @@ CgaTDOWNC:	MOV	AX,PIXOFS
 ;
 PUBLIC	DOWNC
 DOWNC: cmp CRTMOD,0dh
-        jne CgaDOWNC
-        add PIXOFS,320D
-        ret
+        jb CgaDOWNC
+        jmp EgaDown
 CgaDOWNC:	MOV	AX,PIXOFS
 DOWNC1:	CMP	AH,20H
 	JB	DOWNC2
@@ -1522,10 +1590,12 @@ GWTERM:	MOV	AL,VISPAG		; Force the visible page to become
 	JZ	GWTRMF
 	XOR	AH,AH
 	INT	10H
-GWTRMF:	MOV	AH,01H			; Restore the startup cursor shape
+GWTRMF: cmp QuietVideo,0
+        jne TermDevices
+        MOV	AH,01H			; Restore the startup cursor shape
 	MOV	CX,CSRINI
 	INT	10H
-	CALL	SNDTRM			; Clean up the sound module
+TermDevices: CALL SNDTRM			; Clean up the sound module
 	CALL	CBKTRM			; Clean up Ctrl-Break handling
 	JMP	EVTRM			; Clean up event handling
 
@@ -1545,9 +1615,12 @@ GRPSIZ:	PUSH	AX
 	CMP	AL,4D
 	JB	GRPSZ1
 	MOV	DX,200D
-        mov cx,320D
         cmp al,0dh
-        je GRPSZ1
+        jb CgaSize
+        mov cx,EgaWidth
+        mov dx,EgaHeight
+        jmp short GRPSZ1
+CgaSize:
         xor cx,cx
 	CMP	AL,6
 	JA	GRPSZ1
@@ -1792,12 +1865,26 @@ CheckInput:
         mov FileIn,1
         mov KeepScreen,1
 ConsoleInit:
-	MOV	AH,03H			; Get and save initial screen cursor
+        cmp KeepScreen,0
+        je QueryVideo
+        ; Even a read-only INT 10h can start an emulator's full-screen display.
+        ; Read the BIOS data area for the same mode, page and cursor information.
+        mov QuietVideo,1
+        push es
+        xor ax,ax
+        mov es,ax
+        mov cx,es:[460h]
+        mov CSRINI,cx
+        mov al,es:[449h]
+        mov ah,es:[44ah]
+        mov bh,es:[462h]
+        pop es
+        jmp short InitialMode
+QueryVideo:
+        MOV	AH,03H			; Get and save initial screen cursor
 	XOR	BH,BH			; shape
 	INT	10H
 	MOV	CSRINI,CX
-	CMP KeepScreen,0
-	JNE CRTGTO
 	MOV	AX,4F03H		; Get initial video mode using VESA
 	INT	10H			; --- useful to do this, in case the
 	CMP	AX,004FH		; initial mode is some weird
@@ -1812,6 +1899,7 @@ CRTVES:	XCHG	BX,AX			; If we can get the video mode via
 CRTGTO:	MOV	AH,0FH			; If we cannot get the video mode
 	INT	10H			; through VESA, get it through the
 					; classical interface
+InitialMode:
 	AND	AL,01111111B		; Remove any "no blanking" bit in
 	MOV	CRTINI,AL		; the mode number
 	CMP KeepScreen,0
@@ -1856,7 +1944,33 @@ CRTOK2:	MOV	CRTMOD,AL
 	CMP	AL,07H
 	JZ	CRTOK3
 	cmp al,0dh
-        jne CgaColors
+        jb CgaColors
+        mov EgaWidth,320D
+        mov EgaHeight,200D
+        cmp al,0dh
+        je EgaGeometry
+        mov EgaWidth,640D
+        cmp al,0eh
+        je EgaGeometry
+        mov EgaHeight,350D
+EgaGeometry: push ax
+        mov ax,EgaWidth
+        dec ax
+        mov EgaRightX,ax
+        mov ax,EgaHeight
+        dec ax
+        mul EgaWidth
+        mov EgaLastLo,ax
+        mov EgaLastHi,dl
+        pop ax
+        mov bx,0203h
+        cmp al,0fh
+        je CRTOK3
+        cmp al,10h
+        jne Ega16
+        cmp EgaMemory,0
+        je CRTOK3
+Ega16:
         mov bx,040fh
         jmp short CRTOK3
 CgaColors:	MOV	BX,0203H
@@ -1883,9 +1997,13 @@ CRTOK3:	MOV	AL,AH			; INT 10H conveniently gives us the
         mov KeepScreen,0        ; Explicit SCREEN and CLS keep their normal behavior.
         EXTRN ScreenHome:NEAR
         call ScreenHome         ; Initialize editor state without drawing the key line.
-        mov bh,ACTPAG
-        mov ah,03h
-        int 10h
+        push es
+        xor bx,bx
+        mov es,bx
+        mov bl,ACTPAG
+        shl bx,1
+        mov dx,es:[bx+450h]     ; BDA cursor position for the active page.
+        pop es
         inc dx
         inc dh
         mov CSRX,dl
@@ -1912,6 +2030,7 @@ SCNRST: cmp VirtualText,0
         CMP	CRTMOD,AL
 	JZ	CRTOK4
 ChangeMode:
+        mov QuietVideo,0
         mov VirtualText,0
 	PUSH	AX
 	PUSH	BX
@@ -1939,39 +2058,60 @@ ChangeMode:
 ;	FLAGS		CF=0 Success
 ;			CF=1 Error
 ;
-; SCREEN 7, 320x200, 16 colors. Detect a color EGA or VGA before changing mode.
+; EGA BIOS reports installed memory as 0..3 (64K increments).
+EgaBiosModes db 0dh,0eh,10h,0fh
+EgaPages db 2,4,6,8D, 1,2,3,4, 1,1,1,2, 0,1,1,2
 EgaMode:
         push cx
+        sub al,7
+        xor ah,ah
+        mov di,ax
         mov ax,1200h
         mov bl,10h
         int 10h
-        cmp bl,3
-        ja EgaBad
-        or bh,bh
-        jnz EgaBad
         pop cx
-        ; Initial implementation supports the first page.
+        cmp bl,3
+        ja EgaError
+        cmp di,3
+        je EgaMonitorOK
+        or bh,bh
+        jnz EgaError
+EgaMonitorOK:
+        mov EgaMemory,bl
+        xor bh,bh
+        shl di,1
+        shl di,1
+        mov dh,cs:EgaPages[bx+di]
+        or dh,dh
+        jz EgaError
+        shr di,1
+        shr di,1
+        mov al,cs:EgaBiosModes[di]
+        mov dl,0
+        cmp al,CRTMOD
+        jne EgaActive
+        mov dl,ACTPAG
+EgaActive:
         cmp cl,2
-        jb EgaStart
+        jb EgaSet
         cmp byte ptr [si+5],0
-        je EgaVisible
-        cmp byte ptr [si+6],0
-        jne EgaError
-EgaVisible:
+        je EgaSet
+        mov dl,[si+6]
+EgaSet: cmp dl,dh
+        jae EgaError
+        mov ah,dl
         cmp cl,3
-        jb EgaStart
+        jb EgaSwitch
         cmp byte ptr [si+7],0
-        je EgaStart
-        cmp byte ptr [si+8D],0
-        jne EgaError
-EgaStart:
-        mov al,0dh
+        je EgaSwitch
+        mov ah,[si+8D]
+EgaSwitch: cmp ah,dh
+        jae EgaError
         call SCNRST
-        cmp CRTMOD,0dh
+        cmp CRTMOD,al
         jne EgaError
-        clc
-        ret
-EgaBad: pop cx
+        mov al,ah
+        jmp SCRVIP
 EgaError: stc
         ret
 
@@ -1981,7 +2121,7 @@ SCRSTT:	MOV	SI,BX
 	XOR	CH,CH
 	DEC	CX
 	CMP	CL,3			; If < 1 or > 4 parameters, error
-	JA	SCRERR
+	JA	EgaError
 	MOV	AL,2[SI]		; If new MODE given, use it;
 	CMP	1[SI],CH		; otherwise use the current mode
 	JNZ	SCRMO1
@@ -1990,8 +2130,10 @@ SCRSTT:	MOV	SI,BX
 	JZ	SCRMO3
 	MOV	BX,OFFSET CSEG:SMMAP1
 	XLAT	CS:[BX]
-SCRMO1:	CMP AL,7
-        jne LegacyMode
+SCRMO1: cmp al,7
+        jb LegacyMode
+        cmp al,10D
+        ja LegacyMode
         jmp EgaMode
 LegacyMode:	CMP	AL,2			; New MODE must be 0, 1, or 2
 	JA	SCRERR
@@ -2066,7 +2208,7 @@ PAGHKF:	POP	ES
 
 ; Internal data structure: mapping of BIOS video mode numbers to BASIC video
 ; mode numbers (except for mode 07H)
-SMMAP1	DB	0,0,0,0,1,1,2,0,5 dup (0),7
+SMMAP1	DB	0,0,0,0,1,1,2,0,5 dup (0),7,8D,10D,9D
 
 ; Internal data structure: mapping of BASIC video mode numbers to BIOS video
 ; mode numbers, given current screen width (40 or 80 characters) and
@@ -2090,7 +2232,8 @@ TOTPAG:	DB	8D,8D,4,4,1,1,1,8D
 ;	BX (?)
 ;
 PUBLIC	CSRDSP
-CSRDSP:	PUSH	BX
+CSRDSP: mov QuietVideo,0        ; An explicit cursor operation owns the display.
+        PUSH	BX
 	PUSH	CX
 	PUSH	DX
 	PUSH	AX
@@ -2137,11 +2280,20 @@ CSRDS2:	MOV	AH,01H
 ; REGISTERS AFFECTED
 ;	AX, CX
 ;
+EgaCheckAttr:
+        cmp PIXBTS,2
+        je EgaFour
+        cmp al,16D
+        cmc
+        ret
+EgaFour: cmp al,4
+        cmc
+        ret
 PUBLIC	SETATR
 SETATR: cmp CRTMOD,0dh
-        jne LegacyAttr
-        cmp al,16D
-        jae ATRERR
+        jb LegacyAttr
+        call EgaCheckAttr
+        jc ATRERR
         mov ATRPAT,al
         clc
         ret
@@ -2174,15 +2326,15 @@ ATRERR:	STC
 ;
 PUBLIC	SETCLR
 SETCLR: cmp CRTMOD,0dh
-        jne LegacyColor
+        jb LegacyColor
         cmp byte ptr [bx],2
         ja EgaErrorColor
         mov al,FORCLR
         cmp byte ptr [bx+1],0
         je EgaBackground
         mov al,[bx+2]
-        cmp al,15D
-        ja EgaErrorColor
+        call EgaCheckAttr
+        jc EgaErrorColor
 EgaBackground:
         cmp byte ptr [bx],2
         jb EgaForeground
@@ -2333,7 +2485,10 @@ PUBLIC FileOut,FileIn
 FileIn DB 0
 FileOut DB 0
 KeepScreen DB 0
+PUBLIC QuietVideo
+QuietVideo DB 0
 VirtualText DB 0
+PUBLIC CRTMOD
 CRTMOD	DB	?		; (?) Current screen mode
 CRTINI	DB	?		; (?) Initial screen mode on GW-BASIC start
 CSRINI	DW	?		; (?!?) Initial cursor shape on GW-BASIC start
@@ -2355,6 +2510,12 @@ PIXBTS	DB	?		; From BASICA.COM DSEG:0055H
 				; Number of bits per pixel; assumed to be 0
 				; (not graphics mode), 1, or 2
 
+EgaWidth dw ?
+EgaHeight dw ?
+EgaLastLo dw ?
+EgaLastHi db ?
+EgaRightX dw ?
+EgaMemory db ?
 PIXOFS	DW	?		; From BASICA.COM DSEG:06F3H
 				; Byte offset of current pixel into video
 				; memory

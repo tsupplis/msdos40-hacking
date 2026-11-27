@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""Exchange files between the DOS reference and the locally built GW-BASIC."""
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+build = root / "gwbasic/gwbasic.exe"
+reference = build.with_suffix(".ref")
+
+
+def run(folder, argv=(), commands=b""):
+    return subprocess.run([os.environ.get("EMU2", "emu2"), "basic.exe", *argv],
+                          cwd=folder, env=dict(os.environ, EMU2_DRIVE_C=str(folder)),
+                          input=commands, stdout=subprocess.PIPE, check=True, timeout=15)
+
+
+def dos(text):
+    return text.replace("\n", "\r\n").encode("ascii")
+
+
+def report(folder, filename):
+    data, eof, _ = (folder / filename).read_bytes().partition(b"\x1a")
+    if not eof:
+        raise SystemExit(f"{folder.name}/{filename}: missing DOS text EOF")
+    return data
+
+
+def guest(base, name, interpreter):
+    folder = base / name
+    folder.mkdir()
+    shutil.copyfile(interpreter, folder / "basic.exe")
+    return folder
+
+
+writer = '''10 OPEN "O",1,"SEQ.DAT":WRITE #1,"a,b",3.5,"end":CLOSE
+20 OPEN "R",1,"REC.DAT",20:FIELD #1,2 AS I$,4 AS S$,8 AS D$,6 AS T$
+30 FOR I=1 TO 3:LSET I$=MKI$(-I):LSET S$=MKS$(I+.25):LSET D$=MKD$(I+.125#):RSET T$=STR$(I):PUT #1,I:NEXT:CLOSE
+40 DIM A%(1):A%(0)=&H4321:A%(1)=&H7654:BSAVE "BLOCK.BIN",VARPTR(A%(0)),4
+50 SYSTEM
+'''
+reader = '''10 OPEN "O",2,"CHECK.TXT":ON ERROR GOTO 200
+20 OPEN "I",1,"SEQ.DAT":INPUT #1,A$,B,C$:IF A$<>"a,b" OR B<>3.5 OR C$<>"end" THEN ERROR 200
+30 CLOSE #1:OPEN "R",1,"REC.DAT",20:FIELD #1,2 AS I$,4 AS S$,8 AS D$,6 AS T$
+40 FOR I=3 TO 1 STEP -1:GET #1,I
+50 IF CVI(I$)<>-I OR CVS(S$)<>I+.25 OR CVD(D$)<>I+.125# OR VAL(T$)<>I THEN ERROR 200
+60 NEXT:CLOSE #1:DIM A%(1):BLOAD "BLOCK.BIN",VARPTR(A%(0))
+70 IF A%(0)<>&H4321 OR A%(1)<>&H7654 THEN ERROR 200
+80 PRINT #2,"COMPLETE":CLOSE:SYSTEM
+200 PRINT #2,"FAIL";ERR;ERL:CLOSE:SYSTEM
+'''
+
+with tempfile.TemporaryDirectory() as tmp:
+    base = Path(tmp)
+    expected = guest(base, "baseline", reference)
+    fixture = dos((root / "test/gwlang.bas").read_text()) + b"\x1a"
+    (expected / "source.bas").write_bytes(fixture)
+    run(expected, ["source.bas"])
+    baseline = report(expected, "lang.out")
+    if not baseline.endswith(b"COMPLETE\r\n") or b"FAIL" in baseline:
+        raise SystemExit(f"Reference failed the baseline fixture: {baseline!r}")
+    sizes = {}
+    for label, producer, consumer in (("4.01N-to-ref", build, reference),
+                                      ("ref-to-4.01N", reference, build)):
+        source = guest(base, label + "-write", producer)
+        (source / "source.bas").write_bytes(fixture)
+        run(source, commands=dos('LOAD "SOURCE.BAS"\nSAVE "TEXT.BAS",A\n'
+                                 'SAVE "TOKEN.BAS"\nSAVE "LOCKED.BAS",P\nSYSTEM\n'))
+        for name, prefix in (("text.bas", b"10 "), ("token.bas", b"\xff"), ("locked.bas", b"\xfe")):
+            target = guest(base, label + "-" + name, consumer)
+            file = source / name
+            if not file.read_bytes().startswith(prefix):
+                raise SystemExit(f"{label}: wrong {name} format")
+            shutil.copyfile(file, target / name)
+            run(target, [name])
+            actual = report(target, "lang.out")
+            if actual != baseline:
+                raise SystemExit(f"{label}/{name}: {actual!r}")
+            print(f"PASS {label} {name} load and run")
+        (source / "write.bas").write_bytes(dos(writer) + b"\x1a")
+        run(source, ["write.bas"])
+        sizes[label] = {name: (source / name).stat().st_size for name in
+                        ("text.bas", "token.bas", "locked.bas", "seq.dat", "rec.dat", "block.bin")}
+        target = guest(base, label + "-data", consumer)
+        for name in ("seq.dat", "rec.dat", "block.bin"):
+            shutil.copyfile(source / name, target / name)
+        (target / "read.bas").write_bytes(dos(reader) + b"\x1a")
+        run(target, ["read.bas"])
+        actual = report(target, "check.txt")
+        if actual != b"COMPLETE\r\n":
+            raise SystemExit(f"{label}/data: {actual!r}")
+        print(f"PASS {label} sequential, random MBF records, BSAVE/BLOAD")
+    if sizes["4.01N-to-ref"] != sizes["ref-to-4.01N"] or sizes["4.01N-to-ref"]["rec.dat"] != 60:
+        raise SystemExit(f"Physical file lengths differ: {sizes}")
+    print("PASS matching physical lengths for all six file formats")

@@ -85,7 +85,8 @@ ORNCHK:
 	CALL	$READS		;Fill the Buffer
 	JMP	SHORT ORNCHK	; and try again...
 CHKCTZ:
-	MOV	BX,OFFSET DATPSC
+	xor bx,bx
+        mov bl,F_ORCT[si]
 	SUB	BL,BYTE PTR F_BREM[SI]	;[BX] = char offset
 	CMP	BYTE PTR DATOFS[BX+SI],LOW OFFSET ASCCTZ	;check for EOF
 	JNZ	NOTEOF		;Brif next char not EOF
@@ -301,17 +302,16 @@ NTZRF1:
 NOMTRC:
 	CALL	$READS		;read a sector
 	CALL	BAKURN		;back up 1 record
-	XOR	DX,DX		;clear count of chars in buff
-REDEOF:
-	CALL	DSKINP		;read until EOF
-	JB	SETSQM		;Brif physical EOF
-	CMP	AL,LOW OFFSET ASCCTZ	;check for logical eof (ctl Z)
-	JZ	SETSQO		;Brif found eof
-	INC	DX
-	JMP	SHORT REDEOF
-SETSQM:
-	XOR	DX,DX		;zero count since next sector
-	CALL	BAKURN		;backup since read to far
+        xor bx,bx
+AppendScan:
+        cmp bl,F_ORCT[si]
+        je AppendEnd
+        cmp byte ptr DATOFS[bx+si],ASCCTZ
+        je AppendEnd
+        inc bx
+        jmp short AppendScan
+AppendEnd:
+        mov dx,bx
 SETSQO:
 	MOV	BYTE PTR F_MODE[SI],LOW OFFSET MD_SQO	;now we're Seq output
 	LEA	DI,DWORD PTR F_CLOC[SI]
@@ -594,7 +594,13 @@ PGSUB1:
 NTREDS:
 	DEC	BX
 	MOV	WORD PTR F_CLOC[SI],BX	;Set CURLOC to physical rec.
-	MOV	BYTE PTR F_ORCT[SI],LOW OFFSET DATPSC
+	push bx
+        mov bx,PBUFF
+        sub bx,si
+        sub bx,offset DATOFS
+        add bx,cx               ; Prefix through the last modified byte.
+        mov F_ORCT[si],bl
+        pop bx
 	MOV	BYTE PTR F_BREM[SI],LOW OFFSET DATPSC
 	MOV	WORD PTR FCB_RN[SI],BX	;Set record number
 	MOV	WORD PTR FCB_RN+2[SI],0
@@ -628,7 +634,13 @@ $READS:
  REP	STOSW			;zero physical buffer
 	CALL	SETBUF		;Set DMA
 	MOV	AH,LOW OFFSET C_RNDR
-	CALL	ACCFIL		;Read random
+	CALL    ACCFIL          ; Read random
+        cmp al,3
+        jne ReadWhole
+        mov al,byte ptr FCB_FS[si]
+        and al,DATPSC-1
+        jmp short READ1
+ReadWhole:
 	OR	AL,AL
 	MOV	AL,LOW 0	;Len = 0 for EOF
 	JNZ	READ1
@@ -645,12 +657,56 @@ READ1:
 ; Entry - SI points to FDB
 ; Exit  - All registers preserved
 ;
-$WRITS:
-	PUSH	AX
-	MOV	BYTE PTR F_ORCT[SI],LOW 0	;Clear buffer offset
-	CALL	SETBUF		;Set DMA
-	MOV	AH,LOW OFFSET C_RNDW
-	CALL	ACCFIL		;Write Random
+$WRITS: PUSH AX
+        call SETBUF
+        cmp byte ptr F_ORCT[si],DATPSC
+        jb WritePartial
+        mov ah,C_RNDW
+        call ACCFIL
+        jmp short WriteStatus
+WritePartial:
+        ; Express the sector address in bytes for DOS random block write.
+        push bx
+        push cx
+        push dx
+        mov ax,word ptr FCB_RN[si]
+        mov dx,word ptr FCB_RN+2[si]
+        push dx
+        push ax
+        mov cl,7
+ByteOffset:
+        shl ax,1
+        rcl dx,1
+        dec cl
+        jnz ByteOffset
+        mov word ptr FCB_RN[si],ax
+        mov word ptr FCB_RN+2[si],dx
+        mov word ptr FCB_RC[si],1
+        xor cx,cx
+        mov cl,F_ORCT[si]
+        mov bx,cx
+        lea dx,F_FCB[si]
+        mov ah,28h
+        int 21h
+        cmp cx,bx
+        jne ShortWrite
+        or al,al
+        jz PartialDone
+ShortWrite:
+        mov al,2                ; Disk full.
+PartialDone:
+        pop bx
+        pop dx
+        add bx,1
+        adc dx,0
+        mov word ptr FCB_RN[si],bx
+        mov word ptr FCB_RN+2[si],dx
+        mov word ptr FCB_RC[si],DATPSC
+        pop dx
+        pop cx
+        pop bx
+WriteStatus:
+        mov byte ptr F_ORCT[si],0
 	CMP	AL,LOW 255D
 	JZ	ER_TMF		;Brif "Too many Files"
 	DEC	AL
@@ -686,7 +742,7 @@ ACCFIL:
 	INC	WORD PTR FCB_RN+2[SI]	;High order +1
 ACCFL1:
 	CMP	AH,LOW OFFSET C_RNDW	;Was it Random Write?
-	JNE	ACCFL2		;Brif not
+	JNE	ACCRET		;Brif not
 	OR	AL,AL		; else map into 1.4 errors
 	JZ	ACCRET		;Brif no errors
 	CMP	AL,LOW 5
@@ -696,10 +752,6 @@ ACCFL1:
 	JE	ACCRET
 	INC	AL		; else Disk full
 	JMP	SHORT ACCRET
-ACCFL2:
-	CMP	AL,LOW 3	;Partial sector read?
-	JNE	ACCRET		;Brif not
-	XOR	AL,AL		;Map 3 to 0 (no error)
 ACCRET:
 	POP	DX
 	RET	
@@ -1095,6 +1147,42 @@ SAMDRV:
 
 NA_FNF:	JMP	DERFNF		;file not found
 NA_FAE:	JMP	DERFAE		;file already exists
+
+; Directory statements adapted from TK Chia's GWBASICA DOS backend.
+        PUBLIC MKDIR,RMDIR,CHDIR
+        EXTRN ERRACC:ABS,ERRPNF:ABS,ERROR:NEAR
+DSEG SEGMENT PUBLIC 'DATASG'
+DirPath DB 256 DUP (?)
+DSEG ENDS
+MKDIR:  mov ah,39h
+        jmp short DirectoryCall
+RMDIR:  mov ah,3ah
+        jmp short DirectoryCall
+CHDIR:  mov ah,3bh
+DirectoryCall:
+        push ax
+        call NAMFIL
+        mov dx,offset DirPath
+        mov di,dx
+        cld
+        rep movsb
+        xor al,al
+        stosb
+        pop ax
+        push bx
+        int 21h
+        pop bx
+        jnc DirectoryDone
+        mov dl,offset ERRPNF
+        cmp ax,2                ; DOS can report either file or path missing.
+        je DirectoryError
+        cmp ax,3
+        je DirectoryError
+        mov dl,offset ERRACC
+DirectoryError:
+        jmp ERROR
+DirectoryDone:
+        ret
 
 ;NAMFIL - Scan a file name for NAME, KILL, or FILES command
 ; Entry - [BX] = text pointer
