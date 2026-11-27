@@ -611,13 +611,13 @@ procedure   HandleFileTimes,NEAR
 	JMP	filetimes_ok		; Yes, continue
 ;;;; DOS 4.00				;AN000;
 gsetxa: 				;AN000;
-	CallResident ECritSFT		;AN000;;FT. enter critical section
 	CMP	AL,4			;AN000;;FT. =4
 	JBE	gshandle		;AN000;;FT. 2,3,4   do get/set by handle
 funcerr:				;AN000;
 	JMP	inval_func		;AN000;;FT. invalid function
 					;AN000;
 gshandle:				;AN000;
+	CallResident ECritSFT
 	MOV	[SAVE_ES],ES		;AN000;;FT. save regs
 	MOV	[SAVE_DI],DI		;AN000;;FT.
 	MOV	[SAVE_DS],DS		;AN000;;FT. save regs
@@ -762,6 +762,13 @@ BREAK <$DUP2 - force a dup on a particular jfn>
 ;
 Procedure   ForceDuplicateHandle,NEAR
 	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
+	call	CheckOwner		; validate the source before closing the destination
+	jc	DupErr
+	cmp	bx,cx
+	jne	DupReplace
+	mov	ax,bx			; same open handle, no change in reference count
+	jmp	HandleSuccess
+DupReplace:
 	SaveReg <BX,CX> 		; save source
 	MOV	BX,CX			; get one to close
 	invoke CloseHandle			; close destination handle

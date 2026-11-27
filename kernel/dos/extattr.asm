@@ -679,4 +679,9 @@ EndProc FileExtendedAttributes				 ;AN000;
 ;EndProc Get_max_EA_size		      ;FT. exit 			 ;AN000;				   ;AN000;
 										;AN000;
 DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC ExtattrEntries
+ExtattrEntries LABEL WORD
+        DW 0                            ; Only near callers within DOSCODE.
+DOSEND ENDS
     END

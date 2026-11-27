@@ -302,7 +302,7 @@ DosCodeEnd LABEL BYTE
 
         EXTRN ProcEntries:WORD,AllocEntries:WORD,CloseEntries:WORD,BufEntries:WORD,DinfoEntries:WORD,CreateEntries:WORD
         EXTRN RomEntries:WORD,MknodeEntries:WORD,FinfoEntries:WORD
-        EXTRN DupEntries:WORD,DiskEntries:WORD,Disk2Entries:WORD,Disk3Entries:WORD
+        EXTRN DupEntries:WORD,DiskEntries:WORD,Disk2Entries:WORD,Disk3Entries:WORD,ExtattrEntries:WORD
         EXTRN FileEntries:WORD,IsearchEntries:WORD,CpmioEntries:WORD,Cpmio2Entries:WORD
         EXTRN AbortEntries:WORD,SearchEntries:WORD,RenameEntries:WORD,OpenEntries:WORD,FatEntries:WORD
         EXTRN DirEntries:WORD,Dir2Entries:WORD,DircallEntries:WORD
@@ -334,6 +334,7 @@ DosCodeModules LABEL WORD
         DW OFFSET DOSGROUP:DiskEntries
         DW OFFSET DOSGROUP:Disk2Entries
         DW OFFSET DOSGROUP:Disk3Entries
+        DW OFFSET DOSGROUP:ExtattrEntries
         DW OFFSET DOSGROUP:AbortEntries
         DW OFFSET DOSGROUP:SearchEntries
         DW OFFSET DOSGROUP:RenameEntries

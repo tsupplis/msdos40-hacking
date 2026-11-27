@@ -69,7 +69,7 @@ ROM owns cluster allocation, release and traversal. MKNODE calls ROM and BUF dir
 
 DUP uses DS for kernel callbacks during DOS initialization, when SS belongs to the boot caller. Its direct handle entry preserves the caller’s DS and uses the DOS stack segment to obtain DOSGROUP.
 
-DISK calls DISK2’s SETUP directly. The EOF and zero-capacity exits consume the near return address and return to the read or write caller. DISK2 retains resident entries for absolute disk I/O. DISK3 has only movable callers, so its module list has no gateway slots. EXTATTR keeps its handle interface and returns the local attribute size through the saved user registers.
+DISK calls DISK2’s SETUP directly. The EOF and zero-capacity exits consume the near return address and return to the read or write caller. DISK2 retains resident entries for absolute disk I/O. DISK3 and EXTATTR have only DOSCODE callers, so both module lists are empty. HANDLE calls EXTATTR directly. EXTATTR returns the local attribute size through the saved user registers.
 
 ## FILE, ISEARCH, CPMIO and CPMIO2
 
