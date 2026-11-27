@@ -701,7 +701,7 @@ GetNormal:
 	Context DS
 	PUSH	ES
 	PUSH	DI
-	CallResident SFFromHandle
+	invoke LookupHandleFile
 	JC	RET44P
 	MOV	SI,ES
 	MOV	DS,SI

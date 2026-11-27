@@ -282,7 +282,7 @@ BREAK <IOCTL - munge on a handle to do device specific stuff>
 	JBE	ioctl_check_char	; char	device
 	JMP	ioctl_check_block	; Block device
 ioctl_check_char:
-	CallResident SFFromHandle		; ES:DI -> SFT
+	invoke LookupHandleFile		; ES:DI -> SFT
 	JNC	ioctl_check_permissions ; have valid handle
 ioctl_bad_handle:
 	MOV	AL,error_invalid_handle
@@ -427,7 +427,7 @@ doneok:
 ;	SI:DX -> Users Device Parameter Table
 ;	IOCALL -> IOCTL_Req structure
 GENERICIOCTLHANDLE:
-	CallResident SFFromHandle		; Get SFT for device.
+	invoke LookupHandleFile		; Get SFT for device.
 	jnc	goodh
 	JMP	ioctl_bad_handlej
 goodh:
@@ -570,7 +570,7 @@ ioctl_drv_err:
 
 ; Function 10
 Ioctl_Handle_redir:
-	CallResident SFFromHandle		; ES:DI -> SFT
+	invoke LookupHandleFile		; ES:DI -> SFT
 	JNC	ioctl_got_sft		; have valid handle
 	MOV	AL,error_invalid_handle
 	JMP	IoctlError

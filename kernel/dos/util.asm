@@ -41,6 +41,35 @@ if debug
 include bugtyp.asm
 endif
 
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry JobHandleEntry,223
+        DosCodeEntry HandleFileEntry,224
+        DosCodeEntry SystemFileEntry,225
+
+; Boot and INT 2Fh can arrive on a non-DOS stack, with caller-owned DS.
+; ES is the result segment for all three lookups. Supply DOSGROUP in it.
+procedure pJFNFromHandle,NEAR
+        PUSH    CS
+        POP     ES
+        JMP     JobHandleEntry
+EndProc pJFNFromHandle
+
+procedure SFFromHandle,NEAR
+        PUSH    CS
+        POP     ES
+        JMP     HandleFileEntry
+EndProc SFFromHandle
+
+procedure SFFromSFN,NEAR
+        PUSH    CS
+        POP     ES
+        JMP     SystemFileEntry
+EndProc SFFromSFN
+CODE ENDS
+
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
+
 BREAK   <pJFNFromHandle - return pointer to JFN table entry>
 
 ;
@@ -53,25 +82,24 @@ BREAK   <pJFNFromHandle - return pointer to JFN table entry>
 ;                   ES:DI point to the handle spot
 ;   Registers modified:
 ;               If no error, ES:DI, else AX,ES
-; NOTE:
-;   This routine is called from $CREATE_PROCESS_DATA_BLOCK which is called
-;       at DOSINIT time with SS NOT DOSGROUP
-procedure   pJFNFromHandle,NEAR
-	ASSUME  CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:NOTHING
-	MOV     ES,[CurrentPDB]         ; get user process data block
+procedure   LookupJobHandle,NEAR
+        PUSH    SS
+        POP     ES
+        entry   JobHandleInGroup
+        ASSUME  CS:DOSCODE,DS:NOTHING,ES:DOSGROUP,SS:NOTHING
+	MOV     ES,ES:[CurrentPDB]         ; get user process data block
+        ASSUME  ES:NOTHING
 	CMP     BX,ES:[PDB_JFN_Length]  ; is handle greater than allocated
 	JB      JFNAdd                  ; no, get offset
 	fmt     TypAccess,LevSFN,<"$p: Illegal JFN %x\n">,<BX>
 	MOV     AL,error_invalid_handle ; appropriate error
-ReturnCarry:
 	STC                             ; signal error
 	return                          ; go back
 JFNAdd: LES     DI,ES:[PDB_JFN_Pointer] ; get pointer to beginning of table
 	ADD     DI,BX                   ; add in offset
-ReturnNoCarry:
 	CLC                             ; no holes
 	return                          ; bye!
-EndProc pJFNFromHandle
+EndProc LookupJobHandle
 
 BREAK <SFFromHandle - return pointer (or error) to SF entry from handle>
 
@@ -84,26 +112,32 @@ BREAK <SFFromHandle - return pointer (or error) to SF entry from handle>
 ;               Carry Reset
 ;                   ES:DI has pointer to SF entry
 ;   Registers modified: If error, AX,ES, else ES:DI
-; NOTE:
-;   This routine is called from $CREATE_PROCESS_DATA_BLOCK which is called
-;       at DOSINIT time with SS NOT DOSGROUP
-procedure   SFFromHandle,NEAR
-	ASSUME  CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:NOTHING
-	CALL    pJFNFromHandle          ; get jfn pointer
-	retc                            ; return if error
-	CMP     BYTE PTR ES:[DI],-1     ; unused handle
-	JNZ     GetSF                   ; nope, suck out SF
-	fmt     TypAccess,LevSFN,<"$p: Illegal SFN $x:$x\n">,<ES,DI>
-	MOV     AL,error_invalid_handle ; appropriate error
-	jump    ReturnCarry             ; signal it
+procedure   LookupHandleFile,NEAR
+        PUSH    SS
+        POP     ES
+        entry   HandleFileInGroup
+        ASSUME  CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:NOTHING
+	PUSH    DX
+        MOV     DX,ES                   ; retain DOSGROUP across the JFN lookup
+        CALL    JobHandleInGroup
+        JC      HandleFileDone
+        CMP     BYTE PTR ES:[DI],-1
+        JNZ     GetSF
+        fmt     TypAccess,LevSFN,<"$p: Illegal SFN $x:$x\n">,<ES,DI>
+        MOV     AL,error_invalid_handle
+        STC
+        JMP     SHORT HandleFileDone
 GetSF:
-	SaveReg <BX>                    ; save handle
-	MOV     BL,BYTE PTR ES:[DI]     ; get SFN
-	XOR     BH,BH                   ; ignore upper half
-	CALL    SFFromSFN               ; get real sf spot
-	RestoreReg  <BX>                ; restore
-	return                          ; say goodbye
-EndProc SFFromHandle
+        PUSH    BX
+        MOV     BL,ES:[DI]
+        XOR     BH,BH
+        MOV     ES,DX
+        CALL    SystemFileInGroup
+        POP     BX
+HandleFileDone:
+        POP     DX
+        return
+EndProc LookupHandleFile
 
 BREAK <SFFromSFN - index into SF table for SFN>
 
@@ -113,12 +147,13 @@ BREAK <SFFromSFN - index into SF table for SFN>
 ;   Input:      BX has SF index
 ;   Output:     ES:DI points to SF entry
 ;   Registers modified: ES:DI, BX only
-; NOTE:
-;   This routine is called from SFFromHandle which is called
-;       at DOSINIT time with SS NOT DOSGROUP
-procedure   SFFromSFN,NEAR
-	ASSUME  CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:NOTHING
-	LES     DI,[SFT_Addr]           ; get pointer to beginning of table
+procedure   LookupSystemFile,NEAR
+        PUSH    SS
+        POP     ES
+        entry   SystemFileInGroup
+        ASSUME  CS:DOSCODE,DS:NOTHING,ES:DOSGROUP,SS:NOTHING
+	LES     DI,ES:[SFT_Addr]           ; get pointer to beginning of table
+        ASSUME  ES:NOTHING
 ScanLoop:
 	CMP     BX,ES:[DI].SFCount      ; is handle in this table?
 	JB      GetOffset               ; yes, go grab it
@@ -138,7 +173,7 @@ GetOffset:
 	CLC                             ; no holes
 Restore:
 	return                          ; bye!
-EndProc SFFromSFN
+EndProc LookupSystemFile
 
 BREAK <JFNFree - return a jfn pointer if one is free>
 
@@ -152,10 +187,10 @@ BREAK <JFNFree - return a jfn pointer if one is free>
 ;               BX has new handle, ES:DI is pointer to JFN slot
 ;   Registers modified: As above only.
 procedure   JFNFree,NEAR
-	ASSUME  CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
+	ASSUME  CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
 	XOR     BX,BX                   ; try starting low
 JFNScan:
-	CALL    pJFNFromHandle          ; get the appropriate handle
+	CALL    LookupJobHandle          ; get the appropriate handle
 	JC      JFNNone                 ; no more handles
 	CMP     BYTE PTR ES:[DI],-1     ; free?
 	JZ      JFNFound                ; yes, carry is clear
@@ -179,11 +214,11 @@ BREAK <SFNFree - find a free SFN>
 ;   Registers modified: none
 
 Procedure SFNFree,NEAR
-	ASSUME  CS:DOSGROUP,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
+	ASSUME  CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
 	XOR     BX,BX                   ; start at beginning
 SFNFreeLoop:
 	SaveReg <BX>                    ; Next call zaps BX
-	CALL    SFFromSFN               ; get the potential handle
+	CALL    LookupSystemFile               ; get the potential handle
 	RestoreReg  <BX>
 	JNC     SFNCheck                ; no carry, check to see if its free
 	MOV     AL,error_too_many_open_files    ; appropriate error
@@ -228,5 +263,13 @@ SFNDone:
 	return                          ; bye
 EndProc SFNFree
 
-CODE    ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC UtilEntries
+UtilEntries LABEL WORD
+        DW OFFSET DOSGROUP:JobHandleEntry_VECTOR, OFFSET DOSGROUP:JobHandleInGroup
+        DW OFFSET DOSGROUP:HandleFileEntry_VECTOR, OFFSET DOSGROUP:HandleFileInGroup
+        DW OFFSET DOSGROUP:SystemFileEntry_VECTOR, OFFSET DOSGROUP:SystemFileInGroup
+        DW 0
+DOSEND ENDS
 END

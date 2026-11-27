@@ -120,7 +120,7 @@ FCBScanDone:
 	XOR     BX,BX
 Scan:
 	push    bx
-	CallResident SFFromSFN
+	invoke LookupSystemFile
 	pop     bx
 	retc
 	cmp     es:[di].sf_ref_count,0

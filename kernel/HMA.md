@@ -1,6 +1,6 @@
 # DOS kernel HMA standard
 
-**Progress — 41 whole modules relocatable in DOSCODE.** PROC, ALLOC, CLOSE, BUF, DINFO, CREATE, ROM, MKNODE, FINFO, DUP, DISK, DISK2, DISK3, EXTATTR, FILE, ISEARCH, CPMIO, CPMIO2, ABORT, SEARCH, RENAME, OPEN, FAT, DIR, DIR2, DIRCALL, FCB, FCBIO, FCBIO2, MACRO2, GETSET, PARSE, TIME, DEV, PATH, HANDLE, IOCTL, MACRO, DELETE, LOCK and SHARE.
+**Progress — 42 whole modules relocatable in DOSCODE.** PROC, ALLOC, CLOSE, BUF, DINFO, CREATE, ROM, MKNODE, FINFO, DUP, DISK, DISK2, DISK3, EXTATTR, FILE, ISEARCH, CPMIO, CPMIO2, ABORT, SEARCH, RENAME, OPEN, FAT, DIR, DIR2, DIRCALL, FCB, FCBIO, FCBIO2, MACRO2, GETSET, PARSE, TIME, DEV, PATH, HANDLE, IOCTL, MACRO, DELETE, LOCK, SHARE and UTIL.
 
 Count the assembly input that produces the object file. Track included sources under their owning module. The inventory lists the affected service sources since v1.2.0. Update the progress line and inventory together after verification.
 
@@ -133,6 +133,12 @@ The kernel SHARE module owns the retry loop and the sharing-violation response i
 
 With the same `DOS=HIGH,UMB` boot, the largest executable block grew from 624,352 to 624,416 B (+64 B). The six placement tests exercise Retry and Fail through 120Ah and verify that a failed create removes its directory entry. The HMA boot also checks that A20 is released during both the SHARE callback and the INT 24h handler.
 
+## UTIL
+
+All five job-handle and system-file-table helpers execute in DOSCODE. Movable callers use near calls. The three resident entries in `UtilEntries` serve process initialization, server commit and INT 2Fh/1216h and 1220h. They pass DOSGROUP in ES so the lookups preserve DS and can run on the caller’s stack. The process handle table and system file table keep their original addresses.
+
+With the same `DOS=HIGH,UMB` boot, the largest executable block grew from 624,416 to 624,560 B (+144 B). All six placement tests check process-handle and system-file-table exhaustion independently, plus invalid lookups on the application stack.
+
 ## Linked modules and dependencies
 
 The module name is the object filename in the LINK response file. Each row lists the INCLUDE directives in the top-level assembly source and the other objects that supply its external code or data references in this build. Conditional INCLUDE directives appear even when disabled. The object dependencies come from MASM fixup records resolved against the defining objects' public symbols. A reference can be a call, pointer, dispatch-table entry or shared variable. Runtime calls through interrupt vectors and installed drivers require a separate interface review.
@@ -143,7 +149,7 @@ The module name is the object filename in the LINK response file. Each row lists
 
 **PROC example.** `proc.asm` directly includes `dosseg.asm`, `dossym.inc`, `devsym.inc` and `exec.asm`. In turn, `exec.asm` includes `ea.inc` and `version.inc`. `dosseg.asm` declares the shared segments and DOSGROUP. `exec.asm` emits code and data into those segments as part of PROC. Both are assembly-time dependencies. At link time, for example, PROC's `DosCallbackPtr` reference resolves to MISC and its near call to `AllocateBlock` resolves to ALLOC.
 
-Estimates use the current MASM object segment lengths and public-symbol offsets in `msdos.map`. “Up to” gives the module’s resident CODE size before allowing for gateways and callbacks. A named subset counts only those routine bodies. The net conventional-memory gain requires a before/after boot with the same configuration. For scale, TIME keeps 65 B resident for five gateways. The current build has 28,261 B in DOSCODE.
+Estimates use the current MASM object segment lengths and public-symbol offsets in `msdos.map`. “Up to” gives the module’s resident CODE size before allowing for gateways and callbacks. A named subset counts only those routine bodies. The net conventional-memory gain requires a before/after boot with the same configuration. For scale, TIME keeps 65 B resident for five gateways. The current build has 28,578 B in DOSCODE.
 
 Of the two modules with an existing resident or partial review, MISC has another 159 B in `$SETDPB` alone, excluding gateways. NIBDOS has 0 B to move under this model.
 
@@ -202,7 +208,7 @@ Of the two modules with an existing resident or partial review, MISC has another
 | SHARE | dosseg.asm, dossym.inc, devsym.inc | CONST2, MISC, MISC2, MSCTRLC, MSDATA, NIBDOS | DOSCODE, Whole Module Relocatable. The two callbacks to SHARE.EXE remain resident. |
 | SRVCALL | dosseg.asm, dossym.inc, devsym.inc, dpl.asm | CLOSE, CONST2, CRIT, IOCTL, MISC2, MSCODE, MSDATA, MSDISP, NIBDOS, UTIL | Up to 305 B. The server service dispatches through a resident table. SHARE calls and the stack-discarding redispatch path reduce the available saving. |
 | TIME | dosseg.asm, dossym.inc, devsym.inc | CONST2, DEV, MSDATA, MSDISP, MSTABLE, NIBDOS | DOSCODE, Whole Module Relocatable. DATE16 packs FAT timestamps on the DOS stack. Clock-driver requests call DEV directly in DOSCODE. |
-| UTIL | dosseg.asm, dossym.inc, devsym.inc, bugtyp.asm | CONST2, NIBDOS | Up to 190 B. Five handle and SFT helpers. DOS initialization can call them before placement, with a non-DOS stack. |
+| UTIL | dosseg.asm, dossym.inc, devsym.inc, bugtyp.asm | CONST2, MISC, NIBDOS | DOSCODE, Whole Module Relocatable. Three resident gateways preserve the boot, server and multiplex interfaces. |
 
 
 

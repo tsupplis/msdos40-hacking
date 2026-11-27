@@ -489,7 +489,7 @@ exec_com_file:
 ;
 exec_alloc_com_file:
 	MOV	BX,exec_fh
-	CallResident	SFFromHandle
+	invoke	LookupHandleFile
 	JNC	exec_com_size
 	JMP	exec_bomb
 exec_no_memj:

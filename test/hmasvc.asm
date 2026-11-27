@@ -173,6 +173,7 @@ vector_wrong:
     jne fail
     mov bx,ax
     call check_handles
+    call check_handle_limits
     mov ax,bx
     call close
     mov dx,1                    ; open an existing file
@@ -518,6 +519,117 @@ check_handles:
     cmp dx,285dh
     jne fail
     ret
+; Duplicate one file to fill the process table. Then grow that table and
+; open NUL repeatedly to fill the system table with a process slot to spare.
+check_handle_limits:
+    push bx
+    ; Count free JFNs directly in this process's PSP handle table.
+    mov cx,[32h]
+    cmp cx,20                   ; check_handles restored the default size
+    jne fail
+    les di,[34h]
+    xor bp,bp
+.count_handles:
+    cmp byte [es:di],0ffh
+    jne .next_handle
+    inc bp
+.next_handle:
+    inc di
+    loop .count_handles
+    xor si,si
+.dup:
+    mov ah,45h
+    int 21h
+    jc .dup_full
+    push ax
+    inc si
+    cmp si,20
+    jb .dup
+    jmp fail
+.dup_full:
+    cmp ax,4
+    jne fail
+    cmp si,bp
+    jne fail
+    or si,si
+    jz fail
+.close_dups:
+    pop ax
+    call close
+    dec si
+    jnz .close_dups
+    mov bx,48
+    mov ah,67h
+    int 21h
+    jc fail
+    ; Count unused SFT entries across all blocks, including FILES= extensions.
+    mov ah,52h
+    int 21h
+    les bx,[es:bx+4]            ; SYSI_SFT in the DOS list of lists
+    xor bp,bp
+.sft_block:
+    mov cx,[es:bx+4]            ; SFCount
+    lea di,[bx+6]               ; SFTable
+    jcxz .next_block
+.count_files:
+    cmp word [es:di],0          ; sf_ref_count
+    jne .next_file
+    inc bp
+.next_file:
+    add di,59                   ; size of the DOS 4 sf_entry (asminc/sf.inc)
+    loop .count_files
+.next_block:
+    les bx,[es:bx]              ; SFLink
+    cmp bx,0ffffh
+    jne .sft_block
+.open:
+    mov dx,nul_name
+    mov ax,3d00h
+    int 21h
+    jc .sft_full
+    push ax
+    inc si
+    cmp si,48
+    jb .open
+    jmp fail
+.sft_full:
+    cmp ax,4
+    jne fail
+    cmp si,bp
+    jne fail
+    or si,si
+    jz fail
+    pop bx
+    push bx
+    mov ah,45h                  ; reuses an SFT and must still succeed
+    int 21h
+    jc fail
+    call close
+.close_files:
+    pop ax
+    call close
+    dec si
+    jnz .close_files
+    mov bx,20
+    mov ah,67h
+    int 21h
+    jc fail
+    mov bx,0ffffh               ; both multiplex lookups use our application stack
+    mov ax,1220h
+    push ax
+    int 2fh
+    pop dx
+    jnc fail
+    cmp al,6
+    jne fail
+    mov bx,0ffffh
+    mov ax,1216h
+    push ax
+    int 2fh
+    pop dx
+    jnc fail
+    pop bx
+    ret
 ; BX is an open disk file. Exercise handle, drive and driver-packet IOCTLs.
 check_ioctl:
     push bx
@@ -596,6 +708,7 @@ server_query dw 4409h,26,0,0,0,0,0,0,0,0,0
 ioctl_packet times 256 db 0
 pathname db 'B:\SVCDIR\..\SVCTEST.TMP',0
 flatname db 'B:\SVCTEST.TMP',0
+nul_name db 'NUL',0
 okmsg db 'HMA SERVICES PASS',13,10,'$'
 times 256 db 0
 stacktop:

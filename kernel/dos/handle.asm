@@ -163,7 +163,7 @@ Procedure   CloseHandle,NEAR
 ; -1.
 ;
 FreeJFN:
-	CallResident pJFNFromHandle		;   d = pJFN (handle);
+	invoke LookupJobHandle		;   d = pJFN (handle);
 	fmt TypAccess,LevSFN,<"$p  Close jfn pointer $x:$x\n">,<es,di>
 	MOV	BYTE PTR ES:[DI],0FFh	; release the JFN
 PostFree:
@@ -372,7 +372,7 @@ procedure   ReadHandle,NEAR
         call    ReadDo
         jmp     ReadFileData
 ReadDo: pop     si
-	CallResident pJFNFromHandle
+	invoke LookupJobHandle
 	JC	ReadError
 	MOV	AL,ES:[DI]
 	call	CheckOwner		; get the handle
@@ -733,7 +733,7 @@ BREAK <$DUP - duplicate a jfn>
 Procedure   DuplicateHandle,NEAR
 	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
 	MOV	AX,BX			; save away old handle in AX
-	CallResident JFNFree 		; free handle? into ES:DI, new in BX
+	invoke JFNFree 		; free handle? into ES:DI, new in BX
 DupErrorCheck:
 	JC	DupErr			; nope, bye
 	SaveReg <ES,DI> 		; save away SFT
@@ -742,7 +742,7 @@ DupErrorCheck:
 	call	CheckOwner		; get sft in ES:DI
 	JC	DupErr			; errors go home
 	invoke DuplicateSelectedSft
-	CallResident pJFNFromHandle		; get pointer
+	invoke LookupJobHandle		; get pointer
 	MOV	BL,ES:[DI]		; get SFT number
 	MOV	DS:[SI],BL		; stuff in new SFT
 	jmp HandleSuccess		; and go home
@@ -773,7 +773,7 @@ DupReplace:
 	MOV	BX,CX			; get one to close
 	invoke CloseHandle			; close destination handle
 	RestoreReg  <BX,AX>		; old in AX, new in BX
-	CallResident pJFNFromHandle		; get pointer
+	invoke LookupJobHandle		; get pointer
 	JMP	DupErrorCheck		; check error and do dup
 EndProc ForceDuplicateHandle
 
@@ -796,7 +796,7 @@ Break	<CheckOwner - verify ownership of handles from server>
 
 Procedure   CheckOwner,NEAR
 	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGROUP
-	CallResident SFFromHandle
+	invoke LookupHandleFile
 	retc
 	push	ax
 	mov	ax,user_id

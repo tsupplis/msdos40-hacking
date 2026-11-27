@@ -147,7 +147,7 @@ IF  DBCS				;AN000;
 novol:					;AN000;
 ENDIF					;AN000;
 	CallResident ECritSFT
-	CallResident SFNFree 		; get a free sfn
+	invoke SFNFree 		; get a free sfn
 	CallResident LCritSFT
 	JC	OpenFailJ		; oops, no free sft's
 	MOV	SFN,BX			; save the SFN for later
@@ -157,7 +157,7 @@ ENDIF					;AN000;
 ;
 ; Find a free area in the user's JFN table.
 ;
-	CallResident JFNFree 		; get a free jfn
+	invoke JFNFree 		; get a free jfn
 	JNC	SaveJFN
 OpenFailJ:
 	JMP	OpenFail		; there were free JFNs... try SFN

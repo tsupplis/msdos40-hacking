@@ -123,7 +123,7 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	JA	lock_bad_func		;AN000;;MS. no,
 
 	PUSH	DI			       ; Save LengthLow
-	CallResident SFFromHandle		       ; ES:DI -> SFT
+	invoke LookupHandleFile		       ; ES:DI -> SFT
 	JNC	lock_do 		       ; have valid handle
 	POP	DI			       ; Clean stack
 	MOV	AL,error_invalid_handle
