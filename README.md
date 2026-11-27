@@ -22,7 +22,7 @@ We are progressing along the following roles:
 | Goal | Details |
 |---|---|
 | **Stability** | Apply the documented Microsoft and IBM fixes and regression-test the rebuilt system. |
-| **Memory** | Surpass DOS 3.3 and approach DOS 5.0, targeting at least 610 Kbytes free. UMB allocation and XMS reporting are available. Brand new HIMEM.SYS implementation, Selected kernel services can run in the HMA or UMB. |
+| **Memory** | Surpass DOS 3.3 and approach DOS 5.0, targeting at least 610 Kbytes free. UMB allocation and XMS reporting are available. Strong XMS, EMS, HMA, UMB implementation, Selected kernel services can run in the HMA or UMB and Main DOS to UMB |
 | **Storage** | Support for up to 8 physical disks, Integration of all patches, reliability testing |
 | **Usability** | Stay MS-DOS, smooth the angles. Command-line editing and recall, clearer memory diagnostics, BASIC (`mbasic.com`) and a screen editor (`vi.exe`) on the full floppy. |
 | **Compatibility** | Match closely or exceed DOS 5.0 commands and functionality. For example some 6.X DOS command have been reimplemented and Y2k has a stronger enforcement (4 digit dates are mandatory) |
