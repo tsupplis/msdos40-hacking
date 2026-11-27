@@ -53,6 +53,8 @@ static struct {
     int numrows, cap, cx, cy, top, height, width, dirty, eofmark;
     int matchlen, marked, ax, ay;
     long left;
+    file_stamp saved, observed;
+    int confirm_save;
     char *filename;
     char message[160];
 } E;
@@ -88,6 +90,17 @@ static int editorInsertRow(int at, const char *s, int len, int eol)
     return 1;
 }
 
+static const char *ending(int eol)
+{
+    return eol == 2 ? "\r\n" : "\n";
+}
+
+static void countRow(file_stamp *stamp, const erow *row)
+{
+    fs_count(stamp,row->chars,row->size);
+    fs_count(stamp,ending(row->eol),row->eol);
+}
+
 /* Read bytes in binary mode. Only a final Ctrl-Z is a DOS EOF marker.
  * Refuse embedded NUL/Ctrl-Z instead of offering a truncated file to save. */
 static int editorOpen(char *filename)
@@ -97,6 +110,7 @@ static int editorOpen(char *filename)
     unsigned cap = 0;
     int len = 0, c, ok = 1, eol;
     E.filename = filename;
+    E.saved.size = -1;
     fp = fopen(filename,"rb");
     if (!fp) return errno == ENOENT && editorInsertRow(0,"",0,0);
     if (isatty(fileno(fp))) { fclose(fp); return 0; }
@@ -129,37 +143,87 @@ static int editorOpen(char *filename)
     if (ferror(fp)) ok = 0;
     if (fclose(fp)) ok = 0;
     if (ok) ok = len <= MAX_LINE && editorInsertRow(E.numrows,line ? line : "",len,0);
+    if (ok) {
+        int i;
+        fs_reset(&E.saved);
+        for (i = 0; i < E.numrows; ++i) countRow(&E.saved,E.row+i);
+        if (E.eofmark) fs_count(&E.saved,"\032",1);
+    }
     free(line);
     return ok;
+}
+
+/* Recovery files are siblings of the document. Show their short names so
+ * both remain visible even on a 40-column display. */
+static const char *leaf(const char *path)
+{
+    const char *name = path;
+    while (*path) {
+        if (*path == ':' || *path == '\\' || *path == '/') name = path+1;
+        ++path;
+    }
+    return name;
 }
 
 static int editorSave(void)
 {
     char temporary[FS_NAME];
-    FILE *fp = fs_create(temporary,sizeof(temporary),E.filename);
-    int i, ok = 1;
+    file_stamp written;
+    const file_stamp *expected = E.confirm_save ? &E.observed : &E.saved;
+    save_result result;
+    FILE *fp;
+    int i, status, ok = 1;
     erow *row;
-    if (fp) {
+    E.confirm_save = 0;
+    if (!E.dirty && E.saved.size >= 0) {
+        strcpy(E.message,"No changes.");
+        return 1;
+    }
+    status = fs_writable(E.filename);
+    if (status == SAVE_OK) {
+        fp = fs_create(temporary,sizeof(temporary),E.filename);
+        if (!fp) goto write_error;
+        fs_reset(&written);
         for (i = 0; i < E.numrows && ok; ++i) {
             row = &E.row[i];
             ok = fwrite(row->chars,1,row->size,fp) == (unsigned)row->size;
             if (ok && row->eol)
-                ok = fwrite("\r\n"+2-row->eol,1,row->eol,fp) == row->eol;
+                ok = fwrite(ending(row->eol),1,row->eol,fp) == row->eol;
+            countRow(&written,row);
         }
-        if (E.eofmark && putc(26,fp) == EOF) ok = 0;
+        if (E.eofmark) {
+            if (putc(26,fp) == EOF) ok = 0;
+            fs_count(&written,"\032",1);
+        }
         if (ferror(fp)) ok = 0;
         if (fclose(fp)) ok = 0;
-        if (ok) {
-            if (!fs_commit(temporary,E.filename,NULL)) {
-                sprintf(E.message,"Save failed. Edited copy: %s",temporary);
-                return 0;
-            }
+        if (!ok) { unlink(temporary); goto write_error; }
+        status = fs_commit(temporary,E.filename,expected,&result);
+        if (status == SAVE_OK) {
+            E.saved = written;
             E.dirty = 0;
-            strcpy(E.message,"Saved.");
+            if (result.backup[0]) sprintf(E.message,"Saved. Previous: %s",leaf(result.backup));
+            else strcpy(E.message,"Saved.");
             return 1;
         }
-        unlink(temporary);
+        if (status == SAVE_ERROR || unlink(temporary)) {
+            if (result.backup[0])
+                sprintf(E.message,"Old:%s Edited:%s",leaf(result.backup),leaf(temporary));
+            else sprintf(E.message,"Save failed. Edited copy: %s",leaf(temporary));
+            return 0;
+        }
+        if (status == SAVE_CHANGED) {
+            E.observed = result.observed;
+            E.confirm_save = 1;
+            strcpy(E.message,"Disk file changed. Ctrl-S to overwrite.");
+            return 0;
+        }
     }
+    if (status == SAVE_PROTECTED) {
+        strcpy(E.message,"Save failed. Destination is protected.");
+        return 0;
+    }
+write_error:
     strcpy(E.message,"Save failed. Check space and directory permissions.");
     return 0;
 }
@@ -179,8 +243,18 @@ static int editorInsertChar(int c)
 static int editorInsertNewline(void)
 {
     erow *r = &E.row[E.cy];
+    char *smaller;
+    if (!E.cx) {
+        if (!editorInsertRow(E.cy,"",0,2)) return 0;
+        ++E.cy;
+        return 1;
+    }
     if (!editorInsertRow(E.cy+1,r->chars+E.cx,r->size-E.cx,r->eol)) return 0;
     r = &E.row[E.cy++];
+    if (E.cx < r->size) {
+        smaller = realloc(r->chars,E.cx+1U);
+        if (smaller) r->chars = smaller;
+    }
     r->size = E.cx;
     r->chars[E.cx] = 0;
     r->eol = 2;
@@ -353,6 +427,96 @@ static int copySelection(selection s, int cut)
     return 1;
 }
 
+/* Store only the removed text and the range that replaced it. A clipboard
+ * operation is one edit regardless of how many rows it spans. */
+#define UNDO_DEPTH 5
+typedef struct {
+    block removed;
+    selection range;
+    int cx, cy, ax, ay, marked, dirty;
+} undo_entry;
+static undo_entry history[UNDO_DEPTH];
+static int history_count;
+static erow empty_row = {"",0,0};
+
+static int undoEdit(void)
+{
+    undo_entry *u;
+    erow *rows;
+    int count;
+    if (!history_count) {
+        strcpy(E.message,"Nothing to undo.");
+        return 1;
+    }
+    u = history+history_count-1;
+    rows = u->removed.count ? u->removed.rows : &empty_row;
+    count = u->removed.count ? u->removed.count : 1;
+    if (!replaceBlock(u->range,rows,count)) return 0;
+    E.cx = u->cx; E.cy = u->cy;
+    E.ax = u->ax; E.ay = u->ay; E.marked = u->marked;
+    E.dirty = u->dirty;
+    freeBlock(&u->removed);
+    --history_count;
+    strcpy(E.message,"Undone.");
+    return 1;
+}
+
+static int applyEdit(int key, selection s)
+{
+    undo_entry u;
+    erow insert[2];
+    char ch = (char)key;
+    int has_selection = s.y != s.endy || s.x != s.endx;
+    int ok;
+
+    if (key == 24 && !has_selection) return copySelection(s,1);
+    if (key == 22 && !clipboard.count) {
+        strcpy(E.message,"Clipboard is empty.");
+        return 1;
+    }
+    u.cx = E.cx; u.cy = E.cy; u.marked = E.marked;
+    u.ax = E.ax; u.ay = E.ay; u.dirty = E.dirty;
+    u.removed.count = 0; u.removed.rows = NULL;
+    if (!has_selection && (key == 8 || key == DEL_KEY)) {
+        editorMoveCursor(key == 8 ? ARROW_LEFT : ARROW_RIGHT);
+        if (key == 8) { s.x = E.cx; s.y = E.cy; }
+        else { s.endx = E.cx; s.endy = E.cy; }
+        E.cx = u.cx; E.cy = u.cy;
+        if (s.y == s.endy && s.x == s.endx) return 1;
+    }
+    if ((s.y != s.endy || s.x != s.endx) && !copyBlock(s,&u.removed)) return 0;
+    if (key == 24) ok = copySelection(s,1);
+    else if (key == 22) ok = replaceBlock(s,clipboard.rows,clipboard.count);
+    else if (has_selection) {
+        insert[0] = empty_row;
+        insert[0].chars = &ch;
+        insert[0].size = key == 9 || (key >= 32 && key <= 255);
+        insert[0].eol = 2;
+        insert[1] = empty_row;
+        ok = replaceBlock(s,insert,key == 13 ? 2 : 1);
+    } else if (key == 8 || key == DEL_KEY) {
+        E.cx = s.x; E.cy = s.y;
+        ok = editorDelete();
+    } else if (key == 13) ok = editorInsertNewline();
+    else ok = editorInsertChar(key);
+    if (!ok) {
+        E.cx = u.cx; E.cy = u.cy;
+        freeBlock(&u.removed);
+        return 0;
+    }
+    E.marked = 0;
+    E.dirty = 1;
+    u.range = s;
+    u.range.endx = E.cx;
+    u.range.endy = E.cy;
+    if (history_count == UNDO_DEPTH) {
+        freeBlock(&history[0].removed);
+        memmove(history,history+1,(--history_count)*sizeof(u));
+    }
+    history[history_count++] = u;
+    return 1;
+}
+
 static long nextColumn(long col, char c)
 {
     return c == '\t' ? (col | 7L)+1 : col+1;
@@ -435,6 +599,7 @@ static void editorHelp(void)
         "In Find: arrows cycle matching lines.",
         "Enter accepts. Esc restores position.",
         "",
+        "Ctrl-Z          Undo (five edits)",
         "Ctrl-S          Save file",
         "Ctrl-Q          Quit (twice if unsaved)"
     };
@@ -505,14 +670,13 @@ static void editorFind(int folded)
 
 static void editorLoop(void)
 {
-    int c, confirm = 0, ok, x, y;
+    int c, confirm = 0, ok, i, was_dirty;
     selection s;
-    char ch;
-    erow insert[2];
     strcpy(E.message,"F1 Help  Ctrl-S Save  Ctrl-F Find  Ctrl-Q Quit");
     for (;;) {
         editorRefreshScreen();
         c = editorReadKey();
+        if (c != 19) E.confirm_save = 0;
         if (c == 17) {
             if (!E.dirty || confirm) return;
             strcpy(E.message,"Unsaved changes. Press Ctrl-Q again to discard.");
@@ -527,40 +691,25 @@ static void editorLoop(void)
             editorMoveCursor(c & ~SELECT_KEY);
             continue;
         }
-        if ((s.y != s.endy || s.x != s.endx) &&
-            (c == 8 || c == DEL_KEY || c == 13 || c == 9 || (c >= 32 && c <= 255))) {
-            ch = (char)c;
-            insert[0].chars = &ch;
-            insert[0].size = c == 9 || (c >= 32 && c <= 255);
-            insert[0].eol = 2;
-            insert[1] = insert[0];
-            ok = replaceBlock(s,insert,c == 13 ? 2 : 1);
-        } else switch (c) {
-        case 3: case 24: ok = copySelection(s,c == 24); break;
-        case 22:
-            if (clipboard.count) ok = replaceBlock(s,clipboard.rows,clipboard.count);
-            else strcpy(E.message,"Clipboard is empty.");
+        switch (c) {
+        case 3: ok = copySelection(s,0); break;
+        case 26: ok = undoEdit(); break;
+        case 8: case 13: case 22: case 24: case DEL_KEY:
+            ok = applyEdit(c,s);
             break;
         case 27: E.marked = 0; break;
         case HELP_KEY: editorHelp(); break;
-        case 19: editorSave(); break;
-        case 6: case FIND_FOLDED: E.marked = 0; editorFind(c == FIND_FOLDED); break;
-        case 13: E.marked = 0; ok = editorInsertNewline(); if (ok) E.dirty = 1; break;
-        case 8:
-            E.marked = 0;
-            x = E.cx; y = E.cy;
-            editorMoveCursor(ARROW_LEFT);
-            if (x != E.cx || y != E.cy) ok = editorDelete();
-            if (!ok) { E.cx = x; E.cy = y; }
-            break;
-        case DEL_KEY: E.marked = 0; ok = editorDelete(); break;
-        default:
-            E.marked = 0;
-            if (c >= ARROW_LEFT) editorMoveCursor(c);
-            else if (c == 9 || (c >= 32 && c <= 255)) {
-                ok = editorInsertChar(c);
-                if (ok) E.dirty = 1;
+        case 19:
+            was_dirty = E.dirty;
+            if (editorSave() && was_dirty) {
+                /* Earlier undo positions now differ from the saved file. */
+                for (i = 0; i < history_count; ++i) history[i].dirty = 1;
             }
+            break;
+        case 6: case FIND_FOLDED: E.marked = 0; editorFind(c == FIND_FOLDED); break;
+        default:
+            if (c >= ARROW_LEFT) { E.marked = 0; editorMoveCursor(c); }
+            else if (c == 9 || (c >= 32 && c <= 255)) ok = applyEdit(c,s);
         }
         if (!ok) strcpy(E.message,"Edit refused. Line limit or insufficient memory.");
     }

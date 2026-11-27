@@ -9,7 +9,7 @@
 #   make run          build and boot the floppy image in PCE
 #   make tools-check  smoke-test the vintage tools under emu2
 
-SUBDIRS = messages boot common mapper kernel commands gwbasic media
+SUBDIRS = messages boot common mapper kernel commands edit gwbasic media
 
 .PHONY: all clean foundation run msdos dist check tools-check $(SUBDIRS)
 
@@ -25,7 +25,7 @@ boot:     messages
 common:   messages boot
 kernel:   messages boot common mapper
 commands: messages common mapper
-media:    boot kernel commands gwbasic
+media:    boot kernel commands edit gwbasic
 
 # clean: one clean-<dir> target per directory
 CLEAN_SUBDIRS = $(addprefix clean-,$(SUBDIRS))
@@ -36,7 +36,7 @@ $(CLEAN_SUBDIRS): clean-%:
 	$(MAKE) -C $* clean
 
 # media/ builds all three images; dist is the readable name for that
-dist: boot kernel commands gwbasic
+dist: boot kernel commands edit gwbasic
 	$(MAKE) -C media dist
 
 check: all

@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 
 root = Path(__file__).resolve().parent
-for mode in range(6):
+for mode in range(4):
     with tempfile.TemporaryDirectory() as folder:
         wd = Path(folder)
         drive = wd / 'b'
@@ -25,4 +25,4 @@ for mode in range(6):
         if mode:
             assert b'OLD' in contents, (mode, contents)
         assert b'NEW' in contents, (mode, contents)
-print('Replacement: success, backup, rename failures, rollback failure and collision PASS')
+print('Replacement: success, rename failures, rollback failure and collision PASS')

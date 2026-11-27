@@ -7,8 +7,10 @@ Press F1 while editing or searching for keyboard help. Esc or F1 returns
 to the same position and selection. Run `EDIT /?` or `HELP EDIT` for the keys.
 
 Hold Shift with arrows, Home, End, PgUp or PgDn to select text. Ctrl-C copies,
-Ctrl-X cuts and Ctrl-V pastes. The clipboard lasts until EDIT exits. Typing,
-Enter or paste replaces the selection. Esc clears it. Ctrl-F searches literally
+Ctrl-X cuts and Ctrl-V pastes. The clipboard lasts until EDIT exits.
+Ctrl-Z undoes the last edit, up to five edits back. Each typed character,
+line break, deletion, cut, paste or selection replacement counts as one edit.
+Typing, Enter or paste replaces the selection. Esc clears it. Ctrl-F searches literally
 and Ctrl-Shift-F folds case using the current DOS uppercase table.
 
 The editor preserves existing CRLF and LF breaks, a missing final newline,
@@ -16,11 +18,14 @@ DOS code-page bytes, and an optional final Ctrl-Z. Enter inserts CRLF.
 An embedded NUL or Ctrl-Z rejects the complete load. Saving needs enough
 free disk space for a second copy in the target directory. A failed write
 keeps the original and the edited buffer. If the final rename fails, EDIT
-reports the name of the completed temporary copy.
+reports recovery filenames in the document directory. Ctrl-S leaves an
+unchanged existing document alone. If the destination appeared, disappeared,
+or its contents changed since opening or saving, press Ctrl-S again to
+confirm that version. Any other key cancels the confirmation.
 
 ## Build and capacity
 
-Run `make -C commands/edit` from the project root. Microsoft C 5.1 compact
+Run `make -C edit` from the project root. Microsoft C 5.1 compact
 model keeps code in one segment and allocates text on the far heap. Large
 model would add far code calls without increasing the usable data space.
 Each line stores its bytes once. Tabs expand for display only.
@@ -32,15 +37,15 @@ determine the usable document size.
 
 | Measurement | Largest complete load | First refused |
 |---|---:|---:|
-| emu2, file-test build, 78 bytes plus CRLF per line | 501,680 bytes | 501,760 bytes |
-| emu2, file-test build, 1,022 bytes plus CRLF per line | 595,968 bytes | 596,992 bytes |
+| emu2, file-test build, 78 bytes plus CRLF per line | 486,320 bytes | 486,400 bytes |
+| emu2, file-test build, 1,022 bytes plus CRLF per line | 588,800 bytes | 589,824 bytes |
 
 The production executable also passed an interactive edit, find and save
 of a 144,025-byte file under DOS 4.01N in a 640 KiB PCE machine.
 
 ## Verification
 
-- `make -C commands/edit test` exercises file loading, editing at allocation
+- `make -C edit test` exercises file loading, editing at allocation
   failure, streaming saves, replacement and rollback with the target runtime.
 - `test/check_cmdhelp` compares the command's help with the shared viewer.
 - `test/check_screenedit` boots the full floppy and checks BIOS keyboard
@@ -49,4 +54,4 @@ of a 144,025-byte file under DOS 4.01N in a 640 KiB PCE machine.
 
 ## Planned editing features
 
-Undo, untitled startup, Open, Save As and find-and-replace.
+Untitled startup, Open, Save As and find-and-replace.

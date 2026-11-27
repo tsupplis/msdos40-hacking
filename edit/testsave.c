@@ -24,6 +24,8 @@ int main(int argc, char **argv)
     FILE *f;
     char temp[FS_NAME], buf[16];
     int result;
+    file_stamp original;
+    save_result recovery;
 
     need(argc==2,"mode argument");
     failure = atoi(argv[1]);
@@ -31,13 +33,15 @@ int main(int argc, char **argv)
     need(f!=NULL && !strncmp(temp,"B:",2),"same drive temporary");
     need(strcmp(temp,"B:FS0000.TMP"),"existing temporary preserved");
     need(fputs("NEW",f)!=EOF && fclose(f)==0,"finish temporary");
-    result = fs_commit(temp,"B:BASE.DAT",failure==4 ? "B:BASE.BAK" :
-                       (failure==5 ? "b:base.dat" : NULL));
-    need(result==(failure==0 || failure>=4),"commit result");
+    fs_reset(&original);
+    fs_count(&original,"OLD",3);
+    result = fs_commit(temp,"B:BASE.DAT",&original,&recovery);
+    need((result == SAVE_OK) == (failure==0),"commit result");
+    need((recovery.backup[0]!=0) == (failure==3),"original recovery name");
     if (failure!=3) {
         f=fopen("B:BASE.DAT","r"); need(f!=NULL,"destination exists");
         memset(buf,0,sizeof(buf)); fread(buf,1,3,f); fclose(f);
-        need(!strcmp(buf,result ? "NEW" : "OLD"),"destination contents");
+        need(!strcmp(buf,result == SAVE_OK ? "NEW" : "OLD"),"destination contents");
     }
     puts("SAVE PASS");
     return 0;

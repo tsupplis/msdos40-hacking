@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dos.h>
 static int allocations, fail_alloc, fail_close, fail_write;
 static int fail_read;
 static int test_getc(FILE *f)
@@ -84,6 +85,76 @@ static void clipboardFailures(void)
     need(editorSave(),"save restored file");
 }
 
+static void diskText(const char *text)
+{
+    FILE *fp = fopen("B:EDIT.TXT","wb");
+    need(fp != NULL,"open external writer");
+    need(fputs(text,fp) != EOF && fclose(fp) == 0,"external write");
+}
+
+static void expectText(const char *text)
+{
+    char buffer[64];
+    FILE *fp = fopen("B:EDIT.TXT","rb");
+    unsigned length = strlen(text);
+    need(fp != NULL && fread(buffer,1,sizeof(buffer),fp) == length &&
+         !memcmp(buffer,text,length) && !ferror(fp),"disk contents");
+    need(!fclose(fp),"close sample");
+}
+
+static void saveChanges(void)
+{
+    diskText("other");
+    need(editorSave(),"clean save");
+    expectText("other");
+    need(editorInsertChar('x'),"edit");
+    E.dirty = 1;
+    need(!editorSave() && E.confirm_save && E.dirty,"changed on disk");
+    expectText("other");
+    diskText("third");
+    need(!editorSave() && E.confirm_save && E.dirty,"confirmation version changed");
+    expectText("third");
+    need(editorSave() && !E.dirty,"confirm latest version");
+    expectText("xfirst");
+    need(editorInsertChar('y'),"second edit");
+    E.dirty = 1;
+    need(editorSave(),"new saved baseline");
+    expectText("xyfirst");
+    need(!unlink("B:EDIT.TXT"),"external deletion");
+    E.dirty = 1;
+    need(!editorSave() && E.confirm_save,"deleted since load");
+    need(editorSave(),"confirm recreation");
+    expectText("xyfirst");
+}
+
+static void undoFailures(void)
+{
+    int i;
+    E.cx = E.row[0].size;
+    for (i = 1; i <= 4; ++i) {
+        fail_alloc = i; allocations = 0;
+        need(!applyEdit(DEL_KEY,selected()),"failed join");
+        need(!history_count && E.numrows == 2 && !E.dirty,"failed edit kept history");
+    }
+    fail_alloc = 0;
+    need(applyEdit(DEL_KEY,selected()),"join");
+    need(!strcmp(E.row[0].chars,"firstlast"),"joined contents");
+    for (i = 1; i <= 3; ++i) {
+        fail_alloc = i; allocations = 0;
+        need(!undoEdit(),"failed undo");
+        need(history_count == 1 && E.numrows == 1 && E.dirty &&
+             !strcmp(E.row[0].chars,"firstlast"),"failed undo kept edit and history");
+    }
+    fail_alloc = 0;
+    need(undoEdit(),"retry undo");
+    need(!history_count && !E.dirty && E.cx == 5 && !E.cy &&
+         E.numrows == 2 && E.row[0].eol == 1,"restored LF and cursor");
+    need(applyEdit(13,selected()) && undoEdit(),"undo line split");
+    need(applyEdit(8,selected()) && undoEdit(),"undo backspace");
+    need(!strcmp(E.row[0].chars,"first") && !strcmp(E.row[1].chars,"last"),
+         "original text after undo");
+}
+
 int main(int argc, char **argv)
 {
     int mode, result;
@@ -93,6 +164,50 @@ int main(int argc, char **argv)
     if (mode == 16) fail_close = 1;
     if (mode == 17) fail_read = 10;
     result = editorOpen("B:EDIT.TXT");
+    if (mode == 38) {
+        need(result,"undo source loaded");
+        undoFailures();
+        puts("EDIT PASS");
+        return 0;
+    }
+    if (mode >= 33 && mode <= 37) {
+        int i;
+        need(result,"load review fixture");
+        switch (mode) {
+        case 33: saveChanges(); break;
+        case 34:
+            for (i = 0; i < 100; ++i) {
+                E.cx = i % 2;
+                need(editorInsertNewline(),"repeated long line split");
+            }
+            need(E.numrows == 101 && E.row[100].size == 31950,"split contents");
+            E.dirty = 1;
+            need(editorSave(),"save split file");
+            break;
+        case 35:
+            need(!_dos_setfileattr("B:EDIT.TXT",_A_RDONLY),"set read-only");
+            E.dirty = 1;
+            for (i = 0; i < 3; ++i)
+                need(!editorSave() && E.dirty && strstr(E.message,"protected"),"protected save");
+            need(!_dos_setfileattr("B:EDIT.TXT",0),"clear read-only");
+            need(access("B:FS0000.TMP",0) != 0,"no temporary on protected save");
+            expectText("first");
+            break;
+        case 36:
+            need(editorSave(),"save new empty file");
+            expectText("");
+            break;
+        case 37:
+            diskText("appeared");
+            need(!editorSave() && E.confirm_save,"new name occupied");
+            expectText("appeared");
+            need(editorSave(),"confirm replacement of new file");
+            expectText("");
+            break;
+        }
+        puts("EDIT PASS");
+        return 0;
+    }
     if (mode == 31 || mode == 32) {
         selection s;
         need(result,"clipboard source loaded");
