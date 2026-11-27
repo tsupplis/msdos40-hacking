@@ -4,7 +4,7 @@ Target: the project’s 3.23 DOS binary and 4.01N under identical inputs. The al
 
 Sources: [Microsoft GW-BASIC User’s Reference and Guide, July 1987](https://bitsavers.computerhistory.org/pdf/microsoft/msdos_3.3/MS-DOS_GW-BASIC_198707.pdf), [1989 guide and command-line reference](https://bitsavers.trailing-edge.com/pdf/microsoft/gw-basic/Microsoft_GW-BASIC_Users_Guide_and_Reference_1989.pdf). Supplementary syntax must be verified against the project’s executable.
 
-402 work items: 337 matched, 56 different, 6 inconclusive, 3 intentional.
+402 work items: 344 matched, 49 different, 6 inconclusive, 3 intentional.
 
 ## Evidence
 
@@ -21,11 +21,11 @@ Matched records an observed matching case. It does not qualify the entire form o
 
 ## Running the paired regression
 
-With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 78 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Each interpreter runs the BASIC fixtures in succession and writes one report on the scratch floppy.
+With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 85 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Each interpreter runs the BASIC fixtures in succession and writes one report on the scratch floppy.
 
 PCE is the default for the paired audit, including timer and PLAY handler delivery and single cases such as `test/check_gwaudit --check 216`. Set `PCE_VIDEO=ega` or `PCE_VIDEO=vga` to select the adapter. The full probe runner requires explicit `--qemu`; it covers additional observations such as BIOS keyboard input and cursor position.
 
-For the selected IDs, the gate checks each case marked **Matched** against both the live 3.23 run and its recorded output. Incomplete observations fail in every category. The 243 paired records cover 193 matched, 44 different and 6 inconclusive cases. A known difference that now matches is reported for review. After verifying a fix, update that case’s JSONL record, matrix status and counts together. The remaining inventory rows use the other evidence listed above.
+For the selected IDs, the gate checks each case marked **Matched** against both the live 3.23 run and its recorded output. Incomplete observations fail in every category. The 246 paired records cover 200 matched, 40 different and 6 inconclusive cases. A known difference that now matches is reported for review. After verifying a fix, update that case’s JSONL record, matrix status and counts together. The remaining inventory rows use the other evidence listed above.
 
 ## Differences by work area
 
@@ -38,7 +38,7 @@ Each row below groups failed observations for investigation. The count measures 
 | Disk files, sharing and locking | 8 | 53, 110, 249, 250, 374, 375, 376, 377 |
 | Command streams, prompts and diagnostics | 6 | 70, 81, 102, 120, 151, 277 |
 | Keyboard, editor and function keys | 12 | 182, 185, 294, 295, 297, 299, 301, 358, 359, 389, 390, 393 |
-| Coordinates, viewports and text windows | 9 | 196, 217, 218, 219, 220, 221, 223, 224, 225 |
+| Text window | 2 | 220, 221 |
 | Drawing and tiled fill | 3 | 191, 348, 356 |
 | Video modes, pages and EGA memory | 2 | 215, 342 |
 | Serial I/O | 4 | 233, 395, 396, 397 |
@@ -244,7 +244,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 193 | `PALETTE attribute,color` | Display | Matched | PCE, case 193, color 15 maps to 1Fh and -1 preserves it |
 | 194 | `PALETTE USING` | Display | Matched | PCE, case 194, integer array starting at index 2 sets attribute 1 |
 | 195 | `PCOPY` | Display | Matched | Reference page-copy probe and [independent page checks](../test/gwvideo.bas) |
-| 196 | `PMAP` | Display | Different | error 9 for PMAP(23,0) |
+| 196 | `PMAP` | Display | Matched | PCE, case 196, four mapping selectors, inverse fractions, and default rounding |
 | 197 | `POINT(x,y)` | Display | Matched | X |
 | 198 | `POINT(selector)` | Display | Matched | PCE, case 198, selectors 0–3 and pixel readback in SCREEN 7. Both preserve the cursor after SCREEN 0 and a chained RUN |
 | 199 | `POS` | Display | Matched | Q, case 199 |
@@ -264,16 +264,16 @@ Each row below groups failed observations for investigation. The count measures 
 | 213 | `SCREEN 8` | Display | Matched | X |
 | 214 | `SCREEN 9` | Display | Matched | X |
 | 215 | `SCREEN 10` | Display | Different | Q, case 215; 3.23 ERROR 5  100, 4.01N 3  / DONE |
-| 216 | `SCREEN active and visible pages` | Display | Matched | PCE EGA and VGA, case 216; both read 0 on page 0 and 3 on page 1 |
-| 217 | `VIEW graphics` | Display | Different | syntax error |
-| 218 | `VIEW SCREEN` | Display | Different | Q, case 218; 3.23 3  / DONE, 4.01N ERROR 2  100 |
-| 219 | `VIEW reset` | Display | Different | Q, case 219; 3.23 3  / DONE, 4.01N ERROR 2  100 |
+| 216 | `SCREEN active and visible pages` | Display | Matched | PCE EGA and VGA, case 216; both read 0 on page 0 and 3 on page 1. After this page-1 sequence, a subsequent SCREEN 1 with omitted pages raises error 5 in 3.23 and succeeds in 4.01N. Case 217 explicitly selects page zero. |
+| 217 | `VIEW graphics` | Display | Matched | PCE, case 217, reversed viewport corners, fill, border and bounded CGA flood fill |
+| 218 | `VIEW SCREEN` | Display | Matched | PCE, case 218, absolute screen coordinates and clipping |
+| 219 | `VIEW reset` | Display | Matched | PCE, case 219, viewport clear and clipped diagonal, followed by full-screen reset |
 | 220 | `VIEW PRINT range` | Display | Different | syntax error |
 | 221 | `VIEW PRINT reset` | Display | Different | Q, case 221; 3.23 1  / DONE, 4.01N ERROR 2  100 |
 | 222 | `WIDTH screen` | Display | Matched | Q, case 222 |
-| 223 | `WINDOW` | Display | Different | syntax error |
-| 224 | `WINDOW SCREEN` | Display | Different | Q, case 224; 3.23 319  / DONE, 4.01N ERROR 2  100 |
-| 225 | `WINDOW reset` | Display | Different | Q, case 225; 3.23 1  / DONE, 4.01N ERROR 2  100 |
+| 223 | `WINDOW` | Display | Matched | PCE, case 223, Cartesian Y, fractional STEP and physical pixel readback |
+| 224 | `WINDOW SCREEN` | Display | Matched | PCE, case 224, screen-oriented Y on a relative viewport |
+| 225 | `WINDOW reset` | Display | Matched | PCE, case 225, reset preserves pixel cursor and restores identity mapping |
 | 226 | `INP` | Devices | Matched | Q, case 226 |
 | 227 | `OUT` | Devices | Matched | Q, case 227 |
 | 228 | `WAIT` | Devices | Matched | Q, case 228 |
@@ -417,7 +417,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 366 | `PLAY articulation` | Sound | Matched | Q, case 366; statement accepted and returned |
 | 367 | `PLAY foreground/background` | Sound | Matched | Q, case 367; statement accepted and returned |
 | 368 | `PLAY X substring and variable substitution` | Sound | Matched | Q, case 368; statement accepted and returned |
-| 369 | `PRINT zones and separators` | DOS | Matched | Q, case 369 |
+| 369 | `PRINT zones and separators` | DOS | Matched | Q, case 369. A separate comma-delimited PRINT #1 of four PMAP results differed in spacing before the final field. The numeric fields matched. |
 | 370 | `PRINT USING numeric masks` | DOS | Matched | L (file output) |
 | 371 | `PRINT USING string fields` | DOS | Matched | L (file output) |
 | 372 | `PRINT USING literal escapes` | DOS | Matched | Q, case 372 |
@@ -454,7 +454,7 @@ Each row below groups failed observations for investigation. The count measures 
 
 ## Tokenizer cross-check
 
-Both alphabetic keyword dictionaries in the 3.23 executable were decoded (173 spellings including aliases and grammatical tokens). Both executables loaded the same ASCII lines and saved tokenized programs under emu2. Of 187 distinct spellings from those dictionaries, the inventory and the Q/QF tables in [ibmres.asm](ibmres.asm), 9 emitted different byte sequences. Equal bytes can also represent ordinary variable names. Runtime status requires a separate probe. These byte sequences exclude the record header and terminator.
+Both alphabetic keyword dictionaries in the 3.23 executable were decoded (173 spellings including aliases and grammatical tokens). Both executables loaded the same ASCII lines and saved tokenized programs under emu2. Of 187 distinct spellings from those dictionaries, the inventory and the Q/QF tables in [ibmres.asm](ibmres.asm), 6 emitted different byte sequences. Equal bytes can also represent ordinary variable names. Runtime status requires a separate probe. These byte sequences exclude the record header and terminator.
 
 | Spelling | 3.23 hex | 4.01N hex |
 |---|---|---|
@@ -462,8 +462,5 @@ Both alphabetic keyword dictionaries in the 3.23 executable were decoded (173 sp
 | `ERDEV$` | `fe 95 24` | `45 52 44 45 56 24` |
 | `EXTERR` | `fd 8b` | `45 58 54 45 52 52` |
 | `LOCK` | `fe a7` | `4c 4f 43 4b` |
-| `PMAP` | `fe 9e` | `50 4d 41 50` |
 | `SHELL` | `fe 9a` | `53 48 45 4c 4c` |
 | `UNLOCK` | `fe a8` | `55 4e 4c 4f 43 4b` |
-| `VIEW` | `fe 9c` | `56 49 45 57` |
-| `WINDOW` | `fe 9d` | `57 49 4e 44 4f 57` |

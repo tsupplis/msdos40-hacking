@@ -694,8 +694,15 @@ RGHTC2:	INC	PIXOFS
 ; REGISTERS AFFECTED
 ;	AX, BX, CX, DX, BP
 ;
-PUBLIC	MAPXYC
-MAPXYC: cmp CRTMOD,0dh
+DSEG segment public 'DATASG'
+        extrn GXPOS:word,GYPOS:word
+        extrn ViewActive:byte,ViewX:word,ViewY:word
+        extrn ClipLeft:word,ClipRight:word,ClipTop:word,ClipBottom:word
+DSEG ends
+PUBLIC  MAPXYC
+MAPXYC: add cx,ViewX
+        add dx,ViewY
+        cmp CRTMOD,0dh
         jb LegacyXY
         mov ax,EgaWidth
         mul dx
@@ -861,7 +868,14 @@ OEMHED:	DB	"Microsoft GWBASIC Version 4.01N",0
 ; first row, then just return with CF=1
 ;
 PUBLIC	TUPC
-TUPC: cmp CRTMOD,0dh
+TUPC: cmp ViewActive,0
+        je TUPCScreen
+        push di
+        call PaintPosition
+        pop di
+        cmp ax,PaintTop
+        je TopEdge
+TUPCScreen: cmp CRTMOD,0dh
         jb CgaTUPC
         cmp ATRMSK,0
         jne EgaUp
@@ -914,7 +928,9 @@ UPC2:	ADD	AX,2000H-80D
 ;	AX, BX
 ;
 PUBLIC	SCALXY
-SCALXY:	MOV	AL,PIXBTS
+SCALXY: cmp ViewActive,0
+        jne ClipView
+        MOV	AL,PIXBTS
 	OR	AL,AL
 	JZ	SXYERR
 	OR	CH,CH
@@ -950,7 +966,31 @@ SXYXNG:	XOR	CX,CX
 	LAHF
 	JMP	SHORT SXYXOK
 
-SXYERR:	JMP	FCERR
+SXYERR: JMP FCERR
+
+; Clip in viewport coordinates. CF is set only for an unchanged point.
+ClipView:
+        xor ax,ax
+        cmp cx,ClipLeft
+        jl ClipXLow
+        cmp cx,ClipRight
+        jle ClipY
+        mov cx,ClipRight
+        jmp short ClippedX
+ClipXLow: mov cx,ClipLeft
+ClippedX: inc ax
+ClipY:  cmp dx,ClipTop
+        jl ClipYLow
+        cmp dx,ClipBottom
+        jle ClipResult
+        mov dx,ClipBottom
+        clc
+        ret
+ClipYLow: mov dx,ClipTop
+        clc
+        ret
+ClipResult: cmp ax,1
+        ret
 
 ; From BASICA.COM CSEG:233AH
 ; Return the screen's pixel aspect ratio (?)
@@ -984,7 +1024,45 @@ ASPFIN:	RET
 ;	AL		Border colour
 ;
 PUBLIC	PNTINI
-PNTINI: cmp CRTMOD,0dh
+DSEG segment public 'DATASG'
+PaintLeft dw 0
+PaintRight dw 0
+PaintTop dw 0
+PaintBottom dw 0
+PaintColor db 0
+PaintBorder db 0
+DSEG ends
+PNTINI: push ax
+        mov PaintBorder,al
+        mov al,ATRPAT
+        cmp CRTMOD,0dh
+        jae PaintLimits
+        and al,3
+        cmp PIXBTS,1
+        jne PaintLimits
+        and al,1
+PaintLimits:
+        mov PaintColor,al
+        mov PaintLeft,0
+        mov ax,EgaRightX
+        mov PaintRight,ax
+        cmp ViewActive,0
+        je PaintSetupDone
+        mov ax,ClipLeft
+        add ax,ViewX
+        mov PaintLeft,ax
+        mov ax,ClipRight
+        add ax,ViewX
+        mov PaintRight,ax
+        mov ax,ClipTop
+        add ax,ViewY
+        mov PaintTop,ax
+        mov ax,ClipBottom
+        add ax,ViewY
+        mov PaintBottom,ax
+PaintSetupDone:
+        pop ax
+        cmp CRTMOD,0dh
         jb CgaPaint
         call EgaCheckAttr
         mov BORPAT,al
@@ -1070,8 +1148,10 @@ SLRBEG:	MOV	DI,0B800H		; ES:0 = video memory
 PUBLIC	SCANL
 ; Return BX = span length, CL <> 0 if any pixel actually changed.
 ; DI tracks X so a span cannot wrap to the adjacent scan line.
-EgaScanStart:
+PaintPosition:
         push dx
+        cmp CRTMOD,0dh
+        jb PackedPosition
         mov ax,PIXOFS
         xor dx,dx
         mov dl,ATRMSK
@@ -1079,33 +1159,85 @@ EgaScanStart:
         div di
         mov di,dx
         pop dx
+        ret
+; CGA has two interleaved banks of 80-byte rows. ATRMSK identifies
+; the pixel within the packed byte at PIXOFS.
+PackedPosition:
+        mov ax,PIXOFS
+        and ax,1fffh
+        xor dx,dx
+        mov di,80D
+        div di
+        shl ax,1
+        test PIXOFS,2000h
+        jz PackedRow
+        inc ax
+PackedRow:
+        push ax
+        mov di,dx
+        shl di,1
+        shl di,1
+        cmp PIXBTS,1
+        jne PackedMask
+        shl di,1
+PackedMask:
+        mov al,ATRMSK
+        mov ah,PIXBTS
+NextBit: test al,80h
+        jnz PositionDone
+        inc di
+        shl al,1
+        cmp ah,1
+        je NextBit
+        shl al,1
+        jmp short NextBit
+PositionDone: pop ax
+        pop dx
+        ret
+
+PaintScanStart:
+        call PaintPosition
         xor bx,bx
         xor cx,cx
         ret
+; The packed-pixel driver uses BX, CX and DI as scratch registers.
+PaintRead:
+        push bx
+        push cx
+        push di
+        call READC
+        pop di
+        pop cx
+        pop bx
+        ret
 EgaPaintPixel:
-        cmp al,ATRPAT
+        cmp al,PaintColor
         je EgaPaintDone
         mov cl,1
+        push bx
+        push di
         call SETC
+        pop di
+        pop bx
 EgaPaintDone:
         inc bx
         ret
-SCANL:  cmp CRTMOD,0dh
+SCANL:  cmp ViewActive,0
+        jne BoundedScanL
+        cmp CRTMOD,0dh
         jb CgaScanL
-        call EgaScanStart
-EgaLeft: or di,di
+BoundedScanL: call PaintScanStart
+EgaLeft: cmp di,PaintLeft
         jz EgaLeftDone
         dec di
-        sub PIXOFS,1
-        sbb ATRMSK,0
-        call READC
-        cmp al,BORPAT
+        call LEFTC
+        call PaintRead
+        cmp al,PaintBorder
         je EgaLeftBorder
         call EgaPaintPixel
         jmp short EgaLeft
 EgaLeftBorder:
-        add PIXOFS,1
-        adc ATRMSK,0
+        call RIGHTC
 EgaLeftDone:
         ret
 CgaScanL: PUSH	ES
@@ -1129,20 +1261,21 @@ SCL2:	CALL	SLRR
 ; Scan rightwards from current pixel to flood area with colour to paint (?)
 ;
 PUBLIC	SCANR
-SCANR:  cmp CRTMOD,0dh
+SCANR:  cmp ViewActive,0
+        jne BoundedScanR
+        cmp CRTMOD,0dh
         jb CgaScanR
-        call EgaScanStart
+BoundedScanR: call PaintScanStart
 EgaSkip:
-        call READC
-        cmp al,BORPAT
+        call PaintRead
+        cmp al,PaintBorder
         jne EgaRightStart
         dec dx
         jz EgaRightDone
-        cmp di,EgaRightX
+        cmp di,PaintRight
         je EgaRightEdge
         inc di
-        add PIXOFS,1
-        adc ATRMSK,0
+        call RIGHTC
         jmp short EgaSkip
 EgaRightEdge:
         xor dx,dx
@@ -1154,13 +1287,12 @@ EgaRightStart:
         mov CSAVEM,ah
 EgaRight:
         call EgaPaintPixel
-        cmp di,EgaRightX
+        cmp di,PaintRight
         je EgaRightDone
         inc di
-        add PIXOFS,1
-        adc ATRMSK,0
-        call READC
-        cmp al,BORPAT
+        call RIGHTC
+        call PaintRead
+        cmp al,PaintBorder
         jne EgaRight
 EgaRightDone:
         ret
@@ -1400,9 +1532,11 @@ EgaSprite:
         mov EgaAction,al
         mov si,bx
         add bx,4
-        jc SpriteError
+        jc BadSpriteHeader
         cmp bx,EgaArrayEnd
-        ja SpriteError
+        jbe SpriteHeaderOk
+BadSpriteHeader: jmp FCERR
+SpriteHeaderOk:
         cmp al,0ffh
         je SpriteSize
         mov ax,[si]
@@ -1418,6 +1552,20 @@ SpriteSize:
         dec ax
         cmp ax,EgaHeight
         jae SpriteError
+        ; Validate PUT in BASIC viewport coordinates before touching pixels.
+        cmp byte ptr EgaAction,0ffh
+        je SpritePhysical
+        mov cx,GXPOS
+        mov dx,GYPOS
+        add cx,MAXDEL
+        dec cx
+        add dx,MINDEL
+        dec dx
+        push bx
+        call SCALXY
+        pop bx
+        jnc SpriteError
+SpritePhysical:
         ; Both the last pixel and the full data must fit.
         mov ax,PIXOFS
         xor dx,dx
@@ -1728,7 +1876,14 @@ NRWBEG:	MOV	DX,MAXDEL
 ; last row, then just return with CF=1
 ;
 PUBLIC	TDOWNC
-TDOWNC: cmp CRTMOD,0dh
+TDOWNC: cmp ViewActive,0
+        je TDOWNCScreen
+        push di
+        call PaintPosition
+        pop di
+        cmp ax,PaintBottom
+        je VerticalEdge
+TDOWNCScreen: cmp CRTMOD,0dh
         jb CgaTDOWNC
         push ax
         mov al,ATRMSK
@@ -2206,7 +2361,9 @@ CgaColors:	MOV	BX,0203H
 	CMP	AL,06H
 	JNZ	CRTOK3
 	MOV	BX,0101H
-CRTOK3:	MOV	AL,AH			; INT 10H conveniently gives us the
+CRTOK3: extrn ResetCoords:near
+        call ResetCoords
+        MOV	AL,AH			; INT 10H conveniently gives us the
 					; number of character columns
 	MOV	CL,25D			; Assume 25 rows
 	MOV	TXTATR,BL

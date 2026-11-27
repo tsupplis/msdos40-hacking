@@ -282,7 +282,12 @@ FINNOT:	POP	SI
 ; REGISTERS AFFECTED
 ;	AX
 ;
-SWAIPQ:	CALL	LFTQ
+SWAIPQ: test di,di              ; Articulation gaps occupy bytes but are not notes.
+        jnz SegmentSpace
+NoteSpace:
+        cmp WaitingNotes,32D
+        jae NoteSpace
+SegmentSpace: CALL LFTQ
 	CMP	AX,4
 	JB	SWAIPQ
 	RET

@@ -51,7 +51,8 @@ GRAPHICS COORDINATE SYSTEM FOR BOTH X AND Y. ATTRIBUTES RANGE FROM
 	EXTRN	PIXSIZ:NEAR	;Get bits/pixel (0=no graphics available)
 DSEG	SEGMENT PUBLIC 'DATASG'
 	ASSUME DS:DSEG
-	EXTRN	GXPOS:WORD,GYPOS:WORD
+	extrn ViewActive:byte,WindowActive:byte,WorldPos:word
+        EXTRN GXPOS:WORD,GYPOS:WORD
 DSEG	ENDS
 DSEG	SEGMENT PUBLIC 'DATASG'
 	EXTRN	GRPACX:WORD,GRPACY:WORD
@@ -103,11 +104,14 @@ SCAN1:	MOV	AL,BYTE PTR [BX]	;GET THE CURRENT CHARACTER
 	MOV	DH,CH
 	MOV	DL,CL
 	CMP	AL,LOW OFFSET MINUTK	;SEE IF ITS SAME AS PREVIOUS
-	JZ	SHORT SCANN	;USE GRAPHICS ACCUMULATOR
+	JNZ SHORT SCAND
+        JMP SCANN	;USE GRAPHICS ACCUMULATOR
 ;
 ; THE STANDARD ENTRY POINT
 ;
-SCAND:	MOV	AL,BYTE PTR [BX]	;GET THE CURRENT CHARACTER
+SCAND:  cmp WindowActive,0
+        jne WindowCoord
+        MOV	AL,BYTE PTR [BX]	;GET THE CURRENT CHARACTER
 	CMP	AL,LOW OFFSET $STEP	;IS IT RELATIVE?
 	PUSHF			;REMEMBER
 	JNZ	SHORT ??L001
@@ -124,11 +128,86 @@ ScanY: PUSH	DX		;SAVE WHILE SCANNING Y
 	DB	OFFSET ")"
 	POP	CX		;GET BACK X INTO [B,C]
 	POPF			;RECALL IF RELATIVE OR NOT
-        jmp short SCANN
+        jmp SCANN
+; With a WINDOW, keep the exact BASIC cursor for STEP and POINT(2/3).
+; Physical pixel rounding happens only after the logical addition.
+WindowCoord:
+        xor ax,ax
+        cmp byte ptr [bx],low offset $STEP
+        jne WorldOpen
+        call CHRGTR
+        mov ax,1
+WorldOpen:
+        push ax
+        call SYNCHR
+        db '('
+        call FRMEVL
+WorldFirst:
+        pop ax
+        push ax
+        xor di,di
+        call MapOperand
+        push cx                 ; Save logical X and pixel X until Y succeeds.
+        push ax
+        push dx
+        call SYNCHR
+        db ','
+        call FRMEVL
+        mov bp,sp
+        mov ax,[bp+6]           ; Absolute/STEP flag below X.
+        mov di,4
+        call MapOperand
+        push dx
+        push ax
+        push cx
+        call SYNCHR
+        db ')'
+        pop cx
+        pop ax
+        mov WorldPos+4,ax
+        mov WorldPos+6,cx
+        pop dx
+        pop cx
+        pop WorldPos
+        pop WorldPos+2
+        add sp,2
+        mov GRPACX,cx
+        mov GXPOS,cx
+        mov GRPACY,dx
+        mov GYPOS,dx
+        ret
+
+MapOperand:
+        extrn FRMEVL:near,FRCSNG:near,FADD:near,MOVMF:near,WorldPixel:near
+        push bx
+        push di
+        push ax
+        call FRCSNG
+        pop ax
+        pop di
+        test ax,ax
+        jz AbsoluteWorld
+        mov cx,WorldPos[di+2]
+        mov dx,WorldPos[di]
+        push di
+        call FADD
+        pop di
+AbsoluteWorld:
+        extrn MOVRF:near
+        call MOVRF
+        push cx
+        push dx
+        call WorldPixel
+        mov dx,bx
+        pop ax
+        pop cx
+        pop bx
+        ret
+
 PointAbsY:
         or al,1
         pushf
-        jmp short ScanY
+        jmp ScanY
 SCANN:  PUSH	BX		;SAVE TEXT POINTER
 	MOV	BX,GRPACX	;GET OLD POSITION
 	JZ	SHORT SCXREL	;IF ZERO,RELATIVE SO USE OLD BASE
@@ -190,6 +269,10 @@ PSTNOT:	POP	BX
 ; IT RETURNS -1 IF THE POINT IS OUT OF BOUNDS
 ;
 POINT:
+        push WorldPos
+        push WorldPos+2
+        push WorldPos+4
+        push WorldPos+6
 	CALL	CHRGTR		;POINT IS RECOGNIZED IN EVAL
 				;SO NEED TO SKIP ONE MORE CHAR
 	PUSH	BX		;Save the text pointer.
@@ -209,9 +292,11 @@ POINT:
 	cmp byte ptr [bx],'('
         jne PointStep
         call CHRGTR
-        call GETIN2
+        call FRMEVL
         cmp byte ptr [bx],')'
         jne PointPair
+        extrn INTFR2:near
+        call INTFR2
         cmp dx,3
         jbe PointSelector
         jmp FCERR
@@ -220,6 +305,20 @@ PointSelector:
         call CHRGTR
         pop dx
         push bx
+        cmp WindowActive,0
+        je PhysicalPoint
+        cmp dl,2
+        jb PhysicalPoint
+        mov bx,offset WorldPos
+        cmp dl,2
+        je LogicalPoint
+        add bx,4
+LogicalPoint:
+        extrn MOVFM:near,VALSNG:near
+        call MOVFM
+        call VALSNG
+        jmp short PointRestore
+PhysicalPoint:
         mov bx,GRPACX
         test dl,1
         jz PNTNOT
@@ -227,6 +326,16 @@ PointSelector:
         jmp short PNTNOT
 PointPair:
         ; SCAND saves ZF for absolute versus STEP coordinates before parsing Y.
+        cmp WindowActive,0
+        je IntegerPair
+        xor ax,ax
+        call PointWorldPair
+        jmp short ReadPoint
+PointWorldPair:
+        push ax
+        jmp WorldFirst
+IntegerPair:
+        call INTFR2
         call PointAbsY
         jmp short ReadPoint
 PointStep: call SCAND
@@ -240,7 +349,8 @@ ReadPoint:
 	MOV	BL,AL
 	MOV	BH,LOW 0
 	EXTRN	MAKINT:NEAR
-PNTNOT:	CALL	MAKINT
+PNTNOT: CALL MAKINT
+PointRestore:
 	POP	DX		;Restore text pointer
 	POP	BX
 	MOV	GRPACX,BX
@@ -254,7 +364,11 @@ PNTNOT:	CALL	MAKINT
 	POP	BX
 	PUSH	DX
 	CALL	STOREC
-	POP	BX		;Retrieve the text pointer and return.
+	POP BX                  ; Retrieve the text pointer and return.
+        pop WorldPos+6
+        pop WorldPos+4
+        pop WorldPos+2
+        pop WorldPos
 	RET	
 ;
 ; ATTRIBUTE SCAN
@@ -367,6 +481,7 @@ XCHGX:	PUSH	BX
 ; 2. ,B=BOXLINE -- RECTANGLE TREATING (X1,Y1) AND (X2,Y2) AS OPPOSITE CORNERS
 ; 3. ,BF= BOXFILL --  FILLED RECTANGLE WITH (X1,Y1) AND (X2,Y2) AS OPPOSITE CORNERS
 ;
+PUBLIC DOBOXF,BOXLIN
 PUBLIC	GLINE
 GLINE:
 	CALL	SCAN1		;SCAN THE FIRST COORDINATE
@@ -420,7 +535,15 @@ ReadStyle:
         pop cx
         ret
 
-DOBOXF:	PUSH	BX		;SAVE THE TEXT POINTER
+DOBOXF: cmp ViewActive,0
+        je BoxVisible
+        extrn BoxOutside:near
+        push bx
+        call BoxOutside
+        pop bx
+        jz BoxVisible
+        ret
+BoxVisible: PUSH	BX		;SAVE THE TEXT POINTER
 	CALL	SCALXY		;SCALE FIRST POINT
 	CALL	XCHGAC		;SWITCH POINTS
 	CALL	SCALXY		;SCALE SECOND POINT
@@ -496,6 +619,15 @@ BOXLIN:	PUSH	BX		;SAVE TEXT POINTER
 ; DOGRPH DRAWS A LINE FROM ([B,C],[D,E]) TO (GXPOS,GYPOS)
 ;
 DOGRPH:
+        cmp ViewActive,0
+        je ClipScreen
+        extrn ClipSegment:near
+        call ClipSegment
+        jnc ViewLine
+        ret
+ViewLine: call XCHGAC
+        jmp short DOGRP2
+ClipScreen:
 	CALL	SCALXY		;CHEATY SCALING - JUST TRUNCATE FOR NOW
 	CALL	XCHGAC
 	CALL	SCALXY
@@ -595,7 +727,9 @@ DSEG	ENDS
 ;Entry - none
 ;Exit  - all registers preserved
 ;
-GRPRST:	PUSH	AX
+GRPRST: extrn ResetCoords:near
+        call ResetCoords
+        PUSH	AX
 	PUSH	CX
 	PUSH	BX
 	XOR	AL,AL
@@ -615,7 +749,11 @@ GRPRST:	PUSH	AX
 ;Entry - none
 ;Exit  - none
 ;
-GRPINI:	CALL	GRPSIZ		;Get screen pixel dimensions
+GRPINI: extrn HomeCoords:near,SyncWorld:near
+        cmp ViewActive,0
+        je FullHome
+        jmp HomeCoords
+FullHome: CALL	GRPSIZ		;Get screen pixel dimensions
         jcxz GrpIniDone         ; Text mode preserves the last graphics position
 	PUSH	CX		;B,C has X dimension
 	POP	BX		;Move X dimension to H
@@ -627,6 +765,7 @@ GRPINI:	CALL	GRPSIZ		;Get screen pixel dimensions
 	INC	BX
 	INS86	321,353		;;SHR BX,1
 	MOV	GRPACY,BX	;Store as previous position
+        jmp SyncWorld
 GrpIniDone:
 	RET	
 

@@ -361,7 +361,7 @@ def main():
         statuses = {int(n): status for n, status in re.findall(
             r"^\| (\d+) \| [^|]+ \| [^|]+ \| (\w+) \|", inventory, re.M)}
         adapter = "vga" if args.qemu else os.environ.get("PCE_VIDEO", "vga")
-        baseline = {r["id"]: r.get("adapters", {}).get(adapter, r)["ref"] for r in map(json.loads,
+        baseline = {r["id"]: r.get("adapters", {}).get(adapter, r) for r in map(json.loads,
                     (root / "test/gwaudit.jsonl").read_text().splitlines())}
         if baseline.keys() != cases.keys():
             parser.error("probe IDs differ from the recorded baseline")
@@ -396,8 +396,12 @@ def main():
                 reason = "incomplete observation"
             elif status == "Matched" and ref != exe:
                 reason = "4.01N differs from 3.23"
-            elif status == "Matched" and ref != baseline[n]:
+            elif status == "Matched" and ref != baseline[n]["ref"]:
                 reason = "both outputs differ from the recorded reference"
+            elif status == "Different" and ref != baseline[n]["ref"]:
+                reason = "reference observation changed"
+            elif status == "Different" and exe != ref and exe != baseline[n]["exe"]:
+                reason = "known difference changed"
             else:
                 counts[status] += 1
                 if status == "Different" and ref == exe:

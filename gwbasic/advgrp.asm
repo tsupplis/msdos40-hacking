@@ -1001,7 +1001,36 @@ PUT2:
         call EgaSprite
         pop bx
         ret
-PackedPut: PUSH AX             ; Save PUT action mode
+PackedPut:
+        push ax
+        push bx
+        mov cx,EgaArrayEnd
+        sub cx,bx
+        jb InvalidPacked
+        sub cx,4                ; Two header words precede the scan lines.
+        jb InvalidPacked
+        mov ax,[bx]
+        or ax,ax
+        jz InvalidPacked
+        dec ax
+        mov cl,3
+        shr ax,cl
+        inc ax                  ; Bytes per scan line, rounded up.
+        cmp word ptr [bx+2],0
+        je InvalidPacked
+        mul word ptr [bx+2]
+        or dx,dx
+        jnz InvalidPacked
+        mov cx,EgaArrayEnd
+        sub cx,bx
+        sub cx,4
+        cmp ax,cx
+        jbe PackedFits
+InvalidPacked: jmp FCERR
+PackedFits:
+        pop bx
+        pop ax
+        PUSH AX             ; Save PUT action mode
 	MOV	DX,[BX]		;[DE]=NO. OF BITS IN X
 	INC	BX
 	INC	BX

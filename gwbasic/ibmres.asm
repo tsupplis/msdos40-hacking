@@ -584,8 +584,8 @@ STMDSX:
 	R	RMDIR
 	R	SHELL
 	R	ENVIRON
-	R	VIEW
-	R	WINDOW
+	R2 VIEW,ViewStmt
+	R2 WINDOW,WindowStmt
 	R	PMAP
 	R2	PALETTE,PALETE
 	R2	LCOPY,LCOPYS
@@ -702,6 +702,7 @@ NTABX:
 OTABX:
 	DB	0
 PTABX:
+        Q PMAP
         Q PALETTE
         Q PCOPY
 	Q	PUT
@@ -725,8 +726,10 @@ TTABX:
 UTABX:
 	DB	0
 VTABX:
+        Q VIEW
 	DB	0
 WTABX:
+        Q WINDOW
 	DB	0
 XTABX:
 	DB	0
@@ -961,7 +964,12 @@ EVALX:	CMP	AL,LOW 376O
 
 EVALNS:	INC	BX
 	MOV	AL,BYTE PTR [BX]
-	cmp al,low offset $PLAY
+	cmp al,low offset $PMAP
+        jne CheckPlay
+        pop cx
+        extrn PmapFunc:near
+        jmp PmapFunc
+CheckPlay: cmp al,low offset $PLAY
         jne CheckEnv
         pop cx
         extrn PlayCount:near

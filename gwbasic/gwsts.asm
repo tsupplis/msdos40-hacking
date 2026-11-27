@@ -101,15 +101,29 @@ DSEG	ENDS
 ;USES  - none
 ;
 	EXTRN	CLRSCN:NEAR
-CLS:	CALL	SCNINT		;Test for optional parameter
-	CMC	
-	PUSHF	
-	PUSH	AX
-	CALL	EOSCHK		;Test for end of statement
-	POP	AX
-	POPF	
-	PUSH	BX
-	CALL	CLRSCN
+CLS:    extrn ClearViewport:near
+DSEG segment public 'DATASG'
+        extrn ViewActive:byte
+DSEG ends
+        CALL SCNINT		;Test for optional parameter
+	jnc ExplicitClear
+        cmp ViewActive,0
+        je ExplicitClear
+        mov al,1
+ExplicitClear:
+        PUSH AX
+        CALL EOSCHK		;Test for end of statement
+	POP AX
+        PUSH BX
+        cmp al,1
+        jne ClearPhysical
+        cmp ViewActive,0
+        je ClearPhysical
+        call ClearViewport
+        pop bx
+        ret
+ClearPhysical:
+        CALL CLRSCN
 	POP	BX
 	RET	
 	PAGE	
@@ -2662,10 +2676,6 @@ PUBLIC	SHELL
 SHELL:
 PUBLIC	ENVIRON
 ENVIRON:
-PUBLIC	VIEW
-VIEW:
-PUBLIC	WINDOW
-WINDOW:
 PUBLIC	PMAP
 PMAP:
 ADVERR:
