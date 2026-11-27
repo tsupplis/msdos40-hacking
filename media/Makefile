@@ -24,7 +24,7 @@ COMMAND = $(ROOT)/commands/command/command.com
 
 # External commands (everything under commands/ except command.com and select).
 # Listed explicitly: a wildcard would be empty on a clean tree.
-CMDS = append assign attrib backup chkdsk comp debug diskcomp diskcopy edlin \
+CMDS = append assign attrib backup chkdsk comp debug diskcomp diskcopy edit edlin \
        exe2bin fastopen fc fdisk find format graftabl graphics help \
        join keyb label deltree move loadfix mem mode more nlsfunc print recover replace restore \
        share sort subst sys tree xcopy
@@ -53,12 +53,12 @@ EXTRA_FILES  = $(ROOT)/commands/graphics/graphics.pro $(SELECT_FILES) \
                $(ROOT)/kernel/himem/himem.sys \
                $(ROOT)/kernel/umbs/umbs.sys
 
-FULL_FILES = $(ROOT)/extra/vi.exe $(ROOT)/gwbasic/gwbasic.exe
+FULL_FILES = $(ROOT)/gwbasic/gwbasic.exe
 
 SDK = $(ROOT)/sdk
 DEV_BIN = $(addprefix $(SDK)/bin/,cl.exe c1.exe c2.exe c3.exe cl.err c1.err c23.err \
           masm.exe link.exe lib.exe nmake.exe tools.ini) \
-          $(ROOT)/commands/debug/debug.com $(ROOT)/commands/exe2bin/exe2bin.exe $(FULL_FILES)
+          $(ROOT)/commands/debug/debug.com $(ROOT)/commands/exe2bin/exe2bin.exe $(ROOT)/commands/edit/edit.exe $(FULL_FILES)
 DEV_LIB = $(addprefix $(SDK)/lib/,slibce.lib slibfp.lib em.lib)
 DEV_HEADERS = $(wildcard $(SDK)/include/*.h $(SDK)/include/sys/*.h)
 DEV_EXAMPLES = $(addprefix $(SDK)/examples/,c/Makefile c/hello.c asm/Makefile asm/hello.asm)
@@ -66,7 +66,7 @@ DEV_EXAMPLES = $(addprefix $(SDK)/examples/,c/Makefile c/hello.c asm/Makefile as
 IMAGES = msdos40_base.img msdos40_dist.img msdos40_full.img msdos40_dev.img
 
 # Names expected on the finished full image (used by "make check")
-EXPECTED = DOSHELP.HLP IO.SYS MSDOS.SYS COMMAND.COM CONFIG.SYS AUTOEXEC.BAT \
+EXPECTED = EDIT.LIC DOSHELP.HLP IO.SYS MSDOS.SYS COMMAND.COM CONFIG.SYS AUTOEXEC.BAT \
            $(shell echo $(notdir $(CMD_FILES) $(EXTRA_FILES) $(FULL_FILES)) | tr 'a-z' 'A-Z')
 
 .PHONY: all clean check dist force-images
@@ -85,7 +85,7 @@ endif
 	mv $@.tmp $@
 
 # FAT names are upper case: mcopy keeps the host name, so upper-case it explicitly.
-msdos40_base.img: $(BOOTSEC) $(IO_SYS) $(MSDOS) $(COMMAND) $(CMD_FILES) $(ROOT)/doshelp/doshelp.hlp Makefile
+msdos40_base.img: $(BOOTSEC) $(IO_SYS) $(MSDOS) $(COMMAND) $(CMD_FILES) $(ROOT)/commands/edit/LICENSE.md $(ROOT)/doshelp/doshelp.hlp Makefile
 	rm -f $@
 	mformat -f 1440 -C -B $(BOOTSEC) -i $@ ::
 	mcopy -i $@ $(IO_SYS) ::IO.SYS
@@ -100,6 +100,7 @@ msdos40_base.img: $(BOOTSEC) $(IO_SYS) $(MSDOS) $(COMMAND) $(CMD_FILES) $(ROOT)/
 	  n=`basename $$f | tr 'a-z' 'A-Z'`; \
 	  mcopy -i $@ $$f ::$$n || exit 1; \
 	done
+	mcopy -t -i $@ $(ROOT)/commands/edit/LICENSE.md ::EDIT.LIC
 	mcopy -t -i $@ $(ROOT)/doshelp/doshelp.hlp ::DOSHELP.HLP
 	mdir -i $@ -a ::
 
@@ -154,10 +155,11 @@ check: msdos40_full.img
 clean:
 	rm -f *.img ../disks.zip ../disks.zip.tmp .listing.tmp crlf.tmp
 
-msdos40_dev.img: Makefile $(SDK)/env.bat $(DEV_BIN) $(DEV_LIB) $(DEV_HEADERS) $(DEV_EXAMPLES)
+msdos40_dev.img: Makefile $(ROOT)/commands/edit/LICENSE.md $(SDK)/env.bat $(DEV_BIN) $(DEV_LIB) $(DEV_HEADERS) $(DEV_EXAMPLES)
 	rm -f $@.tmp
 	mformat -C -f 1440 -v MSDOS40DEV -i $@.tmp ::
 	mmd -i $@.tmp ::BIN ::LIB ::INCLUDE ::INCLUDE/SYS ::EXAMPLES ::EXAMPLES/C ::EXAMPLES/ASM
+	mcopy -t -i $@.tmp $(ROOT)/commands/edit/LICENSE.md ::EDIT.LIC
 	mcopy -t -i $@.tmp $(SDK)/env.bat ::ENV.BAT
 	@set -e; for group in BIN LIB INCLUDE; do \
 	  case $$group in BIN) files="$(DEV_BIN)";; LIB) files="$(DEV_LIB)";; \
