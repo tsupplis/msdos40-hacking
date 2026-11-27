@@ -633,22 +633,6 @@ POKFLT:	TEST	AL,AL			; MS-DOS v1.25 DONKEY.BAS uses
 POKOK:	TEST	SP,SP
 	RET
 
-; Set serial port (COM1, COM2, etc.) buffer location and size
-;
-; INPUT
-;	CX		Segment for COM buffer
-; OUTPUT
-;	FLAGS		CF=0 OK
-;			CF=1 Out of memory
-; REGISTERS AFFECTED
-;
-PUBLIC	SETCBF
-SETCBF:	JNZ	CBSPEC			; If no buffer size given, use a
-	MOV	DX,100H			; default size
-CBSPEC:	MOV	CBFSEG,CX		; Record the COM buffer location
-	CLC				;
-	RET
-
 ; From BASICA.COM CSEG:2265H
 ; Set current pixel to the pixel just to its left
 ;
@@ -827,15 +811,6 @@ SETFBC:	JC	SETFBG
 SETFBG:	MOV	FORCLR,AL
 	MOV	BAKCLR,BL
 SETFBF:	RET
-
-; The PC backend has no serial driver. GIOCOM maps AH=6 to BASIC error 57.
-PUBLIC	INICOM,RECCOM,SNDCOM,STACOM,TRMCOM
-INICOM:
-RECCOM:
-SNDCOM:
-STACOM:
-TRMCOM:	MOV	AH,6
-	RET
 
 ; MOTOR without an argument toggles the last requested state. SetMotor
 ; takes DL = 0 for off, nonzero for on. As in 3.23, ignore BIOS status
@@ -3353,7 +3328,6 @@ PGTACT	DW	?		; From BASICA.COM DSEG:085BH
 				; apply action verb (PRESET, XOR, etc.) to
 				; pixel data
 
-CBFSEG	DW	?		; Segment of COM buffer (i.e. CBFSEG:0)
 MotorOn db 0                    ; Last requested cassette motor state.
 
 	EXTRN	ACTPAG:BYTE,CRTWID:BYTE

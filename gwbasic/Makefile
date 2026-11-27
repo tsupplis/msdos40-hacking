@@ -15,6 +15,8 @@ gwbasic.exe: $(OBJS) gwbasic.lnk
 %.obj: %.asm oem.h bintrp.h ibmres.h gio86u msdosu
 	$(EMU2) $(SDK)/masm.exe -t '$<,$@;' </dev/null
 
+giocom.obj oemcom.obj: comdcb.h
+
 math.obj: math1.asm math2.asm
 
 check: gwbasic.exe

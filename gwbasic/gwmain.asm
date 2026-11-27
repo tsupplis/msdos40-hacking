@@ -3589,13 +3589,11 @@ PrintReady:
         mov bx,offset REDDY
         cmp FileOut,0
         je ReadyText
-        mov bx,offset StreamReady
         cmp EchoCommands,0
-        je ReadyText
-        mov bx,offset EchoReady
+        jne ReadyText
+        mov bx,offset StreamReady
 ReadyText: jmp STROUT
 StreamReady DB "Ok",13D,10D,0
-EchoReady DB "Ok",0ffh,13D,10D,0
 
 CSEG	ENDS
 	END
