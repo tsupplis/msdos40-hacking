@@ -753,7 +753,7 @@ static void editorRefreshScreen(void)
 static void editorHelp(void)
 {
     static const char *lines[] = {"EDIT Help",
-                                  "",
+                                  "Saves use DOS (CRLF) line endings.",
                                   "Arrows          Move cursor",
                                   "Home / End      Start / end of line",
                                   "PgUp / PgDn     Move one screen",

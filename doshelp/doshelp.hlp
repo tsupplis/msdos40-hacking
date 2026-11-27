@@ -318,9 +318,9 @@ ECHO         Control batch echoing or print a message.
    message         Text to display.
 EDIT         Create or change a text file in the full-screen editor.
 
- EDIT filename
+ EDIT [filename]
 
-   filename        Text file to open or create.
+   filename        Text file to open or create. Omit for an untitled document.
 
  Requires a PC text display.
 EDLIN        Edit a text file.
