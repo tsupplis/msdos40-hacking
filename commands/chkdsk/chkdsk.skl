@@ -16,8 +16,8 @@
 :def 14 "%1 bytes available on disk"                    ;frespc                 ;an000;bgb
 :def 15 "%1 total bytes memory"                         ;totmem                 ;an000;bgb
 :def 16 "%1 bytes free"                                 ;fremem                 ;an000;bgb
-:def 17 "Cannot CHKDSK a network drive"                 ;no_net_arg             ;an000;bgb
-:def 18 "Cannot CHKDSK a SUBSTed or ASSIGNed drive"     ;SubStErr               ;an000;bgb
+:def 17 "CHKDSK: Invalid drive (network drive).",CR,LF
+:def 18 "CHKDSK: Invalid drive (SUBST or ASSIGN).",CR,LF
 :def 19 "Probable non-DOS disk",CR,LF,"Continue (Y/N)?" ;badidbyt ;an018;bgb    ;an000;bgb
 :def 20 "Disk error reading FAT %1",CR,LF               ;badr                   ;an000;bgb
 										;an000;bgb
@@ -56,7 +56,7 @@
 :def 51 "   Extended Attributes has invalid clusters, attributes truncated" ;Inv_XA_Msg;an000;bgb
 :def 52 "   Extended Attributes allocation error , attributes truncated" ;Alloc_XA_Msg;an000;bgb
 :def 53 "Invalid parameter"                             ;badsw_arg              ;an000;bgb
-:use 54 extend15					;baddrv_arg "invalid drive spec" ;an017;bgb
+:def 54 "CHKDSK: Invalid drive.",CR,LF
 :use 55 extend3 					;invpath_arg "path not found"    ;an017;bgb
 :use 56 extend2 					;opnerr_arg "file not found"     ;an017;bgb
 :def 58 "   %1 lost clusters found in %2 chains."          ;orph_arg            ;an000;bgb
@@ -79,4 +79,7 @@
 :use 73 extend26			;invalid media type			;an033;bgb
 :use 74 extend29			;write fault error			;an033;bgb
 
+
+:def 90 "CHKDSK: Invalid switch.",CR,LF
+:def 91 "CHKDSK: Invalid parameter.",CR,LF
 :end

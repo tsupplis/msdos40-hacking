@@ -88,7 +88,7 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
         assert status in summary.splitlines() and status in class_lines, summary
         sizes = read("sizes.txt")
         assert re.search(r"ZZ\s+TXT\s+12,345\s", sizes), sizes
-        assert re.search(r"1 File\(s\)\s+12,345 bytes\s+[\d,]+ bytes free", sizes), sizes
+        assert re.search(r"1 file\(s\)\s+12,345 bytes\s+[\d,]+ bytes free", sizes), sizes
         disk_report = read("disk.txt")
         assert re.search(r"\b1,\d{3},\d{3} bytes total disk space", disk_report), disk_report
         assert re.search(r"\b\d{1,3}(?:,\d{3})+ bytes available on disk", disk_report), disk_report

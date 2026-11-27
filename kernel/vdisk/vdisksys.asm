@@ -7,7 +7,7 @@
 ;Licensed Material - Program Property of Microsoft Corp.
 
 ;Add the following statement to CONFIG.SYS
-;	DEVICE=[d:][path]VDISK.SYS bbb sss ddd [/E:m]
+;	DEVICE=[d:][path]VDISK.SYS bbb sss ddd [/E:m | /X:m]
 
 ;   where:  bbb is the desired buffer size (in kilobytes)
 ;		minimum 1KB, maximum is size of available memory,
@@ -31,9 +31,8 @@
 ;		Minimum 2, maximum 512, default 64.
 ;		Will be rounded upward to sector size boundary.
 
-;	    /E may only be used if extended memory above 1 megabyte
-;	    is to be used.  INT 15H functions 87H and 88H are used
-;	    to read and write this extended memory.
+;           /E allocates an XMS block. Load the XMS manager first.
+;           /X uses the system-reserved EMS page on supporting DOS builds.
 ;	    The m parameter in the /E option specifies the maximum
 ;	    number of sectors that the VDISK will transfer at a time.
 ;	    Optional values are 1,2,3,4,5,6,7 or 8 sectors, the default
@@ -172,25 +171,11 @@ RH4	ENDS
 RH4_DTAA EQU	DWORD PTR RH4_DTAO	;offset/segment of transfer address
 
 ;-----------------------------------------------------------------------;
-;	Segment Descriptor (part of Global Descriptor Table)		;
-;-----------------------------------------------------------------------;
-DESC	STRUC				;data segment descriptor
-DESC_LMT DW	0			;segment limit (length)
-DESC_BASEL DW	0			;bits 15-0 of physical address
-DESC_BASEH DB	0			;bits 23-16 of physical address
-	DB	0			;access rights byte
-	DW	0			;reserved
-DESC	ENDS
-
 	SUBTTL	Equates and Macro Definitions
 	PAGE
 
 MEM_SIZE EQU	12H			;BIOS memory size determination INT
 					;returns system size in KB in AX
-
-EM_INT	EQU	15H			;extended memory BIOS interrupt INT
-EM_BLKMOVE EQU	87H			;block move function
-EM_MEMSIZE EQU	8800H			;memory size determination in KB
 
 DOS	EQU	21H			;DOS request INT
 DOS_PCHR EQU	02H			;print character function
@@ -220,18 +205,6 @@ STACK_SIZE EQU	512			;length of stack during initialization
 	SUBTTL	Resident Data Area
 	PAGE
 
-;-----------------------------------------------------------------------;
-;	Map INT 15H vector in low storage				;
-;-----------------------------------------------------------------------;
-INT_VEC SEGMENT AT 00H
-	ORG	4*EM_INT
-EM_VEC	LABEL	DWORD
-EM_VECO DW	?			;offset
-EM_VECS DW	?			;segment
-INT_VEC ENDS
-
-
-
 CSEG	SEGMENT PARA PUBLIC 'CODE'
 	ASSUME	CS:CSEG
 ;-----------------------------------------------------------------------;
@@ -253,9 +226,12 @@ START	EQU	$			;begin resident VDISK data & code
 	DB	7 DUP (?)		;7 byte filler (remainder of 8-byte name)
 ;END OF DEVICE HEADER
 
+XMS_ENTRY DD 0
+XMS_HANDLE DW 0
+OLD_BOOT DD 0
+
 ;This volume label is placed into the directory of the new VDISK
-;This constant is also used to determine if a previous extended memory VDISK
-;has been installed.
+;It belongs to the FAT directory, not the legacy INT 19h ownership marker.
 
 VOL_LABEL DB	'VDISK  V4.0'		;00-10 volume name (shows program level)
 	DB	28H			;11-11 attribute (volume label)
@@ -264,32 +240,13 @@ VOL_LABEL DB	'VDISK  V4.0'		;00-10 volume name (shows program level)
 	DW	0986H			;24-25 date=12/06/84
 VOL_LABEL_LEN EQU $-VOL_LABEL		;length of volume label
 
-;The following field, in the first extended memory VDISK device driver,
-;is the 24-bit address of the first free byte of extended memory.
-;This address is not in the common offset/segment format.
-;The initial value, 10 0000H, is 1 megabyte.
-
-AVAIL_LO DW	0			;address of first free byte of
-AVAIL_HI DB	10H			;extended memory
-
-INTV15	LABEL	DWORD
-INTV15O DW	?			;offset
-INTV15S DW	?			;segment
-
-
 PARAS_PER_SECTOR DW ?			;number of 16-byte paragraphs in one sector
 
 START_BUFFER_PARA DW ?			;segment address of start of VDISK buffer
 
-EM_New_Size dw	?			;an001; dms;new size for EM
-EM_KSize dw	?			;an001; dms;size of EM currently.
-
 EM_SW	DB	0			;NON-ZERO IF EXTENDED MEMORY
 
 EM_STAT DW	0			;AX from last unsuccessful extended memory I/O
-
-START_EM_LO DW	?			;24-bit address of start of VDISK buffer
-START_EM_HI DB	?			;(extended memory only)
 
 WPARA_SIZE DW	PARA_SIZE		;number of bytes in one paragraph
 
@@ -384,68 +341,30 @@ RH_PTRA LABEL	DWORD
 RH_PTRO DW	?			;offset
 RH_PTRS DW	?			;segment
 ;-----------------------------------------------------------------------;
-;	Global Descriptor Table (GDT), used for extended memory moves	;
-;-----------------------------------------------------------------------;
-;Access Rights Byte (93H) is
-;	P=1	(segment is mapped into physical memory)
-;	E=0	(data segment descriptor)
-;	D=0	(grow up segment, offsets must be <= limit)
-;	W=1	(data segment may be written into)
-;	DPL=0	(privilege level 0)
+; Resident strategy entry. ES:BX points to the request packet.
+; DOS has no unload request. Release this instance's block on bootstrap,
+; restore the previous vector, and let the next handler continue the reboot.
+xms_boot:
+        push    ax
+        push    bx
+        push    dx
+        push    es
+        mov     dx,cs:xms_handle
+        mov     ah,0ah
+        call    cs:xms_entry
+        xor     ax,ax
+        mov     es,ax
+        cli
+        mov     ax,word ptr cs:old_boot
+        mov     es:[19h*4],ax
+        mov     ax,word ptr cs:old_boot+2
+        mov     es:[19h*4+2],ax
+        pop     es
+        pop     dx
+        pop     bx
+        pop     ax
+        jmp     cs:old_boot
 
-GDT	LABEL	BYTE			;begin global descriptor table
-	DESC	<>			;dummy descriptor
-	DESC	<>			;descriptor for GDT itself
-SRC	DESC	<,,,93H,>		;source descriptor
-TGT	DESC	<,,,93H,>		;target descriptor
-	DESC	<>			;BIOS CS descriptor
-	DESC	<>			;stack segment descriptor
-
-	SUBTTL	INT 15H (size) interrupt handler
-	PAGE
-;-----------------------------------------------------------------------;
-;	INT 15H Interrupt Handler routine				;
-;-----------------------------------------------------------------------;
-
-;=========================================================================
-; VDISK_INT15	: This routine traps the INT 15h requests to perform its
-;		  own unique services.	This routine provides 1 INT 15h
-;		  service; function 8800h.
-;
-;	Service - Function 8800h: Obtains the size of EM from the word
-;				  value EM_KSize
-;			Call With: AX - 8800h
-;			Returns  : AX - Kbyte size of EM
-;
-;=========================================================================
-VDISK_INT15 PROC			;an001; dms;
-
-	cmp	ah,EM_Size_Get		;an001; dms;function 88h
-;	$if	e			;an001; dms;get size
-	JNE $$IF1
-	    mov     ax,cs:EM_KSize	;an001; dms;return size
-	    clc 			;an001; dms;clear CY
-;	$else				;an001; dms;
-	JMP SHORT $$EN1
-$$IF1:
-	    jmp     cs:INTV15		;an001; dms;jump to org. vector
-;	$endif				;an001; dms;
-$$EN1:
-
-	iret				;an001; dms;
-
-VDISK_INT15 ENDP			;an001; dms;
-
-
-	ASSUME	DS:NOTHING
-
-	SUBTTL	Device Strategy & interrupt entry points
-	PAGE
-;-----------------------------------------------------------------------;
-;	Device "strategy" entry point					;
-;									;
-;	Retain the Request Header address for use by Interrupt routine	;
-;-----------------------------------------------------------------------;
 STRATEGY PROC	FAR
 	MOV	CS:RH_PTRO,BX		;offset
 	MOV	CS:RH_PTRS,ES		;segment
@@ -613,6 +532,7 @@ OUTPUT_VERIFY:
 	JA	INOUT_E1		;jump if start > total
 
 	ADD	AX,RH.RH4_CNT		;start + sector count
+	jc	inout_e1
 	CMP	AX,CX			;can't exceed total count
 	JNA	INOUT_A 		;jump if start + count <= total
 
@@ -623,6 +543,10 @@ INOUT_E1:				;I/O not within VDISK sector boundaries
 
 INOUT_A:				;I/O within VDISK bounds
 	MOV	AX,RH.RH4_CNT		;get sector count
+	or	ax,ax
+	jnz	have_sectors
+	ret
+have_sectors:
 	MOV	CS:SECT_LEFT,AX 	;save as sectors left to process
 
 	MOV	CS:SECT_LEFT_IN_FRAME,AX ;AN000; Save as sectors left to process
@@ -716,106 +640,72 @@ INOUT_EM:				;Extended memory I/O routine
 	JE	INOUT_EM_A		;AN000;
 	JMP	INOUT_EMS		;AN000; Yes, compute page
 
-INOUT_EM_A:				;AN000; No, compute 24-bit address
-
-;Compute 24-bit address of VDISK sector in CX (hi) and SI (low)
-
-	MOV	AX,RH.RH4_SSN		;starting sector number
-	MUL	CS:BPB_SSZ		;* sector size = offset within buffer
-	ADD	AX,CS:START_EM_LO	;+ base address of this VDISK buffer
-	ADC	DL,CS:START_EM_HI
-	MOV	CX,DX			;save high byte
-	MOV	SI,AX			;save low word
-
-;Compute 24-bit address of caller's DTA in DX (hi) and AX (low)
-
-	MOV	AX,PARA_SIZE		;16
-	MUL	RH.RH4_DTAS		;* segment of caller's DTA
-	ADD	AX,RH.RH4_DTAO		;+ offset of caller's DTA
-	ADC	DL,0			;carry in from addition
-
-;Caller's DTA address is in CX,SI, VDISK buffer address is in DX,AX.
-
-;If this is an OUTPUT request, exchange the source and target addresses
-
-	CMP	RH.RHC_CMD,CMD_INPUT	;INPUT operation?
-	JE	INOUT_EM_B		;jump if INPUT operation
-
-	XCHG	DX,CX			;swap source and target high byte
-	XCHG	AX,SI			;swap source and target low word
-
-INOUT_EM_B:				;CX,SI is source, DX,AX is target
-
-	MOV	SRC.DESC_BASEL,SI	;low 16 bits of source address
-	MOV	SRC.DESC_BASEH,CL	;high 8 bits of source address
-
-	MOV	TGT.DESC_BASEL,AX	;low 16 bits of target address
-	MOV	TGT.DESC_BASEH,DL	;high 8 bits of target address
-
-	JMP	SHORT INOUT_EM_E	;AX := SECT_LEFT, test for zero
-INOUT_EM_C:				;SECT_LEFT in AX, non-zero
-
-;  Compute number of sectors to transfer in a single move,
-;  AX = minimum of (SECT_LEFT, MAX_CNT)
-
-;  MAX_CNT is the maximum number of sectors that can be moved without
-;  spanning a 64KB boundary (0FFFFH / Sector size, remainder truncated)
-
-	MOV	CX,CS:MAX_CNT		;MAX sectors with one move
-	CMP	AX,CX			;if SECT_LEFT cannot span 64KB boundary
-	JBE	INOUT_EM_D		;then move SECT_LEFT sectors
-
-	MOV	AX,CX			;else move MAX_CNT sectors
-INOUT_EM_D:
-	SUB	CS:SECT_LEFT,AX 	;reduce number of sectors left to move
-
-;Move AX sectors from source to target
-
-	MUL	CS:BPB_SSZ		;sectors * sector size = byte count
-					;(cannot overflow into DX)
-	MOV	TGT.DESC_LMT,AX 	;store segment limit (byte count)
-	MOV	SRC.DESC_LMT,AX
-
-	PUSH	AX			;preserve byte count on stack
-
-	SHR	AX,1			;/2 = word count
-	MOV	CX,AX			;word count to CX
-
-	PUSH	CS
-	POP	ES			;set ES = CS
-	MOV	SI,OFFSET GDT		;ES:SI point to GDT
-
-	MOV	AH,EM_BLKMOVE		;function is block move
-	INT	EM_INT			;move an even number of words
-
-	POP	CX			;get byte count back from stack
-
-	OR	AH,AH			;get error code
-
-	JZ	INOUT_UPDATE		;
-	JMP	INOUT_EM_XE		;jump if I/O error encountered
-
-INOUT_UPDATE:
-
-;Update source and target addresses
-
-	ADD	SRC.DESC_BASEL,CX	;add bytes moved to source
-	ADC	SRC.DESC_BASEH,0	;pick up any carry
-
-	ADD	TGT.DESC_BASEL,CX	;add bytes moved to target
-	ADC	TGT.DESC_BASEH,0	;pick up any carry
-
-;Determine if more sectors need to be transferred
-
-INOUT_EM_E:				;do while SECT_LEFT <> zero
-	MOV	AX,CS:SECT_LEFT 	;get sectors left to transfer
-	OR	AX,AX			;set flags
-	JNZ	INOUT_EM_C		;go back to transfer some sectors
-
-	JMP	INOUT_EM_X2		;AN000; All done . . . exit
-;-----------------------------------------------------------------------;
-;	EMS Support				  ;RPS; 		;
-;-----------------------------------------------------------------------;
+INOUT_EM_A:
+        ; Build the XMS 0Bh packet in driver memory. DI names the disk
+        ; endpoint, SI the caller endpoint. A write reverses their roles.
+        mov     di,offset move_source
+        mov     si,offset move_dest
+        cmp     RH.RHC_CMD,CMD_INPUT
+        je      xms_endpoints
+        xchg    si,di
+xms_endpoints:
+        mov     ax,RH.RH4_SSN
+        mul     cs:BPB_SSZ
+        mov     cs:[di+2],ax
+        mov     cs:[di+4],dx
+        mov     ax,cs:xms_handle
+        mov     cs:[di],ax
+        mov     word ptr cs:[si],0
+        mov     ax,RH.RH4_DTAO
+        mov     cs:[si+2],ax
+        mov     ax,RH.RH4_DTAS
+        mov     cs:[si+4],ax
+        push    ds                      ; restore the request pointer on error
+        push    bx
+        push    cs
+        pop     ds
+xms_chunk:
+        mov     ax,cs:sect_left
+        cmp     ax,cs:max_cnt           ; honor /E:sectors
+        jbe     xms_count
+        mov     ax,cs:max_cnt
+xms_count:
+        sub     cs:sect_left,ax
+        mul     cs:bpb_ssz              ; at most eight 512-byte sectors
+        mov     cs:move_length,ax
+        push    si
+        mov     si,offset move_length
+        mov     ah,0bh
+        call    cs:xms_entry
+        pop     si
+        cmp     ax,1
+        jne     xms_failed
+        cmp     cs:sect_left,0
+        je      xms_complete
+        mov     ax,cs:move_length
+        add     cs:[di+2],ax
+        adc     word ptr cs:[di+4],0
+        ; Each sector is paragraph-aligned in size. Saturate the segment
+        ; at FFFFh when the caller buffer extends into the HMA.
+        mov     cl,4
+        shr     ax,cl
+        add     cs:[si+4],ax
+        jnc     xms_chunk
+        mov     ax,cs:[si+4]
+        inc     ax
+        shl     ax,cl
+        mov     word ptr cs:[si+4],0ffffh
+        add     cs:[si+2],ax
+        jnc     xms_chunk
+xms_failed:
+        pop     bx
+        pop     ds
+        jmp     inout_em_xe
+xms_complete:
+        pop     bx
+        pop     ds
+        xor     ax,ax
+        jmp     inout_em_x2
 
 INOUT_EMS:				;AN000;
 
@@ -1125,7 +1015,11 @@ INOUT_D_LOW_MEM ENDP
 
 
 
-	DW	40 DUP (?)		;stack for extended memory I/O
+	; XMS move structure: length, source handle/offset, destination handle/offset.
+move_length dw 0,0
+move_source dw 0,0,0
+move_dest   dw 0,0,0
+        dw      256 dup (?)             ; private stack for EMS/XMS calls
 EM_STACK LABEL	WORD
 
 	SUBTTL	Boot Record
@@ -1509,12 +1403,31 @@ VDISK_CONTINUE_1:			;AN000;
 
 	CALL	UPDATE_AVAIL		;update AVAIL_HI and AVAIL_LO to reflect
 					;addition of extended memory VDISK
+	test	err_flag,ERR_SYSSZ
+	jnz	init_p1_a
 	CALL	FORMAT_VDISK		;construct a boot record, FATs and
 					;directory in storage immediately
 					;following this device driver
 	CALL	MOVE_VDISK		;move formatted boot record, FATs,
 					;and directory to extended memory
 
+        cmp     em_sw,EM_Mem
+        jne     init_p1_a
+        or      ax,ax                   ; MOVE_VDISK returns DOS I/O status
+        jz      install_xms_boot
+        mov     dx,xms_handle
+        mov     ah,0ah
+        call    xms_entry
+        or      err_flag,ERR_SYSSZ
+        jmp     short init_p1_a
+install_xms_boot:
+        mov     ax,3519h
+        int     21h
+        mov     word ptr old_boot,bx
+        mov     word ptr old_boot+2,es
+        mov     dx,offset xms_boot
+        mov     ax,2519h
+        int     21h
 INIT_P1_A:
 	CALL	FILL_RH 		;fill in INIT request header
 	CALL	WRITE_MESSAGES		;display all messages
@@ -1535,7 +1448,13 @@ INIT_P1_A:
 ;	DX = number of bytes in one FAT, less 3 			;
 ;	SI = offset of VOL label field					;
 ;-----------------------------------------------------------------------;
-	MOV	ES,START_BUFFER_PARA	;start paragraph of VDISK buffer
+	cmp     em_sw,0
+        jne     init_done
+        test    err_flag,ERR_SYSSZ+ERR_EXTSW
+        jnz     init_done
+        test    err_flag2,err_baddos
+        jnz     init_done
+        MOV     ES,START_BUFFER_PARA    ; start paragraph of VDISK buffer
 
 	MOV	AX,BPB_RES		;number of reserved sectors
 	MUL	BPB_SSZ 		;* sector size
@@ -1558,6 +1477,10 @@ INIT_P1_A:
 					;extended memory, but is executed anyway
 
 
+
+init_done:
+	xor ax,ax
+	ret
 
 	SUBTTL	PC_386_CHK
 	PAGE
@@ -1884,43 +1807,6 @@ DETERMINE_START PROC
 	ADD	AX,VDISKP		;+ length of resident code
 	MOV	START_BUFFER_PARA,AX	;save as buffer start para
 
-	CMP	EM_SW,0 		;IS EXTENDED MEMORY REQUESTED?
-	JE	DETERMINE_START_X	;if not, we're done here
-
-;-----------------------------------------------------------------------;AN000;
-;If EMS is not installed, the calculation to determine the starting address
-;of the VDISK will remain the same.
-
-;If EMS is installed we really don't need this calculation, the EMM will
-;manage the expanded memory insuring mutiple VDISKs may reside concurrently.
-;-----------------------------------------------------------------------;AN000;
-
-	cmp	EM_SW,EMS_Mem		;EMS requested? 			;an005; dms;
-	je	Determine_Start_X	;yes - leave routine			;an005; dms;
-					;no  - continue routine
-
-	clc				;an001; dms;clear carry for INT
-	MOV	AX,EM_MEMSIZE		;an001; dms; get EM memory size
-	INT	EM_INT			;an001; dms; INT 15h
-	JC	Determine_Start_X	;an001; dms; no extended memory installed
-	or	ax,ax			;an001; dms;see if memory returned
-	jz	Determine_Start_X	;an001; dms;signal no memory
-
-	xor	dx,dx			;an001; dms;clear dx
-	sub	ax,cs:Buff_Size 	;an001; dms;get starting KB location
-	jc	Determine_Start_X	;an001; dms;buffer too large
-
-	mov	cs:EM_New_Size,ax	;an001; dms;save new size of EM for later use
-	mul	C1024			;an001; dms;get total byte count
-	add	ax,cs:Avail_Lo		;an001; dms;add in low word of EM start
-	adc	dl,cs:Avail_Hi		;an001; dms;add in high word of EM start
-
-	mov	cs:Avail_Lo,ax		;an001; dms;save new low beginning word
-	mov	cs:Avail_Hi,dl		;an001; dms;save new high beginning word
-
-	mov	cs:Start_EM_Lo,ax	;an001; dms;load in new beginning word
-	mov	cs:Start_EM_Hi,dl	;an001; dms;load in new beginning byte
-
 DETERMINE_START_X:
 
 	RET
@@ -1978,7 +1864,19 @@ VALIDATE_A:
 
 	MOV	AX,BUFF_SIZE		;requested buffersize in KB
 	MUL	C1024			;DX:AX = buffer size in bytes
-	DIV	BPB_SSZ 		;/sector size = # sectors
+	cmp     dx,bpb_ssz
+        jb      sectors_fit
+        cmp     bpb_ssz,512
+        je      limit_volume
+        shl     bpb_ssz,1
+        or      err_flag,ERR_SSZ
+        jmp     validate_a
+limit_volume:
+        mov     buff_size,32767         ; 65534 sectors of 512 bytes
+        or      err_flag,ERR_BSIZE
+        jmp     validate_a
+sectors_fit:
+        DIV     BPB_SSZ                 ; sector count fits in AX
 	MOV	BPB_SECN,AX		;store number of sectors
 
 	CALL	VAL_DIRN		;validate number of directory entries
@@ -2047,12 +1945,6 @@ VAL_BSIZE_B:				;some memory is available
 	JAE	VAL_BSIZE_C		;if so, we're done
 
 	MOV	BUFF_SIZE,AX		;give all available memory
-	mov	cs:EM_New_Size,0	;an001; dms;save new size of EM for later use
-	mov	ax,cs:Avail_Lo		;an001; dms;get low word of EM start
-	mov	dl,cs:Avail_Hi		;an001; dms;get high byte of EM start
-
-	mov	cs:Start_EM_Lo,ax	;an001; dms;load in new beginning word
-	mov	cs:Start_EM_Hi,dl	;an001; dms;load in new beginning byte
 	OR	ERR_FLAG,ERR_BSIZE	;indicate buffersize adjusted
 VAL_BSIZE_C:
 
@@ -2081,15 +1973,18 @@ GET_MSIZE PROC				;determine memory available to VDISK
 	MUL	DOS_Page_Size_Word	;ac002;   Number of pages * KB per page
 	RET				;AN000;   Return with AX = number of whole free kilobytes
 					;
-USE_EXTENDED_SUPPORT:			;AN000; No, EMS is not installed
-
-	MOV	AX,EM_MEMSIZE		;function code to AH
-	INT	EM_INT			;get extended memory size in AX
-	JC	GET_MSIZE_Z		;if error, no extended memory installed
-	or	ax,ax			;an000; dms;see if memory returned
-	jz	GET_MSIZE_Z		;an000; dms;signal no memory
-
-	RET
+USE_EXTENDED_SUPPORT:
+        mov     ax,4300h
+        int     2fh
+        cmp     al,80h
+        jne     get_msize_z
+        mov     ax,4310h
+        int     2fh
+        mov     word ptr xms_entry,bx
+        mov     word ptr xms_entry+2,es
+        mov     ah,08h
+        call    xms_entry               ; AX = largest free block in KiB
+        ret
 
 GET_MSIZE_2:				;non-extended memory size determination
 
@@ -2507,19 +2402,13 @@ VERIFY_EXTENDER ENDP
 	SUBTTL	UPDATE_AVAIL
 	PAGE
 ;-----------------------------------------------------------------------;
-;	UPDATE_AVAIL updates the address of the first byte in extended	;
-;	memory not used by any VDISK buffer				;
-;-----------------------------------------------------------------------;
-;If EMS is installed, we must allocate memory here and obtain the	;
-;handle which we will use throughout our existance. AVAIL_LO and _HI	;
-;really mean nothing to us.						;
-;-----------------------------------------------------------------------;
+; Allocate the validated size from the selected manager.
 
 UPDATE_AVAIL PROC
 	MOV	AX,BUFF_SIZE		;number of KB of VDISK buffer
 
 	CMP	EM_SW2,EMS_INSTALLED_FLAG ;AN000; Is EMS installed?
-	JNE	USE_INT15_LOGIC 	;ac006; Yes,
+	JNE	alloc_xms 	;ac006; Yes,
 	xor	dx,dx			;an003; clear high word
 	div	DOS_Page_Size_Word	;ac003;   Calculate number of pages needed
 	or	dx,dx			;an004; remainder?
@@ -2540,41 +2429,18 @@ $$IF36:
 	RET				;AN000;
 					;AN000;
 ALLOC_ERROR:				;AN000;
-	MOV	ERR_FLAG,EMS_ALLOC_ERROR ;AN000;    ??????    *RPS
+	or      err_flag,ERR_SYSSZ       ; allocation failed
 	RET				;AN000;
 					;AN000;
-USE_INT15_LOGIC:			;AN000;
-
-	call	Modify_CMOS_EM		;an001; dms;adjust EM for new size
-
-	RET
+alloc_xms:
+        mov     dx,buff_size            ; final validated size, in KiB
+        mov     ah,09h
+        call    xms_entry
+        cmp     ax,1
+        jne     alloc_error
+        mov     xms_handle,dx
+        ret
 UPDATE_AVAIL ENDP
-
-
-;=========================================================================
-; Modify_CMOS_EM	: This routine modifies the size of extended
-;			  memory.  By modifying the size of extended
-;			  memory other users will not have the potential
-;			  to overlay a VDISK residing in EM.
-;
-;	Inputs	: EM_New_Size	- The new size that EM will be after
-;				  creation of this VDISK.
-;	Outputs : Modified data in CMOS for EM.  Bytes 17h & 18h at
-;						 port 71h.
-;=========================================================================
-
-Modify_CMOS_EM Proc Near		;an001; dms;
-
-	push	ax			;an001; dms;save ax
-	call	Steal_Int15		;an001; dms;get INT 15h vector
-
-	mov	ax,word ptr cs:EM_New_Size ;an001; dms;transfer new size
-	mov	word ptr cs:EM_KSize,ax ;an001; dms;set EM size to new size
-	pop	ax			;an001; dms;restore ax
-
-	ret				;an001; dms;
-
-Modify_CMOS_EM endp			;an001; dms;
 
 ;=========================================================================
 ; EMS_Build_Handle_Name 	- This routine will build an EMS handle's
@@ -2694,31 +2560,6 @@ FORMAT_VDISK_A: 			;set up one FAT
 	REP	STOSB			;clear directory to nulls
 	RET
 FORMAT_VDISK ENDP
-
-	SUBTTL	STEAL_INT15
-	PAGE
-;-----------------------------------------------------------------------;
-;	STEAL_INT15 changes the INT 15H vector to point to this VDISK	;
-;	so that subsequent calls to INT15H may determine the actual	;
-;	size of EM after VDISK's allocation of it.                      ;
-;-----------------------------------------------------------------------;
-STEAL_INT15 PROC
-	PUSH	DS
-	XOR	AX,AX
-	MOV	DS,AX			;set DS = 0
-	ASSUME	DS:INT_VEC
-	CLI				;disable interrupts
-	LES	DI,DS:EM_VEC		;get original vector's content
-	MOV	CS:INTV15O,DI		;save original vector
-	MOV	CS:INTV15S,ES
-	MOV	DS:EM_VECO,OFFSET VDISK_INT15 ;offset of new INT routine
-	MOV	DS:EM_VECS,CS		;segment of new INT routine
-	STI				;enable interrupts again
-	POP	DS			;restore DS
-	RET
-STEAL_INT15 ENDP
-
-
 
 	SUBTTL	MOVE_VDISK
 	PAGE

@@ -50,6 +50,7 @@ EXTRA_FILES  = $(ROOT)/commands/graphics/graphics.pro $(SELECT_FILES) \
                $(ROOT)/kernel/xmaem/xmaem.sys \
                $(ROOT)/kernel/vdisk/vdisk.sys \
                $(ROOT)/kernel/memm/memm/emm386.sys \
+               $(ROOT)/kernel/himem/himem.sys \
                $(ROOT)/kernel/umbs/umbs.sys
 
 FULL_FILES = $(ROOT)/extra/mbasic.com $(ROOT)/extra/vi.exe

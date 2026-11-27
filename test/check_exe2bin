@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""Check EXE2BIN output, malformed-input handling and destination preservation."""
+import os
+from pathlib import Path
+import struct
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+program = root / "commands/exe2bin/exe2bin.exe"
+with tempfile.TemporaryDirectory(dir=root / "test/work") as work:
+    folder = Path(work)
+    env = dict(os.environ, EMU2_DOSVER="4.00", EMU2_DRIVE_C=work, EMU2_CWD="C:\\")
+    def check(image, expected):
+        (folder / "input.exe").write_bytes(image)
+        output = folder / "out.bin"
+        output.write_bytes(b"keep")
+        run = subprocess.run(["emu2", program, "input.exe", "out.bin"], cwd=work,
+                             env=env, input=b"2\r\n2\r\n", capture_output=True, timeout=5)
+        assert (run.returncode == 0) == (expected is not None), run
+        assert output.read_bytes() == (b"keep" if expected is None else expected)
+
+    def mz(payload, header=32, ip=0, relocs=()):
+        pages, tail = divmod(header + len(payload), 512)
+        fields = (0x5a4d, tail, pages + bool(tail), len(relocs), header // 16,
+                  0, 0, 0, 0, 0, ip, 0, 28, 0)
+        table = b"".join(struct.pack("<HH", offset, segment) for offset, segment in relocs)
+        return (struct.pack("<14H", *fields) + table).ljust(header, b"\0") + payload
+
+    for header in (32, 512):
+        image = mz(b"PAYLOAD", header)
+        check(image, b"PAYLOAD")
+        check(image[:-1], None)
+    check(mz(bytes(256) + b"COM", ip=256), b"COM")
+    check(mz(bytes(256), ip=256)[:-1], None)
+    check(mz(b"x", ip=256), None)
+    check(mz(b"\x01\0", relocs=[(0, 0)]), b"\x03\0")
+    check(mz(b"xx", relocs=[(1, 0)]), None)
+    check(mz(b"x"*65535), b"x"*65535)
+    check(mz(b"x"*65536), None)
+    check(b"MZ", None)
+print("PASS EXE2BIN conversion, bounds and destination preservation")

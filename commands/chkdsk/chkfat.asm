@@ -897,8 +897,8 @@ ASSUME	DS:NOTHING
 REWRITE:
 	LDS	bx,[THISDPB]
 ASSUME	DS:NOTHING
-	mov	cx,[bx.dpb_FAT_size]		;Sectors for one fat (DCR)	;AC000;
-	mov	DI,cx
+	mov	di,[bx.dpb_FAT_size]
+	xor	ch,ch			; DOS 6 M106: zero-extend the FAT count
 	mov	CL,[bx.dpb_FAT_count]		;Number of FATs
 	mov	dx,[bx.dpb_first_FAT]		;First sector of FAT
 	PUSH	CS
@@ -922,6 +922,7 @@ WRTLOOP:
 	call	Write_Disk			;Do relative sector write		;AC000;
 
 	JNC	WRTOK
+	mov	ExitStatus,Bad_Exit
 	inc	[ERRCNT]
 						;mov	 [badrw_str],offset dg:writing
 	POP	ax				; Get fat # in AH

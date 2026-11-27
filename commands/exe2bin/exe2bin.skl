@@ -33,7 +33,7 @@
 
 ;msgNoConvert
 ;"File cannot be converted", CR, LF
-:def 5 "File cannot be converted",CR,LF
+:def 5 "EXE2BIN: File cannot be converted.",CR,LF
 
 ;msgNoFile
 ;"File not found                ", CR, LF
@@ -60,4 +60,9 @@
 ;"File name must be specified        ", CR, LF
 :def 12 "File name must be specified",CR,LF
 
+
+:def 13 "EXE2BIN: Required parameters missing.",CR,LF
+:def 14 "EXE2BIN: Invalid switch.",CR,LF
+:def 15 "EXE2BIN: Invalid parameter.",CR,LF
+:def 16 "EXE2BIN: "
 :end

@@ -175,6 +175,7 @@ find_done:				;
 	RET
 
 
+EXTRN ExitStatus:byte
 DOINT26:
 ;	PUSH	CX			;reg saves are handled in write_disk	;ac048;bgb;an045;bgb
 ;	PUSH	DX			;reg saves are handled in write_disk	;ac048;bgb;an045;bgb
@@ -188,6 +189,7 @@ DOINT26:
        ;CALL	DSKERR								;ac048;bgb;an045;bgb
 ;      $IF	C								;ac048;bgb;an045;bgb
        JNC $$IF7
+	   mov     ExitStatus,Bad_Exit
 	   mov	   dx,offset dg:write_fault					;ac048;bgb;an045;bgb
 	   invoke  printf_crlf							;ac048;bgb;an045;bgb
 ;      $ENDIF									;ac048;bgb;an045;bgb

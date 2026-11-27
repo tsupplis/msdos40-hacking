@@ -3,50 +3,10 @@
 PAGE	58,132
 
 ;
-;; Will use IBM extended memory on PC-AT or
-;;      use Above Board on PC, XT, or AT, and
-;;	    use extended, expanded, or upper extended memory on AT&T 6300 PLUS
-;
-;
-;;	device = SMARTDRV.sys [bbbb] [/a] [/u]
-;
-;		bbbb  First numeric argument, if present, is memory size
-;			in K bytes. Default value is 256. Min is 128. Max
-;			is 8192 (8 Meg).
-;
-;		      By default PC AT Extended Memory is to be used.
-;			It is an error if /E is specified on a machine other
-;			than an IBM PC AT. /E is the default.
-;		      NOTE: Information in cache in PC AT extended memory
-;			will be lost at system re-boot (warm or cold). This is
-;			due to the fact that the IBM PC AT ROM bootstrap code
-;			zeroes all of memory.
-;		      NOTE: There is 1k of memory overhead. That is to say,
-;			if there are 512k bytes of extended memory, there
-;			will be 511k bytes available for assignment to int13.
-;			This 1k overhead is fixed and makes int13 compatible
-;			with RAMDRive.
-;		      NOTE: The same allocation strategy as is used in RAMDrive
-;			is used. This allows RAMDrive and INT13 to coexist on
-;			the same system. Mixing with IBM VDISK is NOT supported.
-;
-;		/a    Specifies that Above Board memory is to be used. It
-;			is an error if the above board device driver is not
-;			present.
-;		      NOTE: Information in cache in Above Board memory
-;			will be lost at system re-boot (warm or cold). This is
-;			due to the fact that the EMM device driver performs a
-;			destructive test when it is installed which zeros all
-;			of the Above Board memory.
-;;		/u	Specifies that upper extended memory will be used
-;;			on the AT&T 6300 PLUS.  Upper extended memory
-;;			is the memory beginning at FA0000.  It is used
-;;			to hold the UNIX kernel when the machine is running
-;;			Simul-Task.  However, when operating as a pure 
-;;			MS-DOS machine, this 384K of memory is available
-;;			for SMARTDRIVE.
-;;			Note that it is an error to specify this switch
-;;			if the machine is not a 6300 PLUS.
+; DEVICE=SMARTDRV.SYS [kilobytes] [/A]
+; Use XMS for a hard-disk cache, or select EMS with /A.
+; XMS defaults to 256 KiB. EMS defaults to available pages up to 8192 KiB.
+; An explicit cache size is 128 to 8192 KiB.
 ;
 ; NOTE WARNING: ALL OF THIS CODE ASSUMES THAT ALL HARDFILES ARE 512 BYTES
 ;	PER SECTOR!!! All other hardfile parameters are read via INT 13, but
@@ -147,8 +107,6 @@ ENDM
 .286p				; Use some 286 instructions in /E code
 
 DEBUG	EQU	0
-S_OLIVETTI	EQU	1	; Flag for olivetti 6300 plus machine
-S_VECTRA	EQU	2	; Flag for HP Vectra machines
 WINDOWS_SWITCHES EQU	1	; 1 = uses switches for windows, 0 = all switches
 ;OMTI	 EQU	 1		 ; Used for code specific to the OMTI Controller
 
@@ -168,47 +126,13 @@ IF1
     ENDIF
 ENDIF
 
-;; In order to address memory above 1 MB on the AT&T 6300 PLUS, it is
-;; necessary to use the special OS-MERGE hardware to activate lines
-;; A20 to A23.  However, these lines can be disabled only by resetting
-;; the processor.  The return address offset and segment can be found 
-;; at 40:a2, noted here as RealLoc1.
-;;
-BiosSeg	segment at 40h		;; Used to locate 6300 PLUS reset address
-	org	00a2h
-RealLoc1 dd	0
-BiosSeg	ends
-;
-R_Mode_IDT  segment at 0h
-R_mode_IDT  ends
-;
 .xlist
 	include devsym.asm
 	include syscall.asm
 	include mi.asm
 .list
 
-; The INT13 device driver has 2 basic configurations.
-;
-;	TYPE 1 - /E configuration using PC-AT extended memory and the LOADALL
-;		instruction.
-;;		The /U configuration using upper extended memory on the 
-;;		6300 PLUS is a special case of the type 1 configuration.
-;
-;	TYPE 2 - /A configuration using Above Board memory and EMM device
-;		driver.
-;
-; The TYPE 2 driver uses the Above Board EMM device driver via INT 67H
-;    to control access to, and to access the available memory.
-;
-; The TYPE 1 configuration uses the EMM control sector to
-;    control access to the available memory
-;
-
-	include emm.asm
-
-	include loadall.asm
-
+; Cache storage is owned by XMS, or by the EMS manager when /A is selected.
 	include above.asm
 
 	include ab_macro.asm
@@ -350,9 +274,9 @@ ASSUME	CS:INT13CODE,DS:NOTHING,ES:NOTHING,SS:NOTHING
 	public	WRITE_FROM_CACHE
 	public	Cache_hit
 	public	blkmov,INT_9,INT_19,RESET_SYSTEM,DO_INIT,SETBPB
-	public	PRINT,ITOA,INT13$INIT,DRIVEPARMS,GETNUM,DISK_ABORT
-	public	CTRL_IO,MM_SETDRIVE,FIND_VDRIVE,SET_RESET
-	public	AT_EXT_INIT,FIX_DESCRIPTOR,ABOVE_INIT
+	public	PRINT,ITOA,INT13$INIT,DRIVEPARMS,GETNUM
+	public	SET_RESET
+	public	XMS_INIT,ABOVE_INIT
 	public	process_read_partial,process_block_read,pr_acc_trks
 	public	pr_acc_trks,pr_cur_trk,process_write_partial,process_block_write
 	public	check_parameters,process_regions,bytes_in_trk,sect_in_trk
@@ -427,113 +351,22 @@ STATISTICS_SIZE EQU	40
 
 DRIVER_SEL	DB	0	; 0 if /E (TYPE 1), 1 if /A (TYPE 2),
 
+XMS_ENTRY       DD      0
+XMS_HANDLE      DW      0
+XMS_STACK_TOP   DW      0               ; private stack for INT 13h XMS calls
+XMS_MOVING      DB      0
+XMS_STACK_SIZE  EQU     512
 DEV_SIZE	DW	256	; Size in K of the cache
 
 SECTRACK	DW	?	; Sectors per track
 
 current_dev_size dw	?	; Current size in K of cache
 
-;;	Data peculiar to AT&T 6300 PLUS.
-
-S5_FLAG 	DB	0	;; = S_OLIVETTI if 6300 plus machine
-				;; = S_VECTRA if HP Vectra machine
-
-		db	?	; Spacer
-
-A20On	dw	0DF90h
-A20Off	dw	0DD00h
-
-special_mem	dw	0
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Unfortunately the code in smartdrv is very machine dependent
-; necessitating the use of a system flag to store the machine
-; configuration. The system flag is initialised during init time
-; and used when the caching services are requested. One bit which
-; is set and tested during caching is the state of the a20 line
-; when the cache code is entered. This is used because there are
-; applications which enable the a20 line and leave it enabled 
-; throughout the duration of execution.  Since smartdrv is a device
-; driver it shouldn't change the state of the environment.
-;
-; The system flag bit assignments are:
-;
-;	-------------------------------------------------
-;	|  7  |  6  |  5  |  4  |  3  |  2  |  1  |  0  |
-;	-------------------------------------------------
-;	   |-----|-----|     |     |     |     |     |
-;		 |           |     |     |     |     -----286 (and AT)
-;		 |           |     |     |     -----------386 (later than B0)
-;		not          |     |     -----------------PS/2 machine
-;	       used          |     -----------------------Olivetti (not used)
-;		             -----------------------------A20 state (enabled ?)
-;
-; The Olivetti guys have defined a flag of their own. This should be removed
-; and the bit assigned out here for them should be used. 
-;
-sys_flg	db	?
-;
-;	equates used for the system flag
-;
-M_286	equ	00000001B
-M_386	equ	00000010B
-M_PS2	equ	00000100B
-M_OLI	equ	00001000B
-A20_ST	equ	00010000B
-ifdef	OMTI
-OMTI_EXT equ	00100000B
+ifdef OMTI
+sys_flg db 0
+OMTI_EXT equ 00100000B
 endif
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;   flag to indicate that reset code is being executed
-reboot_flg  db	0
-;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;   emm ctrl address, needed for the reset code
-emm_ctrl_addr	dw  EXTMEM_LOW
-		dw  EXTMEM_HIGH
-;
-;
-;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; A20 address line state determination addresses
-;
-low_mem label	dword
-	dw	20h*4
-	dw	0
-
-high_mem label	dword
-	dw	20h*4 + 10h
-	dw	0ffffh
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; A20 PS2 equates
-;
-PS2_PORTA   equ 0092h
-GATE_A20    equ 010b
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;   386 working areas
-start_gdt	label	byte
-nul_des desc	<>
-cs_des	desc	<0FFFFh,0,0,09Fh,0,0>
-ss_des	desc	<0FFFFh,0,0,093h,0,0>
-ds_des	desc	<0FFFFh,0,0,093h,0,0>
-es_des	desc	<0FFFFh,0,0,093h,0,0>
-end_gdt 	label	byte
-
-emm_gdt gdt_descriptor <end_gdt-start_gdt,0,0>
-;
-;   int 15 gdt
-;
-int15_gdt   label   byte
-	    desc    <>	    ;dummy descriptor
-	    desc    <>	    ;descriptor for gdt itself
-src	    desc    <0ffffh,,,93h,,>
-tgt	    desc    <0ffffh,,,93h,,>
-	    desc    <>			;bios cs descriptor
-	    desc    <>			;stack segment descriptor
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; 0 if device is valid
 ; Non-0 if device install failed (device non-functional)
 ;
@@ -2072,9 +1905,9 @@ rd_part:
 	or	dl,80h
 	mov	al,[sect_in_trk]
 	mov	ah,2			; read
-	push	cs
-	pop	es
-	mov	bx,[track_buffer_ptr]
+
+	mov	es,[track_segment]
+	xor	bx,bx
 	pushf
 	cli
 	call	[old_13]
@@ -2090,7 +1923,7 @@ rd_part:
 ;	transfer track buffer to cache
 ;
 rd$1:
-	mov	di,[track_buffer_ptr]	;es:di is transfer address
+	xor	di,di	;es:di is transfer address
 	mov	cx,[bytes_in_trk]
 	shr	cx,1			; cx is number words in track
 	mov	bh,1		;write
@@ -2140,12 +1973,15 @@ read_buffer:
 	dec	si		; 0 based number
 	mov	cl,9		;
 	shl	si,cl		; byte offset in si
-	add	si,[track_buffer_ptr]
+	; SI is the byte offset within the track segment.
 	mov	cx,ax
 	mov	es,[bp.user_es]
 	mov	di,[bp.user_off]
+	push	ds
+	mov	ds,[track_segment]
 	cld
 rep	movsw
+	pop	ds
 	mov	[bp.user_off],di
 	clc
 	ret
@@ -2527,9 +2363,9 @@ rd_partw:
 	or	dl,80h
 	mov	al,[sect_in_trk]
 	mov	ah,2
-	push	cs
-	pop	es
-	mov	bx,[track_buffer_ptr]
+
+	mov	es,[track_segment]
+	xor	bx,bx
 	pushf
 	cli
 	call	[old_13]
@@ -2546,7 +2382,7 @@ rd_partw:
 ;	to be updated from user buffer. transfer track from track buffer
 ;	into cache
 ;
-wr$1:	mov	di,[track_buffer_ptr]	;es:di is transfer address
+wr$1:	xor	di,di	;es:di is transfer address
 	mov	al,[sect_in_trk]
 	xor	ah,ah
 	mov	cl,8
@@ -3088,9 +2924,9 @@ ASSUME	DS:INT13CODE,ES:NOTHING,SS:NOTHING
     ; First transfer track down to track buffer because we can't write
     ;	direct to extended or expanded mem with INT 13
     ;
-	PUSH	CS
-	POP	ES
-	MOV	DI,[TRACK_BUFFER_PTR]	; ES:DI is transfer addr for BLKMOV
+
+	mov	es,[track_segment]
+	xor	DI,DI	; ES:DI is transfer addr for BLKMOV
 	MOV	BX,WORD PTR [SI.TRACK_DRIVE]
 	XOR	BH,BH
 	MOV	AL,[BX.SECTRKARRAY]
@@ -3121,9 +2957,9 @@ ASSUME	DS:INT13CODE,ES:NOTHING,SS:NOTHING
 	OR	CL,1
 	OR	DL,80H
 	MOV	AH,3
-	PUSH	CS
-	POP	ES
-	MOV	BX,[TRACK_BUFFER_PTR]
+
+	mov	es,[track_segment]
+	xor	BX,BX
 	PUSH	AX
 	MOV	[RETRY_CNT],5
 RETRY_WRITE:
@@ -3273,3641 +3109,76 @@ BREAK	<Drive code for /E driver>
 ;
 		EVEN		; Force start of drive code to word boundary
 
-DRIVE_CODE	LABEL	WORD
+; XMS 0Bh uses the same cache-relative offsets as BLKMOV. INT 13h callers
+; supply their own stack, so build the move packet on our resident stack.
+; A nested BIOS caller cannot reuse an active XMS transfer stack.
+xms_move:
+	pushf
+	cli
+	cmp     cs:[xms_moving],0
+	je      xms_enter
+	popf
+	mov     al,20h
+	stc
+	ret
+xms_enter:
+	inc     cs:[xms_moving]
+	popf
+	mov     si,ss
+	mov     bp,sp
+	push    cs
+	pop     ss
+	mov     sp,cs:[xms_stack_top]
+	push    si                      ; caller's SS:SP
+	push    bp
+	or      bh,bh
+	jnz     xms_write
+	push    es                      ; destination: real-mode buffer
+	push    di
+	xor     si,si
+	push    si
+	push    dx                      ; source: cache handle and byte offset
+	push    ax
+	push    cs:[xms_handle]
+	jmp     short xms_transfer
+xms_write:
+	push    dx                      ; destination: cache
+	push    ax
+	push    cs:[xms_handle]
+	push    es                      ; source: real-mode buffer
+	push    di
+	xor     si,si
+	push    si
+xms_transfer:
+	xor     dx,dx
+	shl     cx,1                    ; word count to DWORD byte count
+	adc     dx,dx
+	push    dx
+	push    cx
+	mov     si,sp
+	push    cs
+	pop     ds
+	mov     ah,0bh
+	call    cs:[xms_entry]
+	add     sp,16
+	pop     bp
+	pop     ss
+	mov     sp,bp
+	mov     cs:[xms_moving],0
+	cmp     ax,1                    ; AX=0 sets carry
+	je      xms_move_done
+	mov     al,20h                  ; BIOS controller error
+xms_move_done:
+	ret
 
-EXTMEM_LOW	EQU	0000H	; 24 bit addr of start of extended memory
-EXTMEM_HIGH	EQU	0010H
-
-;**	BASE_ADDR data element
-;
-; The next value defines the 24 bit address of the start of the memory for
-;  the cache. It is equal to the EMM_BASE value in the
-;  EMM_REC structure for the cache.
-;
-;  NOTE THAT IT IS INITIALIZED TO THE START OF EXTENDED MEMORY. This is
-;  because BLKMOV is used to read the EMM_CTRL sector during initialization
-;  of a TYPE 1 driver.
-;
-; NOTE: This data element is shared by TYPE 1, 2 drivers, but
-;	its meaning and correct initial value are driver type specific.
-;
-
-;; NOTE: The value at BASE_ADDR is patched during initialization when
-;;	 loading a RAMDrive into upper extended memory on a PLUS
-;;
-BASE_ADDR	LABEL	DWORD	; 24 bit address of start of this RAMDRV
-		DW	EXTMEM_LOW
-		DW	EXTMEM_HIGH
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;**	BLKMOV - Perform transfer for TYPE 1 driver
-;
-;	This routine is the transfer routine for moving bytes
-;	to and from the AT extended memory in real mode using
-;	the LOADALL instruction. The LOADALL instruction is used
-;	to set up a segment descriptor which has a 24 bit address.
-;	During the time the LOADALL 24 bit segment descriptor is
-;	in effect we must have interrupts disabled. If a real mode
-;	8086 interrupt handler was given control it might perform
-;	a segment register operation which would destroy the special
-;	segment descriptor set up by LOADALL. This is prevented by
-;	doing a CLI during the "LOADALL time".
-;
-;	WARNING NUMBER ONE:
-;	    THIS CODE WILL NOT WORK ON ANY 80286 MACHINE WHERE THE NMI
-;	    INTERRUPT IS ANYTHING BUT A FATAL, SYSTEM HALTING ERROR.
-;
-;	Since it is bad to leave interrupts disabled for a long
-;	time, the I/O is performed 256 words at a time enabling
-;	interrupts between each 256 word piece. This keeps the time
-;	interrupts are disabled down to a reasonable figure in the 100mSec
-;	range.
-;
-;	To use the LOADALL instruction 102 bytes at location 80:0 must
-;	be used. INT13 copies the contents of 80:0 into its own buffer,
-;	copies in the LOADALL info, performs the LOADALL, and then copies
-;	back the previous contents of 80:0. These operations are all
-;	performed during the time interrupts are disabled for each 256 word
-;	block. This must be done with interrupts disabled because this area
-;	on DOS 2.X and 3.X contains variable BIOS data.
-;
-;	In order to gain full 24 bit addressing it is also required
-;	that address line 20 be enabled. This effects 8086 compatibility
-;	on 80286 systems. This code leaves address line 20 enabled
-;	for the ENTIRE duration of the I/O because it is too time
-;	expensive to disable/enable it for each 256 word block.
-;
-;	WARNING NUMBER TWO:
-;	    IF A MULTITASKING PRE-EMPTIVE SYSTEM SCHEDULES AND RUNS
-;	    AN APPLICATION WHICH RELIES ON THE 1 MEG ADDRESS WRAP
-;	    PROPERTY OF THE 8086 AND 8088 DURING THE TIME INT13
-;	    IS IN THE MIDDLE OF DOING AN I/O WITH ADDRESS LINE 20 ENABLED,
-;	    THE APPLICATION WILL NOT RUN PROPERLY AND MAY DESTRUCT THE
-;	    INT13 MEMORY.
-;
-;	METHOD:
-;	    Perform various LOADALL setup operations
-;	    Enable address line 20
-;	    While there is I/O to perform
-;		Do "per 256 word block" LOADALL setup operations
-;		Set up copy of 80:0 to INT13 buffer
-;		CLI
-;		copy 80:0 to INT13 buffer
-;		copy LOADALL info to 80:0
-;		LOADALL
-;		do 256 word transfer
-;		copy INT13 80:0 buffer back to 80:0
-;		STI
-;	    Disable address line 20
-;
-;	SEE ALSO
-;	    INTEL special documentation of LOADALL instruction
-;
-;	ENTRY:
-;	    ES:DI is packet transfer address.
-;	    CX is number of words to transfer.
-;	    DX:AX is 32 bit start byte offset (0 = start of cache)
-;	    BH is 1 for WRITE, 0 for READ
-;
-;	    BASE_ADDR set to point to start of cache memory
-;		This "input" is not the responsibility of the caller. It
-;		is up to the initialization code to set it up when the
-;		device is installed
-;
-;	EXIT:
-;	    Carry Clear
-;		    OK, operation performed successfully
-;	    Carry Set
-;		    Error during operation, AL is error number (INT 13 error)
-;
-;	USES:
-;	    ALL
-;
-;	This routine is specific to TYPE 1 driver
-;
-;	sunilp - incorporated blkmov_386 (thanks to gregh)
-;		 incorporated loadall_286 trick (thanks to scottra)
-;		 added new a20 functionality
-;		 ideally the code should be all relocatable abd the 386
-;		 blkmov should be relocated on the 286 blkmov for the
-;		 386 case. Also the A20 routines for the Olivetti or PS/2
-;		 should also ideally be relocated on top of the normal A20
-
+; Transfers use ES:DI, CX words, DX:AX cache offset and BH direction.
+; Initialization selects the mover before installing the INT 13h handler.
+cache_move      dw      offset xms_move
+base_addr       dd      0               ; EMS page frame
+above_pid       dw      0               ; EMS allocation handle
 BLKMOV:
-ASSUME	DS:INT13CODE,ES:NOTHING,SS:NOTHING
-	test	[sys_flg],M_386
-	je     blkmov_286
-	jmp	blkmov_386
-    ;
-    ; Compute 32 bit address of start of I/O
-    ;
-blkmov_286:
-	ADD	AX,WORD PTR [BASE_ADDR]
-	ADC	DX,WORD PTR [BASE_ADDR + 2]
-    ;
-    ; Dispatch on function
-    ;
-	OR	BH,BH
-	JZ	READ_IT
-    ;
-    ; Write
-    ;
-	MOV	WORD PTR [ESDES.SEG_BASE],AX
-	MOV	BYTE PTR [ESDES.SEG_BASE + 2],DL
-;	 MOV	 [LSI],DI
-	mov	[lbx],di	;sp
-	MOV	[LDI],0
-	MOV	SI,OFFSET DSDES
-	JMP	SHORT SET_TRANS
+        jmp     cs:[cache_move]
 
-READ_IT:
-	MOV	WORD PTR [DSDES.SEG_BASE],AX
-	MOV	BYTE PTR [DSDES.SEG_BASE + 2],DL
-	MOV	[LDI],DI
-;	 MOV	 [LSI],0	   ;sp
-	mov	[lbx],0
-	MOV	SI,OFFSET ESDES
-SET_TRANS:
-	MOV	AX,ES
-	CALL	SEG_SET 		; Set ES or DS segreg
-    ;
-    ; Set stack descriptor
-    ;
-	MOV	AX,SS
-	MOV	[LSSS],AX
-	MOV	SI,OFFSET SSDES
-	CALL	SEG_SET
-	MOV	[LSP],SP
-;	 SUB	 [LSP],2		 ; CX is on stack at LOADALL
-;
-;	the loadall kludge
-;
-	mov	ax,cs			;sp
-	inc	ax			;sp
-	mov	[lcss],ax		;sp
-	mov	si,offset CSDES 	;sp
-	mov	ax,cs			;sp
-	call	seg_set 		;sp
-    ;
-    ; Set Other LOADALL stuff
-    ;
-	SMSW	[LDSW]
-	SIDT	FWORD PTR [IDTDES]
-	SGDT	FWORD PTR [GDTDES]
-    ;
-    ; NOW The damn SXXX instructions store the desriptors in a
-    ;	  different order than LOADALL wants
-    ;
-	MOV	SI,OFFSET IDTDES
-	CALL	FIX_DESCRIPTOR
-	MOV	SI,OFFSET GDTDES
-	CALL	FIX_DESCRIPTOR
-    ;
-    ; Enable address line 20
-    ;
-
-;;
-;; Enable address line 20 on the PC AT or activate A20-A23 on the 6300 PLUS.
-;; The former can be done by placing 0dfh in AH and activating the keyboard
-;; processor.  On the PLUS, 90h goes in AL and the port at 03f20h is written.
-;; So the combined value of 0df90h can be used for both machines with
-;; appropriate coding of the called routine A20.
-;;
-
-;;	MOV	AH,0DFH
-	mov	ax,cs:[A20On]		;; set up for PLUS or AT
-	CALL	A20
-	Jc	NR_ERR
-;	 JMP	 SHORT IO_START 	;sp
-	jmp	short move_main_loop	;sp
-
-NR_ERR:
-	MOV	AL,0AAH 		; Drive not ready error
-	STC
-	RET
-
-;IOLOOP:				;sp
-;	 PUSH	 CX			;sp
-
-move_main_loop: 			;sp
-assume ds:nothing			;sp
-	jcxz	io_done 		;sp
-	mov	cs:[ldx],cx		   ;sp
-	MOV	AX,80H
-	MOV	DS,AX
-	PUSH	CS
-	POP	ES
-	XOR	SI,SI
-	MOV	DI,OFFSET cs:[SWAP_80]
-	MOV	CX,102/2
-	mov	cs:[ssSave],ss
-	CLD
-	CLI				; Un interruptable
-	REP	MOVSW			; Save contents of 80:0
-	PUSH	DS
-	PUSH	ES
-	POP	DS
-	POP	ES
-	XOR	DI,DI
-	MOV	SI,OFFSET cs:LOADALL_TBL
-	MOV	CX,102/2
-	REP	MOVSW			; Transfer in LOADALL info
-	 DW	 050FH			 ; LOADALL INSTRUCTION
-AFTER_LOADALL:
-; set up stack for moving 80:0 information back again
-;
-	xor	bp,bp
-	mov	ss,ax
-	mov	si,offset cs:[swap_80]
-	mov	cx,102/2
-move_loop:
-	lods	word ptr cs:[si]
-	mov	ss:[bp],ax
-	inc	bp
-	inc	bp
-	loop	move_loop
-	mov	ss,cs:[ssSave]
-	mov	cx,dx
-	mov	si,bx
-;critical code
-	sti
-	rep	movsw
-	cli		    ; bugfix sunilp
-	mov	ax,cs
-	dec	ax
-	push	ax
-	mov	ax,offset    io_done
-	push	ax
-	db	0cbh
-;
-	db	16 dup (0fah) ; bugfix sunilp
-	mov	ax,cs
-	dec	ax
-	push	ax
-	mov	ax,offset    resume_int
-	push	ax
-	db	0cbh
-;
-resume_int:
-	mov	cs:[ldi],di
-	mov	cs:[lbx],si
-	jmp	move_main_loop
-
-;	 REP	 MOVSW			 ; Move data
-;IO_START:
-;	 JCXZ	 IODN
-;	 MOV	 WORD PTR [LCX],256	 ; ASSUME full block
-;	 SUB	 CX,256
-;	 JNC	 IOLOOP 		 ; OK
-;	 ADD	 [LCX],CX		 ; OOPs, partial block
-;	 XOR	 CX,CX			 ; This is the last block
-;	 JMP	 IOLOOP
-
-;IODN:
-io_done:
-	sti				; bugfix sunilp
-	MOV	CX,800H 		; Retry this many times
-OFFLP:
-
-;;
-;; Reset of line A20 on the PC AT requires writing 0ddh to the keyboard
-;; processor.  On the PLUS, the appropriate value is 00.
-;;
-
-;;	MOV	AH,0DDH
-	mov	ax,cs:[A20Off]	;; setup for PLUS or AT. ah for IBM, al for PLUS
-	CALL	A20		; Disable address line 20
-	jnc	dis_done
-	LOOP	OFFLP
-dis_done:
-	CLC
-	RET
-
-;**	A20 - ENABLE/DISABLE ADDRESS LINE 20 ON IBM PC-AT
-;
-;	This routine enables/disables address line 20 by twiddling bits
-;	in one of the keyboard controller registers.
-;
-;	SEE ALSO
-;	    IBM Technical Reference Personal Computer AT Manual #1502243
-;		Page 5-155
-;
-;	ENTRY
-;	    AH = 0DDH to disable A20
-;	    AH = 0DFH to enable A20
-;	EXIT
-;	    CY Failed
-;	    NC Succeeded
-;	USES
-;	    AL, FLAGS
-;
-; WARNING If this routine is called in a CLI state this routine has
-;	the side effect of enabling interrupts.
-;
-;	This routine is specific to TYPE 1 driver
-;
-
-A20:
-ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
-;; CS override needed on S5_FLAG to avoid phase errors on
-;; forward declaration of this variable.
-	cmp	cs:[S5_FLAG],S_OLIVETTI ;; test for 6300 PLUS
-	jne	test_vec		;; yes, do this code
-	jmp	a20s5
-test_vec:
-	cmp	cs:[S5_FLAG],S_VECTRA
-	jne	test_ps2
-	jmp	VecA20
-test_ps2:
-	test	cs:[sys_flg],M_PS2	; is it a ps2 machine
-	jne	a20ps2			 ; if yes it has separate a20 routine
-old_a20:
-	CLI
-	call	check_a20		; check to see if it can be enb /disb
-	jc	a20suc		       ; no it may not be toggled
-	CALL	E_8042
-	JNZ	a20err
-	MOV	AL,0D1H
-	OUT	64H,AL
-	CALL	E_8042
-	JNZ	a20err
-	MOV	AL,AH
-	OUT	60H,AL
-	CALL	E_8042
-	JNZ	a20err
-    ;
-    ;	We must wait for the a20 line to settle down, which (on an AT)
-    ;	 may not happen until up to 20 usec after the 8042 has accepted
-    ;	 the command.  We make use of the fact that the 8042 will not
-    ;	 accept another command until it is finished with the last one.
-    ;	 The 0FFh command does a NULL 'Pulse Output Port'.  Total execution
-    ;	 time is on the order of 30 usec, easily satisfying the IBM 8042
-    ;	 settling requirement.	(Thanks, CW!)
-    ;
-	mov	al,0FFh 		;* Pulse Output Port (pulse no lines)
-	out	64H,al			;* send cmd to 8042
-	CALL	E_8042			;* wait for 8042 to accept cmd
-	jnz	A20Err
-
-A20Suc: sti
-	clc
-	RET
-A20Err: sti
-	stc
-	ret
-;
-; Helper routine for A20. It waits for the keyboard controller to be "ready".
-;
-E_8042:
-ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
-	PUSH	CX
-	XOR	CX,CX
-E_LOOP:
-	IN	AL,64H
-	AND	AL,2
-	LOOPNZ	E_LOOP
-	POP	CX
-	RET
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;	A20 status checking. If request is to enable a20 we must check to
-;	see if it is already enabled. If so we just set the sys_flg to
-;	indicate this. On disabling the routine checks to see if disabling
-;	is allowed
-;
-check_a20:
-assume ds:nothing,es:nothing,ss:nothing
-	cmp	ah,0ddh     ; is it a disable operation
-	jne	check_a20_enable
-;
-;   check if a20 disabling allowed
-;
-	test	cs:[sys_flg],a20_st
-	jne	no_toggle
-toggle: clc
-	ret
-;
-;   a20 enabling, check if allowed
-;
-check_a20_enable:
-	and	cs:[sys_flg], not A20_ST
-	push	cx
-	push	ds
-	push	si
-	push	es
-	push	di
-	lds	si,cs:low_mem
-	les	di,cs:high_mem
-	mov	cx,3
-	cld
-repe	cmpsw
-	pop	di
-	pop	es
-	pop	si
-	pop	ds
-	jcxz	not_enabled
-	pop	cx
-	or	cs:[sys_flg],A20_ST
-no_toggle:
-	stc
-	ret
-not_enabled:
-	pop	cx
-	clc
-	ret
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; A20 routine for PS2s. The PS2 A20 hardware has shifted and toggling
-; a bit in the system port is all that is required.
-A20PS2:
-assume	ds:nothing,es:nothing,ss:nothing
-	cli
-;
-;   first separate disable operation from enable operation
-;
-	cmp	ah,0ddh
-	je	disbl_PS2
-;
-;   enabling the a20
-;
-	and	cs:[sys_flg],not A20_ST
-	in	al,PS2_PORTA	; input a20 status
-	test	al,GATE_A20	; is the a20 line set
-	je	set_it		;
-	or	cs:[sys_flg],A20_ST ; indicate that it was already set
-ps2a20suc:
-	clc
-	sti
-	ret
-
-set_it: push	cx
-	xor	cx,cx
-	or	al,GATE_A20
-	out	PS2_PORTA,al	; set it
-see_agn:
-	in	al,PS2_PORTA	; read status again
-	test	al,GATE_A20
-	loopz	see_agn
-	pop	cx
-	jz	ps2err
-	clc
-	sti
-	ret
-;
-;	disabling the ps2
-;
-disbl_PS2:
-	test	cs:[sys_flg],A20_ST
-	jne	ps2a20suc
-;
-	push	cx
-	xor	cx,cx
-	in	al,PS2_PORTA
-	and	al,not GATE_A20
-	out	PS2_PORTA,al
-see_agn1:
-	in	al,PS2_PORTA
-	test	al,GATE_A20
-	loopnz	see_agn1
-	pop	cx
-	jnz	ps2err
-	clc
-	sti
-	ret
-;
-ps2err:
-	stc
-	sti
-	ret
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;*	VECA20 - Address enable/disable routine for Vectra family computers
-;;
-;;	This routine does the same function as A20 for Vectra machines.
-;;	Vectra machines require writing single byte as opposed to
-;;	double byte commands to the 8041.  This is due to a bug
-;;	in older versions in the Vectra 8041 controllers.  IBM
-;;	machines must use double byte commands due to lack of
-;;	implementation of single byte commands in some of their machines.
-;;
-;;	Uses	al, flags
-;;	Has same results as A20
-;;
-VecA20:
-	CLI
-	call	check_a20
-	jc	VecA20Suc
-	call	E_8042
-	jnz	VecA20Err
-	mov	al,ah			;sigle byte command is code passed
-	out	64H,al
-	call	E_8042
-	jnz	VecA20Err
-;	See A20 for a description of the following code.  It simply makes
-;	sure that the previous command has been completed. We cannot
-;	pulse the command reg since there is a bug in some Vectra 8041s
-;	instead we write the byte again knowing that when this one is
-;	accepted the previous one has been processed.
-	mov	al,ah
-	out	64H,al
-	call	E_8042
-	jnz	VecA20Err
-VecA20Suc:
-	sti
-	clc
-	ret
-VecA20Err:
-	sti
-	stc
-	ret
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;*	A20S5 - Address enable/disable routine for the 6300 PLUS.
-;;
-;;	This routine enables lines A20-A23 on the PLUS by writing
-;;	to port 03f20h.  Bit 7 turns the lines on, and bit 4 sets
-;;	the power-up bit.  To disable the lines, the processor
-;;	must be reset.  This is done by saving the world and 
-;;	jumping to the ROM 80286 reset code.  Since the power-up bit
-;;	is set, the data segment is set to the BiosSeg at 40h
-;;	and a jump is then made to the address at RealLoc1.  
-;;	At RealLoc1, one can find the CS:IP where the code
-;;	is to continue.
-;;	 
-;;	Uses ax, flags.
-;;	Returns with zero flag set.
-;;
-A20S5:	test	[reboot_flg],0ffh	;; sunilp
-	jne	a20s5boot		;; sunilp
-	cli
-	or	al,al			;; if zero, then resetting processor
-	jnz	A20S5Next
-	call	RSet			;; must return with entry value of ax
-A20S5Next:
-	push	dx			;; set/reset port
-	mov	dx,3f20h
-	out	dx,al
-	pop	dx
-	clc				;; sunilp modification cy flag now important
-        STI
-        RET
-
-;;* a20S5BOOT -	This code bypasses the processor reset on a reboot
-;;		of the 6300 PLUS.  Otherwise the machine hangs.
-a20s5BOOT:				;; use this code before reboot
-	cli
-	jmp short a20s5next
-
-OldStackSeg	dw	0		;; used during PLUS processor reset
-					;; to save the stack segment
-
-;;* Rset -	Reset the 80286 in order to turn off the address lines
-;;		on the 6300 PLUS.  Only way to do this on the
-;;		current hardware.  The processor itself can be
-;;		reset by reading or writing prot 03f00h
-;;
-;;  Uses flags.
-;;
-RSet:
-	pusha				;; save world
-	push	ds			;; save segments
-	push	es
-	mov	ax,BiosSeg		;; point to the bios segment
-	mov	ds,ax			;; ds -> 40h
-assume	ds:BiosSeg
-	push	word ptr [RealLoc1]	;; save what might have been here
-	push	word ptr [RealLoc1+2]
-	mov	word ptr [RealLoc1],cs:[offset ReturnBack] ;; load our return address
-	mov	word ptr [RealLoc1+2],cs
-assume ds:nothing
-	mov	[OldStackSeg],ss	;; save the stack segment, too
-	mov	dx,03f00h		;; reset the processor
-	in	ax,dx
-	nop				
-	nop
-	nop
-	cli
-	hlt				;; should never get here
-ReturnBack:
-	mov	ss,[OldStackSeg]	;; start the recovery
-assume ds:BiosSeg
-	pop	word ptr [RealLoc1+2]
-	pop	word ptr [RealLoc1]
-	pop	es
-	pop	ds
-	popa
-	ret		
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-blkmov_386:	    ;_protect:
-assume	ds:int13code,es:nothing,ss:nothing
-;
-; Compute 32 bit address of start of I/O
-;
-	add	ax,word ptr [base_addr]
-	adc	dx,word ptr [base_addr + 2]
-;
-	push	cx
-;
-; Are we in virtual mode
-;
-	smsw	cx
-	test	cx,01B		; is the pe bit set
-	je	pr_mode_tran
-
-       jmp     int_15_tran
-;
-; Dispatch on function
-;
-pr_mode_tran:
-	or	bh,bh
-	jz	read_it_1
-;
-; Write
-;
-; Update ES descriptor with address of track in cache
-;
-	mov	si,offset es_des
-	mov	[si].bas_0_15,ax
-	mov	[si].bas_16_23,dl
-	mov	[si].bas_24_31,dh
-;
-; Update DS descriptor with transfer address
-;
-	mov	ax,es
-	mov	cx,16
-	mul	cx
-	mov	si,offset ds_des
-	mov	[si].bas_0_15,ax
-	mov	[si].bas_16_23,dl
-	mov	[si].bas_24_31,dh
-
-
-; Switch SI and DI for write transfer
-
-	mov	si,di
-	xor	di,di
-
-	jmp	short set_trans_1
-
-read_it_1:
-;
-; Update DS descriptor with address of track in cache
-;
-	mov	si,offset ds_des
-	mov	[si].bas_0_15,ax
-	mov	[si].bas_16_23,dl
-	mov	[si].bas_24_31,dh
-;
-; Update ES descriptor with transfer address
-;
-	mov	ax,es
-	mov	cx,16
-	mul	cx
-	mov	si,offset es_des
-	mov	[si].bas_0_15,ax
-	mov	[si].bas_16_23,dl
-	mov	[si].bas_24_31,dh
-;
-; Keep SI and DI the same for read transfer
-;
-	xor	si,si
-
-set_trans_1:
-;
-; Restore Transfer Count
-;
-	pop	cx
-
-;
-	mov	ax,cs:[A20On]
-	call	A20
-	jc	nr_err_1
-;
-;	we shall do the transfer 1024 words at a time
-;
-	db	66h
-	push	ax
-	mov	bx,cx
-assume ds:nothing
-pr_io_agn_1:
-	mov	cx,1024
-	cmp	bx,cx
-	ja	pr_strt_1
-	mov	cx,bx
-pr_strt_1:
-	sub	bx,cx
-	cli		; Un interruptable
-	cld
-	lgdt	fword ptr emm_gdt
-
-
-;
-; Switch to protected mode
-;
-	db	66h,0Fh, 20h, 0 	    ;mov     eax,cr0
-	or	ax,1
-	db	66h,0Fh,22h, 0		    ;mov     cr0,eax
-;
-; Clear prefetch queue
-;
-	db	0eah		; far jump
-	dw	offset flush_prefetch
-	dw	cs_des - start_gdt	
-;
-flush_prefetch:
-	assume	cs:nothing
-;
-; Initialize segment registers
-;
-	mov	ax,ds_des - start_gdt
-	mov	ds,ax
-	assume	ds:nothing
-	mov	ax,es_des - start_gdt
-	mov	es,ax
-	assume	es:nothing
-	shr	cx,1			; convert word count to dword count
-	db	0f3h,066h,0a5h		; rep movsd
-;	rep	movsw			; Move data
-;
-;
-; Return to Real Mode
-;
-;
-	db	66h,0Fh, 20h, 0 	    ; mov     eax,cr0
-	and	ax,0FFFEh
-	db	66h,0Fh, 22h, 0 	    ; mov     cr0,eax
-;
-; Flush Prefetch Queue
-;
-	db	0EAh			; Far jump
-	dw	offset flushcs
-cod_seg dw	?			; Fixed up at initialization time
-	assume	cs:Int13Code
-flushcs:
-;
-	sti
-;  see if transfer done else go to do next block
-;
-	or	bx,bx
-	jne	pr_io_agn_1
-;
-	db	66h
-	pop	ax
-	mov	ax,cs
-	mov	es,ax
-	assume	es:nothing
-	mov	ds,ax
-	assume	ds:Int13Code
-
-	mov	cx,800h 		; Retry this many times
-offlp_1:
-	mov	ax,cs:[A20Off]
-	call	A20			; Disable address line 20
-	jnc	offlp1_out
-	loop	offlp_1
-offlp1_out:
-	clc
-	ret
-
-nr_err_1:
-
-	mov	al,0AAh 		; Drive not ready error
-	stc
-	ret
-;
-int_15_tran:
-assume	ds:int13code,es:nothing,ss:nothing
-	or	bh,bh
-	jz	read_it_2
-;
-; Write
-;
-; Update tgt descriptor with address of track in cache
-;
-	mov	si,offset tgt
-	mov	[si].bas_0_15,ax
-	mov	[si].bas_16_23,dl
-	mov	[si].bas_24_31,dh
-;
-; Update src descriptor with transfer address
-;
-	mov	ax,es
-	mov	cx,16
-	mul	cx
-	add	ax,di
-	adc	dx,0
-	mov	si,offset src
-	mov	[si].bas_0_15,ax
-	mov	[si].bas_16_23,dl
-	mov	[si].bas_24_31,dh
-;
-	jmp	short set_trans_2
-
-read_it_2:
-;
-; Update src descriptor with address of track in cache
-;
-	mov	si,offset src
-	mov	[si].bas_0_15,ax
-	mov	[si].bas_16_23,dl
-	mov	[si].bas_24_31,dh
-;
-; Update tgt descriptor with transfer address
-;
-	mov	ax,es
-	mov	cx,16
-	mul	cx
-	add	ax,di
-	adc	dx,0
-	mov	si,offset tgt
-	mov	[si].bas_0_15,ax
-	mov	[si].bas_16_23,dl
-	mov	[si].bas_24_31,dh
-;
-set_trans_2:
-;
-; Restore Transfer Count
-;
-	pop	bx
-
-;
-;	we shall do the transfer 1024 words at a time
-;
-pr_io_agn_2:
-	mov	cx,1024
-	cmp	bx,cx
-	ja	pr_strt_2
-	mov	cx,bx
-pr_strt_2:
-	sub	bx,cx
-	push	cs
-	pop	es
-	mov	si,offset int15_gdt
-	mov	ax,emm_blkm shl 8
-	int	emm_int
-	jc	nr_err_1
-;
-;
-;  see if transfer done else fo to do next block
-;
-	or	bx,bx
-	je	io_exit
-;
-	add	[src.bas_0_15],2048
-	adc	[src.bas_16_23],0
-	adc	[src.bas_24_31],0
-;
-	add	[tgt.bas_0_15],2048
-	adc	[tgt.bas_16_23],0
-	adc	[tgt.bas_24_31],0
-;
-	jmp	pr_io_agn_2
-io_exit:
-	clc
-	ret
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;**	SEG_SET - Set up a LOADALL segment descriptor as in REAL mode
-;
-;	This routine sets the BASE value in the segment descriptor
-;	pointed to by DS:SI with the segment value in AX as the 80286
-;	does in REAL mode. This routine is used to set a descriptor
-;	which DOES NOT have an extended 24 bit address.
-;
-;	SEE ALSO
-;	    INTEL special documentation of LOADALL instruction
-;
-;	ENTRY:
-;	      DS:SI -> Seg register descriptor
-;	      AX is seg register value
-;	EXIT:
-;	      NONE
-;	USES:
-;	      AX
-;
-;	This routine is specific to TYPE 1 driver
-;
-
-SEG_SET:
-ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
-	PUSH	DX
-	PUSH	CX
-	MOV	CX,16
-	MUL	CX	; Believe or not, this is faster than a 32 bit SHIFT
-	MOV	WORD PTR [SI.SEG_BASE],AX
-	MOV	BYTE PTR [SI.SEG_BASE + 2],DL
-	POP	CX
-	POP	DX
-	RET
-
-;**	FIX_DESCRIPTOR - Shuffle GTD IDT descriptors
-;
-;	The segment descriptors for the IDT and GDT are stored
-;	by the SIDT instruction in a slightly different format
-;	than the LOADALL instruction wants them. This routine
-;	performs the transformation by PUSHing the contents
-;	of the descriptor, and then POPing them in a different
-;	order.
-;
-;	SEE ALSO
-;	    INTEL special documentation of LOADALL instruction
-;	    INTEL 80286 processor handbook description of SIDT instruction
-;
-;	ENTRY:
-;	    DS:SI points to IDT or GDT descriptor in SIDT form
-;	EXIT:
-;	    DS:SI points to IDT or GDT descriptor in LOADALL form
-;	USES:
-;	    6 words of stack
-;
-;	NOTE: The transformation is reversable, so this routine
-;		will also work to transform a descriptor in LOADALL
-;		format to one in SIDT format.
-;
-;	Specific to TYPE 1 driver
-;
-
-FIX_DESCRIPTOR:
-ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
-	PUSH	WORD PTR [SI + 4]
-	PUSH	WORD PTR [SI + 2]
-	PUSH	WORD PTR [SI]
-	POP	WORD PTR [SI + 4]
-	POP	WORD PTR [SI]
-	POP	WORD PTR [SI + 2]
-	RET
-
-;**	DATA SPECIFIC TO THE LOADALL INSTRUCTION USAGE
-;
-;	SWAP_80 and LOADALL_TBL are data elements specific to the use
-;	of the LOADALL instruction by TYPE 1 drivers.
-;
-
-;
-; Swap buffer for contents of 80:0
-;
-	EVEN		; Force word alignment of SWAP_80 and LOADALL_TBL
-
-SWAP_80 DB	102 DUP(?)
-ssSave	dw	?
-
-;
-; LOADALL data buffer placed at 80:0
-;
-LOADALL_TBL	LABEL	BYTE
-	DB	6 DUP(0)
-LDSW	DW	?
-	DB	14 DUP (0)
-TR	DW	0
-FLAGS	DW	0		; High 4 bits 0, Int off, Direction clear
-				;   Trace clear. Rest don't care.
-LIP	DW	OFFSET AFTER_LOADALL
-LDT	DW	0
-LDSS	DW	8000h
-LSSS	DW	?
-LCSS	DW	?
-LESS	DW	?
-LDI	DW	?
-LSI	DW	?
-LBP	DW	?
-LSP	DW	?
-LBX	DW	?
-LDX	DW	?
-LCX	DW	?
-LAX	DW	80H
-ESDES	SEGREG_DESCRIPTOR <>
-CSDES	SEGREG_DESCRIPTOR <>
-SSDES	SEGREG_DESCRIPTOR <>
-DSDES	SEGREG_DESCRIPTOR <>
-GDTDES	DTR_DESCRIPTOR <>
-LDTDES	DTR_DESCRIPTOR <0D000H,0,0FFH,0088H>
-IDTDES	DTR_DESCRIPTOR <>
-TSSDES	DTR_DESCRIPTOR <0C000H,0,0FFH,0800H>
-
-;**	TRUE LOCATION OF ABOVE_PID
-;
-;	Define the TRUE (runtime TYPE 2 driver) location of ABOVE_PID.
-;	This is the only piece of TYPE 2 specific data that we need
-;	in the resident image. We must define it HERE rather than down
-;	at ABOVE_BLKMOV so that we have its TRUE location after the
-;	TYPE 2 code is swapped in at initialization. If we defined
-;	it down at ABOVE_BLKMOV any instruction like:
-;
-;		MOV	DX,[ABOVE_PID]
-;
-;	Would have to be "fixed up" when we moved the ABOVE_BLKMOV
-;	code into its final location.
-;
-
-ABOVE_PID	EQU	WORD PTR $ - 2		; TRUE location of ABOVE_PID
-
-;
-; The following label defines the end of the region where BLKMOV code
-;   may be swapped in. BLKMOV code to be swapped in MUST fit
-;   between DRIVE_CODE and DRIVE_END
-;
-DRIVE_END	LABEL	WORD
-
-
-BREAK	<INT 19/9 Handlers>
-
-;
-; As discussed above in the documentation of the EMM_CTRL sector it
-; is necessary to hear about system re-boots so that the EMM_ISDRIVER
-; bits in the EMM_REC structure can be manipulated correctly.
-;
-; On the IBM PC family of machines there are two events which cause a
-; "soft" system re-boot which we might expect the EMM_CTRL sector to
-; survive through. One is software INT 19H, the other is the Ctrl-Alt-Del
-; character sequence which can be detected by "listening" on INT 9 for
-; it. The code below consists of a handler for INT 19H, a handler
-; for INT 9, and a drive TYPE dependant piece of code.
-;
-; The drive TYPE dependant piece of code works as follows:
-;
-;	TYPE 1 uses EMM_CTRL sector so it turnd off the
-;		EMM_ISDRIVER bit in the record indicated by MY_EMM_REC.
-;		EACH TYPE 1 driver in the system includes the INT 19/9
-;		code.
-;
-;	TYPE 2 DOES NOT use the EMM_CTRL sector but it still has
-;		a handler. What this handler does is issue an
-;		ABOVE_DEALLOC call to deallocate the Above Board
-;		memory allocated to INT13. In current versions
-;		of the EMM device driver this step is unnecessary
-;		as the EMM device driver is thrown away together
-;		with all of the allocation information when the system
-;		is re-booted. We do it anyway because some future version
-;		of the EMM device driver may be smarter and retain
-;		allocation information through a warm-boot. Currently,
-;		doing this doesn't hurt anything. Since this code cannot
-;		do a global ABOVE_DEALLOC for all TYPE 2 drivers in the
-;		system, it does an ABOVE_DEALLOC only for its memory
-;		and EACH TYPE 2 driver in the system includes the INT 19/9
-;		code.
-;
-
-;
-; Storage locations for the "next" INT 19 and INT 9 vectors, the ones
-;  that were in the interrupt table when the device driver was loaded.
-;  They are initialized to -1 to indicate they contain no useful information.
-;
-OLD_19	LABEL	DWORD
-	DW	-1
-	DW	-1
-
-OLD_9	LABEL	DWORD
-	DW	-1
-	DW	-1
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; modification to meet new memory allocation standard
-OLD_15	LABEL	DWORD
-	DW	-1
-	DW	-1
-int15_size  dw	0
-;
-;
-INT_15:
-ASSUME DS:NOTHING,SS:NOTHING,ES:NOTHING
-;
-;	This piece of code determines the size of extended memory
-;	which was allocated before this driver and then subtracts
-;	the amount it has allocated for itself
-;
-;	inputs: ah = 88h is of interest
-;	outputs: ax = size of extended memory allocated by all before and
-;		 including us
-;	regs used: flags
-;
-	pushf
-	cmp	ah,88h
-	je	mem_det
-	popf
-	jmp	[old_15]
-mem_det:
-	mov	ax,[int15_size]
-	popf
-	clc
-	sti
-	iret
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;**	INT 9 Keyboard handler
-;
-;	All this piece of code does is look for the Ctrl-Alt-Del event.
-;	If key is not Ctrl-Alt-Del, it jumps to OLD_9 without doing
-;	anything. If the Ctrl-Alt-Del key is detected it calls
-;	RESET_SYSTEM to perform driver TYPE specific re-boot code.
-;	It then resets INT 13H to disable the cache and then jumps to
-;	OLD_9 to pass on the event.
-;
-;	NOTE THAT UNLIKE INT 19 THIS HANDLER DOES NOT NEED TO RESET
-;	THE INT 9 AND INT 19 VECTORS. This is because the Ctrl-Alt-Del
-;	IBM ROM re-boot code resets these vectors.
-;
-;	We would LIKE to ALSO flush the cache, but we can't. For one the
-;	keyboard is at a higher IRQ than the disk. We could EOI the keyboard,
-;	but this doesn't fix the second problem. INT 13s to write
-;	out any dirty tracks take a LONG time, so long that we lose
-;	the key. In other words we see Ctrl-Alt-Del, but none of the
-;	INT 9 handlers after us will.
-;
-;
-;	SEE ALSO
-;	    INT 9 IBM ROM code in ROM BIOS listing of
-;	    IBM PC Technical Reference manual for any PC family member
-;
-;	ENTRY
-;	    NONE
-;	EXIT
-;	    NONE, via OLD_9
-;	USES
-;	    FLAGS
-;
-;	THIS CODE IS USED BY TYPE 1,2 drivers.
-;
-
-INT_9:
-ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
-	PUSH	AX
-	PUSH	DS
-	IN	AL,60H
-	CMP	AL,83			; DEL key?
-	JNZ	CHAIN			; No
-	XOR	AX,AX
-	MOV	DS,AX
-	MOV	AL,BYTE PTR DS:[417H]	; Get KB flag
-	NOT	AL
-	TEST	AL,0CH			; Ctrl Alt?
-	JNZ	CHAIN			; No
-	MOV	[INT_13_BUSY],1 	; Exclude
-;
-; We would LIKE to do this, always but we can't. For one the keyboard
-;   is at a higher IRQ than the disk. We can EOI the keyboard,
-;   but this doesn't fix the second problem. INT 13s to write
-;   out any dirty tracks take a LONG time, so long that we loose
-;   the key. In other words we see Ctrl-Alt-Del, but none of the
-;   INT 9 handlers after us will.
-;
-	CMP	[REBOOT_FLUSH],0	; Reboot flush enabled?
-	JZ	NO_REBOOT_FLUSH 	; No
-	CMP	[DIRTY_CACHE],0 	; Anything to do?
-	JZ	NO_REBOOT_FLUSH 	; No
-	MOV	AL,20H
-	OUT	20H,AL			; EOI the keyboard int
-	CALL	FLUSH_WHOLE_CACHE_SAV	; Flush cache
-NO_REBOOT_FLUSH:
-;
-	CALL	RESET_SYSTEM		; Ctrl Alt DEL
-    ;
-    ; Reset INT 13 vector to turn cache off
-    ;
-	MOV	AX,WORD PTR [OLD_13]
-	CLI
-	MOV	WORD PTR DS:[13H * 4],AX
-	MOV	AX,WORD PTR [OLD_13 + 2]
-	MOV	WORD PTR DS:[(13H * 4) + 2],AX
-    ;
-    ; Reset INT 1C vector to turn cache off
-    ;
-;	MOV	AX,WORD PTR [OLD_1C]
-;	MOV	WORD PTR DS:[1CH * 4],AX
-;	MOV	AX,WORD PTR [OLD_1C + 2]
-;	MOV	WORD PTR DS:[(1CH * 4) + 2],AX
-	MOV	[INT_13_BUSY],0
-CHAIN:
-	POP	DS
-	POP	AX
-	JMP	[OLD_9]
-
-;**	INT 19 Software re-boot handler
-;
-;	All this piece of code does is sit on INT 19 waiting for
-;	a re-boot to be signaled by being called. It calls
-;	FLUSH_WHOLE_CACHE_SAV to flush out any dirty cache info then
-;	RESET_SYSTEM to perform driver TYPE specific re-boot code,
-;	resets the INT 19, INT 13 and INT 9 vectors,
-;	and then jumps to OLD_19 to pass on the event.
-;
-;	NOTE THAT UNLIKE INT 9 THIS HANDLER NEEDS TO RESET
-;	THE INT 9 AND INT 19 VECTORS. This is because the INT 19
-;	IBM ROM re-boot code DOES NOT reset these vectors, and we
-;	don't want to leave them pointing to routines that are not
-;	protected from getting stomped on by the re-boot.
-;
-;	SEE ALSO
-;	    INT 19 IBM ROM code in ROM BIOS listing of
-;	    IBM PC Technical Reference manual for any PC family member
-;
-;	ENTRY
-;	    NONE
-;	EXIT
-;	    NONE, via OLD_19
-;	USES
-;	    FLAGS
-;
-;	THIS CODE IS USED BY TYPE 1,2 drivers.
-;
-
-INT_19:
-ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
-	MOV	[INT_13_BUSY],1 	; Exclude
-	cmp	[reboot_flush],0	;
-	je	no_flush
-	CALL	FLUSH_WHOLE_CACHE_SAV	; Flush out the cache
-no_flush:
-	CALL	RESET_SYSTEM
-	PUSH	AX
-	PUSH	DS
-	XOR	AX,AX
-	MOV	DS,AX
-	MOV	AX,WORD PTR [OLD_13]
-	CLI
-    ;
-    ; Reset INT 13 vector to trun cache off
-    ;
-	MOV	WORD PTR DS:[13H * 4],AX
-	MOV	AX,WORD PTR [OLD_13 + 2]
-	MOV	WORD PTR DS:[(13H * 4) + 2],AX
-    ;
-    ; Reset INT 1C vector to turn cache off
-    ;
-;	MOV	AX,WORD PTR [OLD_1C]
-;	MOV	WORD PTR DS:[1CH * 4],AX
-;	MOV	AX,WORD PTR [OLD_1C + 2]
-;	MOV	WORD PTR DS:[(1CH * 4) + 2],AX
-    ;
-    ; Since INT 19 DOES NOT reset any vectors (like INT 9 Ctrl Alt DEL does),
-    ;	we must replace those vectors we have mucked with.
-    ;
-    ; NOTE THAT WE RESET VECTORS DIRECTLY!!!!!!!!!!!!!!!!!!
-    ;	We are not sure that DOS is reliable enough to call.
-    ;
-	MOV	AX,WORD PTR [OLD_19]
-	MOV	WORD PTR DS:[19H * 4],AX
-	MOV	AX,WORD PTR [OLD_19 + 2]
-	MOV	WORD PTR DS:[(19H * 4) + 2],AX
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;   removed from smartdrv
-;	MOV	AX,WORD PTR [OLD_9]
-;	MOV	WORD PTR DS:[9H * 4],AX
-;	MOV	AX,WORD PTR [OLD_9 + 2]
-;	MOV	WORD PTR DS:[(9H * 4) + 2],AX
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-	mov	ax,word ptr [old_15]
-	cmp	ax,word ptr [old_15+2]
-	jne	res_15
-	cmp	ax,-1
-	je	skip_res
-res_15:
-	mov	word ptr ds:[15h*4],ax
-	mov	ax,word ptr    [old_15+2]
-	mov	word ptr ds:[(15h*4) +2],ax
-;
-skip_res:
-	POP	DS
-	POP	AX
-	MOV	[INT_13_BUSY],0
-	JMP	[OLD_19]
-
-;**	RESET_SYSTEM perform TYPE 1 (/E) driver specific reboot code
-;
-;	This code performs the EMM_ISDRIVER reset function as described
-;	in EMM.ASM for all EMM_REC structure for this device (offset
-;	stored in MY_EMM_REC). We use the same LOADALL
-;	method described at BLKMOV to address the EMM_CTRL sector
-;	at the start of extended memory and perform our changes in
-;	place.
-;
-;	NOTE: RESET_SYSTEM ALSO defines the start of ANOTHER piece of
-;		driver TYPE specific code that TYPE 2 drivers
-;		will have to swap in a different piece of code for.
-;
-;	ENTRY
-;	    NONE
-;	EXIT
-;	    NONE
-;	USES
-;	    NONE
-;
-; This code is specific to TYPE 1 drivers
-;
-
-RESET_SYSTEM:
-ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
-	JMP	SHORT TRUE_START
-
-MY_EMM_REC	DW	0		; Offset into 1K EMM_CTRL of my record
-
-TRUE_START:
-	PUSHA
-	mov	cs:[reboot_flg],0ffh	; set the reboot flag
-	cmp	cs:[my_emm_rec],0	; was an emm record allocated?
-	je	reset_skip
-	PUSH	DS
-	PUSH	ES
-;
-; reset base_addr to be address of emm ctrl sector
-;
-	mov	ax,cs:[emm_ctrl_addr]
-	mov	dx,cs:[emm_ctrl_addr+2]
-	mov	word ptr cs:[base_addr],ax
-	mov	word ptr cs:[base_addr+2],dx
- ;
- ;  read 1k emm control sector into track buffer, I want to keep memory
- ;  access methods separate from driver code. We end up wasting a lot of
- ;  time here but is reboot code anyway so thats okay
- ;
-	mov	bx,cs
-	mov	es,bx			;
-	mov	di,cs:[track_buffer_ptr]
-	mov	cx,512
-	xor	ax,ax
-	xor	dx,dx
-	mov	bh,0	    ; read
-	push	es
-	push	di
-	call	blkmov
-	pop	di
-	pop	es
-	jc	finish_reset
-;
-;   fix the flags for my emm record so that it is no longer in use
-;
-	mov	bx,cs:[my_emm_rec]
-	add	bx,di
-	and	es:[bx.emm_flags],not emm_isdriver
-;
-;   write out the modified emm record out to memory
-;
-	xor	ax,ax
-	xor	dx,dx
-	mov	bh,1	    ; write
-	call	blkmov
-finish_reset:
-	POP	ES
-	POP	DS
-reset_skip:
-	POPA
-	RET
-
-;
-; The following label defines the end of the
-; Driver TYPE specific RESET_SYSTEM code which will have to be replaced
-; for different driver TYPEs as the code between RESET_SYSTEM and
-; RESET_INCLUDE. Swapped in code MUST FIT between RESET_SYSTEM and
-; RESET_INCLUDE.
-;
-RESET_INCLUDE  LABEL   BYTE
-
-;
-; This data is only used at INIT, but it must be protected from overwrite
-;  by the DO_INIT code.
-;
-TERM_ADDR	LABEL	DWORD	; Address to return as break address in INIT packet
-		DW	?	; Computed at INIT time
-		DW	?	; INT13 CS filled in at INIT
-
-;
-; THIS CODE MUST BE IN RESIDENT PORTION BECAUSE IT WRITES IN THE AREA
-;  OCCUPIED BY THE DISPOSABLE INIT CODE.
-;
-
-;**	DO_INIT - Initialize cache structures to "empty"
-;
-DO_INIT:
-ASSUME	DS:INT13CODE
-	MOV	AX,[SECTRACK]
-	MOV	CL,9
-	SHL	AX,CL			; AX is bytes per track buffer
-	MOV	BX,[CACHE_CONTROL_PTR]
-	MOV	CX,[TTRACKS]
-	MOV	[CACHE_HEAD],BX
-	MOV	[BX.BACK_LRU_LNK],-1
-	MOV	WORD PTR [BX.BASE_OFFSET],0
-	MOV	WORD PTR [BX.BASE_OFFSET+2],0
-	MOV	[BX.TRACK_FLAGS],TRACK_FREE
-	MOV	DI,BX
-	ADD	BX,SIZE CACHE_CONTROL	; Next structure
-	DEC	CX			; One less to do
-	JCXZ	SETDONE 		; one buffer in cache
-SETLOOP:
-	MOV	[DI.FWD_LRU_LNK],BX
-	MOV	[BX.BACK_LRU_LNK],DI
-	MOV	[BX.TRACK_FLAGS],TRACK_FREE
-	MOV	DX,WORD PTR [DI.BASE_OFFSET]
-	ADD	DX,AX
-	MOV	WORD PTR [BX.BASE_OFFSET],DX
-	MOV	DX,WORD PTR [DI.BASE_OFFSET+2]
-	ADC	DX,0
-	MOV	WORD PTR [BX.BASE_OFFSET+2],DX
-	MOV	DI,BX
-	ADD	BX,SIZE CACHE_CONTROL	; Next structure
-	LOOP	SETLOOP
-SETDONE:
-	MOV	[DI.FWD_LRU_LNK],-1
-	MOV	[CACHE_TAIL],DI 	; That is the tail
-;
-;	NOTE FALL THROUGH!!!!!!!
-;
-
-;**	SETBPB - Set INIT packet I/O return values
-;
-;	This entry is used to set the INIT packet Break address
-;
-;	ENTRY
-;	    TERM_ADDR set to device end
-;	EXIT
-;	    through DEVEXIT
-;	USES
-;	    DS, BX, CX
-;
-;	COMMON TO TYPE 1, 2 drivers
-;
-
-SETBPB:
-ASSUME	DS:NOTHING
-    ;
-    ; 7.  Set the return INIT I/O packet values
-    ;
-	LDS	BX,[PTRSAV]
-	MOV	CX,WORD PTR [TERM_ADDR]
-	MOV	WORD PTR [BX.INIT_BREAK],CX		   ;SET BREAK ADDRESS
-	MOV	CX,WORD PTR [TERM_ADDR + 2]
-	MOV	WORD PTR [BX.INIT_BREAK + 2],CX
-	JMP	DEVEXIT
-
-
-	EVEN			; Make sure we get word alignment of the track
-				;    buffer.
-
-;
-; The following items define the "track buffer". When we want to I/O a track
-;    this is where we do it. We cannot I/O the track directly into extended
-;    memory because we have no way to specify a 24 bit address to INT 13. We
-;    Cannot I/O direct to expanded memory because DMA into the expanded memory
-;    window is not supported. This buffer also "holds" one track, so we keep
-;    track of the last track that was in here because it is faster to access
-;    it here than through extended/expanded memory. A value of -1 in the
-;    "currency" fields indicates that there is currently nothing interesting
-;    in the track buffer. NOTE: It is ASSUMED that the track buffer always
-;    represents a track that is IN the cache, therefore one must be sure to
-;    invalidate the track buffer when the cache element it represents is
-;    discarded. The offset of the track buffer is dynamic. Never talk about
-;    OFFSET TRACK_BUFFER. Always get the track buffer address out of
-;    TRACK_BUFFER_PTR. The initialization code "moves" the track buffer so
-;    that it does not cause a DMA Boundary error which would slow things
-;    down quite a bit.
-;
-
-;
-; Cylinder and hd/drv of track in track buffer
-;
-TRACK_BUFFER_CYLN	DW	-1
-TRACK_BUFFER_HDDR	DW	-1
-
-;
-; Pointer to track buffer. May be adjusted for DMA boundary error prevention.
-;
-TRACK_BUFFER_PTR DW	OFFSET TRACK_BUFFER
-
-;
-; Cache structure pointers
-;
-
-;
-; Pointer to cache structures. This ends up being right after TRACK_BUFFER.
-;
-CACHE_CONTROL_PTR DW	?
-
-;
-; Cache head and tail pointers
-;
-CACHE_HEAD	DW	?
-CACHE_TAIL	DW	?
-
-;
-; This is the "in the 1Meg address space" track buffer. Its TRUE start
-; may be adjusted for DMA boundary violation error prevention, and its
-; Size may be adjusted depending on how many sectors per track there
-; are. WARNING! This buffer must be AT LEAST 1024 bytes for /E driver
-; init code (buffer for 1K EMM control sector).
-;
-TRACK_BUFFER	DB	(512 * 2 + 16) DUP(0)
-				    ; we really don't need those 16 bytes, i
-				    ; am just paranoid
-;
-; The TERM_ADDR for the device will be set somewhere "around" here
-;    by the init code
-;
-
-BREAK	<COMMON INIT CODE>
-
-;**	DISPOSABLE INIT DATA
-;
-; INIT data which need not be part of resident image
-;
-
-U_SWITCH	db	0	;; upper extended memory requested on 6300 PLUS
-
-EXT_K		DW	?	; Size in K of Extended memory.
-
-NUM_ARG 	DB	1	; Counter for numeric
-				;    arguments	bbbb.
-
-GOTSWITCH	DB	0	; Bit map of switches seen
-
- SWITCH_E	 EQU	 00000001B
- SWITCH_A	 EQU	 00000010B   ; Only switch allowed
- SWITCH_T	 EQU	 00000100B
- SWITCH_D	 EQU	 00001000B
- SWITCH_WT	 EQU	 00010000B
- SWITCH_WC	 EQU	 00100000B
- SWITCH_R	 EQU	 01000000B
- SWITCH_C	 EQU	 10000000B
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-sys_det	proc	near
-;
-; author:  sunilp, august 1, 1987.  thanks to rickha for most of this
-; 	   routine.
-;
-; purpose: to determine whether extended memory cache can be installed
-;	   on this system. also to determine and store in the system 
-;	   flag the machine identification.
-;
-; inputs:  none
-;
-; outputs: CY set if this machine doesn't allow extended memory cache.
-;	   CY clear if this machine allows extended memory cache and
-;		    the system flag is set according to the machine type.
-;
-; registers used:  ax,es,flags
-;----------------------------------
-;	Clear the state of the system flag
-;
-assume ds:int13code,es:nothing,ss:nothing
-	xor	ax,ax			; 0000 into AX
-	mov	[sys_flg],al		; clear system flag
-;----------------------------------
-;	Determine if 8086/8088 system. If so we should abort immediately.
-;
-	push	ax			; ax has 0
-	popf				; try to put that in the flags
-	pushf
-	pop	ax			; look at what really went into flags
-	and	ax,0F000h		; mask off high flag bits
-	cmp	ax,0F000h		; Q: was high nibble all ones ?
-	je	cpu_err			; Y: it's an 8086 (or 8088)
-;----------------------------------
-;	Determine if 80286/80386 machine. 
-;
-	mov	ax,0F000h		;   N: try to set the high bits
-	push	ax
-	popf				;      ... in the flags
-	pushf
-	pop	ax			; look at actual flags
-	and	ax,0F000h		; Q: any high bits set ?
-	je	cpu_286			;   N: it's an 80286
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;	It is a 386 cpu. We should next try to determine if the ROM is
-;	B0 or earlier. We don't want these guys.
-;
-cpu_386:
-      	pushf				; clear
-      	pop	ax			;   NT
-      	and	ax,not 0F000h		;     and
-	push	ax			;       IOPL
-	popf				;         bits
-;----------------------------------
-;	the next three instructions were removed because we are loaded
-;	in real mode. So there is no need to check for virtual mode.
-;
-;	smsw	ax			;check for Virtual Mode
-;	test	ax,0001			; Q: Currently in Virtual Mode ?
-;	jnz	cpu_exit		;   Y: quit with error message
-;----------------------------------
-					;   N: check 386 stepping for B0
-	call	is_b0			; Q: B0 ?
-	jc	cpu_err 		;   Y: abort
-;----------------------------------
-;	We have a valid 386 guy. Set the flag to indicate this.
-;
-	or	[sys_flg],M_386 	; set 386 bit
-	jmp	short PS2Test
-
-;----------------------------------
-;	This is a 286 guy. Check for AT model byte. We don't want non-ATs.
-;	Set 286 bit if AT type. Then check for PS/2
-;
-cpu_286:
-	mov	ax,0ffffh
-	mov	es,ax
-	cmp	byte ptr es:[0eh],0fch	; AT model byte
-	jne	cpu_err			; if not abort
-;
-	or	[sys_flg],M_286		; set 286 flag bit
-;
-;
-;	Determine if this is a PS/2 system
-;
-PS2Test:
-	call	IsPS2Machine
-	or	ax,ax
-	jz	NCRTest
-	or	[sys_flg],M_PS2
-
-NCRTest:
-	call	IsNCRMachine
-	or	ax,ax
-	jz	cpu_suc
-
-	; We're on an NCR machine, send D7 and D5 to the 8042 in order
-	; to toggle A20 instead of the DF and DD we usually send.
-	; ChipA 06-16-88
-	mov	cs:[A20On],0D790h
-	mov	cs:[A20Off],0D500h
-
-;----------------------------------
-;	success exit:--
-cpu_suc:
-	clc
-	ret
-
-;----------------------------------
-;	error exit:--
-cpu_err:
-	stc
-	ret
-;
-sys_det endp
-
-
-;*--------------------------------------------------------------------------*
-;*									    *
-;*  IsPS2Machine					    HARDWARE DEP.   *
-;*									    *
-;*	Check for PS/2 machine						    *
-;*									    *
-;*  ARGS:   None							    *
-;*  RETS:   AX = 1 if we're on a valid PS/2 machine, 0 otherwise	    *
-;*  REGS:   AX	and Flags clobbered					    *
-;*									    *
-;*--------------------------------------------------------------------------*
-
-IsPS2Machine proc   near
-
-	    mov     ah,0C0h	    ; Get System Description Vector
-	    stc
-	    int	    15h
-	    jc	    short IPMNoPS2  ; Error?  Not a PS/2.
-
-	    ; Are we on a PS/2 Model 35?
-	    cmp     es:[bx+2],09FCh
-	    je	    short IPMFoundIt	    ; Yup, use the PS/2 method
-
-	    ; Do we have a "Micro Channel" computer?
-	    mov     al,byte ptr es:[bx+5]   ; Get "Feature Information Byte 1"
-	    test    al,00000010b    ; Test the "Micro Channel Implemented" bit
-	    jz	    short IPMNoPS2
-
-IPMFoundIt: mov     ax,1
-	    ret
-
-IPMNoPS2:   xor	    ax,ax
-	    ret
-
-IsPS2Machine endp
-
-
-;*--------------------------------------------------------------------------*
-;*									    *
-;*  IsNCRMachine					    HARDWARE DEP.   *
-;*									    *
-;*	Check for NCR machine						    *
-;*									    *
-;*  ARGS:   None							    *
-;*  RETS:   AX = 1 if we're on a valid NCR machine, 0 otherwise 	    *
-;*  REGS:   AX	and Flags clobbered					    *
-;*									    *
-;*--------------------------------------------------------------------------*
-
-; Look for 'NC' at F000:FFEA
-
-IsNCRMachine proc   near
-
-	    mov     ax,0F000h
-	    mov     es,ax
-	    mov     ax,word ptr es:[0FFEAh]
-	    cmp     ax,'CN'
-	    je	    INMFoundIt
-	    xor     ax,ax
-	    ret
-
-INMFoundIt: mov     ax,1
-	    ret
-
-IsNCRMachine endp
-
-
-;******************************************************************************
-;   IS_B0 - check for 386-B0
-;
-;   This routine takes advantage of the fact that the bit INSERT and 
-;   EXTRACT instructions that existed in B0 and earlier versions of the
-;   386 were removed in the B1 stepping.  When executed on the B1, INSERT 
-;   and EXTRACT cause an INT 6 (invalid opcode) exception.  This routine
-;   can therefore discriminate between B1/later 386s and B0/earlier 386s.
-;   It is intended to be used in sequence with other checks to determine
-;   processor stepping by exercising specific bugs found in specific
-;   steppings of the 386.
-;
-;   ENTRY:  REAL MODE on 386 processor (CPU ID already performed)
-;   EXIT:   CF = 0 if B1 or later
-;	    CF = 1 if B0 or prior
-;
-;   ENTRY:  
-;   EXIT:   
-;   USED:   AX, flags
-;   STACK:  
-;------------------------------------------------------------------------------
-is_b0	proc	near
-	push	bx
-	push	cx
-	push	dx
-	push	ds
-
-	xor	bx,bx
-	mov	ds,bx			; DS = 0000 (real mode IDT)
-assume ds:R_Mode_IDT
-	push	[bx+(6*4)]
-	pop	cs:[int6_save]		; save old INT 6 offset
-	push	[bx+(6*4)+2]
-	pop	cs:[int6_save+2]	; save old INT 6 segment
-					
-	mov	word ptr [bx+(6*4)],offset int6
-	mov	[bx+(6*4)+2],cs 	; set vector to new INT 6 handler
-;
-;   Attempt execution of Extract Bit String instruction.  Execution on
-;   B0 or earlier with length (CL) = 0 will return 0 into the destination 
-;   (CX in this case).  Execution on B1 or later will fail and dummy INT 6
-;   handler will return execution to the instruction following the XBTS.
-;   CX will remain unchanged in this case.
-;
-	xor	ax,ax
-	mov	dx,ax
-	mov	cx,0FF00h		; Extract length (CL)=0, CX=non-zero
-	db	0Fh,0A6h,0CAh		; XBTS CX,DX,AX,CL
-	
-	xor	bx,bx
-	mov	ds,bx			; DS = 0000 (real mode IDT)
-	push	cs:[int6_save]		; restore original INT 6 offset
-	pop	[bx+(6*4)]		;
-	push	cs:[int6_save+2]	; restore original INT 6 segment
-	pop	[bx+(6*4)+2]
-
-	or	cx,cx			; Q: CX = 0 (meaning <=B0) ?
-	jz	ib_exit			;   Y: exit (carry clear)
-	stc				;   N: set carry to indicate >=B1
-ib_exit:
-	cmc				; flip carry tense
-	pop	ds
-	pop	dx
-	pop	cx
-	pop	bx
-	ret				; *** RETURN ***
-is_b0	endp
-;
-;   Temporary INT 6 handler - assumes the cause of the exception was the 
-;   attempted execution of an XTBS instruction.
-;
-int6	proc 	near
-	push	bp
-	mov	bp,sp
-	add	word ptr [bp+2],3	; bump IP past faulting instruction
-	pop	bp
-	iret				; *** RETURN ***
-int6_save	dw	0000,0000
-int6	endp
-;***************************************************************************
-
-;**	PRINT - Print a "$" terminated message on stdout
-;
-;	This routine prints "$" terminated messages on stdout.
-;	It may be called with only the DX part of the DS:DX message
-;	pointer set, the routine puts the correct value in DS to point
-;	at the INT13 messages.
-;
-;	ENTRY:
-;	     DX pointer to "$" terminated message (INT13CODE relative)
-;	EXIT:
-;	     NONE
-;	USES:
-;	     AX
-;
-;	COMMON TO TYPE 1, 2, 3, 4 drivers
-;
-
-PRINT:
-ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
-	PUSH	DS
-	PUSH	CS
-	POP	DS
-	MOV	AH,Std_Con_String_Output
-	INT	21H
-	POP	DS
-	RET
-
-;**	ITOA - Print Decimal Integer on stdout
-;
-;	Print an unsigned 16 bit value as a decimal integer on stdout
-;	with leading zero supression. Prints from 1 to 5 digits. Value
-;	0 prints as "0".
-;
-;	Routine uses divide instruction and a recursive call. Maximum
-;	recursion is four (five digit number) plus one word on stack
-;	for each level.
-;
-;	ENTRY	AX has binary value to be printed
-;	EXIT	NONE
-;	USES	AX,CX,DX,FLAGS
-;
-;	COMMON TO TYPE 1, 2, 3, 4 drivers
-;
-
-ITOA:
-ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
-
-	MOV	CX,10
-	XOR	DX,DX
-	DIV	CX			; DX is low digit, AX is higher digits
-	OR	AX,AX
-	JZ	PRINT_THIS_DIGIT	; No more higher digits
-	PUSH	DX			; Save this digit
-	CALL	ITOA			; Print higher digits first
-	POP	DX			; Recover this digit
-PRINT_THIS_DIGIT:
-	ADD	DL,"0"			; Convert to ASCII
-	MOV	AH,Std_CON_Output
-	INT	21H
-	RET
-
-
-;**	INT13$INIT - Device Driver Initialization routine
-;
-;	INT13 Initialization routine. This is the COMMON initialization
-;	code used by ALL driver TYPEs. Its jobs are to:
-;
-;	    1.	Initialize various global values
-;	    2.	Check for correct DOS version and do changes to the device
-;			based on the DOS version if needed.
-;	    3.	Set OLD_13, OLD_1C and Parse the command line and set values accordingly
-;	    4.	Set up the cache parameters and
-;		Call a TYPE specific INIT routine based on the Parse
-;			to set up a specific driver TYPE.
-;	    5.	Print out report of INT13 parameters
-;	    6.	Set the return INIT I/O packet values
-;
-;	The first two lines perform step 1. Step two starts after and
-;	goes through VER_OK. Step 3 starts at VER_OK and goes through
-;	ARGS_DONE. Step 4 starts at ARGS_DONE and goes through I001.
-;	Step 5 starts at I001 and goes through DRIVE_SET. Step 6 starts
-;	at DRIVE_SET and goes through SETBPB. Step 7 starts at SETBPB
-;	and ends at the JMP DEVEXIT 10 lines later.
-;
-;	At any time during the above steps an error may be detected. When
-;	this happens one of the error messages is printed and INT13
-;	de-installs itself.  It does this at DEVABORT_NOMES by changing
-;	the Device attributes to a BLOCK DEVICE and setting its size to NULL.
-;	All INT13 needs to do is make sure any INT vectors it changed
-;	(INT 9 and INT 19 and INT 13) get restored to what they were
-;	when INT13 first started.  If an EMM_CTRL sector is being
-;	used (TYPE 1) and one of the EMM_REC structures has been
-;	marked EMM_ISDRIVER by this driver, it must turn that bit back off
-;	since the driver did not install. A TYPE 2 driver must make sure it
-;	ABOVE_DEALLOCs any memory it allocated from the EMM device. The duty
-;	of reclaiming EMM_CTRL or Above Board memory and re-setting vectors
-;	is done by the DISK_ABORT routine which may be called by either
-;	this COMMON INIT code, or the TYPE specific INIT code.
-;
-;	Step 1 initializes the segment part of TERM_ADDR to the correct
-;	value for type 1, 2 drivers.
-;
-;	Step 2 checks to make sure that we are running on a DOS in the
-;	2.X or 3.X series which this driver is restricted to. If running
-;	on a 2.X series the device header attribute word and device command
-;	table are patched to exclude those device calls that don't exist
-;	on DOS 2.X.
-;
-;	Step 3 uses the "DEVICE = xxxxxxxxx" line pointer provided by
-;	DOS to look for the various device parameters. NOTE: This pointer
-;	IS NOT DOCUMENTED in the DOS 2.X tech ref material, but it does
-;	exist in the same way as 3.X. This code is simple even though
-;	it looks rather long. First it skips over the device name field
-;	to get to the arguments. In then parses the arguments as they are
-;	encountered. All parameter errors are detected here. NOTE THAT
-;	THIS ROUTINE IS NOT RESPONSIBLE FOR SETTING DEFAULT VALUES OF
-;	PARAMETER VARIABLES. This is accomplished by static initialization
-;	of the parameter variables.
-;
-;	Step 4 calls a device TYPE specific initialization routine based
-;	on the parse in step 3 (presence or absense of /E and /A switches).
-;	NOTE that one of the prime jobs of these device TYPE specific
-;	routines is to set all of the variables that are needed by Step
-;	5 and 6 that haven't been set by the COMMON init code:
-;
-;			DEV_SIZE   set to TRUE size of device
-;			BASE_ADDR  set to TRUE start of device so BLKMOV
-;					can be called
-;			BASE_RESET set so DISK_ABORT can be called
-;			TERM_ADDR  set to correct end of device
-;
-;	Step 5 makes the status report display of DEVICE SIZE and other info.
-;
-;	Step 6 sets the INIT I/O packet return values for Break address.
-;
-;
-;	SEE ALSO
-;	  MS-DOS Technical Reference manual section on
-;	  Installable Device Drivers
-;
-;	ENTRY from INT13$IN
-;	EXIT Through DEVEXIT
-;	USES ALL
-;
-;	COMMON TO TYPE 1, 2 drivers
-;
-
-INT13$INIT:
-ASSUME	DS:INT13CODE,ES:NOTHING,SS:NOTHING
-    ;
-    ; 1.  Initialize various global values
-    ;
-	MOV	WORD PTR [TERM_ADDR + 2],CS
-    ;
-    ; 2.  Check for correct DOS version and do changes to the device
-    ;	     based on the DOS version if needed.
-    ;
-	CLD
-	MOV	AH,GET_VERSION
-	INT	21H
-	XCHG	AH,AL
-	CMP	AX,(2 SHL 8) + 00
-	JB	BADVER			; Below 2.00, BAD
-	CMP	AX,(3 SHL 8) + 00
-	JB	VER2X			; 2.X requires some patches
-	CMP	AX,(4 SHL 8) + 00
-	JBE	VER_OK			; 3.X or 4.0 OK
-BADVER:
-	MOV	DX,OFFSET BADVERMES
-	JMP	DEVABORT
-
-VER2X:
-	AND	[DEVATS],NOT DEVOPCL	    ; No such bit in 2.X
-	MOV	BYTE PTR [INT13TBL],11	    ; Fewer functions too
-VER_OK:
-
-;;
-;; 2.5 Check here for 6300 PLUS machine.  First look for Olivetti copyright,
-;;     and if found, check id byte at f000:fffd.
-;;
-
-	push	es				;; Olivetti Machine?
-	mov	ax,0fc00h			;; Look for 'OL' at fc00:50
-	mov	es,ax
-	cmp	es:[0050h],'LO'
-	jnz	notS5				;; not found
-	mov	ax,0f000h
-	mov	es,ax
-	cmp	word ptr es:[0fffdh],0fc00h	;; look for 6300 plus
-	jnz	notS5
-	mov	[S5_FLAG],S_OLIVETTI		;; yep, set flag
-notS5:
-
-;; Check here for an HP Vectra machine.  Look for HP id byte.
-;;
-	mov	ax,0f000H
-	mov	es,ax
-	cmp	es:[0f8H],'PH'
-	jnz	notHP
-	mov	[S5_FLAG],S_VECTRA
-notHP:
-	pop	es
-
-;
-; 3.  Set OLD_13, OLD_1C and Parse the command line and set values accordingly
-;
-	MOV	AX,(Get_Interrupt_Vector SHL 8) OR 13H
-	INT	21H
-	MOV	WORD PTR [OLD_13],BX
-	MOV	WORD PTR [OLD_13 + 2],ES
-	MOV	AX,(Get_Interrupt_Vector SHL 8) OR 1CH
-	INT	21H
-	MOV	WORD PTR [OLD_1C],BX
-	MOV	WORD PTR [OLD_1C + 2],ES
-	LDS	SI,[PTRSAV]
-ASSUME	DS:NOTHING
-	MOV	DX,OFFSET HEADERMES
-	CALL	PRINT
-	LDS	SI,[SI.INIT_BPB]    ; DS:SI points to config.sys
-SKIPLP1:			    ; Skip leading delims to start of name
-	LODSB
-	CMP	AL," "
-	JZ	SKIPLP1
-	CMP	AL,9
-	JZ	SKIPLP1
-	CMP	AL,","
-	JZ	SKIPLP1
-	JMP	SHORT SKIPNM
-
-ARGS_DONEJ:
-	JMP	ARGS_DONE
-
-SWITCHJ:
-	JMP	SWITCH
-
-SKIPLP2:			; Skip over device name
-	LODSB
-SKIPNM:
-	CMP	AL,13
-	JZ	ARGS_DONEJ
-	CMP	AL,10
-	JZ	ARGS_DONEJ
-	CMP	AL," "
-	JZ	FIRST_ARG
-	CMP	AL,9
-	JZ	FIRST_ARG
-	CMP	AL,","
-	JZ	FIRST_ARG
-	CMP	AL,0		; Need this for 2.0 2.1
-	JNZ	SKIPLP2
-SCAN_LOOP:			; PROCESS arguments
-	LODSB
-FIRST_ARG:
-	OR	AL,AL		; Need this for 2.0 2.1
-	JZ	ARGS_DONEJ
-	CMP	AL,13
-	JZ	ARGS_DONEJ
-	CMP	AL,10
-	JZ	ARGS_DONEJ
-	CMP	AL," "
-	JZ	SCAN_LOOP
-	CMP	AL,9
-	JZ	SCAN_LOOP
-	CMP	AL,","
-	JZ	SCAN_LOOP
-	CMP	AL,"/"
-	JZ	SWITCHJ
-	CMP	AL,"0"
-	JB	BAD_PARMJ
-	CMP	AL,"9"
-	JA	BAD_PARMJ
-	DEC	SI
-	CALL	GETNUM
-	CMP	[NUM_ARG],1
-	JA	BAD_PARMJ		 ; Only 1 numeric argument
-SET_SIZE:
-	CMP	BX,128
-	JB	BAD_PARMJ
-	CMP	BX,8192
-	JA	BAD_PARMJ
-	MOV	[DEV_SIZE],BX
-;A
-	mov	[current_dev_size],bx
-;A
-	JMP	SHORT NUM_DONE
-
-BAD_PARMJ:
-	JMP	SHORT BAD_PARM
-
-NUM_DONE:
-	INC	[NUM_ARG]		; Next numeric argument
-SCAN_LOOPJ:
-	JMP	SCAN_LOOP
-
-BAD_PARM:
-	MOV	DX,OFFSET ERRMSG1
-DEVABORT:
-	CALL	PRINT
-DEVABORT_NOMES:
-;	INC	[NULDEV]		;Indicate NUL device
-;	MOV	WORD PTR [TERM_ADDR],OFFSET ERROR_END ;Minimul null device
-;	JMP	SETBPB			;and return
-	LDS	BX,[PTRSAV]
-	MOV	WORD PTR [BX].INIT_NUM,0
-	MOV	WORD PTR [BX].INIT_BREAK[0],0
-	MOV	WORD PTR [BX].INIT_BREAK[2],CS
-	MOV	[DEVATS],0
-	JMP	DEVEXIT
-
-SWITCH:
-	LODSB
-	OR	AL,20H
-
-if WINDOWS_SWITCHES eq 0
-	CMP	AL,"e"
-	JNZ	ABOVE_TEST
-EXT_SET:
-	TEST	[GOTSWITCH],SWITCH_E + SWITCH_A
-	JNZ	BAD_PARM
-	OR	[GOTSWITCH],SWITCH_E
-	MOV	[DRIVER_SEL],0
-	JMP	SCAN_LOOP
-
-ABOVE_TEST:
-
-endif	; WINDOWS_SWITCHES eq 0
-
-;; Added for /u switch
-	cmp	al,'u'			;; Look for U switch for PLUS
-	jnz	A_TEST
-	cmp	[S5_FLAG],S_OLIVETTI	;; No good unless PLUS
-	jne	bad_parm
-	TEST	[GOTSWITCH],SWITCH_A	;; Already have switch A ?
-	JNZ	BAD_PARM
-	cmp	[U_SWITCH],0
-	jne	bad_parm
-	dec	[U_SWITCH]
-	jmp	scan_loop
-A_TEST:
-;;
-	CMP	AL,"a"
-
-if WINDOWS_SWITCHES
-	jnz	bad_parm
-else
-	JNZ	DIS_TEST
-endif	;WINDOWS_SWITCHES
-
-ABOVE_SET:
-	TEST	[GOTSWITCH],SWITCH_A	; Was SWITCH_E + SWITCH_A
-	JNZ	BAD_PARM
-;; added for /u switch
-	cmp	[U_SWITCH],0
-	jne	bad_parm
-;;
-	OR	[GOTSWITCH],SWITCH_A
-	MOV	[DRIVER_SEL],1
-	JMP	SCAN_LOOP
-
-if WINDOWS_SWITCHES eq 0
-
-DIS_TEST:
-	CMP	AL,"d"
-	JNZ	W_TEST
-DIS_SET:
-	TEST	[GOTSWITCH],SWITCH_D
-	JNZ	BAD_PARM
-	OR	[GOTSWITCH],SWITCH_D
-	MOV	[ENABLE_13],0
-	JMP	SCAN_LOOP
-
-W_TEST:
-	CMP	AL,"w"
-	JNZ	T_TEST
-	LODSW
-	OR	AL,20H
-	CMP	AX,":c"
-	JNZ	WT_TEST
-	LODSW
-	OR	AX,2020H
-	CMP	AX,"fo"
-	JNZ	BAD_PARM
-	LODSB
-	OR	AL,20H
-	CMP	AL,"f"
-	JNZ	BAD_PARMJX
-WC_SET:
-	TEST	[GOTSWITCH],SWITCH_WC
-	JNZ	BAD_PARMJX
-	OR	[GOTSWITCH],SWITCH_WC
-	MOV	[WRITE_BUFF],0
-	JMP	SCAN_LOOP
-
-WT_TEST:
-	CMP	AX,":t"
-	JNZ	BAD_PARMJX
-	LODSW
-	OR	AX,2020H
-	CMP	AX,"no"
-	JNZ	BAD_PARMJX
-WT_SET:
-	TEST	[GOTSWITCH],SWITCH_WT
-	JNZ	BAD_PARMJX
-	OR	[GOTSWITCH],SWITCH_WT
-	MOV	[WRITE_THROUGH],1
-	JMP	SCAN_LOOP
-
-BAD_PARMJX:
-	JMP	BAD_PARM
-
-T_TEST:
-	CMP	AL,"t"
-	JNZ	R_TEST
-	LODSW
-	CMP	AL,":"
-	JNZ	BAD_PARMJX
-	CMP	AH,"0"
-	JB	BAD_PARMJX
-	CMP	AH,"9"
-	JA	BAD_PARMJX
-	DEC	SI
-	CALL	GETNUM
-T_SET:
-	TEST	[GOTSWITCH],SWITCH_T
-	JNZ	BAD_PARMJX
-	OR	[GOTSWITCH],SWITCH_T
-	MOV	[TICK_SETTING],BX
-	JMP	SCAN_LOOP
-
-R_TEST:
-	CMP	AL,"r"
-	JNZ	C_TEST
-	LODSW
-	OR	AH,20H
-	CMP	AX,"o:"
-	JNZ	BAD_PARMJX
-	LODSB
-	OR	AL,20H
-	CMP	AL,"n"
-	JNZ	BAD_PARMJX
-	TEST	[GOTSWITCH],SWITCH_R
-	JNZ	BAD_PARMJX
-	OR	[GOTSWITCH],SWITCH_R
-	MOV	[REBOOT_FLUSH],1
-	JMP	SCAN_LOOP
-
-C_TEST:
-	CMP	AL,"c"
-	JNZ	BAD_PARMJX
-	LODSW
-	OR	AH,20H
-	CMP	AX,"o:"
-	JNZ	BAD_PARMJX
-	LODSB
-	OR	AL,20H
-	CMP	AL,"n"
-	JNZ	BAD_PARMJX
-	TEST	[GOTSWITCH],SWITCH_C
-	JNZ	BAD_PARMJX
-	OR	[GOTSWITCH],SWITCH_C
-	MOV	[ALL_CACHE],1
-	JMP	SCAN_LOOP
-endif	;WINDOWS_SWITCHES eq 0
-
-ARGS_DONE:
-;
-; 4.  Call a TYPE specific INIT routine based on the Parse
-;	 to set up a specific driver TYPE.
-;
-	PUSH	CS
-	POP	DS
-ASSUME	DS:INT13CODE
-	MOV	AL,[DRIVER_SEL] 	; Find out which init to call
-	OR	AL,AL
-	JNZ	NEXTV
-	CALL	AT_EXT_INIT
-	JMP	SHORT INI_RET
-
-NEXTV:
-	CALL	ABOVE_INIT
-INI_RET:
-	JNC	I001
-	JMP	DEVABORT_NOMES
-
-I001:
-DRIVE_SET:
-    ;
-    ; update the current device size
-    ;
-	mov	ax,[dev_size]
-	mov	[current_dev_size],ax
-    ;
-    ; 6.  Print out report of INT13 parameters
-    ;
-	MOV	DX,OFFSET STATMES1
-	CALL	PRINT
-	MOV	AX,[DEV_SIZE]
-	CALL	ITOA
-	MOV	DX,OFFSET STATMES1E
-	CMP	[DRIVER_SEL],0
-	JZ	PTYPX
-	MOV	DX,OFFSET STATMES1A
-PTYPX:
-	CALL	PRINT
-	MOV	DX,OFFSET STATMES2
-	CALL	PRINT
-	MOV	AX,[TTRACKS]
-	CALL	ITOA
-	MOV	DX,OFFSET STATMES3
-	CALL	PRINT
-	MOV	AX,[SECTRACK]
-	CALL	ITOA
-	MOV	DX,OFFSET STATMES4
-	CALL	PRINT
-
-ifdef	OMTI
-	mov	dx,offset omti_msg
-	call	print
-endif
-IF DEBUG
-	MOV	DX,OFFSET STATMES5
-	CALL	PRINT
-	MOV	AX,CS
-	CALL	ITOA
-	MOV	DX,OFFSET STATMES6
-	CALL	PRINT
-ENDIF
-    ;
-    ; Turn on the cache by chaining INT 13, and INT 1C
-    ;
-	MOV	DX,OFFSET INT_13_HANDLER
-	MOV	AX,(Set_Interrupt_Vector SHL 8) OR 13H
-	INT	21H
-;	MOV	DX,OFFSET INT_1C_HANDLER
-;	MOV	AX,(Set_Interrupt_Vector SHL 8) OR 1CH
-;	INT	21H
-	JMP	DO_INIT
-
-;**	DRIVEPARMS Initialize drive related cache parameters
-;
-;	ENTRY
-;	    Stuff set so that BLKMOV can be used to access cache memory
-;	    DEV_SIZE set to TRUE cache size in K
-;	EXIT
-;	    Carry Set
-;		Error, message already printed
-;	    Carry clear
-;		TRACK_BUFFER_PTR adjusted for DMA error prevention
-;		CACHE_CONTROL_PTR set
-;		TERM_ADDR set
-;		TTRACKS set
-;		SECTRACK set
-;		SECTRKARRAY set
-;		HDARRAY set (SUNILP)
-;	USES
-;	    ALL but DS
-;
-;	COMMON TO TYPE 1, 2 drivers
-;
-;
-NO_HARDFILES:
-ASSUME	DS:INT13CODE,ES:NOTHING,SS:NOTHING
-	MOV	DX,OFFSET NOHARD
-PEER:
-	CALL	PRINT
-	STC
-	RET
-
-TRACK_TOO_BIG:
-	MOV	DX,OFFSET BIGTRACK
-	JMP	PEER
-
-DRIVEPARMS:
-ASSUME	DS:INT13CODE,ES:NOTHING,SS:NOTHING
-    ;
-    ; First figure out sec/track of any hardfiles
-    ;
-	MOV	DL,80H
-	MOV	AH,8
-	INT	13H
-	JC	NO_HARDFILES
-	OR	DL,DL
-	JZ	NO_HARDFILES
-	AND	CL,00111111B
-	MOV	[SECTRKARRAY],CL
-	mov	[hdarray],dh
-	XOR	CH,CH
-	MOV	[SECTRACK],CX
-	MOV	CL,DL
-	DEC	CX
-	JCXZ	FINISHED
-	CMP	CX,MAX_HARD_FILES - 1
-	JBE	DNUM_OK
-	MOV	CX,MAX_HARD_FILES - 1
-DNUM_OK:
-	MOV	DL,81H
-PARMLOOP:
-	PUSH	CX
-	PUSH	DX
-	MOV	AH,8
-	INT	13H
-	JC	IGNORE_DRIVE
-	AND	CL,00111111B
-	POP	BX
-	PUSH	BX
-	AND	BX,0000000001111111B
-	MOV	[BX.SECTRKARRAY],CL
-	mov	[bx.hdarray],dh
-	XOR	CH,CH
-	CMP	CX,[SECTRACK]
-	JBE	IGNORE_DRIVE
-	MOV	[SECTRACK],CX
-IGNORE_DRIVE:
-	POP	DX
-	INC	DL
-	POP	CX
-	LOOP	PARMLOOP
-FINISHED:
-    ;
-    ; Figure out number of full tracks that fit in cache
-    ;
-	MOV	AX,[SECTRACK]
-	MOV	CX,512
-	MUL	CX		; DX:AX = Bytes per track
-	OR	DX,DX
-	JNZ	TRACK_TOO_BIG
-	MOV	BX,AX		; BX is bytes per track
-	MOV	AX,[DEV_SIZE]
-	MOV	CX,1024
-	MUL	CX		; DX:AX = size of cache in bytes
-	DIV	BX		; AX is full tracks in cache
-	MOV	[TTRACKS],AX
-    ;
-    ; Figure out if we have a DMA boundary problem
-    ;
-	mov	DX,DS			; Check for 64k boundary error
-	shl	DX,1
-	shl	DX,1
-	shl	DX,1
-	shl	DX,1			; Segment converted to absolute address
-	add	DX,[TRACK_BUFFER_PTR]	; Combine with offset
-	add	DX,511			; simulate a one sector transfer
-					; And set next divide for round up
-;
-; If carry is set, then we are within 512 bytes of the end of the DMA segment.
-; Adjust TRACK_BUFFER_PTR UP by 512 bytes.
-;
-	jnc	NotWithin512
-	add	[TRACK_BUFFER_PTR],512	; adjust
-	jmp	short SetCachest
-
-NotWithin512:
-;
-; DX is the physical low 16 bits of the proposed track buffer plus 511.
-; See how many sectors fit up to boundary.
-;
-	shr	DH,1		; DH = number of sectors in DMA segment
-				;	till start of buffer rounded up
-	mov	AH,128		; AH = max number of sectors in DMA segment
-	sub	AH,DH
-;
-; AH is now the number of sectors that we can successfully transfer using this
-; address without a DMA boundary problem. If this number is above or equal to
-; the track buffer size, then buffer is OK. Otherwise, we adjust buffer UP
-; till it is after the boundary by adding ((AH+1)*512) to the buffer address.
-;
-	mov	al,ah
-	xor	ah,ah
-	cmp	AX,[SECTRACK]		; can we fit it in?
-	jae	SetCachest		; yes, buffer is OK
-	inc	ax			; Add 1
-	mov	cl,9			; Mult by 512
-	shl	ax,cl
-	add	[TRACK_BUFFER_PTR],ax	; Adjust
-SetCachest:
-    ;
-    ; Set pointer to cache control structures
-    ;
-	mov	bx,[SECTRACK]
-	mov	cl,9			; Mult by 512
-	shl	bx,cl			; AX is bytes in Track buffer
-	add	bx,[TRACK_BUFFER_PTR]	; First byte after track buffer
-	mov	[CACHE_CONTROL_PTR],bx
-	mov	cx,SIZE CACHE_CONTROL
-	mov	ax,[TTRACKS]
-	MUL	cx
-	add	bx,ax
-    ;
-    ; Set TERM_ADDR
-    ;
-	mov	word ptr [TERM_ADDR],bx
-	CLC
-	RET
-
-;**	GETNUM - Read an unsigned integer
-;
-;	This routine looks at DS:SI for a decimal unsigned integer.
-;	It is up to the caller to make sure DS:SI points to the start
-;	of a number. If it is called without DS:SI pointing to a valid
-;	decimal digit the routine will return 0. Any non decimal digit
-;	defines the end of the number and SI is advanced over the
-;	digits which composed the number. Leading "0"s are OK.
-;
-;	THIS ROUTINE DOES NOT CHECK FOR NUMBERS LARGER THAN WILL FIT
-;	IN 16 BITS. If it is passed a pointer to a number larger than
-;	16 bits it will return the low 16 bits of the number.
-;
-;	This routine uses the MUL instruction to multiply the running
-;	number by 10 (initial value is 0) and add the numeric value
-;	of the current digit. Any overflow on the MUL or ADD is ignored.
-;
-;	ENTRY:
-;	     DS:SI -> ASCII text of number
-;	EXIT:
-;	     BX is binary for number
-;	     SI advanced to point to char after number
-;	USES:
-;	     AX,BX,DX,SI
-;
-;	COMMON TO TYPE 1, 2, 3, 4 drivers
-;
-
-GETNUM:
-ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
-
-	XOR	BX,BX
-GETNUM1:
-	LODSB
-	SUB	AL,"0"
-	JB	NUMRET
-	CMP	AL,9
-	JA	NUMRET
-	CBW
-	XCHG	AX,BX
-	MOV	DX,10
-	MUL	DX
-	ADD	BX,AX
-	JMP	GETNUM1
-
-NUMRET:
-	DEC	SI
-	RET
-
-BREAK	<INITIAL EMM control sector>
-
-;**	flag to signify valid emm control record
-;
-valid_emm   db	0
-
-;**	INITIAL EMM_CTRL sector
-;
-;	This is a datum which represents a correct initial EMM_CTRL
-;	sector as discussed in the EMM_CTRL documentation. It is used
-;	to check for the presense of a valid EMM_CTRL by comparing
-;	the signature strings, and for correctly initializing the
-;	EMM_CTRL sector if needed.
-;
-;	The DWORD at BASE_RESET, which is the EMM_BASE of the NULL
-;	0th EMM_REC structure, is used as a storage location of
-;	the address of the EMM_CTRL sector (PLUS 1024!!!!!!).
-;	This value can be used if it is necessary to re-address the
-;	EMM_CTRL sector during initialization. See the DISK_ABORT routine.
-;	NOTE THAT BASE_RESET CAN NOT BE USED AT RUNTIME AS THIS DATUM
-;	IS NOT PART OF THE RESIDENT IMAGE.
-;
-;	This data is appropriate to TYPE 1 drivers
-;
-
-EMM_CONTROL   LABEL   BYTE
-		DB	"MICROSOFT EMM CTRL VERSION 1.00 CONTROL BLOCK     "
-		DW	0
-		DW	0
-	; NULL 0th record
-		DW	EMM_ALLOC + EMM_ISDRIVER
-		DW	EMM_EMM
-;; Note:  When using upper extended memory on the PLUS, the value 
-;;	  at BASE_RESET + 2 is patched to FA during initialization.
-;;
-BASE_RESET	LABEL	DWORD		; RESMEM driver must patch this value
-		DW	EXTMEM_LOW + 1024
-		DW	EXTMEM_HIGH
-		DW	0
-
-		DB	950 DUP(0)
-		DB	"ARRARRARRA"
-
-
-BREAK	<INT13 COMMON INIT ROUTINES>
-
-;**	DISK_ABORT - De-install INT13 after init
-;
-;	This routine MUST BE CALLED to de-install a INT13 cache
-;	if the de-installation takes place:
-;
-;		AFTER INT 19/INT 9 vectors are replaced
-;		AFTER ABOVE_PID is valid for TYPE 2
-;		AFTER an EMM_REC structure in the EMM_CTRL sector
-;			has been marked EMM_ISDRIVER for TYPE 1.
-;
-;	In all cases the INT 9 and INT 19 vectors are replaced if the
-;	value of both words of OLD_19 is NOT -1. This is why the initial value
-;	of this datum is -1. In the event that the INT 9 and INT 19
-;	vectors are replaced, this datum takes on some value other than -1.
-;
-;	If this is a TYPE 1 driver the EMM_ISDRIVER bit is
-;	turned off in the EMM_REC pointed to by MY_EMM_REC.
-;	NOTE THAT A TYPE 1 DRIVER MAY USE THIS ROUTINE
-;	IF IT HAS NOT "TURNED ON" AN EMM_ISDRIVER BIT IN ONE OF THE EMM_REC
-;	STRUCTURES. This is OK because the initial 0 value of MY_EMM_REC
-;	is checked, and nothing is done if it is still 0.
-;
-;	If this is a TYPE 2 driver, an ABOVE_DEALLOC call is made on
-;	ABOVE_PID.
-;
-;	ENTRY:
-;	    BASE_RESET valid if TYPE 1
-;	    ABOVE_PID valid if TYPE 2
-;	EXIT:
-;	    NONE
-;	USES:
-;	    ALL but DS
-;
-;	COMMON TO TYPE 1, 2 drivers
-;
-
-DISK_ABORT:
-ASSUME	DS:INT13CODE,ES:NOTHING,SS:NOTHING
-
-	CMP	[DRIVER_SEL],1
-	JNZ	NOT_ABOVE
-AGAIN:
-    ;
-    ; TYPE 2, De-alloc the Above Board memory
-    ;
-	MOV	DX,[ABOVE_PID]
-	MOV	AH,ABOVE_DEALLOC
-	INT	67H
-	CMP	AH,ABOVE_ERROR_BUSY
-	JZ	AGAIN
-	JMP	SHORT RET002
-
-NOT_ABOVE:
-	CMP	[MY_EMM_REC],0			; Need to turn off bit?
-	JZ	RET002				; No
-    ;
-    ; TYPE 1, turn off EMM_ISDRIVER at MY_EMM_REC
-    ;
-	MOV	AX,WORD PTR [BASE_RESET]
-	MOV	DX,WORD PTR [BASE_RESET + 2]
-	SUB	AX,1024 			; Backup to EMM_CTRL
-	SBB	DX,0
-	MOV	WORD PTR [BASE_ADDR],AX
-	MOV	WORD PTR [BASE_ADDR + 2],DX
-	XOR	BH,BH				; READ
-	CALL	CTRL_IO 			; Get EMM_CTRL
-	JC	RET002
-	MOV	DI,OFFSET TRACK_BUFFER
-	ADD	DI,[MY_EMM_REC]
-	AND	[DI.EMM_FLAGS],NOT EMM_ISDRIVER     ; Undo install
-	MOV	BH,1		; WRITE
-	CALL	CTRL_IO 	; EMM_CTRL back out
-RET002:
-    ;
-    ; Reset INT 9, and/or INT 19 if OLD_19 is not -1
-    ;
-	PUSH	DS
-	LDS	DX,[OLD_19]
-ASSUME	DS:NOTHING
-	MOV	AX,DS
-	CMP	AX,-1
-	JNZ	RESET_VECS
-	CMP	AX,DX
-	JZ	NO_VECS
-RESET_VECS:
-	MOV	AX,(Set_Interrupt_Vector SHL 8) OR 19H
-	INT	21H
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; removed from smartdrv
-;	LDS	DX,[OLD_9]
-;	MOV	AX,(Set_Interrupt_Vector SHL 8) OR 9H
-;	INT	21H
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-	lds	dx,[old_15]
-	cmp	ax,-1
-	jne	reset_15
-	cmp	ax,dx
-	je	no_vecs
-reset_15:
-	mov	ax,(set_interrupt_vector shl 8) or 15h
-	int	21h
-NO_VECS:
-	POP	DS
-	RET
-
-;**	CTRL_IO - Read/Write the first 1024 bytes at BASE_ADDR
-;
-;	This routine is used at INIT time to read the first 1024
-;	bytes at BASE_ADDR. If TYPE 1 and BASE_ADDR points
-;	to the EMM_CTRL address (initial value), the EMM_CTRL sector
-;	is read/written. If TYPE 1 and BASE_ADDR has been set
-;	to the start of the cache, the first 1024 bytes of the cache
-;	are read/written. If TYPE 2, the first 1024 bytes of
-;	the cache are read/written. All this routine does is
-;	set inputs to BLKMOV to transfer 1024 bytes at offset 0 to/from
-;	TRACK_BUFFER.
-;
-;	ENTRY:
-;	     BH = 0 for READ, 1 for WRITE
-;	EXIT:
-;	     TRACK_BUFFER filled in with 1024 bytes at BASE_ADDR
-;	USES:
-;	     ALL but DS
-;
-;	COMMON TO TYPE 1, 2 drivers
-;
-
-CTRL_IO:
-ASSUME	DS:INT13CODE,ES:NOTHING,SS:NOTHING
-	XOR	DX,DX
-	MOV	AX,DX		; Offset 0
-	MOV	CX,512		; 1024 bytes
-	PUSH	CS
-	POP	ES
-	MOV	DI,OFFSET TRACK_BUFFER
-	PUSH	DS
-	CALL	BLKMOV		; Read in EMM_CTRL
-	POP	DS
-	RET
-
-;**	MM_SETDRIVE - Look for/Init EMM_CTRL and DOS volume
-;
-;	This routine is used by TYPE 1 drivers to check for/initialize
-;	the EMM_CTRL sector.
-;
-;	This routine reads the EMM_CTRL sector in to TRACK_BUFFER
-;	CALLS FIND_VDRIVE to check out and alloc or find an EMM_REC
-;	Sets BASE_ADDR to point to the start of the INT13 cache memory
-;	Writes the updated EMM_CTRL back out from TRACK_BUFFER
-;
-;	ENTRY:
-;	     BASE_ADDR initialized to point at START of extended memory
-;		     so that the EMM_CTRL sector can be accessed by
-;		     doing I/O at offset 0.
-;	     EXT_K is set to size of extended memory
-;	     DEV_SIZE is set to user requested device size
-;	EXIT:
-;	     CARRY SET - error, message already printed
-;	     CARRY CLEAR
-;		     BASE_ADDR set for this drive
-;		     DEV_SIZE set to TRUE size
-;
-;	USES
-;	    ALL but DS
-;
-;	Used by TYPE 1 drivers
-;
-
-MM_SETDRIVE:
-ASSUME	DS:INT13CODE,ES:NOTHING,SS:NOTHING
-	XOR	BH,BH		; READ
-	CALL	CTRL_IO 	; Get EMM_CTRL
-	MOV	DX,OFFSET INIT_IO_ERR
-	JC	ERR_RET2
-	CALL	FIND_VDRIVE	; Snoop
-	JC	RET001
-	PUSH	ES		; Save EMM_BASE from EMM_REC
-	PUSH	DI
-; modification sunilp
-	cmp	[u_switch],0	; we shall use ol' microsoft standard for this
-	je	mm_s$1		; if we are using int15 scheme no need to write
-				; out emm control record
-; end modification sp
-	MOV	BH,1		; WRITE
-	CALL	CTRL_IO 	; Write EMM_CTRL back out
-	MOV	DX,OFFSET INIT_IO_ERR
-	JC	ERR_RET2P
-mm_s$1:
-	POP	WORD PTR [BASE_ADDR]	; Set final correct BASE_ADDR
-	POP	WORD PTR [BASE_ADDR + 2]
-	CLC
-RET001:
-	RET
-
-ERR_RET2P:
-	ADD	SP,4
-ERR_RET2:
-	CALL	PRINT
-	STC
-	RET
-
-;**	FIND_VDRIVE - Check out EMM_CTRL and alloc
-;
-;	This code checks for a valid EMM_CTRL and sets up
-;	an initial one if there isn't. It then performs the
-;	algorithm described in the EMM_CTRL documentation
-;	to either allocate a NEW EMM_REC of type EMM_APPLICATION,
-;	or find an existing EMM_REC which is EMM_APPLICATION and has
-;	its EMM_ISDRIVER bit clear. In the later case it
-;	checks to see if DEV_SIZE is consistent with EMM_KSIZE
-;	and tries to make adjustments to EMM_KSIZE or DEV_SIZE
-;	if they are not consistent.
-;
-;	First the EMM_CTRL signature strings are checked.
-;	If they are not valid we go to SETCTRL to set up a new
-;	empty EMM_CTRL in SECTOR_BUFFER.
-;	If the signatures are valid, EMM_TOTALK is checked
-;	against EXT_K. If they are the same, the EMM_CTRL sector is
-;	valid and we skip to SCAN_DEV. Otherwise we initialize the
-;	EMM_CTRL sector at SETCTRL. All we need to do to set up the initial
-;	EMM_CTRL sector is transfer the record at EMM_CONTROL into
-;	TRACK_BUFFER and set EMM_TOTALK and EMM_AVAILK to EXT_K - 1.
-;
-;	In either case, finding a valid EMM_CTRL or setting up a correct
-;	initial one, we end up at SCAN_DEV. This code performs the
-;	scan of the EMM_REC structures looking for a "free" one
-;	or an allocated one which is EMM_APPLICATION and has its EMM_ISDRIVER
-;	bit clear as described in the EMM_CTRL sector documentation.
-;
-;	If we find a "free" EMM_REC structure we go to GOT_FREE_REC
-;	and try to allocate some memory. This attempt will fail if
-;	EMM_AVAILK is less than 16K. We then call SET_RESET to do
-;	the INT 9/INT 19 setup. We adjust DEV_SIZE to equal the
-;	available memory if DEV_SIZE is > EMM_AVAILK. Then all we do
-;	is set EMM_AVAILK and all of the fields in the EMM_REC structure
-;	as described in the EMM_CTRL sector documentation.
-;
-;		Call SET_RESET to do INT 9/INT 19 setup.
-;		IF the EMM_REC structure we found is the LAST EMM_REC structure
-;		    we cannot edit any sizes and whatever the EMM_KSIZE
-;		    is we stuff it into DEV_SIZE and set the EMM_ISDRIVER
-;		    bit, and we're done.
-;		    NOTE: We DO NOT check that EMM_KSIZE is at least
-;			16K as we know this EMM_REC was created
-;			by some PREVIOUS INT13 program who
-;			DID make sure it was at least 16K
-;		ELSE
-;		    IF EMM_KSIZE == DEV_SIZE
-;			set EMM_ISDRIVER and we're done
-;		    IF EMM_KSIZE < DEV_SIZE
-;			either the user has edited his DEVICE = line since
-;			the last time the system was re-booted, or at the
-;			time we initially allocated this region EMM_AVAILK
-;			was less than DEV_SIZE and we had to trim the device
-;			size back.
-;			This case is handled at INSUFF_MEM.
-;			IF the next EMM_REC structure is not allocated
-;			    IF EMM_AVAILK == 0
-;				We can't do anything, so set DEV_SIZE
-;				to EMM_KSIZE and we're done.
-;			    ELSE
-;				allocate appropriate amount off of EMM_AVAILK
-;				and add it to EMM_KSIZE and we're done.
-;			ELSE
-;			    We can't do anything, so set DEV_SIZE
-;			    to EMM_KSIZE and we're done.
-;		    ELSE
-;			This is the EMM_KSIZE > DEV_SIZE case, it means the
-;			user MUST have edited his DEVICE = line.
-;			IF next EMM_REC is NOT free
-;				We can't shrink the allocation block,
-;				but we'll leave DEV_SIZE set to the user
-;				specification and let him waste memory.
-;			ELSE
-;				SHRINK the allocation block by adding
-;				the extra memory back onto EMM_AVAILK
-;				and subtracting it from EMM_KSIZE and
-;				we're done
-;
-;	ENTRY:
-;	     SECTOR_BUFFER containes POSSIBLE EMM_CTRL sector
-;		  MUST BE CHECKED
-;	     EXT_K is set to size of extended memory
-;	     DEV_SIZE is set to user requested device size
-;	EXIT:
-;	    CARRY SET
-;		Error, message already printed
-;	    CARRY CLEAR
-;		ES:DI = BASE_ADDR for this drive from EMM_BASE of EMM_REC
-;		EMM_REC is marked EMM_ISDRIVER
-;		TRACK_BUFFER must be written out, it contains an updated
-;			 EMM_CTRL sector
-;		DEV_SIZE set to TRUE size
-;		MY_EMM_REC is the offset in the 1k EMM_CTRL sector of the
-;			record we allocated.
-;
-;	USES:
-;	    ALL but DS
-;
-;	Specific to TYPE 1 drivers
-;
-;   substancial modification to this routine, would have totally changed
-;   if it weren't for the olivetti memory
-;
-;   we are going to be int15 guys from now except for the olivetti memory
-;
-FIND_VDRIVE:
-ASSUME	DS:INT13CODE,ES:NOTHING,SS:NOTHING
-	PUSH	CS
-	POP	ES
-	MOV	DI,OFFSET TRACK_BUFFER
-	MOV	SI,OFFSET EMM_CONTROL
-	MOV	CX,50
-	CLD
-	REPE	CMPSB
-	jnz	no_emm_rec
-;	JNZ	SETCTRL 		; No EMM_CTRL
-	ADD	SI,EMM_TAIL_SIG - 50
-	ADD	DI,EMM_TAIL_SIG - 50
-	MOV	CX,10
-	REPE	CMPSB
-	jnz	no_emm_rec
-;	JNZ	SETCTRL 		; No EMM_CTRL
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;	with int15 guys around this is not feasible
-;	MOV	DI,OFFSET TRACK_BUFFER
-;	MOV	AX,[EXT_K]
-;	DEC	AX		; Size in EMM_CTRL doesn't include EMM_CTRL
-;	CMP	AX,[DI.EMM_TOTALK]
-;	JZ	SCAN_DEV		; EMM_CTRL is valid
-;SETCTRL:
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;
-;   modification sunilp
-;
-	dec	[valid_emm]		; signal prescence of emm record
-no_emm_rec:
-	cmp	[u_switch],0h		  ; is it a u driver
-	jne	old_st			; if not go to install acc to new int15
-	jmp	new_st			; standard
-;
-; for olivetti u memory we still have to install according to ol' microsoft st
-;
-old_st:
-	cmp	[valid_emm],0h		; do we have a valid emm
-	jne	scan_dev		; if yes go to scan structures
-set_ctrl:				; else we have to install a new one
-	MOV	DI,OFFSET TRACK_BUFFER
-	PUSH	DI
-	MOV	SI,OFFSET EMM_CONTROL
-	MOV	CX,1024/2
-	REP	MOVSW		; Move in initial EMM_CTRL
-	POP	DI
-	MOV	AX,[EXT_K]
-	DEC	AX		; Size in EMM_CTRL doesn't include EMM_CTRL
-	MOV	[DI.EMM_TOTALK],AX
-	MOV	[DI.EMM_AVAILK],AX
-SCAN_DEV:
-	MOV	SI,OFFSET TRACK_BUFFER ; DS:SI points to EMM_CTRL
-	MOV	DI,SI
-	ADD	DI,EMM_RECORD	      ; DS:DI points to EMM records
-	MOV	CX,EMM_NUMREC
-LOOK_REC:
-	TEST	[DI.EMM_FLAGS],EMM_ALLOC
-	JNZ	CHECK_SYS
-	JMP	GOT_FREE_REC		; Must alloc new region
-
-CHECK_SYS:
-	CMP	[DI.EMM_SYSTEM],EMM_APPLICATION
-	JNZ	NEXTREC 		; Not correct type
-	TEST	[DI.EMM_FLAGS],EMM_ISDRIVER
-	JNZ	NEXTRECI		; Driver already in
-	CALL	SET_RESET		; Set up INT 19,9
-	MOV	AX,[DI.EMM_KSIZE]
-	CMP	CX,1
-	JBE	OK_SET_DEV		; If this is last record, must
-					;   select this size
-	CMP	AX,[DEV_SIZE]
-	JZ	OK_SET_DEV		; Exact match, Okay
-	JB	INSUFF_MEM		; User asked for more
-    ; Size of found block is bigger than requested size.
-    ;	User MUST have edited CONFIG.SYS.
-	PUSH	DI
-	ADD	DI,SIZE EMM_REC
-	TEST	[DI.EMM_FLAGS],EMM_ALLOC
-	POP	DI
-	JZ	SHRINK_BLOCK	; Next block is free, shrink
-	MOV	AX,[DEV_SIZE]
-	JMP	SHORT SET_2
-
-SHRINK_BLOCK:
-	SUB	AX,[DEV_SIZE]	; AX is amount to shrink
-	ADD	[SI.EMM_AVAILK],AX
-	MOV	AX,[DEV_SIZE]
-	MOV	[DI.EMM_KSIZE],AX
-	JMP	SHORT SET_2
-
-INSUFF_MEM:			; Size of found block is smaller
-				;   than requested size.
-	PUSH	DI
-	ADD	DI,SIZE EMM_REC
-	TEST	[DI.EMM_FLAGS],EMM_ALLOC
-	POP	DI
-	JNZ	OK_SET_DEV	; Next block is NOT free, can't grow
-TRY_TO_GROW_BLOCK:
-	CMP	[SI.EMM_AVAILK],0
-	JZ	OK_SET_DEV	; Need SPECIAL check for this case
-	SUB	AX,[DEV_SIZE]
-	NEG	AX		; AX is amount we would like to grow
-	SUB	[SI.EMM_AVAILK],AX
-	JNC	GOT_THE_MEM
-	ADD	AX,[SI.EMM_AVAILK]    ; AX is MAX we can grow
-	MOV	[SI.EMM_AVAILK],0     ; We take all that's left
-GOT_THE_MEM:
-	ADD	[DI.EMM_KSIZE],AX
-	MOV	AX,[DI.EMM_KSIZE]
-SET_2:
-OK_SET_DEV:
-	MOV	[DEV_SIZE],AX
-	OR	[DI.EMM_FLAGS],EMM_ISDRIVER
-	MOV	[MY_EMM_REC],DI
-	SUB	[MY_EMM_REC],OFFSET TRACK_BUFFER  ; Make start of EMM_CTRL relative
-	LES	DI,[DI.EMM_BASE]
-	XOR	AX,AX			; Set zero, clear carry
-	RET
-
-NEXTRECI:
-NEXTREC:
-	ADD	DI,SIZE EMM_REC       ; Next record
-	LOOP	LOOK_RECJ
-VERROR:
-	MOV	DX,OFFSET ERRMSG2
-	CALL	PRINT
-	STC
-	RET
-
-LOOK_RECJ:
-	JMP	LOOK_REC
-
-GOT_FREE_REC:
-	MOV	AX,[SI.EMM_AVAILK]
-	CMP	AX,16
-	JB	VERROR			; 16K is smallest device
-	CALL	SET_RESET		; Set INT 19,9
-	CMP	AX,[DEV_SIZE]
-	JBE	GOTSIZE 		; Not enough for user spec
-	MOV	AX,[DEV_SIZE]		; User size is OK
-GOTSIZE:
-	MOV	[DEV_SIZE],AX
-	SUB	[SI.EMM_AVAILK],AX
-	MOV	[DI.EMM_KSIZE],AX
-	MOV	[DI.EMM_SYSTEM],EMM_APPLICATION
-	MOV	[DI.EMM_FLAGS],EMM_ALLOC + EMM_ISDRIVER
-	MOV	[MY_EMM_REC],DI
-	SUB	[MY_EMM_REC],OFFSET TRACK_BUFFER  ; Make start of EMM_CTRL relative
-	PUSH	DI
-	SUB	DI,SIZE EMM_REC       ; Look at prev record to compute base
-	MOV	AX,[DI.EMM_KSIZE]
-	LES	BX,[DI.EMM_BASE]
-	MOV	DI,ES			; DI:BX is prev base
-	MOV	CX,1024
-	MUL	CX			; Mult size by 1024 to get # bytes
-	ADD	AX,BX			; Add size onto base to get next base
-	ADC	DX,DI
-	POP	DI
-	MOV	WORD PTR [DI.EMM_BASE],AX
-	MOV	WORD PTR [DI.EMM_BASE + 2],DX
-	LES	DI,[DI.EMM_BASE]
-	XOR	AX,AX			; Set zero, clear carry
-	INC	AX			; RESET zero
-	RET
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; the new int15 standard
-;
-new_st:
-	mov	bx,[ext_k]		; contiguous memory reported by int15
-	cmp	[valid_emm],0		; is there a valid emm record
-	je	no_adjust		; if not there no need to adjust
-					; the memory available
-; else we have to find how much memory is already allocated by the microsoft
-; emm control block and subtract this from the amount that is available. the
-; memory allocated is totalk - availk + 1
-;
-	sub	bx,1			; subtract the emm ctrl record size
-	mov	di,offset track_buffer	; set up to address the ctrl record
-					; read in
-	mov	ax,[di.emm_totalk]	; ax <- totalk
-	sub	ax,[di.emm_availk]	; ax <- totalk - availk
-	sub	bx,ax			; adjust memory available
-	jc	verror			; if no memory go to abort
-;
-	cmp	bx,128			; is it the minimum required
-	jb	verror			; if less go to abort
-;
-; the memory available has been found and is in bx. now compare it with
-; requested device size and take the minimum of the two
-;
-no_adjust:
-	cmp	[dev_size],bx		;
-	jb	skip_adj_dev_size	; if enough space we don't need to adj
-					; dev_size
-	mov	[dev_size],bx		; else we have compromise on dev size
-skip_adj_dev_size:
-;
-; now that we have the correct dev size we should proceed with the installation
-; of a new int 15 handler which will account for the memory grabbed by this guy
-;
-	mov	bx,[ext_k]		; get memory which was reported by int15
-	add	bx,[special_mem]	; account for olivetti guys
-	sub	bx,[dev_size]		;
-	mov	[int15_size],bx 	; this is the size thaat will be reported
-					; by the int 15 handler
-; now install the int15 handler
-;
-	push	ax
-	push	dx
-	push	bx
-	push	es
-	mov	ax,(get_interrupt_vector shl 8) or 15h
-	int	21h
-	mov	word ptr [old_15],bx
-	mov	word ptr [old_15+2],es
-	mov	dx,offset int_15
-	mov	ax,(set_interrupt_vector shl 8) or 15h
-	int	21h
-	pop	es
-	pop	bx
-	pop	dx
-	pop	ax
-;
-;	set up int19 vector
-;
-	call	set_reset
-;
-;	now fill device base address in es:di
-;
-	mov	ax,[ext_k]
-	sub	ax,[dev_size]	    ; this now has memory left
-	mov	cx,1024 	    ; we are going to find size in bytes
-	mul	cx		    ; dx:ax = ax * 1024
-	add	ax,word ptr [base_addr]      ;
-	adc	dx,word ptr [base_addr+2]    ;
-	mov	es,dx		    ;
-	mov	di,ax		    ;
-	ret
-
-;**	SET_RESET - Set up INT 19/INT 9 vectors
-;
-;	This routine will install the INT 9 and INT 19
-;	code by saving the current INT 9 and INT 19
-;	vectors in OLD_9 and OLD_19 (NOTE: the change in the value of OLD_19
-;	to something other than -1 indicates that the vectors have been
-;	replaced), setting the vectors to point to INT_9 and INT_19.
-;
-;	ENTRY:
-;	     NONE
-;	EXIT:
-;	     NONE
-;	USES:
-;	     None
-;
-;	COMMON TO TYPE 1, 2 drivers
-;
-
-SET_RESET:
-ASSUME	DS:INT13CODE,ES:NOTHING,SS:NOTHING
-	cmp	U_SWITCH,0		;; don't do this for at&t 6300 plus
-	jnz	ret005
-	PUSH	AX
-	PUSH	DX
-	PUSH	BX
-	PUSH	ES
-	MOV	AX,(Get_Interrupt_Vector SHL 8) OR 19H
-	INT	21H
-	MOV	WORD PTR [OLD_19],BX
-	MOV	WORD PTR [OLD_19 + 2],ES
-	MOV	DX,OFFSET INT_19
-	MOV	AX,(Set_Interrupt_Vector SHL 8) OR 19H
-	INT	21H
-	MOV	AX,(Get_Interrupt_Vector SHL 8) OR 9H
-	INT	21H
-	MOV	WORD PTR [OLD_9],BX
-	MOV	WORD PTR [OLD_9 + 2],ES
-;	MOV	DX,OFFSET INT_9
-;	MOV	AX,(Set_Interrupt_Vector SHL 8) OR 9H
-;	INT	21H
-	POP	ES
-	POP	BX
-	POP	DX
-	POP	AX
-RET005:
-	RET
-
-BREAK	</E INIT Code>
-
-;**	AT_EXT_INIT - Perform /E (TYPE 1) specific initialization
-;
-;	This code does the drive TYPE specific initialization for TYPE 1
-;	drivers.
-;
-;	Make sure running on 80286 IBM PC-AT compatible system by
-;		making sure the model byte at FFFF:000E is FC.
-;	Get the size of extended memory by using 8800H call to INT 15.
-;		and make sure it is big enough to accomodate thr driver.
-;	Limit DEV_SIZE to the available memory found in the previous step
-;		by making DEV_SIZE smaller if necessary.
-;	Initialize the GLOBAL parts of the LOADALL information which
-;		are not set by each call to BLKMOV.
-;	CALL MM_SETDRIVE to look for EMM_CTRL and perform all the
-;		other initialization tasks.
-;	Call DRIVEPARMS to set TERM_ADDR and other drive specific cache parms
-;
-;	ENTRY:
-;	    Invokation line parameter values set.
-;	EXIT:
-;	    CARRY SET
-;		Error, message already printed. Driver not installed.
-;			EMM_CTRL not marked (but MAY be initialized if
-;			a valid one was not found).
-;	    CARRY CLEAR
-;		BASE_ADDR set for this drive from EMM_BASE of EMM_REC
-;		BASE_RESET set from BASE_ADDR
-;		TERM_ADDR set
-;		EMM_REC is marked EMM_ISDRIVER
-;		MY_EMM_REC set
-;		DEV_SIZE set to TRUE size
-;		RESET_SYSTEM code and INT 9/INT 19 code included,
-;		INT 19 and 9 vector patched.
-;
-;	USES:
-;	    ALL but DS
-;
-;	Code is specific to TYPE 1 driver
-;
-
-AT_EXT_INIT:
-ASSUME	DS:INT13CODE,ES:NOTHING,SS:NOTHING
-	push	ds
-	call	sys_det 	; new routine to do more comprehensive
-	pop	ds
-	jnc	at001		; checks than before
-	MOV	DX,OFFSET BAD_AT
-ERR_RET:
-	CALL	PRINT
-	STC
-	RET
-
-AT001:
-
-;; If upper extended memory is used on the PLUS, it is necessary to
-;; patch the values of base_reset and base_addr to get the addressing right.
-;;
-	cmp	[U_SWITCH],0		;; patch the code for /U option
-	jz	AT001A
-	mov	ax,00fah
-	mov	word ptr [emm_ctrl_addr+2],ax	;; in resident part for reset code
-	mov	word ptr [base_reset+2],ax	;; patching upper address
-	mov	word ptr [base_addr+2],ax	;;   to FA from 10
-AT001A:
-	MOV	AX,8800H
-	INT	15H			; Get extended memory size
-	MOV	DX,OFFSET NO_MEM
-	OR	AX,AX
-	JZ	ERR_RET
-
-;; If running on a 6300 PLUS, it is necessary to subtract any upper extended
-;; memory from the value obtained by int 15 to determine the correct memory
-;; available for a type /E RAMDrive.  If loading a /U RAMDrive, it is necessary
-;; to find out if there IS any upper extended memory.
-
-	cmp	[U_SWITCH],0		;; did we ask for upper extended memory
-	jz	olstuff			;; no
-	call	UpperMemCheck		;; yes, see if anything there
-	jc	ERR_RET			;; no, quit
-	mov	ax,384			;; yes, but max allowed is 384K
-	jmp short at001b
-olstuff:
-	cmp	[S5_FLAG],S_OLIVETTI	;; if not 6300 PLUS, go on
-	jne	at001b
-	call	UpperMemCheck		;; yes, see if 384K is there
-	jc	at001b			;; no, so int 15h is right
-	sub	ax,384			;; yes, subtract 384K
-	mov	[special_mem],384	;; store special memory size
-AT001B:
-
-	MOV	DX,OFFSET ERRMSG2
-	CMP	AX,128		; 128k min cache
-	JB	ERR_RET
-	MOV	[EXT_K],AX
-	MOV	BX,AX
-;	DEC	BX		; BX is MAX possible cache size
-	CMP	[DEV_SIZE],BX
-	JBE	AT002		; DEV_SIZE OK
-	MOV	[DEV_SIZE],BX	; Limit DEV_SIZE to available
-AT002:
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; 386 modification
-	test	[sys_flg],M_386
-	je	loadall_setup
-	mov	ax,cs
-	mov	word ptr [cod_seg],ax
-; set cs descriptor
-	mov	cx,16
-	mul	cx
-	mov	si,offset cs_des
-	mov	[si].bas_0_15,ax
-	mov	[si].bas_16_23,dl
-	mov	[si].bas_24_31,dh
-; set gdt base
-	mov	si,offset emm_gdt
-	add	ax,offset start_gdt
-	adc	dx,0
-	mov	[si].gdt_base_0,ax
-	mov	[si].gdt_base_2,dx
-	jmp	short common_setup
-    ;
-    ; Init various pieces of LOADALL info
-    ;
-;;;;	    SMSW    [LDSW]
-;;;;	    SIDT    QWORD PTR [IDTDES]
-;;;;	    SGDT    QWORD PTR [GDTDES]
-;;;;	;
-;;;;	; NOW The damn SXXX instructions store the desriptors in a
-;;;;	;     different order than LOADALL wants
-;;;;	;
-;;;;	    MOV     SI,OFFSET IDTDES
-;;;;	    CALL    FIX_DESCRIPTOR
-;;;;	    MOV     SI,OFFSET GDTDES
-;;;;	    CALL    FIX_DESCRIPTOR
-loadall_setup:
-	MOV	[LCSS],CS
-	MOV	SI,OFFSET CSDES
-	MOV	AX,CS
-	CALL	SEG_SET
-common_setup:
-	CALL	MM_SETDRIVE
-	JC	RETXXX
-	CALL	DRIVEPARMS
-	JNC	RETXXX
-	CALL	DISK_ABORT
-	STC
-RETXXX:
-	RET
-
-;;* UpperMemCheck - Called by 6300 PLUS to verify existence of
-;;		    upper extended memory of 384K at FA0000h
-;;
-;;	Returns carry set if no upper extended memory.
-;;
-;;	This routine is called only by a 6300 PLUS, and
-;;	it reads the hardware switch DSW2 to do the job.
-;;
-UpperMemCheck:
-	push	ax
-	in	al,66h
-	and	al,00001111b
-	cmp	al,00001011b
-	pop	ax
-	jnz	nomem
-	clc
-	ret
-nomem:
-	stc
-	ret
-
-BREAK	</A INIT Code>
-
-;**	EMM device driver name
-;
-;	The following datum defines the Above Board EMM 8 character
-;	device driver name that is looked for as part of TYPE 2
-;	specific initialization.
-;
-;	This datum is specific to TYPE 2 drivers
-;
-
-ABOVE_DEV_NAME	DB	"EMMXXXX0"
-
-;**	ABOVE_INIT - Perform /A (TYPE 2) specific initialization
-;
-;	This code performes the driver specific initialization for
-;	type 2 drivers.
-;
-;	Swap ABOVE_BLKMOV code in for TYPE 1 code at BLKMOV
-;	Swap ABOVE_RESET code in for TYPE 1 code at RESET_SYSTEM
-;	Check to make sure EMM Above Board device driver is installed
-;		by looking for device name relative to INT 67H segment
-;		address. This is method 2 described on page 36 and 37
-;		of the Expanded Memory Manager Programming Specification.
-;
-;		WARNING! If run on a version of DOS where all INT vectors
-;		are managed by the kernel, or on a system where some
-;		foreign program (not EMM.SYS) is also using INT 67H, this
-;		method will fail to find the EMM device driver.
-;		The reason this method was used rather than the more portable
-;		method 1 described on pages 33 and 34 of the EMM Programming
-;		Specification is that the DOS Installable Device Driver
-;		document makes a statement about which DOS system calls
-;		may be made in a device initialization routine, and
-;		OPEN, IOCTL, and CLOSE are not included in the allowed
-;		set. Adherance to the Installable Device Driver document,
-;		therefore, excludes the use of method 1.
-;
-;	Check the EMM device status
-;	Get the EMM map window address and set BASE_ADDR
-;	Get the available Above Board memory
-;	Adjust DEV_SIZE to be consistent with the available memory if needed,
-;		and also round DEV_SIZE up so that it is a multiple of the 16K
-;		granularity of the Above Board memory.
-;	Allocate DEV_SIZE worth of Above Board memory and set ABOVE_PID.
-;		After this point we can use CTRL_IO and/or BLKMOV to
-;		read/write the memory we have allocated.
-;	Install the INT 9 and INT 19 code by calling SET_RESET.
-;	Call DRIVEPARMS to set TERM_ADDR and other drive specific cache parms
-;
-;	SEE ALSO
-;	    INTEL Expanded Memory Manager Programming Specification
-;
-;	ENTRY:
-;	    Invokation line parameter values set.
-;	EXIT:
-;	    ABOVE_BLKMOV code swapped in at BLKMOV
-;	    ABOVE_RESET code swapped in at RESET_SYSTEM
-;	    CARRY SET
-;		Error, message already printed. Driver not installed.
-;			No Above Board memory allocated.
-;	    CARRY CLEAR
-;		BASE_ADDR set to segment address of Above Board map window
-;		ABOVE_PID contains PID of allocated above board memory
-;		DEV_SIZE set to TRUE size
-;		TERM_ADDR set
-;
-;	USES:
-;	    ALL but DS
-;
-;	Code is specific to TYPE 2 driver
-;
-
-ABOVE_INIT:
-ASSUME	DS:INT13CODE,ES:NOTHING,SS:NOTHING
-    ;
-    ; Swap above code into place
-    ;
-	PUSH	CS
-	POP	ES
-	MOV	SI,OFFSET ABOVE_CODE
-	MOV	DI,OFFSET DRIVE_CODE
-	MOV	CX,OFFSET DRIVE_END - OFFSET DRIVE_CODE
-	REP	MOVSB
-	MOV	SI,OFFSET ABOVE_RESET
-	MOV	DI,OFFSET RESET_SYSTEM
-	MOV	CX,OFFSET RESET_INCLUDE - OFFSET RESET_SYSTEM
-	REP	MOVSB
-    ;
-    ; Check for presence of Above board memory manager
-    ;
-	MOV	AX,(Get_Interrupt_Vector SHL 8) OR 67H
-	INT	21H
-	MOV	DI,SDEVNAME
-	MOV	SI,OFFSET ABOVE_DEV_NAME
-	MOV	CX,8
-	REPE	CMPSB
-	JZ	GOT_MANAGER
-	MOV	DX,OFFSET NO_ABOVE
-ABOVE_ERR:
-	CALL	PRINT
-	STC
-	RET
-
-GOT_MANAGER:
-    ;
-    ; Check memory status
-    ;
-	MOV	CX,8000H
-STLOOP:
-	MOV	AH,ABOVE_STATUS
-	INT	67H
-	CMP	AH,ABOVE_SUCCESSFUL
-	JZ	MEM_OK
-	CMP	AH,ABOVE_ERROR_BUSY
-	LOOPZ	STLOOP
-ST_ERR:
-	MOV	DX,OFFSET BAD_ABOVE
-	JMP	ABOVE_ERR
-
-MEM_OK:
-    ;
-    ; Get base address of map region and set BASE_ADDR
-    ;
-	MOV	AH,ABOVE_GET_SEG
-	INT	67H
-	CMP	AH,ABOVE_ERROR_BUSY
-	JZ	MEM_OK
-	CMP	AH,ABOVE_SUCCESSFUL
-	JNZ	ST_ERR
-	MOV	WORD PTR [BASE_ADDR],0
-	MOV	WORD PTR [BASE_ADDR + 2],BX
-    ;
-    ; Allocate drive memory
-    ;
-GET_AVAIL:
-	MOV	AH,ABOVE_GET_FREE
-	INT	67H
-	CMP	AH,ABOVE_ERROR_BUSY
-	JZ	GET_AVAIL
-	CMP	AH,ABOVE_SUCCESSFUL
-	JNZ	ST_ERR
-	MOV	AX,DX		; AX is total 16K pages
-				; BX is un-allocated 16K pages
-	MOV	DX,OFFSET NO_MEM
-	OR	AX,AX
-	JZ	ABOVE_ERR
-	MOV	DX,OFFSET ERRMSG2
-;
-;   change in allocation strategy new default is all of available pages
-;   < 8192K.
-;
-;   algorithm:	    if (free_pages < 8) then	error();
-;		    else {
-;			if (free_pages >  200h) then free_pages = 200h;
-;			if (num_arg == 1) then dev_size = free_pages;
-;			else dev_size = min (dev_size,free_pages)
-
-
-
-	CMP	BX,8		; 128K = 16K * 8 = Min cache size
-	JB	ABOVE_ERR
-	cmp	bx,0200h	; 8192K = Max cache size
-	jbe	ab0$1		; if less  or equal fine
-	mov	bx,0200h	; else limit it to 8192K
-ab0$1:
-	mov	cx,4		; to convert number of pages into no of k
-	shl	bx,cl
-	cmp	[num_arg],1	; is numeric argument 1 ( means none )
-	jne	ab0$2		; cache size has been requested
-	mov	[dev_size],bx	; else use all of available cache
-	jmp	short ab001	;
-ab0$2:
-	cmp	[dev_size],bx	; minimum of dev size and bx
-	jb	ab001
-	mov	[dev_size],bx	;
-
-
-ab001:
-	mov	bx,[dev_size]
-	mov	[current_dev_size],bx ; Initialize current device size
-    ;
-    ; BX is K we want to allocate (limited by available K)
-    ;  BX is at least 16
-    ;
-	MOV	AX,BX
-	MOV	CX,4		; Convert back to # of 16K pages
-	SHR	BX,CL
-	TEST	AX,0FH		; Even????
-	JZ	OKAYU		; Yes
-	INC	BX		; Gotta round up
-	PUSH	BX
-	MOV	CX,4
-	SHL	BX,CL
-	MOV	[DEV_SIZE],BX	; Correct dev size too by rounding it up to
-				;   next multiple of 16K, no sense wasting
-				;   part of a page.
-;A
-	mov	[current_dev_size],bx ; Correct current device size also
-;A
-	POP	BX
-OKAYU:
-	MOV	AH,ABOVE_ALLOC
-	INT	67H
-	CMP	AH,ABOVE_ERROR_BUSY
-	JZ	OKAYU
-	CMP	AH,ABOVE_SUCCESSFUL
-	JZ	GOT_ID
-	CMP	AH,ABOVE_ERROR_MAP_CNTXT
-	JZ	ST_ERRJ
-	CMP	AH,ABOVE_ERROR_OUT_OF_PIDS
-	JB	ST_ERRJ
-	MOV	DX,OFFSET ERRMSG2
-	JMP	ABOVE_ERR
-
-ST_ERRJ:
-	JMP	ST_ERR
-
-GOT_ID:
-	MOV	[ABOVE_PID],DX
-    ;
-    ; INSTALL ABOVE RESET handler
-    ;
-	CALL	SET_RESET
-    ;
-    ; We are now in good shape.
-    ;
-	CALL	DRIVEPARMS
-	JNC	RETYYY
-	CALL	DISK_ABORT
-	STC
-RETYYY:
-	RET
-
-BREAK	<Drive code for /A driver. Swapped in at BLKMOV>
-
-;
-; This label defines the start of the code swapped in at DRIVE_CODE
-;
-ABOVE_CODE	LABEL	WORD
-
-;
-; WARNING DANGER!!!!!!!
-;
-; This code is tranfered over the /E driver code at DRIVE_CODE
-;
-; ALL jmps etc. must be IP relative.
-; ALL data references must be to cells at the FINAL, TRUE location
-;	(no data cells may be named HERE, must be named up at BLKMOV).
-; OFFSET of ABOVE_BLKMOV relative to ABOVE_CODE MUST be the same as
-;	the OFFSET of BLKMOV relative to DRIVE_CODE.
-; SIZE of stuff between ABOVE_CODE and ABOVE_END MUST be less than
-;	or equal to size of stuff between DRIVE_CODE and DRIVE_END.
-
-IF2
-  IF((OFFSET ABOVE_BLKMOV - OFFSET ABOVE_CODE) NE (OFFSET BLKMOV - OFFSET DRIVE_CODE))
-	  %out ERROR BLKMOV, ABOVE_BLKMOV NOT ALIGNED
-  ENDIF
-  IF((OFFSET ABOVE_END - OFFSET ABOVE_CODE) GT (OFFSET DRIVE_END - OFFSET DRIVE_CODE))
-	  %out ERROR ABOVE CODE TOO BIG
-  ENDIF
-ENDIF
-
-		DD	?	; 24 bit address of start of this RAMDRV
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;**	ABOVE_BLKMOV - Perform transfer for TYPE 2 driver
 ;
 ;	This routine is the transfer routine for moving bytes
@@ -7452,72 +3723,1243 @@ restore_mp:
 	restore_mapping_context
 	ret
 
-		DW	?		; SPACE for ABOVE_PID
+
+BREAK	<INT 19/9 Handlers>
 
 ;
-; This label defines the end of the code swapped in at DRIVE_CODE
+; On INT 19h release the selected manager handle and restore the BIOS chain.
 ;
-ABOVE_END	LABEL	WORD
+; Storage locations for the "next" INT 19 and INT 9 vectors, the ones
+;  that were in the interrupt table when the device driver was loaded.
+;  They are initialized to -1 to indicate they contain no useful information.
+;
+OLD_19	LABEL	DWORD
+	DW	-1
+	DW	-1
 
-BREAK	<Drive code for /A driver. Swapped in at RESET_SYSTEM>
-
-
+OLD_9	LABEL	DWORD
+	DW	-1
+	DW	-1
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; modification to meet new memory allocation standard
+;**	INT 9 Keyboard handler
 ;
-; WARNING DANGER!!!!!!!
+;	All this piece of code does is look for the Ctrl-Alt-Del event.
+;	If key is not Ctrl-Alt-Del, it jumps to OLD_9 without doing
+;	anything. If the Ctrl-Alt-Del key is detected it calls
+;	RESET_SYSTEM to perform driver TYPE specific re-boot code.
+;	It then resets INT 13H to disable the cache and then jumps to
+;	OLD_9 to pass on the event.
 ;
-; This code is tranfered over the /E driver code at RESET_SYSTEM
+;	NOTE THAT UNLIKE INT 19 THIS HANDLER DOES NOT NEED TO RESET
+;	THE INT 9 AND INT 19 VECTORS. This is because the Ctrl-Alt-Del
+;	IBM ROM re-boot code resets these vectors.
 ;
-; ALL jmps etc. must be IP relative.
-; ALL data references must be to cells at the FINAL, TRUE location
-;	(no data cells may be named HERE, must be named up at RESET_SYSTEM).
-; SIZE of stuff between ABOVE_RESET and ABOVE_RESET_END MUST be less than
-;	or equal to size of stuff between RESET_SYSTEM and RESET_INCLUDE.
+;	We would LIKE to ALSO flush the cache, but we can't. For one the
+;	keyboard is at a higher IRQ than the disk. We could EOI the keyboard,
+;	but this doesn't fix the second problem. INT 13s to write
+;	out any dirty tracks take a LONG time, so long that we lose
+;	the key. In other words we see Ctrl-Alt-Del, but none of the
+;	INT 9 handlers after us will.
 ;
-; NOTE: EACH ABOVE BOARD driver has an INT 19 and 9 handler. This is
-;	different from /E and RESMEM in which only the first
-;	driver has an INT 19 and 9 handler.
 ;
-
-IF2
-  IF((OFFSET ABOVE_RESET_END - OFFSET ABOVE_RESET) GT (OFFSET RESET_INCLUDE - OFFSET RESET_SYSTEM))
-	  %out ERROR ABOVE_RESET CODE TOO BIG
-  ENDIF
-ENDIF
-
-;**	ABOVE_RESET perform TYPE 2 (/A) driver specific reboot code
-;
-;	This code issues an ABOVE_DEALLOC call for the memory
-;	associated with this particular TYPE 2 cache since the
-;	system is being re-booted and the driver is "gone".
+;	SEE ALSO
+;	    INT 9 IBM ROM code in ROM BIOS listing of
+;	    IBM PC Technical Reference manual for any PC family member
 ;
 ;	ENTRY
 ;	    NONE
 ;	EXIT
-;	    NONE
+;	    NONE, via OLD_9
 ;	USES
-;	    NONE
+;	    FLAGS
 ;
-; This code is specific to TYPE 2 drivers
+;	THIS CODE IS USED BY TYPE 1,2 drivers.
 ;
 
-ABOVE_RESET:
+INT_9:
 ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
 	PUSH	AX
-	PUSH	DX
-AGAIN_RESET:
-	MOV	DX,[ABOVE_PID]
-	MOV	AH,ABOVE_DEALLOC	; Close PID
-	INT	67H
-	CMP	AH,ABOVE_ERROR_BUSY
-	JZ	AGAIN_RESET
-	POP	DX
+	PUSH	DS
+	IN	AL,60H
+	CMP	AL,83			; DEL key?
+	JNZ	CHAIN			; No
+	XOR	AX,AX
+	MOV	DS,AX
+	MOV	AL,BYTE PTR DS:[417H]	; Get KB flag
+	NOT	AL
+	TEST	AL,0CH			; Ctrl Alt?
+	JNZ	CHAIN			; No
+	MOV	[INT_13_BUSY],1 	; Exclude
+;
+; We would LIKE to do this, always but we can't. For one the keyboard
+;   is at a higher IRQ than the disk. We can EOI the keyboard,
+;   but this doesn't fix the second problem. INT 13s to write
+;   out any dirty tracks take a LONG time, so long that we loose
+;   the key. In other words we see Ctrl-Alt-Del, but none of the
+;   INT 9 handlers after us will.
+;
+	CMP	[REBOOT_FLUSH],0	; Reboot flush enabled?
+	JZ	NO_REBOOT_FLUSH 	; No
+	CMP	[DIRTY_CACHE],0 	; Anything to do?
+	JZ	NO_REBOOT_FLUSH 	; No
+	MOV	AL,20H
+	OUT	20H,AL			; EOI the keyboard int
+	CALL	FLUSH_WHOLE_CACHE_SAV	; Flush cache
+NO_REBOOT_FLUSH:
+;
+	CALL	RESET_SYSTEM		; Ctrl Alt DEL
+    ;
+    ; Reset INT 13 vector to turn cache off
+    ;
+	MOV	AX,WORD PTR [OLD_13]
+	CLI
+	MOV	WORD PTR DS:[13H * 4],AX
+	MOV	AX,WORD PTR [OLD_13 + 2]
+	MOV	WORD PTR DS:[(13H * 4) + 2],AX
+    ;
+    ; Reset INT 1C vector to turn cache off
+    ;
+;	MOV	AX,WORD PTR [OLD_1C]
+;	MOV	WORD PTR DS:[1CH * 4],AX
+;	MOV	AX,WORD PTR [OLD_1C + 2]
+;	MOV	WORD PTR DS:[(1CH * 4) + 2],AX
+	MOV	[INT_13_BUSY],0
+CHAIN:
+	POP	DS
 	POP	AX
-	RET
+	JMP	[OLD_9]
+
+;**	INT 19 Software re-boot handler
+;
+;	All this piece of code does is sit on INT 19 waiting for
+;	a re-boot to be signaled by being called. It calls
+;	FLUSH_WHOLE_CACHE_SAV to flush out any dirty cache info then
+;	RESET_SYSTEM to perform driver TYPE specific re-boot code,
+;	resets the INT 19, INT 13 and INT 9 vectors,
+;	and then jumps to OLD_19 to pass on the event.
+;
+;	NOTE THAT UNLIKE INT 9 THIS HANDLER NEEDS TO RESET
+;	THE INT 9 AND INT 19 VECTORS. This is because the INT 19
+;	IBM ROM re-boot code DOES NOT reset these vectors, and we
+;	don't want to leave them pointing to routines that are not
+;	protected from getting stomped on by the re-boot.
+;
+;	SEE ALSO
+;	    INT 19 IBM ROM code in ROM BIOS listing of
+;	    IBM PC Technical Reference manual for any PC family member
+;
+;	ENTRY
+;	    NONE
+;	EXIT
+;	    NONE, via OLD_19
+;	USES
+;	    FLAGS
+;
+;	THIS CODE IS USED BY TYPE 1,2 drivers.
+;
+
+INT_19:
+ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
+	MOV	[INT_13_BUSY],1 	; Exclude
+	cmp	[reboot_flush],0	;
+	je	no_flush
+	CALL	FLUSH_WHOLE_CACHE_SAV	; Flush out the cache
+no_flush:
+	CALL	RESET_SYSTEM
+	PUSH	AX
+	PUSH	DS
+	XOR	AX,AX
+	MOV	DS,AX
+	MOV	AX,WORD PTR [OLD_13]
+	CLI
+    ;
+    ; Reset INT 13 vector to trun cache off
+    ;
+	MOV	WORD PTR DS:[13H * 4],AX
+	MOV	AX,WORD PTR [OLD_13 + 2]
+	MOV	WORD PTR DS:[(13H * 4) + 2],AX
+    ;
+    ; Reset INT 1C vector to turn cache off
+    ;
+;	MOV	AX,WORD PTR [OLD_1C]
+;	MOV	WORD PTR DS:[1CH * 4],AX
+;	MOV	AX,WORD PTR [OLD_1C + 2]
+;	MOV	WORD PTR DS:[(1CH * 4) + 2],AX
+    ;
+    ; Since INT 19 DOES NOT reset any vectors (like INT 9 Ctrl Alt DEL does),
+    ;	we must replace those vectors we have mucked with.
+    ;
+    ; NOTE THAT WE RESET VECTORS DIRECTLY!!!!!!!!!!!!!!!!!!
+    ;	We are not sure that DOS is reliable enough to call.
+    ;
+	MOV	AX,WORD PTR [OLD_19]
+	MOV	WORD PTR DS:[19H * 4],AX
+	MOV	AX,WORD PTR [OLD_19 + 2]
+	MOV	WORD PTR DS:[(19H * 4) + 2],AX
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;   removed from smartdrv
+;	MOV	AX,WORD PTR [OLD_9]
+;	MOV	WORD PTR DS:[9H * 4],AX
+;	MOV	AX,WORD PTR [OLD_9 + 2]
+;	MOV	WORD PTR DS:[(9H * 4) + 2],AX
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	POP	DS
+	POP	AX
+	MOV	[INT_13_BUSY],0
+	JMP	[OLD_19]
+
+; Release the cache when bootstrapping again through INT 19h.
+RESET_SYSTEM:
+        push    ax
+        push    bx
+        push    dx
+        cmp     cs:[driver_sel],1
+        je      reset_ems
+        mov     dx,cs:[xms_handle]
+        mov     ah,0ah
+        call    cs:[xms_entry]
+        jmp     short reset_done
+reset_ems:
+        mov     dx,cs:[above_pid]
+        mov     ah,ABOVE_DEALLOC
+        int     67h
+        cmp     ah,ABOVE_ERROR_BUSY
+        je      reset_ems
+reset_done:
+        pop     dx
+        pop     bx
+        pop     ax
+        ret
+
+; This data is only used at INIT, but it must be protected from overwrite
+;  by the DO_INIT code.
+;
+TERM_ADDR	LABEL	DWORD	; Address to return as break address in INIT packet
+		DW	?	; Computed at INIT time
+		DW	?	; INT13 CS filled in at INIT
 
 ;
-; This label defines the end of the code swapped in at RESET_SYSTEM
+; THIS CODE MUST BE IN RESIDENT PORTION BECAUSE IT WRITES IN THE AREA
+;  OCCUPIED BY THE DISPOSABLE INIT CODE.
 ;
-ABOVE_RESET_END    LABEL   BYTE
+
+;**	DO_INIT - Initialize cache structures to "empty"
+;
+DO_INIT:
+ASSUME	DS:INT13CODE
+	MOV	AX,[SECTRACK]
+	MOV	CL,9
+	SHL	AX,CL			; AX is bytes per track buffer
+	MOV	BX,[CACHE_CONTROL_PTR]
+	MOV	CX,[TTRACKS]
+	MOV	[CACHE_HEAD],BX
+	MOV	[BX.BACK_LRU_LNK],-1
+	MOV	WORD PTR [BX.BASE_OFFSET],0
+	MOV	WORD PTR [BX.BASE_OFFSET+2],0
+	MOV	[BX.TRACK_FLAGS],TRACK_FREE
+	MOV	DI,BX
+	ADD	BX,SIZE CACHE_CONTROL	; Next structure
+	DEC	CX			; One less to do
+	JCXZ	SETDONE 		; one buffer in cache
+SETLOOP:
+	MOV	[DI.FWD_LRU_LNK],BX
+	MOV	[BX.BACK_LRU_LNK],DI
+	MOV	[BX.TRACK_FLAGS],TRACK_FREE
+	MOV	DX,WORD PTR [DI.BASE_OFFSET]
+	ADD	DX,AX
+	MOV	WORD PTR [BX.BASE_OFFSET],DX
+	MOV	DX,WORD PTR [DI.BASE_OFFSET+2]
+	ADC	DX,0
+	MOV	WORD PTR [BX.BASE_OFFSET+2],DX
+	MOV	DI,BX
+	ADD	BX,SIZE CACHE_CONTROL	; Next structure
+	LOOP	SETLOOP
+SETDONE:
+	MOV	[DI.FWD_LRU_LNK],-1
+	MOV	[CACHE_TAIL],DI 	; That is the tail
+;
+;	NOTE FALL THROUGH!!!!!!!
+;
+
+;**	SETBPB - Set INIT packet I/O return values
+;
+;	This entry is used to set the INIT packet Break address
+;
+;	ENTRY
+;	    TERM_ADDR set to device end
+;	EXIT
+;	    through DEVEXIT
+;	USES
+;	    DS, BX, CX
+;
+;	COMMON TO TYPE 1, 2 drivers
+;
+
+SETBPB:
+ASSUME	DS:NOTHING
+    ;
+    ; 7.  Set the return INIT I/O packet values
+    ;
+	LDS	BX,[PTRSAV]
+	MOV	CX,WORD PTR [TERM_ADDR]
+	MOV	WORD PTR [BX.INIT_BREAK],CX		   ;SET BREAK ADDRESS
+	MOV	CX,WORD PTR [TERM_ADDR + 2]
+	MOV	WORD PTR [BX.INIT_BREAK + 2],CX
+	JMP	DEVEXIT
+
+
+	EVEN			; Make sure we get word alignment of the track
+				;    buffer.
+
+;
+; The following items define the "track buffer". When we want to I/O a track
+;    this is where we do it. We cannot I/O the track directly into extended
+;    memory because we have no way to specify a 24 bit address to INT 13. We
+;    Cannot I/O direct to expanded memory because DMA into the expanded memory
+;    window is not supported. This buffer also "holds" one track, so we keep
+;    track of the last track that was in here because it is faster to access
+;    it here than through extended/expanded memory. A value of -1 in the
+;    "currency" fields indicates that there is currently nothing interesting
+;    in the track buffer. NOTE: It is ASSUMED that the track buffer always
+;    represents a track that is IN the cache, therefore one must be sure to
+;    invalidate the track buffer when the cache element it represents is
+;    discarded. Runtime transfers address the track at TRACK_SEGMENT:0.
+;    Initialization places the track buffer so
+;    that it does not cause a DMA Boundary error which would slow things
+;    down quite a bit.
+;
+
+;
+; Cylinder and hd/drv of track in track buffer
+;
+TRACK_BUFFER_CYLN	DW	-1
+TRACK_BUFFER_HDDR	DW	-1
+
+;
+; Pointer to track buffer. May be adjusted for DMA boundary error prevention.
+;
+TRACK_SEGMENT DW 0		; full track at segment:0
+
+;
+; Cache structure pointers
+;
+
+;
+; Pointer to cache structures. The cache entries reuse discardable initialization space.
+;
+CACHE_CONTROL_PTR DW	?
+
+;
+; Cache head and tail pointers
+;
+CACHE_HEAD	DW	?
+CACHE_TAIL	DW	?
+
+;
+; Cache controls reuse disposable initialization space after this point.
+TRACK_BUFFER LABEL BYTE
+
+BREAK	<COMMON INIT CODE>
+
+;**	DISPOSABLE INIT DATA
+;
+; INIT data which need not be part of resident image
+;
+
+NUM_ARG 	DB	1	; Counter for numeric
+				;    arguments	bbbb.
+
+GOTSWITCH	DB	0	; Bit map of switches seen
+
+ SWITCH_E	 EQU	 00000001B
+ SWITCH_A	 EQU	 00000010B   ; Only switch allowed
+ SWITCH_T	 EQU	 00000100B
+ SWITCH_D	 EQU	 00001000B
+ SWITCH_WT	 EQU	 00010000B
+ SWITCH_WC	 EQU	 00100000B
+ SWITCH_R	 EQU	 01000000B
+ SWITCH_C	 EQU	 10000000B
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;**	PRINT - Print a "$" terminated message on stdout
+;
+;	This routine prints "$" terminated messages on stdout.
+;	It may be called with only the DX part of the DS:DX message
+;	pointer set, the routine puts the correct value in DS to point
+;	at the INT13 messages.
+;
+;	ENTRY:
+;	     DX pointer to "$" terminated message (INT13CODE relative)
+;	EXIT:
+;	     NONE
+;	USES:
+;	     AX
+;
+;	COMMON TO TYPE 1, 2, 3, 4 drivers
+;
+
+PRINT:
+ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
+	PUSH	DS
+	PUSH	CS
+	POP	DS
+	MOV	AH,Std_Con_String_Output
+	INT	21H
+	POP	DS
+	RET
+
+;**	ITOA - Print Decimal Integer on stdout
+;
+;	Print an unsigned 16 bit value as a decimal integer on stdout
+;	with leading zero supression. Prints from 1 to 5 digits. Value
+;	0 prints as "0".
+;
+;	Routine uses divide instruction and a recursive call. Maximum
+;	recursion is four (five digit number) plus one word on stack
+;	for each level.
+;
+;	ENTRY	AX has binary value to be printed
+;	EXIT	NONE
+;	USES	AX,CX,DX,FLAGS
+;
+;	COMMON TO TYPE 1, 2, 3, 4 drivers
+;
+
+ITOA:
+ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
+
+	MOV	CX,10
+	XOR	DX,DX
+	DIV	CX			; DX is low digit, AX is higher digits
+	OR	AX,AX
+	JZ	PRINT_THIS_DIGIT	; No more higher digits
+	PUSH	DX			; Save this digit
+	CALL	ITOA			; Print higher digits first
+	POP	DX			; Recover this digit
+PRINT_THIS_DIGIT:
+	ADD	DL,"0"			; Convert to ASCII
+	MOV	AH,Std_CON_Output
+	INT	21H
+	RET
+
+
+;**	INT13$INIT - Device Driver Initialization routine
+;
+; Validate the command line and BIOS geometry, then allocate the selected
+; cache and its DMA-safe conventional track buffer. Install the vectors only
+; after allocation and layout succeed. DOS discards the driver on failure.
+
+INT13$INIT:
+ASSUME	DS:INT13CODE,ES:NOTHING,SS:NOTHING
+    ;
+    ; 1.  Initialize various global values
+    ;
+	MOV	WORD PTR [TERM_ADDR + 2],CS
+    ;
+    ; 2.  Check for correct DOS version and do changes to the device
+    ;	     based on the DOS version if needed.
+    ;
+	CLD
+	MOV	AH,GET_VERSION
+	INT	21H
+	XCHG	AH,AL
+	CMP	AX,(2 SHL 8) + 00
+	JB	BADVER			; Below 2.00, BAD
+	CMP	AX,(3 SHL 8) + 00
+	JB	VER2X			; 2.X requires some patches
+	CMP	AX,(4 SHL 8) + 00
+	JBE	VER_OK			; 3.X or 4.0 OK
+BADVER:
+	MOV	DX,OFFSET BADVERMES
+	JMP	DEVABORT
+
+VER2X:
+	AND	[DEVATS],NOT DEVOPCL	    ; No such bit in 2.X
+	MOV	BYTE PTR [INT13TBL],11	    ; Fewer functions too
+VER_OK:
+
+;;
+; 3.  Set OLD_13, OLD_1C and Parse the command line and set values accordingly
+;
+	MOV	AX,(Get_Interrupt_Vector SHL 8) OR 13H
+	INT	21H
+	MOV	WORD PTR [OLD_13],BX
+	MOV	WORD PTR [OLD_13 + 2],ES
+	MOV	AX,(Get_Interrupt_Vector SHL 8) OR 1CH
+	INT	21H
+	MOV	WORD PTR [OLD_1C],BX
+	MOV	WORD PTR [OLD_1C + 2],ES
+	LDS	SI,[PTRSAV]
+ASSUME	DS:NOTHING
+	MOV	DX,OFFSET HEADERMES
+	CALL	PRINT
+	LDS	SI,[SI.INIT_BPB]    ; DS:SI points to config.sys
+SKIPLP1:			    ; Skip leading delims to start of name
+	LODSB
+	CMP	AL," "
+	JZ	SKIPLP1
+	CMP	AL,9
+	JZ	SKIPLP1
+	CMP	AL,","
+	JZ	SKIPLP1
+	JMP	SHORT SKIPNM
+
+ARGS_DONEJ:
+	JMP	ARGS_DONE
+
+SWITCHJ:
+	JMP	SWITCH
+
+SKIPLP2:			; Skip over device name
+	LODSB
+SKIPNM:
+	CMP	AL,13
+	JZ	ARGS_DONEJ
+	CMP	AL,10
+	JZ	ARGS_DONEJ
+	CMP	AL," "
+	JZ	FIRST_ARG
+	CMP	AL,9
+	JZ	FIRST_ARG
+	CMP	AL,","
+	JZ	FIRST_ARG
+	CMP	AL,0		; Need this for 2.0 2.1
+	JNZ	SKIPLP2
+SCAN_LOOP:			; PROCESS arguments
+	LODSB
+FIRST_ARG:
+	OR	AL,AL		; Need this for 2.0 2.1
+	JZ	ARGS_DONEJ
+	CMP	AL,13
+	JZ	ARGS_DONEJ
+	CMP	AL,10
+	JZ	ARGS_DONEJ
+	CMP	AL," "
+	JZ	SCAN_LOOP
+	CMP	AL,9
+	JZ	SCAN_LOOP
+	CMP	AL,","
+	JZ	SCAN_LOOP
+	CMP	AL,"/"
+	JZ	SWITCHJ
+	CMP	AL,"0"
+	JB	BAD_PARMJ
+	CMP	AL,"9"
+	JA	BAD_PARMJ
+	DEC	SI
+	CALL	GETNUM
+	CMP	[NUM_ARG],1
+	JA	BAD_PARMJ		 ; Only 1 numeric argument
+SET_SIZE:
+	CMP	BX,128
+	JB	BAD_PARMJ
+	CMP	BX,8192
+	JA	BAD_PARMJ
+	MOV	[DEV_SIZE],BX
+;A
+	mov	[current_dev_size],bx
+;A
+	JMP	SHORT NUM_DONE
+
+BAD_PARMJ:
+	JMP	SHORT BAD_PARM
+
+NUM_DONE:
+	INC	[NUM_ARG]		; Next numeric argument
+SCAN_LOOPJ:
+	JMP	SCAN_LOOP
+
+BAD_PARM:
+	MOV	DX,OFFSET ERRMSG1
+DEVABORT:
+	CALL	PRINT
+DEVABORT_NOMES:
+;	INC	[NULDEV]		;Indicate NUL device
+;	MOV	WORD PTR [TERM_ADDR],OFFSET ERROR_END ;Minimul null device
+;	JMP	SETBPB			;and return
+	LDS	BX,[PTRSAV]
+	MOV	WORD PTR [BX].INIT_NUM,0
+	MOV	WORD PTR [BX].INIT_BREAK[0],0
+	MOV	WORD PTR [BX].INIT_BREAK[2],CS
+	MOV	[DEVATS],0
+	JMP	DEVEXIT
+
+SWITCH:
+	LODSB
+	OR	AL,20H
+
+if WINDOWS_SWITCHES eq 0
+	CMP	AL,"e"
+	JNZ	ABOVE_TEST
+EXT_SET:
+	TEST	[GOTSWITCH],SWITCH_E + SWITCH_A
+	JNZ	BAD_PARM
+	OR	[GOTSWITCH],SWITCH_E
+	MOV	[DRIVER_SEL],0
+	JMP	SCAN_LOOP
+
+ABOVE_TEST:
+
+endif	; WINDOWS_SWITCHES eq 0
+
+	CMP	AL,"a"
+
+if WINDOWS_SWITCHES
+	jnz	bad_parm
+else
+	JNZ	DIS_TEST
+endif	;WINDOWS_SWITCHES
+
+ABOVE_SET:
+	TEST	[GOTSWITCH],SWITCH_A	; Was SWITCH_E + SWITCH_A
+	JNZ	BAD_PARM
+	OR	[GOTSWITCH],SWITCH_A
+	MOV	[DRIVER_SEL],1
+	JMP	SCAN_LOOP
+
+if WINDOWS_SWITCHES eq 0
+
+DIS_TEST:
+	CMP	AL,"d"
+	JNZ	W_TEST
+DIS_SET:
+	TEST	[GOTSWITCH],SWITCH_D
+	JNZ	BAD_PARM
+	OR	[GOTSWITCH],SWITCH_D
+	MOV	[ENABLE_13],0
+	JMP	SCAN_LOOP
+
+W_TEST:
+	CMP	AL,"w"
+	JNZ	T_TEST
+	LODSW
+	OR	AL,20H
+	CMP	AX,":c"
+	JNZ	WT_TEST
+	LODSW
+	OR	AX,2020H
+	CMP	AX,"fo"
+	JNZ	BAD_PARM
+	LODSB
+	OR	AL,20H
+	CMP	AL,"f"
+	JNZ	BAD_PARMJX
+WC_SET:
+	TEST	[GOTSWITCH],SWITCH_WC
+	JNZ	BAD_PARMJX
+	OR	[GOTSWITCH],SWITCH_WC
+	MOV	[WRITE_BUFF],0
+	JMP	SCAN_LOOP
+
+WT_TEST:
+	CMP	AX,":t"
+	JNZ	BAD_PARMJX
+	LODSW
+	OR	AX,2020H
+	CMP	AX,"no"
+	JNZ	BAD_PARMJX
+WT_SET:
+	TEST	[GOTSWITCH],SWITCH_WT
+	JNZ	BAD_PARMJX
+	OR	[GOTSWITCH],SWITCH_WT
+	MOV	[WRITE_THROUGH],1
+	JMP	SCAN_LOOP
+
+BAD_PARMJX:
+	JMP	BAD_PARM
+
+T_TEST:
+	CMP	AL,"t"
+	JNZ	R_TEST
+	LODSW
+	CMP	AL,":"
+	JNZ	BAD_PARMJX
+	CMP	AH,"0"
+	JB	BAD_PARMJX
+	CMP	AH,"9"
+	JA	BAD_PARMJX
+	DEC	SI
+	CALL	GETNUM
+T_SET:
+	TEST	[GOTSWITCH],SWITCH_T
+	JNZ	BAD_PARMJX
+	OR	[GOTSWITCH],SWITCH_T
+	MOV	[TICK_SETTING],BX
+	JMP	SCAN_LOOP
+
+R_TEST:
+	CMP	AL,"r"
+	JNZ	C_TEST
+	LODSW
+	OR	AH,20H
+	CMP	AX,"o:"
+	JNZ	BAD_PARMJX
+	LODSB
+	OR	AL,20H
+	CMP	AL,"n"
+	JNZ	BAD_PARMJX
+	TEST	[GOTSWITCH],SWITCH_R
+	JNZ	BAD_PARMJX
+	OR	[GOTSWITCH],SWITCH_R
+	MOV	[REBOOT_FLUSH],1
+	JMP	SCAN_LOOP
+
+C_TEST:
+	CMP	AL,"c"
+	JNZ	BAD_PARMJX
+	LODSW
+	OR	AH,20H
+	CMP	AX,"o:"
+	JNZ	BAD_PARMJX
+	LODSB
+	OR	AL,20H
+	CMP	AL,"n"
+	JNZ	BAD_PARMJX
+	TEST	[GOTSWITCH],SWITCH_C
+	JNZ	BAD_PARMJX
+	OR	[GOTSWITCH],SWITCH_C
+	MOV	[ALL_CACHE],1
+	JMP	SCAN_LOOP
+endif	;WINDOWS_SWITCHES eq 0
+
+ARGS_DONE:
+;
+; 4.  Call a TYPE specific INIT routine based on the Parse
+;	 to set up a specific driver TYPE.
+;
+	PUSH	CS
+	POP	DS
+ASSUME	DS:INT13CODE
+	call	get_geometry
+	jc	ini_ret
+	MOV	AL,[DRIVER_SEL] 	; Find out which init to call
+	OR	AL,AL
+	JNZ	NEXTV
+	CALL	XMS_INIT
+	JMP	SHORT INI_RET
+
+NEXTV:
+	CALL	ABOVE_INIT
+INI_RET:
+	JNC	I001
+	JMP	DEVABORT_NOMES
+
+I001:
+DRIVE_SET:
+	call	set_reset
+    ;
+    ; update the current device size
+    ;
+	mov	ax,[dev_size]
+	mov	[current_dev_size],ax
+    ;
+    ; 6.  Print out report of INT13 parameters
+    ;
+	MOV	DX,OFFSET STATMES1
+	CALL	PRINT
+	MOV	AX,[DEV_SIZE]
+	CALL	ITOA
+	MOV	DX,OFFSET STATMES1E
+	CMP	[DRIVER_SEL],0
+	JZ	PTYPX
+	MOV	DX,OFFSET STATMES1A
+PTYPX:
+	CALL	PRINT
+	MOV	DX,OFFSET STATMES2
+	CALL	PRINT
+	MOV	AX,[TTRACKS]
+	CALL	ITOA
+	MOV	DX,OFFSET STATMES3
+	CALL	PRINT
+	MOV	AX,[SECTRACK]
+	CALL	ITOA
+	MOV	DX,OFFSET STATMES4
+	CALL	PRINT
+
+ifdef	OMTI
+	mov	dx,offset omti_msg
+	call	print
+endif
+IF DEBUG
+	MOV	DX,OFFSET STATMES5
+	CALL	PRINT
+	MOV	AX,CS
+	CALL	ITOA
+	MOV	DX,OFFSET STATMES6
+	CALL	PRINT
+ENDIF
+    ;
+    ; Turn on the cache by chaining INT 13, and INT 1C
+    ;
+	MOV	DX,OFFSET INT_13_HANDLER
+	MOV	AX,(Set_Interrupt_Vector SHL 8) OR 13H
+	INT	21H
+;	MOV	DX,OFFSET INT_1C_HANDLER
+;	MOV	AX,(Set_Interrupt_Vector SHL 8) OR 1CH
+;	INT	21H
+	JMP	DO_INIT
+
+;**	DRIVEPARMS Initialize drive related cache parameters
+;
+;	ENTRY
+;	    Stuff set so that BLKMOV can be used to access cache memory
+;	    DEV_SIZE set to TRUE cache size in K
+;	EXIT
+;	    Carry Set
+;		Error, message already printed
+;	    Carry clear
+;		TRACK_SEGMENT adjusted for DMA error prevention
+;		CACHE_CONTROL_PTR set
+;		TERM_ADDR set
+;		TTRACKS set
+;		SECTRACK set
+;		SECTRKARRAY set
+;		HDARRAY set (SUNILP)
+;	USES
+;	    ALL but DS
+;
+;	COMMON TO TYPE 1, 2 drivers
+;
+;
+NO_HARDFILES:
+ASSUME	DS:INT13CODE,ES:NOTHING,SS:NOTHING
+	MOV	DX,OFFSET NOHARD
+PEER:
+	CALL	PRINT
+	STC
+	RET
+
+TRACK_TOO_BIG:
+	MOV	DX,OFFSET BIGTRACK
+	JMP	PEER
+
+GET_GEOMETRY:
+ASSUME	DS:INT13CODE,ES:NOTHING,SS:NOTHING
+    ;
+    ; First figure out sec/track of any hardfiles
+    ;
+	MOV	DL,80H
+	MOV	AH,8
+	INT	13H
+	JC	NO_HARDFILES
+	OR	DL,DL
+	JZ	NO_HARDFILES
+	AND	CL,00111111B
+	MOV	[SECTRKARRAY],CL
+	mov	[hdarray],dh
+	XOR	CH,CH
+	JCXZ	TRACK_TOO_BIG
+	MOV	[SECTRACK],CX
+	MOV	CL,DL
+	DEC	CX
+	JCXZ	FINISHED
+	CMP	CX,MAX_HARD_FILES - 1
+	JBE	DNUM_OK
+	MOV	CX,MAX_HARD_FILES - 1
+DNUM_OK:
+	MOV	DL,81H
+PARMLOOP:
+	PUSH	CX
+	PUSH	DX
+	MOV	AH,8
+	INT	13H
+	JC	IGNORE_DRIVE
+	AND	CL,00111111B
+	POP	BX
+	PUSH	BX
+	AND	BX,0000000001111111B
+	MOV	[BX.SECTRKARRAY],CL
+	mov	[bx.hdarray],dh
+	XOR	CH,CH
+	CMP	CX,[SECTRACK]
+	JBE	IGNORE_DRIVE
+	MOV	[SECTRACK],CX
+IGNORE_DRIVE:
+	POP	DX
+	INC	DL
+	POP	CX
+	LOOP	PARMLOOP
+FINISHED:
+	clc
+	ret
+
+DRIVEPARMS:
+    ;
+    ; Figure out number of full tracks that fit in cache
+    ;
+	MOV	AX,[SECTRACK]
+	MOV	CX,512
+	MUL	CX		; DX:AX = Bytes per track
+	OR	DX,DX
+	JNZ	TRACK_TOO_BIG
+	MOV	BX,AX		; BX is bytes per track
+	MOV	AX,[DEV_SIZE]
+	MOV	CX,1024
+	MUL	CX		; DX:AX = size of cache in bytes
+	DIV	BX		; AX is full tracks in cache
+	MOV	[TTRACKS],AX
+    ; Keep the near-linked cache entries inside CS. Place the track itself
+    ; after them at a paragraph boundary. Align to the next DMA page only
+    ; if the BIOS transfer would cross a physical 64 KiB boundary.
+	or      ax,ax
+	jz      layout_error
+	mov     [cache_control_ptr],offset track_buffer
+	mov     cx,size cache_control
+	mul     cx
+	or      dx,dx
+	jnz     layout_error
+	add     ax,offset track_buffer
+	jc      layout_error
+	cmp     [xms_handle],0
+	je      round_layout
+	add     ax,xms_stack_size
+	jc      layout_error
+	and     ax,0fffeh
+	mov     [xms_stack_top],ax
+round_layout:
+	add     ax,15
+	jc      layout_error
+	mov     cl,4
+	shr     ax,cl
+	mov     dx,cs
+	add     ax,dx
+	jc      layout_error
+	mov     dx,ax
+	and     dx,0fffh              ; paragraph offset within the DMA page
+	mov     bx,[sectrack]
+	mov     cl,5
+	shl     bx,cl                 ; paragraphs in a track
+	add     dx,bx
+	cmp     dx,1000h
+	jbe     track_fits
+	or      ax,0fffh
+	inc     ax
+	jz      layout_error
+track_fits:
+	mov     [track_segment],ax
+	add     ax,bx
+	jc      layout_error
+	; DOS 4 supplies its allocation ceiling in the INIT request.
+	les     di,[ptrsav]
+	cmp     word ptr es:[di.init_break],0
+	jne     publish_layout
+	cmp     word ptr es:[di.init_break+2],0
+	je      publish_layout
+	cmp     ax,word ptr es:[di.init_break+2]
+	ja      layout_error
+publish_layout:
+	mov     word ptr [term_addr+2],ax
+	mov     word ptr [term_addr],0
+	CLC
+	RET
+
+layout_error:
+	mov     dx,offset errmsg2
+	jmp     peer
+
+;**	GETNUM - Read an unsigned integer
+;
+;	This routine looks at DS:SI for a decimal unsigned integer.
+;	It is up to the caller to make sure DS:SI points to the start
+;	of a number. If it is called without DS:SI pointing to a valid
+;	decimal digit the routine will return 0. Any non decimal digit
+;	defines the end of the number and SI is advanced over the
+;	digits which composed the number. Leading "0"s are OK.
+;
+;	THIS ROUTINE DOES NOT CHECK FOR NUMBERS LARGER THAN WILL FIT
+;	IN 16 BITS. If it is passed a pointer to a number larger than
+;	16 bits it will return the low 16 bits of the number.
+;
+;	This routine uses the MUL instruction to multiply the running
+;	number by 10 (initial value is 0) and add the numeric value
+;	of the current digit. Any overflow on the MUL or ADD is ignored.
+;
+;	ENTRY:
+;	     DS:SI -> ASCII text of number
+;	EXIT:
+;	     BX is binary for number
+;	     SI advanced to point to char after number
+;	USES:
+;	     AX,BX,DX,SI
+;
+;	COMMON TO TYPE 1, 2, 3, 4 drivers
+;
+
+GETNUM:
+ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
+
+	XOR	BX,BX
+GETNUM1:
+	LODSB
+	SUB	AL,"0"
+	JB	NUMRET
+	CMP	AL,9
+	JA	NUMRET
+	CBW
+	XCHG	AX,BX
+	MOV	DX,10
+	MUL	DX
+	ADD	BX,AX
+	JMP	GETNUM1
+
+NUMRET:
+	DEC	SI
+	RET
+
+;**	SET_RESET - Set up INT 19/INT 9 vectors
+;
+;	This routine will install the INT 9 and INT 19
+;	code by saving the current INT 9 and INT 19
+;	vectors in OLD_9 and OLD_19 (NOTE: the change in the value of OLD_19
+;	to something other than -1 indicates that the vectors have been
+;	replaced), setting the vectors to point to INT_9 and INT_19.
+;
+;	ENTRY:
+;	     NONE
+;	EXIT:
+;	     NONE
+;	USES:
+;	     None
+;
+;	COMMON TO TYPE 1, 2 drivers
+;
+
+SET_RESET:
+ASSUME	DS:INT13CODE,ES:NOTHING,SS:NOTHING
+	PUSH	AX
+	PUSH	DX
+	PUSH	BX
+	PUSH	ES
+	MOV	AX,(Get_Interrupt_Vector SHL 8) OR 19H
+	INT	21H
+	MOV	WORD PTR [OLD_19],BX
+	MOV	WORD PTR [OLD_19 + 2],ES
+	MOV	DX,OFFSET INT_19
+	MOV	AX,(Set_Interrupt_Vector SHL 8) OR 19H
+	INT	21H
+	MOV	AX,(Get_Interrupt_Vector SHL 8) OR 9H
+	INT	21H
+	MOV	WORD PTR [OLD_9],BX
+	MOV	WORD PTR [OLD_9 + 2],ES
+;	MOV	DX,OFFSET INT_9
+;	MOV	AX,(Set_Interrupt_Vector SHL 8) OR 9H
+;	INT	21H
+	POP	ES
+	POP	BX
+	POP	DX
+	POP	AX
+RET005:
+	RET
+
+BREAK	</E INIT Code>
+
+; Acquire one XMS block for the cache. A provider may implement only UMBs.
+; On a geometry or layout error return the block before DOS finishes INIT.
+XMS_INIT:
+ASSUME DS:INT13CODE,ES:NOTHING,SS:NOTHING
+	mov     ax,4300h
+	int     2fh
+	cmp     al,80h
+	jne     xms_missing
+	mov     ax,4310h
+	int     2fh
+	mov     word ptr [xms_entry],bx
+	mov     word ptr [xms_entry+2],es
+	mov     ah,08h
+	call    [xms_entry]
+	or      ax,ax
+	jnz     xms_size
+	cmp     bl,80h                  ; a UMB-only provider has no EMBs
+	je      xms_missing
+xms_no_space:
+	mov     dx,offset errmsg2
+	jmp     short xms_error
+xms_size:
+	cmp     ax,[dev_size]
+	jae     xms_alloc
+	cmp     ax,MIN_CACHE_SIZE_K
+	jb      xms_no_space
+	mov     [dev_size],ax
+xms_alloc:
+	mov     dx,[dev_size]
+	mov     ah,09h
+	call    [xms_entry]
+	cmp     ax,1
+	jne     xms_no_space
+	mov     [xms_handle],dx
+	call    driveparms
+	jnc     xms_init_done
+	mov     dx,[xms_handle]
+	mov     ah,0ah
+	call    [xms_entry]
+	mov     [xms_handle],0
+	stc
+xms_init_done:
+	ret
+xms_missing:
+        mov     dx,offset no_xms
+xms_error:
+        call    print
+        stc
+        ret
+
+BREAK	</A INIT Code>
+
+;**	EMM device driver name
+;
+;	The following datum defines the Above Board EMM 8 character
+;	device driver name that is looked for as part of TYPE 2
+;	specific initialization.
+;
+;	This datum is specific to TYPE 2 drivers
+;
+
+ABOVE_DEV_NAME	DB	"EMMXXXX0"
+
+; Install the EMS cache through INT 67h.
+ABOVE_INIT:
+ASSUME	DS:INT13CODE,ES:NOTHING,SS:NOTHING
+    ;
+	mov	[cache_move],offset above_blkmov
+    ; Check for presence of Above board memory manager
+    ;
+	MOV	AX,(Get_Interrupt_Vector SHL 8) OR 67H
+	INT	21H
+	MOV	DI,SDEVNAME
+	MOV	SI,OFFSET ABOVE_DEV_NAME
+	MOV	CX,8
+	REPE	CMPSB
+	JZ	GOT_MANAGER
+	MOV	DX,OFFSET NO_ABOVE
+ABOVE_ERR:
+	CALL	PRINT
+	STC
+	RET
+
+GOT_MANAGER:
+    ;
+    ; Check memory status
+    ;
+	MOV	CX,8000H
+STLOOP:
+	MOV	AH,ABOVE_STATUS
+	INT	67H
+	CMP	AH,ABOVE_SUCCESSFUL
+	JZ	MEM_OK
+	CMP	AH,ABOVE_ERROR_BUSY
+	LOOPZ	STLOOP
+ST_ERR:
+	MOV	DX,OFFSET BAD_ABOVE
+	JMP	ABOVE_ERR
+
+MEM_OK:
+    ;
+    ; Get base address of map region and set BASE_ADDR
+    ;
+	MOV	AH,ABOVE_GET_SEG
+	INT	67H
+	CMP	AH,ABOVE_ERROR_BUSY
+	JZ	MEM_OK
+	CMP	AH,ABOVE_SUCCESSFUL
+	JNZ	ST_ERR
+	MOV	WORD PTR [BASE_ADDR],0
+	MOV	WORD PTR [BASE_ADDR + 2],BX
+    ;
+    ; Allocate drive memory
+    ;
+GET_AVAIL:
+	MOV	AH,ABOVE_GET_FREE
+	INT	67H
+	CMP	AH,ABOVE_ERROR_BUSY
+	JZ	GET_AVAIL
+	CMP	AH,ABOVE_SUCCESSFUL
+	JNZ	ST_ERR
+	MOV	AX,DX		; AX is total 16K pages
+				; BX is un-allocated 16K pages
+	MOV	DX,OFFSET NO_MEM
+	OR	AX,AX
+	JZ	ABOVE_ERR
+	MOV	DX,OFFSET ERRMSG2
+;
+;   change in allocation strategy new default is all of available pages
+;   < 8192K.
+;
+;   algorithm:	    if (free_pages < 8) then	error();
+;		    else {
+;			if (free_pages >  200h) then free_pages = 200h;
+;			if (num_arg == 1) then dev_size = free_pages;
+;			else dev_size = min (dev_size,free_pages)
+
+
+
+	CMP	BX,8		; 128K = 16K * 8 = Min cache size
+	JB	ABOVE_ERR
+	cmp	bx,0200h	; 8192K = Max cache size
+	jbe	ab0$1		; if less  or equal fine
+	mov	bx,0200h	; else limit it to 8192K
+ab0$1:
+	mov	cx,4		; to convert number of pages into no of k
+	shl	bx,cl
+	cmp	[num_arg],1	; is numeric argument 1 ( means none )
+	jne	ab0$2		; cache size has been requested
+	mov	[dev_size],bx	; else use all of available cache
+	jmp	short ab001	;
+ab0$2:
+	cmp	[dev_size],bx	; minimum of dev size and bx
+	jb	ab001
+	mov	[dev_size],bx	;
+
+
+ab001:
+	mov	bx,[dev_size]
+	mov	[current_dev_size],bx ; Initialize current device size
+    ;
+    ; BX is K we want to allocate (limited by available K)
+    ;  BX is at least 16
+    ;
+	MOV	AX,BX
+	MOV	CX,4		; Convert back to # of 16K pages
+	SHR	BX,CL
+	TEST	AX,0FH		; Even????
+	JZ	OKAYU		; Yes
+	INC	BX		; Gotta round up
+	PUSH	BX
+	MOV	CX,4
+	SHL	BX,CL
+	MOV	[DEV_SIZE],BX	; Correct dev size too by rounding it up to
+				;   next multiple of 16K, no sense wasting
+				;   part of a page.
+;A
+	mov	[current_dev_size],bx ; Correct current device size also
+;A
+	POP	BX
+OKAYU:
+	MOV	AH,ABOVE_ALLOC
+	INT	67H
+	CMP	AH,ABOVE_ERROR_BUSY
+	JZ	OKAYU
+	CMP	AH,ABOVE_SUCCESSFUL
+	JZ	GOT_ID
+	CMP	AH,ABOVE_ERROR_MAP_CNTXT
+	JZ	ST_ERRJ
+	CMP	AH,ABOVE_ERROR_OUT_OF_PIDS
+	JB	ST_ERRJ
+	MOV	DX,OFFSET ERRMSG2
+	JMP	ABOVE_ERR
+
+ST_ERRJ:
+	JMP	ST_ERR
+
+GOT_ID:
+	MOV	[ABOVE_PID],DX
+    ;
+    ; Validate the resident layout before hooking any vectors.
+        call    driveparms
+        jnc     RETYYY
+        call    reset_system
+        stc
+RETYYY:
+	RET
 
 BREAK <messages and common data>
 
@@ -7532,8 +4974,8 @@ BREAK <messages and common data>
 
 NO_ABOVE db	"SMARTDrive : Expanded Memory Manager not present",13,10,"$"
 BAD_ABOVE db	"SMARTDrive : Expanded Memory Status shows error",13,10,"$"
-BAD_AT	db	"SMARTDrive : Cannot run on this computer",13,10,"$"
-NO_MEM	db	"SMARTDrive : No extended memory available",13,10,"$"
+NO_XMS	db	"SMARTDrive : Extended Memory Manager (XMS) required",13,10,"$"
+NO_MEM	db	"SMARTDrive : No expanded memory available",13,10,"$"
 ERRMSG1 db	"SMARTDrive : Invalid parameter",13,10,"$"
 ERRMSG2 db	"SMARTDrive : Insufficient memory",13,10,"$"
 INIT_IO_ERR db	"SMARTDrive : I/O error accessing cache memory",13,10,"$"
@@ -7558,7 +5000,7 @@ HEADERMES db	13,10,"Microsoft SMARTDrive Disk Cache v2.10",13,10,"$"
 ;
 STATMES1  db	"    Cache size: $"
 STATMES1A db	"K in Expanded Memory$"
-STATMES1E db	"K in Extended Memory$"
+STATMES1E db	"K in Extended Memory (XMS)$"
 STATMES2  db	13,10,"    Room for $"
 STATMES3  db	" tracks of $"
 STATMES4  db	" sectors each",13,10,13,10,"$"

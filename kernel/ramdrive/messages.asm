@@ -28,6 +28,8 @@ ASSUME	CS:RAMCODE,DS:RAMCODE,ES:NOTHING,SS:NOTHING
 	PUBLIC	HEADERMES,PATCH2X,DOS_DRV
 	PUBLIC	STATMES1,STATMES2,STATMES3,STATMES4,STATMES4,STATMES5
 
+	PUBLIC	NO_XMS
+NO_XMS db	"RAMDrive: Extended Memory Manager (XMS) required",13,10,"$"
 NO_ABOVE db	"RAMDrive: Expanded Memory Manager not present",13,10,"$"
 BAD_ABOVE db	"RAMDrive: Expanded Memory Status shows error",13,10,"$"
 BAD_AT	db	"RAMDrive: Computer must be PC-AT, or PC-AT compatible",13,10,"$"

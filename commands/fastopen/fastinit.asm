@@ -287,6 +287,7 @@ EXTRN	Main_Name_Cache_Buff:word								    ;AN000;
 EXTRN	Main_Name_Cache_Seg:word								   ;AN000;
 EXTRN	Main_Parambuff:byte									   ;AN000;
 EXTRN	Main_extent_drive_Buff:word								   ;AN000;
+EXTRN   EMS_PAGE_ARRAY:word
 EXTRN	Main_Num_Of_drives:word 								   ;AN000;
 EXTRN	Main_Ext_Count:word									   ;AN000;
 EXTRN	Main_Ext_Cache_Size:word								   ;AN000;
@@ -455,7 +456,7 @@ Next_Byte:				    ; may be in Extended memory)
 Init_Set_Cache:
 	 mov	si,Main_Extent_Drive_Buff   ; SI-->first extent drive header	     ;AN000;
 	 mov	cx,Main_num_of_drives	    ; number of drives
-	 mov	dx,0			    ; drive counter
+
 	 lea	di,Main_ParamBuff	    ; DS:DI-->parameter buff contains			   ;AN000;
 					    ; drive ID and number of extents	      ;AN000;
 	 mov	 es,Main_name_cache_seg     ; ES = addressability to Cseg_Init			   ;AN000;
@@ -463,7 +464,7 @@ Init_Set_Cache:
 												   ;AN000;
 INIT_LOOP:				    ; ES:SI-->cache buffer				   ;AN000;
 	 push	cx			    ; save counter					   ;AN000;
-	 add	di,dx			    ; points to drive ID of this driv			   ;AN000;
+
 	 xor	ax,ax										   ;AN000;
 	 mov	ax,[di+2]		    ; get Extent Count					   ;AN000;
 	 cmp	ax, -1			    ; any extent under this drive ??			   ;AN000;
@@ -491,15 +492,15 @@ INIT_LOOP:				    ; ES:SI-->cache buffer				   ;AN000;
 	 mov	es:[si].Next_Drv_hdr_Ptr,ax    ; save next drive header ptr in			   ;AN000;
 					    ; current drive header				   ;AN000;
 	 mov	bx,ax										   ;AN000;
-	 mov	ax,si			    ; save current header pointer			   ;AN000;
+	 mov     dx,si                  ; last extent-enabled header
 	 mov	si,bx			    ; DS:SI-->next drive header 			   ;AN000;
 												   ;AN000;
 SKIP_THIS_DRIVE:										   ;AN000;
-	 add	dx,4			    ; update index to next drive/extent 		   ;AN000;
+	 add     di,4			    ; update index to next drive/extent 		   ;AN000;
 	 pop	cx			    ; restore loop count				   ;AN000;
 	 LOOP	init_loop		    ; repeat for next drive number			   ;AN000;
 												   ;AN000;
-	 mov	si,ax										   ;AN000;
+	 mov     si,dx										   ;AN000;
 	 mov	es:[si].Next_Drv_hdr_Ptr,-1   ; mark current header as last
 					      ; drive header
 ;----------------------------------------------------------------------------
@@ -531,6 +532,8 @@ INIT_EXIT:
 	 mov   es,ax
 	 mov   ah,49H
 	 INT   21H		   ; deallocate environment
+	 jc    dont_dealloc
+	 mov   word ptr [si],0
 Dont_Dealloc:
 	 pop   ds		   ; restore DS
 
@@ -616,7 +619,7 @@ stack_seg_end		dw	0								   ;AN000;
 num_of_drives		dw	0		;number of user specified drives						   ;AN000;
 Ext_Mem 		dw	0		;=1 if exteded memory is enabled		   ;AN000;
 drive_id		db     " :",0                                                              ;AN000;
-Parambuff		db	50  dup (0)
+Parambuff		dw	(max_drives * 2) dup (0)
 Parmbuff_Ptr		dw	0								   ;AN000;
 FRAME_COUNT		dw	0		;EMS frame count
 
@@ -661,7 +664,8 @@ SEEK_Size		DW	0		;size of Cseg_Seek in paragraph 			 ;AN000;
 ;-----------------------------------------------------------------------;
 ;	EMS Support							;
 ;-----------------------------------------------------------------------;
-EXT_HANDLE     DW   ?		     ; EMS handle for reference 					 ;AN000;
+EMS_MAPPED     DB   0
+EXT_HANDLE     DW   0ffffh		     ; EMS handle for reference 					 ;AN000;
 EMS_PAGESIZE   DW   ?		     ; EMS handle for reference 					 ;AN000;
 EMS_FRAME_ADDR DW   ?		     ; EMS handle for reference 					 ;AN000;
 CURR_EMS_PAGE  DB   ?		     ; Current EMS page number						 ;AN000;
@@ -840,7 +844,7 @@ START:
 	CALL	SYSDISPMSG		; display error 					   ;AN000;
 
 	mov	ah,04ch 		; Terminate						   ;AN000;
-	mov	al,0			; Errorlevel 0 (Compatible)				   ;AN000;
+	mov	al,1			; message preload failed				   ;AN000;
 	INT	021h			; exit to DOS
 
 Parse_Cmd_Line: 										   ;AN000;
@@ -939,6 +943,28 @@ SETUP_STACK:
 	jmp	INIT_VECTOR		;Jump to Cseg_Main to do second
 					;phase of the initialization
 ERROR_EXIT:
+        push    cs
+        pop     ds
+        mov     dx,EXT_HANDLE
+        cmp     dx,0ffffh
+        je      exit_failure
+IF BUFFERFLAG
+        cmp     EMS_MAPPED,0
+        je      release_handle
+        push    ds
+        push    dx
+        mov     ax,Cseg_Main
+        mov     ds,ax
+        mov     si,offset EMS_PAGE_ARRAY
+        mov     ax,4f01h
+        int     67h
+        pop     dx
+        pop     ds
+release_handle:
+ENDIF
+        mov     ah,45h                  ; release pages acquired by SET_EMS
+        int     67h
+exit_failure:
 	mov	al,1			;set up return code
 	mov	ah,exit 		;set function code
 	INT	INT_COMMAND		;exit to DOS
@@ -1599,7 +1625,9 @@ ENDIF
 ; Copy drive buffer to MAIN segment
 	 lea   si,ParamBuff									   ;AN000;
 	 lea   di,es:Main_ParamBuff								   ;AN000;
-	 mov   cx,50										   ;AN000;
+	 mov   cx,num_of_drives
+	 shl   cx,1
+	 shl   cx,1										   ;AN000;
 
 Paramloop:
 	 mov   al,[si]										   ;AN000;
@@ -1902,13 +1930,25 @@ Verify_Missing_Oper:
 
 	 cmp   Prev_Type,0	   ; yes - any previous parameters ??
 	 jne   Chk_Prev_Drive	   ; yes, previous drive id							;AN000;
-	 mov	 MSG_CLASS,2
-	 MOV	 MSG_NUM,AX	   ; set message number 					   ;AN000;
-	 MOV	 SUBST_COUNT,0	   ; no message substitution					   ;AN000;
-	 MOV	 INPUT_FLAG,0	   ; no input							   ;AN000;
-	 CALL	 PRINT_STDOUT	   ; show message						   ;AN000;
-	 stc			   ; set error flag						   ;AN000;
-	 jmp   Parse_Exit	   ; exit
+	 mov   si,Current_Parm
+skip_arg_space:
+         lodsb
+         cmp   al,' '
+         je    skip_arg_space
+         cmp   al,9
+         je    skip_arg_space
+         cmp   al,'/'
+         je    first_switch
+         mov   ax,20
+         ; Empty tail is terminated by CR.
+         cmp   byte ptr [si-1],0dh
+         je    first_error
+         mov   ax,incorrect_param
+         jmp   short first_error
+first_switch:
+         mov   ax,invalid_switch
+first_error:
+         jmp   parse_error
 
 ;----------------------------------------------------------------------------
 ; If previous positional is drive ID without counts then assign default counts
@@ -1955,26 +1995,8 @@ Bad_Param:
 	jmp   Chk_Prev_Drive	   ; exit
 
 Set_Disp_Param:
-	mov   di,Next_Parm	  ; ending address of bad param  (1/6/88)
-	mov   al,0
-	mov   ds:[di],al	   ; set termination character
-	LEA   SI,SUBLIST1	  ; DS:SI-->Substitution list					   ;AN000;
-	MOV   AX,CURRENT_PARM	  ; starting address of bad parameter				  ;AN000;
-	MOV   [SI].DATA_OFF,AX	  ; SI-->File name						   ;AN000;
-	MOV   [SI].DATA_SEG,DS	  ; DS-->Segment						   ;AN000;
-	MOV   [SI].MSG_ID,0	  ; message ID							   ;AN000;
-	MOV   [SI].FLAGS,010H	  ; ASCIIZ string, left align					   ;AN000;
-	MOV   [SI].MAX_WIDTH,0	  ; MAXIMUM FIELD WITH						   ;AN000;
-	MOV   [SI].MIN_WIDTH,0	  ; MINIMUM FIELD WITH						   ;AN000;
-	mov   ax,incorrect_param  ; Error Code					;AN000;
-	MOV   MSG_NUM,AX	  ; set message number						   ;AN000;
-	MOV   SUBST_COUNT,1	  ; substitution count						   ;AN000;
-	MOV   MSG_CLASS,-1	  ; message class						   ;AN000;
-	MOV   INPUT_FLAG,0	  ; no input							   ;AN000;
-	CALL  PRINT_STDOUT	  ; display message						   ;AN000;
-	stc			  ; error flag
-	jmp   Parse_Exit	  ; exit		      (1/6/88 P2670)
-
+	mov ax,incorrect_param
+	jmp parse_error
 
 ;----------------------------------------------------------------------------
 ;	CHECK POSITIONAL PARAMETER TYPE
@@ -2025,6 +2047,11 @@ Check_Drive_Id: 		   ; process current drive ID
 	 jmp   Parse_Exit	   ; no, invalid drive id , exit				   ;AN000;
 
 Set_Drive_Id:
+	 cmp   num_of_drives,max_drives
+	 jb    store_drive_id
+	 mov   ax,too_many_entries
+	 jmp   parse_error
+store_drive_id:
 	 inc   num_of_drives	   ; update the drive count					   ;AN000;
 	 xor   ax,ax										   ;AN000;
 	 mov   ax,valuelo	   ; get drive number						   ;AN000;
@@ -2220,7 +2247,10 @@ Store_Extent_Count:
 ;----------------------------------------------------------------------------
 Proc_Switch:
 	 cmp   Prev_Type,0	   ; any previous type ??
-	 je    Switch_Error	   ; no  - error
+	 jne   has_drive
+	 mov   ax,20		   ; /X requires a drive
+	 jmp   parse_error
+has_drive:
 	 cmp   Ext_Mem,0	   ; switch previously specified ??					    ;AN000;
 	 je    set_sw_flag	   ; no, set flag						   ;AN000;
 
@@ -2251,27 +2281,8 @@ Set_ExtFlag:			   ; no, check reult buffer
 	 jmp   parse_loop						;AN000;
 
 Bad_Switch:
-	mov   di,Next_Parm	  ; ending address of bad param  1/6/88
-	mov   al,0
-	mov   ds:[di],al	   ; set termination character
-	LEA   SI,SUBLIST1	  ; DS:SI-->Substitution list					   ;AN000;
-	MOV   AX,CURRENT_PARM	  ; starting address of bad parameter				  ;AN000;
-	MOV   [SI].DATA_OFF,AX	  ; SI-->File name						   ;AN000;
-	MOV   [SI].DATA_SEG,DS	  ; DS-->Segment						   ;AN000;
-	MOV   [SI].MSG_ID,0	  ; message ID							   ;AN000;
-	MOV   [SI].FLAGS,010H	  ; ASCIIZ string, left align					   ;AN000;
-	MOV   [SI].MAX_WIDTH,0	  ; MAXIMUM FIELD WITH						   ;AN000;
-	MOV   [SI].MIN_WIDTH,0	  ; MINIMUM FIELD WITH						   ;AN000;
-	MOV   BX,Invalid_Switch   ; get message number
-	MOV   MSG_NUM,BX	  ; set message number						   ;AN000;
-	MOV   SUBST_COUNT,1	  ; substitution count						   ;AN000;
-	MOV   MSG_CLASS,-1	  ; message class						   ;AN000;
-	MOV   INPUT_FLAG,0	  ; no input							   ;AN000;
-	CALL  PRINT_STDOUT	  ; display message						   ;AN000;
-	stc			  ; error flag
-	jmp   Parse_Exit	  ; exit		      (1/6/88 P2670)
-
-
+	mov ax,invalid_switch
+	jmp parse_error
 
 ;----------------------------------------------------------------------------
 ;	      PROCESS PARSE ERROR
@@ -2739,12 +2750,13 @@ ENDIF
 ; Map logical page 0 in physical page frame FE (P254)
 ;-----------------------------------------------------------------------
 	CALL	MAP_FRAME	    ;map two pages						   ;AN000;
-	JNC	EMS_GET_SIZE	    ;no error, normal exit					   ;AN000;
+	JC	EMS_ERROR	    ; mapping failed					   ;AN000;
 
 ;-----------------------------------------------------------------------
 ; Get partial page map size
 ;-----------------------------------------------------------------------
 EMS_GET_SIZE:
+	MOV     EMS_MAPPED,1
 	MOV	AH,EMS_PAGE_SIZE    ;Allocate requested pages				       ;AN000;
 	MOV	AL,2
 	INT	EMS_INT 	    ;							       ;AN000;
@@ -2935,7 +2947,11 @@ PRINT_STDOUT PROC NEAR
 	PUSH	DX										   ;AN000;
 
 	MOV	AX,MSG_NUM		; Message ID						   ;AN000;
-	MOV	BX,STDOUT		; standard input message handle 			   ;AN000;
+	MOV	BX,2
+	CMP	AX,INSTALL1
+	JNE	message_handle_set
+	MOV	BX,STDOUT
+message_handle_set:	; message handle 			   ;AN000;
 	MOV	CX,SUBST_COUNT		; message substitution count				   ;AN000;
 	MOV	DH,MSG_CLASS		; message class 					   ;AN000;
 	MOV	DL,INPUT_FLAG		; Type of INT 10 for KBD input				   ;AN000;

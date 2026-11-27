@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""Exercise cache selection and RAM-disk I/O on scratch QEMU disks."""
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+import time
+
+root = Path(__file__).resolve().parents[1]
+image = Path(os.environ.get("IMG", root / "media/msdos40_full.img"))
+native = "device=himem.sys"
+ems = "device=emm386.sys 1024 ON"
+umb = "device=umbs.sys D000-D100"
+smart = "device=smartdrv.sys 128"
+ram = "device=ramdrive.sys 128"
+payload = bytes((i ^ (i >> 9)) & 255 for i in range(80000))
+
+
+def put(volume, path):
+    subprocess.run(["mcopy", "-o", "-i", volume, path, "::"], check=True)
+
+
+def boot(folder, name, drivers, mode, ide, blocks=None):
+    bootdisk = folder / "boot.img"
+    shutil.copyfile(image, bootdisk)
+    config = folder / "config.sys"
+    config.write_bytes(("\r\n".join(drivers) + "\r\n").encode())
+    batch = ["@echo off"]
+    if blocks is not None:
+        batch.append("cacheio h " + str(blocks))
+    if mode == "p":
+        batch += [r"copy /b b:\seed.bin c:\saved.bin", "if errorlevel 1 cacheio f",
+                  r"copy /b c:\saved.bin b:\back.bin", "if errorlevel 1 cacheio f"]
+    batch.append("cacheio " + mode)
+    autoexec = folder / "autoexec.bat"
+    autoexec.write_bytes(("\r\n".join(batch) + "\r\n").encode())
+    for file in (config, autoexec, folder / "cacheio.com", folder / "xmshold.sys"):
+        put(bootdisk, file)
+    guest = ["qemu-system-i386", "-accel", "tcg", "-cpu", "486", "-m", "8",
+             "-boot", "a", "-display", "none", "-monitor", "none", "-serial", "none",
+             "-no-reboot", "-device", "isa-debug-exit,iobase=0xf4,iosize=4",
+             "-drive", f"file={bootdisk},format=raw,if=floppy,index=0"]
+    if ide:
+        disk = folder / "ide.img"
+        with disk.open("wb") as stream:
+            stream.truncate(32 * 16 * 63 * 512)
+            for block, value in ((1, 0x35), (64, 0x76)):
+                stream.seek(block * 512)
+                stream.write(bytes([value]) * 512)
+        guest += ["-drive", f"file={disk},format=raw,if=none,id=hard", "-device",
+                  "ide-hd,drive=hard,cyls=32,heads=16,secs=63,bios-chs-trans=none"]
+    elif mode == "p":
+        data = folder / "data.img"
+        subprocess.run(["mformat", "-C", "-f", "1440", "-i", data, "::"], check=True)
+        put(data, folder / "seed.bin")
+        guest += ["-drive", f"file={data},format=raw,if=floppy,index=1"]
+    start = time.monotonic()
+    status = subprocess.run(guest, timeout=20).returncode
+    if status != 33:
+        raise SystemExit(f"{name}: guest returned {status}")
+    if ide and mode in ("x", "e", "t"):
+        with disk.open("rb") as stream:
+            stream.seek(512)
+            if stream.read(512) != bytes([0xa7]) * 512:
+                raise SystemExit(f"{name}: write did not reach IDE disk")
+    if mode == "p":
+        if subprocess.check_output(["mtype", "-i", data, "::back.bin"]) != payload:
+            raise SystemExit(f"{name}: RAM disk round trip differs")
+    print(f"PASS {name} ({time.monotonic()-start:.1f}s)", flush=True)
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    folder = Path(tmp)
+    for driver in ("smartdrv", "himem", "ramdrive", "vdisk"):
+        if subprocess.check_output(["mtype", "-i", image, "::" + driver + ".sys"]) != (
+                root / "kernel" / driver / (driver + ".sys")).read_bytes():
+            raise SystemExit(f"{image}: stale {driver}.sys")
+    subprocess.run(["nasm", "-f", "bin", root / "test/cacheio.asm", "-o", folder / "cacheio.com"],
+                   check=True)
+    subprocess.run(["nasm", "-f", "bin", root / "test/xmshold.asm", "-o", folder / "xmshold.sys"], check=True)
+    hold = "device=xmshold.sys"
+    vd = "device=vdisk.sys 128"
+    (folder / "seed.bin").write_bytes(payload)
+    for args in (
+            ("SMARTDRV XMS", [native, smart], "x", True),
+            ("SMARTDRV with DOS high", ["dos=high", native, smart], "x", True),
+            ("SMARTDRV EMS", [ems, smart + " /A"], "e", True),
+            ("SMARTDRV without XMS", [smart], "n", True),
+            ("SMARTDRV with only UMBs", [umb, smart], "n", True),
+            ("SMARTDRV /A without EMS", [native, smart + " /A"], "n", True),
+            ("SMARTDRV without IDE", [native, hold, smart], "n", False, 0),
+            ("RAMDRIVE XMS", ["dos=high", native, hold, ram + " /E"], "p", False, 1),
+            ("RAMDRIVE conventional", [ram], "p", False),
+            ("RAMDRIVE EMS", [ems, ram + " /A"], "p", False),
+            ("VDISK XMS", ["dos=high", native, hold, vd + " /E:1"], "p", False, 1),
+            ("VDISK conventional", [vd], "p", False),
+            ("VDISK /X without a reserved EMS page", [ems, vd + " /X"], "r", False),
+            ("VDISK /E without XMS", [vd + " /E"], "r", False),
+            ("SMARTDRV after both RAM disks", [native, hold, ram + " /E", vd + " /E:8", smart], "t", True, 3),
+            ("RAMDRIVE /E without XMS", [ram + " /E"], "r", False)):
+        boot(folder, *args)

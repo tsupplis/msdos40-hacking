@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""Install each release floppy with SELECT, then boot its hard disk with DOS high."""
+import json
+from pathlib import Path
+import shutil
+import struct
+import subprocess
+import tempfile
+import time
+
+root = Path(__file__).resolve().parents[1]
+sectors = 32 * 16 * 63
+first_sector = 63
+
+
+def prepare_disk(disk):
+    # One active FAT16 partition matching the geometry advertised to the BIOS.
+    with disk.open("wb") as stream:
+        stream.truncate(sectors * 512)
+        stream.seek(446)
+        stream.write(struct.pack("<B3sB3sII", 0x80, bytes([1, 1, 0]), 4, bytes([15, 63, 31]),
+                                 first_sector, sectors - first_sector))
+        stream.seek(510)
+        stream.write(b"\x55\xaa")
+    volume = f"{disk}@@{first_sector * 512}"
+    subprocess.run(["mformat", "-i", volume, "-T", str(sectors - first_sector), "-h", "16",
+                    "-s", "63", "-H", str(first_sector), "-c", "4", "-v", "SELECTHD", "::"], check=True)
+    with disk.open("r+b") as stream:
+        stream.seek(first_sector * 512 + 3)
+        stream.write(b"MSDOS4.0")  # make DOS 4 consume the volume's actual BPB
+    return volume
+
+
+def qmp(guest, command, **arguments):
+    guest.stdin.write(json.dumps({"execute": command, "arguments": arguments}) + "\n")
+    guest.stdin.flush()
+    while True:
+        reply = json.loads(guest.stdout.readline())
+        if "return" in reply:
+            return reply["return"]
+        if "error" in reply:
+            raise RuntimeError(f"{command}: {reply['error']}")
+
+
+def run_select(guest, folder):
+    # Changes to the installer floppy (including SELECT's attribute changes)
+    # are confined to a scratch copy. SELECT also asks for a blank work disk.
+    if "QMP" not in json.loads(guest.stdout.readline()):
+        raise RuntimeError("QEMU monitor did not start")
+    qmp(guest, "qmp_capabilities")
+    screen_file = folder / "screen.bin"
+    previous = None
+    deadline = time.monotonic() + 90
+    while time.monotonic() < deadline:
+        qmp(guest, "pmemsave", val=0xb8000, size=4000, filename=str(screen_file))
+        video = screen_file.read_bytes()
+        screen = video[::2].decode("cp437")
+        if "Installation Complete" in screen:
+            return
+        if "An error occurred" in screen or "Incorrect diskette" in screen:
+            raise RuntimeError(screen)
+        panels = ("Welcome to DOS 4.0", "As you view the SELECT displays",
+                  "Specify Function and Workspace", "Select Country and Keyboard",
+                  "Select Installation Drive", "Specify DOS Location", "Number of Printers",
+                  "MS-DOS Shell Option", "Accept configuration and continue",
+                  "For now, leave the INSTALL diskette", "Insert the SELECT COPY diskette",
+                  "Insert the INSTALL diskette", "Leave disk unchanged", "Insert OPERATING diskette")
+        panel = next((label for label in panels if label in screen), None)
+        if panel and panel != previous:
+            key = "ret"
+            if panel == "MS-DOS Shell Option":
+                # The project disks omit the Shell. Confirm the highlighted choice.
+                at = screen.find("2. Do not install")
+                if at < 0:
+                    continue
+                if video[2 * at + 1] != 0x70:
+                    key = "down"
+            if panel.startswith("Insert"):
+                floppy = "work.img" if panel == "Insert the SELECT COPY diskette" else "boot.img"
+                qmp(guest, "blockdev-change-medium", device="floppy0", filename=str(folder / floppy),
+                    format="raw")
+            qmp(guest, "send-key", keys=[{"type": "qcode", "data": key}], **{"hold-time": 10})
+            if key == "ret":
+                previous = panel
+        time.sleep(.05)
+    raise RuntimeError("SELECT timed out on\n" + "\n".join(screen[i:i+80] for i in range(0, 2000, 80)))
+
+
+def install(image, folder):
+    boot = folder / "boot.img"
+    shutil.copyfile(image, boot)
+    scratch = folder / "input"
+    def put(volume, name, content):
+        scratch.write_bytes(content)
+        subprocess.run(["mcopy", "-o", "-i", volume, scratch, "::" + name], check=True)
+
+    def read(volume, name):
+        return subprocess.check_output(["mtype", "-i", volume, "::" + name])
+
+    disk = folder / "hard.img"
+    volume = prepare_disk(disk)
+    put(boot, "AUTOEXEC.BAT", b"@echo off\r\nfdisk /mbr\r\nselect.exe menu\r\n")
+    subprocess.run(["mformat", "-C", "-f", "1440", "-i", folder / "work.img", "::"], check=True)
+    qemu = ["qemu-system-i386", "-accel", "tcg", "-cpu", "486", "-m", "4", "-display", "none",
+            "-monitor", "none", "-serial", "none", "-no-reboot", "-drive",
+            f"if=none,id=hard,format=raw,file={disk}", "-device",
+            "ide-hd,drive=hard,cyls=32,heads=16,secs=63,bios-chs-trans=none"]
+    with subprocess.Popen(qemu + ["-boot", "a", "-drive", f"if=floppy,format=raw,file={boot}",
+                                  "-qmp", "stdio"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                          text=True) as guest:
+        try:
+            run_select(guest, folder)
+        finally:
+            qmp(guest, "quit")
+
+    for name, driver in (("HIMEM.SYS", "himem"), ("UMBS.SYS", "umbs")):
+        expected = (root / "kernel" / driver / name.lower()).read_bytes()
+        if read(image, name) != expected or read(volume, "DOS/" + name) != expected:
+            raise RuntimeError(f"{image.name}: {name} differs on shipped or installed disk")
+    if read(volume, "DOS/DOSHELP.HLP") != read(image, "DOSHELP.HLP"):
+        raise RuntimeError("SELECT installed a different help file")
+
+    # Apply the documented opt-in to SELECT's own CONFIG.SYS. Boot C: alone.
+    put(volume, "CONFIG.SYS", b"DOS=HIGH\r\nDEVICE=C:\\DOS\\HIMEM.SYS\r\n" + read(volume, "CONFIG.SYS"))
+    probe = folder / "xmshma.com"
+    subprocess.run(["nasm", "-f", "bin", root / "test/xmshma.asm", "-o", probe], check=True)
+    put(volume, "XMSHMA.COM", probe.read_bytes())
+    put(volume, "AUTOEXEC.BAT", b"@echo off\r\nC:\\DOS\\HELP HIMEM.SYS > C:\\TOPIC.TXT\r\nC:\\XMSHMA h\r\n")
+    guest = subprocess.run(qemu + ["-boot", "c", "-device", "isa-debug-exit,iobase=0xf4,iosize=4"],
+                           timeout=30)
+    if guest.returncode != 33 or b"DEVICE=C:\\DOS\\HIMEM.SYS" not in read(volume, "TOPIC.TXT"):
+        raise RuntimeError(f"{image.name}: installed HELP or DOS=HIGH failed ({guest.returncode})")
+    print(f"PASS {image.name} SELECT install, hard-disk boot, DOS=HIGH and HELP", flush=True)
+
+
+for edition in ("dist", "full"):
+    with tempfile.TemporaryDirectory() as tmp:
+        install(root / f"media/msdos40_{edition}.img", Path(tmp))

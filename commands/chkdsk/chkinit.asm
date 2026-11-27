@@ -260,6 +260,10 @@ Procedure Main_Init				;				;an000;bgb;AN000;
 $$IF2:
 ;	$ENDIF					;				;an000;bgb;AN000;
 $$IF1:
+	cmp	Fatal_Error,Yes
+	jne	return_status
+	mov	ExitStatus,Bad_Exit
+return_status:
 	mov	al,ExitStatus			;Get Errorlevel 		;an000;bgb;AN000;
 	DOS_Call Exit				;Exit program			;an000;bgb;AN000;
 	int	20h				;If other exit fails		;an000;bgb;AN000;
@@ -645,29 +649,16 @@ $$IF21:
 ;	$ENDLOOP				;Parse error, see what it was	;an000;bgb;AN000;
 	JMP SHORT $$DO21
 $$EN21:
-
-	   dec	  si			;point to last byte of invalid parm
-public decsi
-decsi:	   cmp	   byte ptr [si],' '	;are we pointing to a space?		;an046;bgb
-;	   $IF	   E,OR 		;if so, we dont want to do that
-	   JE $$LL26
-	   cmp	   byte ptr [si],0dh	;are we pointing to CR? 		;an046;bgb
-;	   $IF	   E			;if so, we dont want to do that
-	   JNE $$IF26
-$$LL26:
-	       dec   si 		;find the last byte of parm
-	       jmp   decsi
-;	   $ENDIF
-$$IF26:
-	   mov	   byte ptr [si+1],00	  ;zero terminate display string  ;an046;bgb
-nextsi:
-public nextsi
-	   dec	   si			;look at previous char			;an046;bgb
-	   cmp	   byte ptr [si],' '	;find parm separator			;an046;bgb
-	   jnz	   nextsi		;loop until begin of parm found
-	   mov	   movsi,si		;mov si into display parms		;an046;bgb
-	   PARSE_MESSAGE			;Display parse error		;an000;bgb;AN000;
-	   mov	   Fatal_Error,YES		;Indicate death!		;an000;bgb;AN000;
+           cmp     ax,3
+           mov     ax,90
+           je      parse_diagnostic
+           inc     ax
+parse_diagnostic:
+           mov     bx,2
+           xor     cx,cx
+           mov     dx,0ff00h
+           call    SysDispMsg
+           mov     Fatal_Error,YES
 ;	$ENDSRCH				;				;an000;bgb;AN000;
 $$SR21:
 	pop	ds				;				;an000;bgb;AN000;
@@ -908,7 +899,7 @@ $$IF48:
 $$IF50:
 	cmp	fatal_error,no							;an000;bgb
 ;	$IF	E								;an000;bgb
-	JNE $$IF52
+	JNE Exit_Baddrv
 get_bpb:   mov	   al,GENERIC_IOCTL		   ;Get BPB information 	;an000;bgb   ;AN000;
 	   mov	   ch,RawIO			   ; "  "   "  "		;an000;bgb   ;AN000;
 	   mov	   cl,GET_DEVICE_PARAMETERS	   ;				;an000;bgb   ;AN000;

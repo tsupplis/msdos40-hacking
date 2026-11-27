@@ -2,15 +2,15 @@
 
 MS-DOS 4.01 rebuilt on Unix with GNU make and the original tools under `emu2`. The goal is a usable replacement for DOS 3.3 and 5.5. This project will carry on iteratively, also reviewing/fixing the original code to be both robust and dependable. The version tag is 4.01N.
 
-**Status Summary v1.6.0**: _We already have:
-- HMA,UMB support with placement configurability for a large part of DOS and installed drivers and software (Up to 611KB of free application memory)
-- all common commands are in line with DOS 5.0 with a few DOS 6.22 commands added.
-- support for up to 8 hard drives
+_**Status Summary v1.7.0**: We already have:_
+- _native `HIMEM.SYS` for XMS 2.0 on AT-compatible 286 and later systems. and extended memory management of vdisk, ramdrive and smartdrv moved to XMS_
+- _HMA,UMB support with placement configurability for a large part of DOS and installed drivers and software (Up to 613KB of free application memory)_
+- _all common commands are in line with DOS 5.0 with a few DOS 6.22 commands added._
+- _support for up to 8 hard drives._
 
-Some deliverate choice are made no to close the following gaps (doskey replaced only by simple command line editing, undelete/unformat, 2.88MB floppy format).
+_Some deliverate choice are made no to close the following gaps (doskey replaced only by simple command line editing, undelete/unformat, 2.88MB floppy format)._
 
-The remaining gaps are in the work:_
-- _himem.sys driver (XMS 2.0)_
+_The remaining gaps are in the work:_
 - _completion of emm386 functionalities in line with DOS 5.0_
 - _setver_
 - _more to UMB and HMA_
@@ -123,7 +123,7 @@ The survey compares the commands shipped here with the command syntax and option
 | `more [filename]` | No known gaps | Page a file by name. |  |
 | `printfix` | Missing command |  | Suppress printer status checks for printers that cannot answer them. |
 | `restore` | No known gaps | `/D` lists matching backup paths and preserves destination files. |  |
-| `select` | No same-name DOS 5.0 utility | `SELECT MENU` installs DOS from the distribution or full floppy. Both install `UMBS.SYS` for optional configuration. The full floppy also installs `MBASIC.COM` and `VI.EXE`. |  |
+| `select` | No same-name DOS 5.0 utility | `SELECT MENU` installs DOS from the distribution or full floppy. Both install `HIMEM.SYS` and `UMBS.SYS` for optional configuration. The full floppy also installs `MBASIC.COM` and `VI.EXE`. |  |
 | `setver` | Missing command |  | Display or edit the per-program DOS version table. |
 | `sys` | Gaps identified |  | *won't implement — Transfer `COMMAND.COM`, recognize both IBM and Microsoft system-file names when replacing an installation, and allow the first three contiguous sectors of `IO.SYS` to reside later in the data area. The placement change also requires boot-loader support.* |
 | `ver` | No known gaps | Displays the project version as `4.01N`. |  |
@@ -184,6 +184,15 @@ Measured conventional-memory savings on PCE¹ are 7,504 bytes for `DOS=HIGH`, 4,
 
 Use `FILES=80 /L` with Windows 3.0 to keep the System File Table in conventional memory while retaining `DOS=HIGH,UMB`. `FCBS` and `STACKS` also accept `/L`. For `BUFFERS`, `/X /L` tries EMS then conventional memory.
 
+On an AT-compatible 286 or later, SELECT installs the native driver in the
+chosen DOS directory. To enable the HMA with the default installation path,
+add these lines to CONFIG.SYS and reboot.
+
+```dos
+DOS=HIGH
+DEVICE=C:\DOS\HIMEM.SYS
+```
+
 PCE example for `config.sys`
 
 ```dos
@@ -199,16 +208,38 @@ shellhigh=command.com /p /e:160
 
 ¹ PCE XT with 512-byte floppy sectors. With 88 Kbytes of UMB and the HMA enabled, the example above gives a 614,448-byte largest executable (600 KiB plus 48 bytes). The launcher configuration in `pceconfig.sys` gives the same result.
 
-For a machine with unused RAM mapped from segment `ca00` up to `e000` (exclusive), use `umbs.sys` as the provider.
+For an AT with unused RAM mapped from segment `ca00` up to `e000` (exclusive), load the native drivers in this order. Substitute the range mapped on your machine.
 
 ```dos
-dos=umb
-device=umbs.sys ca00-e000
-devicehigh=ansi.sys
+dos=high,umb
+device=c:\dos\himem.sys
+device=c:\dos\umbs.sys ca00-e000
+devicehigh=c:\dos\ansi.sys
 shellhigh=command.com /p
 ```
 
 Programs can link UMBs with `int 21h/5803h` and select upper-only or upper-first allocation with `5801h`.
+
+### AT memory layout
+
+Physical addresses increase from bottom to top. This layout assumes the
+native HIMEM driver and at least 64 KiB of extended RAM.
+
+```mermaid
+flowchart TB
+    extended["Extended memory blocks<br/>110000h to end of managed RAM"]
+    hma["High Memory Area (HMA)<br/>100000h–10FFEFh · DOS=HIGH"]
+    uma["Upper Memory Area (UMA)<br/>A0000h–FFFFFh · video, ROM and mapped RAM"]
+    conventional["Conventional memory<br/>00000h–9FFFFh · up to 640 KiB"]
+    extended ~~~ hma ~~~ uma ~~~ conventional
+    classDef highlight fill:#fff2b3,stroke:#796318,color:#201b08
+    class hma highlight
+```
+
+Real-mode addressing reaches 65,520 bytes above 1 MiB. HIMEM rounds its HMA
+reservation to 64 KiB and allocates extended-memory blocks above it. Within
+the UMA, `UMBS.SYS` can supply unused mapped RAM for `DOS=UMB` and
+`DEVICEHIGH`. [Native HIMEM driver](kernel/himem/README.md)
 
 ## Companion projects
 

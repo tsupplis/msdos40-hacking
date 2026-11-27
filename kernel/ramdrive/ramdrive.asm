@@ -34,18 +34,8 @@ PAGE	58,132
 ;			result in a volume with a different number of directory
 ;			entries than the dddd parameter specifies.
 ;
-;		/E    Specifies that PC AT Extended Memory is to be used.
-;			It is an error if /E is specified on a machine other
-;			than an IBM PC AT.
-;		      NOTE: Information on RAMDrive drives in PC AT extended memory
-;			will be lost at system re-boot (warm or cold). This is
-;			due to the fact that the IBM PC AT ROM bootstrap code
-;			zeroes all of memory.
-;		      NOTE: There is 1k of RAMDrive overhead. That is to say,
-;			if there are 512k bytes of extended memory, there
-;			will be 511k bytes available for assignment to RAMDrive
-;			drives. This 1k overhead is fixed and does not depend
-;			on the number of RAMDrive drives installed.
+;               /E    Allocate the disk through an installed XMS manager.
+;                     The driver formats the block on each installation.
 ;
 ;		/A    Specifies that Above Board memory is to be used. It
 ;			is an error if the above board device driver is not
@@ -752,6 +742,7 @@ ASSUME	DS:RAMCODE,ES:NOTHING,SS:NOTHING
 	JAE	SEC_NOT_FOUND		; Start is beyond end
 	MOV	AX,DX
 	ADD	AX,CX
+	jc	sec_not_found
 	CMP	AX,[SECLIM]
 	JA	SEC_NOT_FOUND		; End is beyond end
     ;
@@ -769,7 +760,9 @@ CNT_SET:
     ;
 	MOV	AX,DX
 	MUL	[SSIZE] 		; DX:AX is byte offset of start
-	JMP	BLKMOV			; Perform I/O
+	jmp	cs:[transfer_proc]	; Selected during INIT
+
+transfer_proc dw offset BLKMOV
 
 BREAK	<Work Area for Ramdrive>
 
@@ -2183,7 +2176,11 @@ ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
 ;   this piece of code cannot be removed because other guys relocate
 ;   on top of this
 ;
+	cmp	cs:[transfer_proc],offset xms_move
+	je	reset_xms
 	jmp	reset_ret
+reset_xms:
+	jmp	xms_release
 ;
 	PUSHA
 	PUSH	DS
@@ -2280,6 +2277,86 @@ reset_ret:
 ; RESET_INCLUDE. It also defines the end of the resident device driver
 ; code for a driver which wants to include the INT 19/ INT 9 code.
 ;
+; XMS owns the block until the reboot handler or failed INIT releases it.
+; Keep the packet on a private stack because DOS supplies the I/O stack.
+xms_entry       dd      0
+xms_handle      dw      0
+xms_moving      db      0
+                even
+                db      512 dup (?)
+xms_stack_top   label   word
+
+xms_move:
+	pushf
+	cli
+	cmp     cs:[xms_moving],0
+	je      xms_enter
+	popf
+	mov     al,0ch
+	stc
+	ret
+xms_enter:
+	inc     cs:[xms_moving]
+	popf
+	mov     si,ss
+	mov     bp,sp
+	push    cs
+	pop     ss
+	mov     sp,offset xms_stack_top
+	push    si                      ; caller's SS:SP
+	push    bp
+	or      bh,bh
+	jnz     xms_write
+	push    es                      ; destination: real-mode buffer
+	push    di
+	xor     si,si
+	push    si
+	push    dx                      ; source: cache handle and byte offset
+	push    ax
+	push    cs:[xms_handle]
+	jmp     short xms_transfer
+xms_write:
+	push    dx                      ; destination: cache
+	push    ax
+	push    cs:[xms_handle]
+	push    es                      ; source: real-mode buffer
+	push    di
+	xor     si,si
+	push    si
+xms_transfer:
+	xor     dx,dx
+	shl     cx,1                    ; word count to DWORD byte count
+	adc     dx,dx
+	push    dx
+	push    cx
+	mov     si,sp
+	push    cs
+	pop     ds
+	mov     ah,0bh
+	call    cs:[xms_entry]
+	add     sp,16
+	pop     bp
+	pop     ss
+	mov     sp,bp
+	mov     cs:[xms_moving],0
+	cmp     ax,1                    ; AX=0 sets carry
+	je      xms_move_done
+	mov     al,0ch                  ; DOS general failure
+xms_move_done:
+	ret
+
+xms_release:
+        push    ax
+        push    bx
+        push    dx
+        mov     dx,cs:[xms_handle]
+        mov     ah,0ah
+        call    cs:[xms_entry]
+        pop     dx
+        pop     bx
+        pop     ax
+        ret
+
 RESET_INCLUDE  LABEL   BYTE
 
 BREAK	<COMMON INIT CODE>
@@ -2305,6 +2382,7 @@ EXT_K		DW	?	; Size in K of Exteneded memory.
 NUM_ARG 	DB	1	; Counter for order dependent numeric
 				;    arguments	bbbb ssss dddd.
 
+init_io_failed db 0
 INIT_DRIVE	DB	1	; 0 means drive is inited
 				; 1 means drive is to be inited
 				;    MUST BE DEFAULT SETTING
@@ -3018,6 +3096,11 @@ ASSUME	DS:RAMCODE
 	MOV	AL,[DRIVER_SEL] 	; Find out which init to call
 	OR	AL,AL
 	JNZ	NEXTV
+	cmp	[u_switch],0		; /U is the Olivetti-specific backend
+	jne	init_upper
+	call	xms_init
+	jmp	short ini_ret
+init_upper:
 	CALL	AT_EXT_INIT
 	JMP	SHORT INI_RET
 
@@ -3264,6 +3347,14 @@ DIRZERO:
 	LOOP	DIRZERO
 ;
 DRIVE_SET:
+	cmp	[transfer_proc],offset xms_move
+	jne	volume_ready
+	cmp	[init_io_failed],0
+	je	volume_ready
+	call	disk_abort
+	mov	dx,offset init_io_err
+	jmp	devabort
+volume_ready:
 ;
 ;	BPB IS NOW ALL SET
 ;
@@ -3329,6 +3420,9 @@ ASSUME	DS:NOTHING,ES:NOTHING,SS:NOTHING
 	PUSH	DX
 	PUSH	BX
 	CALL	MEMIO
+	jnc	init_io_done
+	mov	cs:[init_io_failed],1
+init_io_done:
 	POP	BX
 	POP	DX
 	POP	CX
@@ -3486,6 +3580,11 @@ AGAIN:
 	JMP	SHORT RET002
 
 NOT_ABOVE:
+	cmp	[transfer_proc],offset xms_move
+	jne	legacy_abort
+	call	xms_release
+	jmp	ret002
+legacy_abort:
 	CMP	[RESMEM_SPECIAL],0
 	JNZ	RET002				; No EMM_CTRL on TYPE 4
 ;
@@ -4261,6 +4360,48 @@ BREAK	</E INIT Code>
 ;	Code is specific to TYPE 1 driver
 ;
 
+XMS_INIT:
+ASSUME DS:RAMCODE,ES:NOTHING,SS:NOTHING
+        mov     ax,4300h
+        int     2fh
+        cmp     al,80h
+        jne     xms_missing
+        mov     ax,4310h
+        int     2fh
+        mov     word ptr [xms_entry],bx
+        mov     word ptr [xms_entry+2],es
+        mov     ah,08h
+        call    [xms_entry]
+        or      ax,ax
+        jnz     xms_size
+        cmp     bl,80h
+        je      xms_missing
+xms_full:
+        mov     dx,offset errmsg2
+        jmp     err_ret
+xms_size:
+        cmp     ax,[dev_size]
+        jae     xms_alloc
+        cmp     ax,16                   ; smallest supported FAT volume, KiB
+        jb      xms_full
+        mov     [dev_size],ax
+xms_alloc:
+        mov     dx,[dev_size]
+        mov     ah,09h
+        call    [xms_entry]
+        cmp     ax,1
+        jne     xms_full
+        mov     [xms_handle],dx
+        mov     [transfer_proc],offset xms_move
+        mov     [init_drive],2          ; always format a newly allocated block
+        xor     bx,bx
+        call    set_reset
+        clc
+        ret
+xms_missing:
+        mov     dx,offset no_xms
+        jmp     err_ret
+
 AT_EXT_INIT:
 ASSUME	DS:RAMCODE,ES:NOTHING,SS:NOTHING
 	push	ds
@@ -4483,7 +4624,7 @@ ASSUME	DS:RAMCODE,ES:NOTHING,SS:NOTHING
 	REP	MOVSB
 	MOV	SI,OFFSET ABOVE_RESET
 	MOV	DI,OFFSET RESET_SYSTEM
-	MOV	CX,OFFSET RESET_INCLUDE - OFFSET RESET_SYSTEM
+	MOV	CX,OFFSET ABOVE_RESET_END - OFFSET ABOVE_RESET
 	REP	MOVSB
     ;
     ; Check for presence of Above board memory manager
@@ -5566,7 +5707,7 @@ ASSUME	DS:RAMCODE,ES:NOTHING,SS:NOTHING
 	REP	MOVSB
 	MOV	SI,OFFSET RESMEM_RESET
 	MOV	DI,OFFSET RESET_SYSTEM
-	MOV	CX,OFFSET RESET_INCLUDE - OFFSET RESET_SYSTEM
+	MOV	CX,OFFSET RESMEM_RESET_END - OFFSET RESMEM_RESET
 	REP	MOVSB
     ;
     ; We have THREE cases to contend with:
@@ -6195,6 +6336,7 @@ BREAK <messages and common data>
 ;
 ;	translatable messages moved to message module (SP)
 
+	EXTRN	NO_XMS:BYTE
 	EXTRN	NO_ABOVE:BYTE,BAD_ABOVE:BYTE,BAD_AT:BYTE,NO_MEM:BYTE
 	EXTRN	ERRMSG1:BYTE,ERRMSG2:BYTE,INIT_IO_ERR:BYTE,BADVERMES:BYTE
 	EXTRN	HEADERMES:BYTE,PATCH2X:BYTE,DOS_DRV:BYTE

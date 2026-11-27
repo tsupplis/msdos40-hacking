@@ -85,4 +85,7 @@
 :def 83 "DOS is using the High Memory Area.",0
 :def 84 "DOS is not using the High Memory Area.",0
 
+
+:def 85 "MEM: Invalid switch.",CR,LF
+:def 86 "MEM: Invalid parameter.",CR,LF
 :end

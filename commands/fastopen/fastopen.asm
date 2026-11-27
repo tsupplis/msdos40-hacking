@@ -117,6 +117,7 @@ Main_EMS_PAGE_SEG      DW    0		   ; EMS page segment ID				;AN000;
 
 
 Main_EMS_PAGE_SIZE     DW    0		   ; EMS page size					;AN000;
+PUBLIC EMS_PAGE_ARRAY
 EMS_PAGE_ARRAY	       DW  30	dup  (0)   ; EMS state save array
 
 ; The following data values are used by MAIN segment
@@ -324,8 +325,15 @@ Drive_Not_Found:			    ; drive id not found
 	pop	si										   ;AN000;
 	jmp	Error_Exit		    ; return
 
-Drive_Found:				    ; drive ID found
-	mov	cs:Prev_drv_id,dl	    ; save drive id as prev drive id
+Drive_Found:
+	cmp word ptr cs:[si+2],-1	; name-only drive
+	jne cache_extent_drive
+	cmp al,FONC_Purge
+	jne Drive_Not_Found
+	jmp short dispatch_drive
+cache_extent_drive:				    ; drive ID found
+	mov	cs:Prev_drv_id,dl
+dispatch_drive:
 	pop	cx			    ; restore registers 				   ;AN000;
 	pop	bx			    ; and do the specified function		      ;AN000;
 	pop	si										   ;AN000;

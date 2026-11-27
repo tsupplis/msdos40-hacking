@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+"""Boot the native HIMEM on PCE/XT and QEMU/AT."""
+import os
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+from hmaprobe import install_probe
+
+root = Path(__file__).resolve().parents[1]
+source = Path(os.environ.get("IMG", root / "media/msdos40_full.img"))
+with tempfile.TemporaryDirectory() as tmp:
+    folder = Path(tmp)
+    for machine in ("xt", "at"):
+        image = folder / (machine + ".img")
+        shutil.copyfile(source, image)
+        probe = folder / "xmsdisc.com"
+        subprocess.run(["nasm", *(["-DQEMU"] if machine == "at" else []),
+                        "-f", "bin", root / "test/xmsdisc.asm", "-o", probe], check=True)
+        if subprocess.check_output(["mtype", "-i", image, "::HIMEM.SYS"]) != (root / "kernel/himem/himem.sys").read_bytes():
+            raise SystemExit(f"{source} contains a different HIMEM.SYS")
+        subprocess.run(["mcopy", "-o", "-i", image, probe, "::"], check=True)
+        native = "DEVICE=HIMEM.SYS"
+        umb = "DEVICE=UMBS.SYS D000-D100"
+        if machine == "xt":
+            batch = folder / "xt.bat"
+            subprocess.run(["mcopy", "-o", "-i", image, root / "extra/pcehimem.sys",
+                            "::PCEHIMEM.SYS"], check=True)
+            for name, drivers, expected in (
+                    ("refusal", native, 16),
+                    ("PCEHIMEM", "DEVICE=PCEHIMEM.SYS", 21)):
+                batch.write_text(f"xmsdisc\nif errorlevel {expected + 1} goto failed\n"
+                                 f"if errorlevel {expected} goto passed\n"
+                                 ":failed\necho FAILED XT discovery\n:passed\n")
+                batch.with_suffix(".cfg").write_text(drivers + "\n")
+                subprocess.run([root / "test/run_tests", batch], check=True,
+                               env=dict(os.environ, IMG=str(image), PCE_TEST_WORK=str(folder / "xt")))
+                print(f"PASS XT {name}", flush=True)
+            continue
+        # The layout probe resolves addresses from the host linker maps.
+        for system in (root / "kernel/bios/io.sys", root / "kernel/dos/msdos.sys"):
+            if subprocess.check_output(["mtype", "-i", image, "::" + system.name]) != system.read_bytes():
+                raise SystemExit(f"{source} contains a different {system.name}")
+        install_probe(root, folder, image)
+        for name in ("xmshma", "xmsemb", "xmsmove"):
+            binary = folder / (name + ".com")
+            subprocess.run(["nasm", "-f", "bin", root / f"test/{name}.asm", "-o", binary], check=True)
+            subprocess.run(["mcopy", "-o", "-i", image, binary, "::"], check=True)
+        sizes = {}
+        batch = folder / "autoexec.bat"
+        for filename, flags in (("a20", []), ("busykbc", ["-DBUSY_KBC"]),
+                                ("postbusy", ["-DPOST_BUSY"]), ("latekbc", ["-DLATE_KBC"])):
+            binary = folder / (filename + ".com")
+            subprocess.run(["nasm", *flags, "-f", "bin", root / "test/xmsa20.asm",
+                            "-o", binary], check=True)
+            subprocess.run(["mcopy", "-o", "-i", image, binary, "::"], check=True)
+        high = ["DOS=HIGH", native]
+        for name, drivers, command, expected in (
+                ("control", [], "xmsdisc", 0),
+                ("native", [native], "xmsdisc", 1),
+                ("existing provider", [umb, native], "xmsdisc", 2),
+                ("UMB chaining", [native, umb], "xmsdisc", 3),
+                ("A20", [native], "a20", 0),
+                ("KBC busy after data write", [native], "postbusy", 0),
+                ("KBC late after D1h", [native], "latekbc", 0),
+                ("busy KBC", [native], "busykbc", 0),
+                ("low", [native], "xmshma l", 0),
+                ("high", high, "xmshma h", 0),
+                ("XMS block moves", [native], "xmsmove", 0),
+                ("XMS moves with DOS high", high, "xmsmove", 0),
+                ("XMS moves through UMBS", [native, umb], "xmsmove", 0),
+                ("extended blocks", [native], "xmsemb", 0),
+                ("blocks with DOS high", high, "xmsemb h", 0),
+                ("32 KiB extended", [native], "xmsemb s", 0),
+                ("VDISK in HMA", [native], "xmshma v", 0),
+                ("VDISK after pool reservation", [native], "xmshma p", 0),
+                ("VDISK on INT 19h", [native], "xmshma i", 0),
+                ("RAMDRIVE", [native], "xmshma r", 0),
+                ("no memory", high, "xmshma m", 0),
+                ("286 address ceiling", [native], "xmsemb c", 0),
+                ("empty block pool", high, "xmsemb z", 0)):
+            steps = ["@echo off"]
+            if name == "high":
+                steps.extend(["hmaio h! > layout.txt", 'find "LAYOUT PASS" < layout.txt > nul',
+                              "if errorlevel 1 xmshma x"])
+            batch.write_bytes(("\r\n".join([*steps, command]) + "\r\n").encode())
+            subprocess.run(["mcopy", "-o", "-i", image, batch, "::AUTOEXEC.BAT"], check=True)
+            machine_opts = []
+            if name == "busy KBC":
+                machine_opts = ["-chardev", "null,id=busy", "-device",
+                                "isa-debugcon,iobase=0x64,readback=2,chardev=busy"]
+            size_log = folder / "size.bin"
+            if name in ("low", "high"):
+                machine_opts += ["-debugcon", f"file:{size_log}"]
+            config = folder / "config.sys"
+            config.write_bytes(("\r\n".join(["FILES=20", *drivers]) + "\r\n").encode())
+            subprocess.run(["mcopy", "-o", "-i", image, config, "::CONFIG.SYS"], check=True)
+            ram_mib = {"no memory": "1", "empty block pool": "1", "286 address ceiling": "32"}.get(name, "4")
+            guest = subprocess.run(["qemu-system-i386", *machine_opts, "-accel", "tcg", "-cpu", "486",
+                                    "-m", ram_mib, "-boot", "a", "-display", "none",
+                                    "-monitor", "none", "-serial", "none", "-no-reboot",
+                                    "-device", "isa-debug-exit,iobase=0xf4,iosize=4",
+                                    "-drive", f"file={image},format=raw,if=floppy,snapshot=on"],
+                                   timeout=30)
+            if guest.returncode != 2 * (0x10 + expected) + 1:
+                raise SystemExit(f"AT {name}: unexpected emulator status {guest.returncode}")
+            print(f"PASS AT {name}", flush=True)
+            if name in ("low", "high"):
+                data = size_log.read_bytes()
+                if len(data) != 2:
+                    raise SystemExit(f"missing conventional memory measurement: {data!r}")
+                sizes[name] = int.from_bytes(data, "little") * 16
+        gain = sizes["high"] - sizes["low"]
+        if gain <= 0:
+            raise SystemExit(f"DOS=HIGH did not free conventional memory: {sizes}")
+        print(f"Conventional memory gain: {gain} bytes", flush=True)

@@ -1,0 +1,5 @@
+:class 1
+:use 1 HIMEM cpu_message
+:use 2 HIMEM provider_message
+;
+:end

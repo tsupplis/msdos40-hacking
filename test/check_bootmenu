@@ -28,6 +28,7 @@ cases = [
     ("enter", entries + "default=2\ntimeout=60", "Return", "WINPROBE.SYS"),
     ("escape", entries + "timeout=60", "Esc", None),
     ("timeout", entries, None, "ORDPROBE.SYS"),
+    ("one second", entries + "timeout=1", None, "ORDPROBE.SYS"),
     ("missing", "A:\\ABSENT.SYS = Missing", None, "ABSENT.SYS"),
 ]
 for name, menu, key, expected in cases:
@@ -50,12 +51,12 @@ for name, menu, key, expected in cases:
         child = ""
         comspec = r"A:\COMMAND.COM"
         if name == "shellhigh":
-            subprocess.run(["mcopy", "-i", image, root / "extra/pcehimem.sys", "::HIMEM.SYS"], check=True)
+            subprocess.run(["mcopy", "-i", image, root / "extra/pcehimem.sys", "::PCEHIMEM.SYS"], check=True)
             subprocess.run(["mmd", "-i", image, "::BIN"], check=True)
             command = subprocess.check_output(["mtype", "-i", image, "::COMMAND.COM"])
             (folder / "COMMAND.COM").write_bytes(command)
             subprocess.run(["mcopy", "-i", image, folder / "COMMAND.COM", "::BIN/COMMAND.COM"], check=True)
-            put("WIN30.SYS", "DEVICE=HIMEM.SYS\nDOS=UMB\nDEVICE=WINPROBE.SYS\n"
+            put("WIN30.SYS", "DEVICE=PCEHIMEM.SYS\nDOS=UMB\nDEVICE=WINPROBE.SYS\n"
                 "SHELLHIGH=A:\\BIN\\COMMAND.COM A:\\BIN /P\n")
             comspec = r"A:\BIN\COMMAND.COM"
             put("CHECK.BAT", "@echo off\necho CHILD=[%DOSCFG%]\n")
@@ -95,7 +96,12 @@ for name, menu, key, expected in cases:
                     assert "CHILD=[WIN30]" in screen, (name, screen)
                 for marker in ("ORDPROBE.SYS", "WINPROBE.SYS", "ABSENT.SYS"):
                     assert (marker in screen) == (marker == expected), (name, screen)
-                assert ("Esc to skip configuration." in screen) == bool(key or name == "timeout"), name
+                assert ("Esc to skip configuration." in screen) == bool(key or name in ("timeout", "one second")), name
+                if name == "one second":
+                    rows = "\n".join(screen[i:i+80].rstrip() for i in range(0, len(screen), 80))
+                    assert ("Select a system configuration:\n\n1. Ordinary\n2. Windows\n\n"
+                            "Press 1-2 to select, Enter for default, or Esc to skip configuration.\n"
+                            "Default: 1 in 1 second(s) ...\n\n") in rows, (name, rows)
             finally:
                 guest.kill()
         print("PASS", name, flush=True)

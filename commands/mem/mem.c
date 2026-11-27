@@ -182,7 +182,7 @@ struct p_value_blk p_noval;                                                     
                                                                                                                                  /* ;an000; */
         char    OwnerName[128];                                                                                                  /* ;an000; */
         char    TypeText[128];                                                                                                   /* ;an000; */
-        char    cmd_line[128];                                                                                                   /* ;an000; */
+        char    cmd_line[129];                                                                                                   /* ;an000; */
         char    far *cmdline;                                                                                                    /* ;an000; */
                                                                                                                                  /* ;an000; */
         char    UseArgvZero = TRUE;                                                                                              /* ;an000; */
@@ -196,7 +196,6 @@ struct p_value_blk p_noval;                                                     
         int      i;                                                                                                              /* ;an000; */
                                                                                                                                  /* ;an000; */
         int      BlockDeviceNumber;                                                                                              /* ;an000; */
-        unsigned Parse_Ptr;                                                     /* ;an003; dms; pointer to command      */
                                                                                                                                  /* ;an000; */
 /*컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�*/                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -233,13 +232,12 @@ void     DisplayExpandedSummary(void);                                          
                                                                                                                                  /* ;an000; */
 void     DisplayBaseDetail(void);                                                                                                /* ;an000; */
                                                                                                                                  /* ;an000; */
-void     GetFromArgvZero(unsigned,unsigned far *);                                                                               /* ;an000; */
+static void GetFromArgvZero(unsigned);                                                                               /* ;an000; */
                                                                                                                                  /* ;an000; */
 void     DisplayDeviceDriver(struct   DEVICEHEADER far *,int);                                                                   /* ;an000; */
                                                                                                                                  /* ;an000; */
 void     parse_init(void);                                                                                                       /* ;an000; */
                                                                                                                                  /* ;an000; */
-void     Parse_Message(int,int,unsigned char);                                                                                    /* ;an000; */
 void     Sub0_Message(int,int,unsigned char);                                                                                    /* ;an000; */
 void     Sub2_Message(int,int,unsigned char,char *,int);                                                                         /* ;an000; */
 void     Sub3_Message(int,int,unsigned char,                                                                                     /* ;an000; */
@@ -294,11 +292,15 @@ char     *argv[];                                                               
         FP_OFF(cmdline) = 0x81;                                                 /* an000; dms; offset of command line   */       /* ;an000; */
         FP_SEG(cmdline) = InRegs.x.bx;                                          /* an000; dms; segment of command line  */       /* ;an000; */
                                                                                                                                  /* ;an000; */
-        i = 0;                                                                  /* an000; dms; init index               */       /* ;an000; */
-        while ( *cmdline != (char) '\x0d' ) cmd_line[i++] = *cmdline++;         /* an000; dms; while no CR              */       /* ;an000; */
-        cmd_line[i++] = (char) '\x0d';                                          /* an000; dms; CR terminate string      */       /* ;an000; */
-        cmd_line[i++] = (char) '\0';                                            /* an000; dms; null terminate string    */       /* ;an000; */
-                                                                                                                                 /* ;an000; */
+        i = (unsigned char)cmdline[-1];
+        if (i > 127) i = 127;
+        {
+            int j;
+            for (j = 0; j < i; ++j) cmd_line[j] = cmdline[j];
+        }
+        cmd_line[i++] = '\r';
+        cmd_line[i] = 0;
+
         DataLevel = 0;                                                                                                           /* ;an000; */
                                                                                                                                  /* ;an000; */
         parse_init();                                                           /* an000; dms; init for parser          */       /* ;an000; */
@@ -306,7 +308,6 @@ char     *argv[];                                                               
         InRegs.x.cx = (unsigned)0;                                              /* an000; dms; ordinal of 0             */       /* ;an000; */
         InRegs.x.dx = (unsigned)0;                                              /* an000; dms; init pointer             */       /* ;an000; */
         InRegs.x.di = (unsigned)&p_p;                                           /* an000; dms; point to ctrl blocks     */       /* ;an000; */
-        Parse_Ptr   = (unsigned)cmd_line;                                       /*;an003; dms; point to command         */
                                                                                                                                  /* ;an000; */
         parse(&InRegs,&OutRegs);                                                /* an000; dms; parse command line       */       /* ;an000; */
         while (OutRegs.x.ax == p_no_error)                                      /* an000; dms; good parse loop          */       /* ;an000; */
@@ -314,17 +315,16 @@ char     *argv[];                                                               
                 if (OutRegs.x.dx == (unsigned)&page_result && !Paging) {
                         Paging = 1;
                 } else if (DataLevel || OutRegs.x.dx == (unsigned)&page_result) {
-                        OutRegs.x.ax = p_too_many;
+                        OutRegs.x.ax = p_not_in_sw;
                         break;
                 } else if (OutRegs.x.dx == (unsigned)&classify_result) DataLevel = 3;
                 else DataLevel = 2;
-                Parse_Ptr = OutRegs.x.si;
                 parse(&OutRegs,&OutRegs);
                 }                                                                                                                /* ;an000; */
                                                                                                                                  /* ;an000; */
         if (OutRegs.x.ax != p_rc_eol)                                           /* an000; dms; parse error?             */       /* ;an000; */
                 {                                                                                                                /* ;an000; */
-                Parse_Message(OutRegs.x.ax,STDERR,Parse_Err_Class);             /* an000; dms; display parse error      */       /* ;an000; */
+                Sub0_Message(OutRegs.x.ax == p_not_in_sw ? InvalidSwitchMsg : InvalidParamMsg, STDERR, Utility_Msg_Class);             /* an000; dms; display parse error      */       /* ;an000; */
                 exit(1);                                                        /* an000; dms; exit the program         */       /* ;an000; */
                 }                                                                                                                /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -350,7 +350,7 @@ char     *argv[];                                                               
         ReadMemoryPools();
         DisplaySummary(DataLevel == 3);
                                                                                                                                  /* ;an000; */
-        return;                         /* end of MEM main routine */                                                            /* ;an000; */
+        exit(0);                        /* end of MEM main routine */                                                            /* ;an000; */
                                                                                                                                  /* ;an000; */
         }                                                                                                                        /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -1273,7 +1273,7 @@ struct ARENA far *ArenaPtr;                                                     
         char     far *StringPtr;                                                                                                 /* ;an000; */
         unsigned far *WordPtr;                                                                                                   /* ;an000; */
         char         *o;                                                                                                         /* ;an000; */
-        unsigned far *EnvironmentSegmentPtr;                                                                                     /* ;an000; */
+                                                                                             /* ;an000; */
         unsigned     PspSegment;                                                                                                 /* ;an000; */
         int          i;                                                                                                          /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -1293,7 +1293,7 @@ struct ARENA far *ArenaPtr;                                                     
                 *o = (char) '\0';                                                                                                /* ;an000; */
                 }                                                                                                                /* ;an000; */
                                                                                                                                  /* ;an000; */
-        if (UseArgvZero) GetFromArgvZero(PspSegment,EnvironmentSegmentPtr);                                                      /* ;an000; */
+        if (UseArgvZero && PspSegment > 8) GetFromArgvZero(PspSegment);                                                      /* ;an000; */
                                                                                                                                  /* ;an000; */
         return(&OwnerName[0]);                                                                                                   /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -1302,62 +1302,38 @@ struct ARENA far *ArenaPtr;                                                     
                                                                                                                                 /* ;an000; */
 /*컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�*/                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
-void         GetFromArgvZero(PspSegment,EnvironmentSegmentPtr)                                                                   /* ;an000; */
-unsigned     PspSegment;                                                                                                         /* ;an000; */
-unsigned far *EnvironmentSegmentPtr;                                                                                             /* ;an000; */
-{                                                                                                                                /* ;an000; */
-                                                                                                                                 /* ;an000; */
-        char    far *StringPtr;                                                                                                  /* ;an000; */
-        char    *OutputPtr;                                                                                                      /* ;an000; */
-        unsigned far *WordPtr;                                                                                                   /* ;an000; */
-                                                                                                                                 /* ;an000; */
-        OutputPtr = &OwnerName[0];                                                                                               /* ;an000; */
-                                                                                                                                 /* ;an000; */
-        if (UseArgvZero)                                                                                                         /* ;an000; */
-              {                                                                                                                  /* ;an000; */
-                if (PspSegment < FP_SEG(ArenaHeadPtr))                                                                           /* ;an000; */
-                      {                                                                                                          /* ;an000; */
-                        if (*OutputPtr == NUL) sprintf(OutputPtr,Ibmdos);                                                        /* ;an000; */
-                        }                                                                                                        /* ;an000; */
-                 else {                                                                                                          /* ;an000; */
-                        FP_SEG(EnvironmentSegmentPtr) = PspSegment;                                                              /* ;an000; */
-                        FP_OFF(EnvironmentSegmentPtr) = 44;                                                                      /* ;an000; */
-                                                                                                                                 /* ;an000; */
-/*                         FP_SEG(StringPtr) = *EnvironmentSegmentPtr;  */                                                          /* ;an000; */
-                        FP_SEG(StringPtr) = FP_SEG(EnvironmentSegmentPtr);                                                              /* ;an000; */
-                        FP_OFF(StringPtr) = 0;                                                                                   /* ;an000; */
-                                                                                                                                 /* ;an000; */
-                        while ( (*StringPtr != NUL) || (*(StringPtr+1) != NUL) ) StringPtr++;                                    /* ;an000; */
-                                                                                                                                 /* ;an000; */
-                        StringPtr += 2;                                                                                          /* ;an000; */
-                        WordPtr = (unsigned far *) StringPtr;                                                                    /* ;an000; */
-                                                                                                                                 /* ;an000; */
-                        if (*WordPtr == 1)                                                                                       /* ;an000; */
-                              {                                                                                                  /* ;an000; */
-                                StringPtr += 2;                                                                                  /* ;an000; */
-                                while (*StringPtr != NUL)                                                                        /* ;an000; */
-                                        *OutputPtr++ = *StringPtr++;                                                             /* ;an000; */
-                                *OutputPtr++ = NUL;                                                                              /* ;an000; */
-                                                                                                                                 /* ;an000; */
-                                while ( OutputPtr > &OwnerName[0] )                                                              /* ;an000; */
-                                      { if (*OutputPtr == (char) '.') *OutputPtr = NUL;                                          /* ;an000; */
-                                        if ( (*OutputPtr == (char) '\\') || (*OutputPtr == (char) ':') )                         /* ;an000; */
-                                              { OutputPtr++;                                                                     /* ;an000; */
-                                                break;                                                                           /* ;an000; */
-                                                }                                                                                /* ;an000; */
-                                        OutputPtr--;                                                                             /* ;an000; */
-                                        }                                                                                        /* ;an000; */
-                                                                                                                                 /* ;an000; */
-                                }                                                                                                /* ;an000; */
-                                                                                                                                 /* ;an000; */
-                        }                                                                                                        /* ;an000; */
-                }                                                                                                                /* ;an000; */
-                                                                                                                                 /* ;an000; */
-        strcpy(&OwnerName[0],OutputPtr);                                                                                         /* ;an000; */
-                                                                                                                                 /* ;an000; */
-        return;                                                                                                                  /* ;an000; */
-                                                                                                                                 /* ;an000; */
-        }                                                                                                                        /* ;an000; */
+static void GetFromArgvZero(unsigned psp)
+{
+    struct ARENA far *block;
+    unsigned far *envptr;
+    char far *env;
+    unsigned segment, limit, i, start, end, dot;
+
+    FP_SEG(envptr) = psp;
+    FP_OFF(envptr) = 0x2c;
+    segment = *envptr;
+    if (!segment) return;
+    FP_SEG(block) = segment - 1;
+    FP_OFF(block) = 0;
+    if ((block->Signature != 'M' && block->Signature != 'Z') ||
+        block->Owner != psp || !block->Paragraphs) return;
+    limit = block->Paragraphs >= 4096 ? 65535 : block->Paragraphs * 16;
+    FP_SEG(env) = segment;
+    FP_OFF(env) = 0;
+    for (i = 0; i < limit - 4; ++i)
+        if (!env[i] && !env[i+1]) break;
+    if (i >= limit - 4 || env[i+2] != 1 || env[i+3]) return;
+    start = dot = i + 4;
+    for (end = start; end < limit && env[end]; ++end) {
+        if (env[end] == ':' || env[end] == '\\') start = dot = end + 1;
+        else if (env[end] == '.') dot = end;
+    }
+    if (end == limit) return;
+    if (dot > start) end = dot;
+    if (end <= start || end - start > 8) return;
+    for (i = 0; start < end; ++i) OwnerName[i] = env[start++];
+    OwnerName[i] = 0;
+}
                                                                                                                                  /* ;an000; */
                                                                                                                                 /* ;an000; */
 /*컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�*/                                                  /* ;an000; */
@@ -1929,57 +1905,3 @@ void parse_init()
     SetSwitch(&classify_switch, &classify_result, "/CLASSIFY");
     SetSwitch(&page_switch, &page_result, "/P");
 } /* end parse_init */                                                                     /* ;an000; */
-
-
-/************************************************************************/                                                       /* ;an000; */
-/* Parse_Message                - This routine will print only those    */
-/*                                messages that require 1 replaceable   */
-/*                                parm.                                 */
-/*                                                                      */
-/*      Inputs  : Msg_Num       - number of applicable message          */
-/*                Handle        - display type                          */
-/*                Message_Type  - type of message to display            */
-/*                Replace_Parm  - pointer to parm to replace            */
-/*                                                                      */
-/*      Outputs : message                                               */
-/*                                                                      */
-/************************************************************************/
-
-void Parse_Message(Msg_Num,Handle,Message_Type)                                 /*;an003; dms;                          */
-                                                                                /*;an003; dms;                          */
-int             Msg_Num;                                                        /*;an003; dms;                          */
-int             Handle;                                                         /*;an003; dms;                          */
-unsigned char   Message_Type;                                                   /*;an003; dms;                          */
-                                                                                /*;an003; dms;                          */
-{                                                                               /*;an003; dms;                          */
-char    far *Cmd_Ptr;                                                           /*;an003; dms;                          */
-                                                                                /*;an003; dms;                          */
-                                                                                /*;an003; dms;                          */
-        {                                                                       /*;an003; dms;                          */
-        segread(&SegRegs);                                                      /*;an003; dms;                          */
-        FP_SEG(Cmd_Ptr) = SegRegs.ds;                                           /*;an003; dms;                          */
-        FP_OFF(Cmd_Ptr) = OutRegs.x.si;                                         /*;an003; dms;                          */
-        *Cmd_Ptr        = '\0';                                                 /*;an003; dms;                          */
-                                                                                /*;an003; dms;                          */
-        FP_SEG(sublist[1].value) = SegRegs.ds;                                  /*;an003; dms;                          */
-        FP_OFF(sublist[1].value) = Parse_Ptr;                                   /*;an003; dms;                          */
-        sublist[1].size      = Sublist_Length;                                  /*;an003; dms;                          */
-        sublist[1].reserved  = Reserved;                                        /*;an003; dms;                          */
-        sublist[1].id        = 0;                                               /*;an003; dms;                          */
-        sublist[1].flags     = Char_Field_ASCIIZ+Left_Align;                    /*;an003; dms;                          */
-        sublist[1].max_width = 40;                                              /*;an003; dms;                          */
-        sublist[1].min_width = 01;                                              /*;an003; dms;                          */
-        sublist[1].pad_char  = Blank;                                           /*;an003; dms;                          */
-                                                                                /*;an003; dms;                          */
-        InRegs.x.ax = Msg_Num;                                                  /*;an003; dms;                          */
-        InRegs.x.bx = Handle;                                                   /*;an003; dms;                          */
-        InRegs.x.cx = SubCnt1;                                                  /*;an003; dms;                          */
-        InRegs.h.dl = No_Input;                                                 /*;an003; dms;                          */
-        InRegs.h.dh = Message_Type;                                             /*;an003; dms;                          */
-        InRegs.x.si = (unsigned int)&sublist[1];                                /*;an003; dms;                          */
-        ReportMessage();                                           /*;an003; dms;                          */
-        }                                                                       /*;an003; dms;                          */
-        return;                                                                 /*;an003; dms;                          */
-}                                                                               /*;an003; dms;                          */
-
-

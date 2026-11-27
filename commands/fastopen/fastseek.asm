@@ -1796,16 +1796,9 @@ FK_PURGE   PROC    FAR	       ; Purge Cache buffers
        mov    si,Seek_Extent_Drive_Buff   ; SI-->beginning of extent drive			   ;AN000;
        mov    es,Seek_Name_Cache_Seg	  ; ES = addressability to Cseg_Init			   ;AN000;
        ASSUME  es:Cseg_Init		  ;							   ;AN000;
-       mov    cx,Seek_Num_Of_drives	  ; number of drives
-
-Main_Loop2:				  ; ES:SI-->cache buffer
-       mov    ax,es:[si].Drive_Number	  ; get drive id
-       cmp    al,dl			  ; drive id found ??
-       je     purge_buffer		  ; yes - purge drive id buffer
-       mov    ax, size Drive_Header	  ; ax size of drive heder
-       add    ax, es:[si].Buff_Size	  ; ax = offset to next header
-       add    si,ax			  ; (2/11)SI-->next drive header			      ;AN000;
-       LOOP   main_loop2		  ; try next header
+       call   FIND_DRIVE_HEADER
+       jc     FK_Exit
+       mov    si,di
 
 Purge_Buffer:				  ; SI-->drive header
        mov    es:[si].MRU_Hdr_Ptr,-1	  ; Make OPEN  QUEUE empty				   ;AN000;

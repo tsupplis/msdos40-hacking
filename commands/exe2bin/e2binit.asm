@@ -221,7 +221,7 @@ procedure Main_Init near		;				;AN000;
 	    call    LOCATE		;Go do the real program 	;AN000;
 ;	$ENDIF								;AN000;
 $$IF1:
-	xor	al,al							;AN000;
+	mov	al,Fatal_Error
 	Dos_call Exit							;AN000;
 	int	20h			;If other exit fails		;AN000;
 
@@ -410,13 +410,24 @@ $$IF8:
 	cmp	ax,End_of_Parse 	;Check for parse error		;AN000;
 ;	$IF	NE							;AN000;
 	JE $$IF14
-		push	ax						;AN001;
-		mov	ax,es:parse_ptr 				;AN001;
-		mov	es:parsoff,ax					;AN001;
-		mov	es:parseg,ds					;AN001;
-		mov	byte ptr ds:[si],0				;AN001;
-		pop	ax						;AN001;
-		parse_message		       ;Must enter file name	;AN000;
+                push    ds
+                push    es
+                pop     ds
+                cmp     ax,2
+                je      missing_operand
+                cmp     ax,3
+                mov     ax,14
+                je      report_argument
+                inc     ax
+                jmp     short report_argument
+missing_operand:
+                mov     ax,13
+report_argument:
+                mov     bx,2
+                xor     cx,cx
+                mov     dx,0ff00h
+                call    SysDispMsg
+                pop     ds
 		mov	es:Fatal_Error,YES     ;Indicate death! 	;AN000;
 ;	$ENDIF								;AN000;
 $$IF14:
@@ -674,13 +685,10 @@ bad_file:
 	jmp	DosError
 
 BADEXE:
-	pop	ds
-	ASSUME	DS:nothing						;AN000;
-	MESSAGE msgNoConvert						;AC000;
-	jmp	getout							;AN000;
-
+        MESSAGE msgNoConvert
+        jmp     conversion_failed
 ReadError:
-	jmp	DosError
+        jmp     DosError
 
 EXELOAD:
 	ASSUME	DS:DATA 						;AN000;
@@ -692,69 +700,98 @@ EXELOAD:
 	INT	21H			;Read in header
 	pop	bx
 	jc	ReadError
-	CMP	[RELPT],5A4DH		;Check signature word
-	JNZ	BADEXE
-	MOV	AX,[HEADSIZ]		;size of header in paragraphs
-	ADD	AX,31			;Round up first
-	CMP	AX,1000H		;Must not be >=64K
-	JAE	TOOBIG
-	AND	AX,NOT 31
-	MOV	CL,4
-	SHL	AX,CL			;Header size in bytes
-
-	push	dx
-	push	cx
-	push	ax
-	push	bx
-	mov	dx,ax
-	xor	cx,cx
-	mov	al,0
-	mov	bx,[handle1]
-	mov	ah,lseek
-	int	21h
-	jc	LseekError
-	pop	bx
-	pop	ax
-	pop	cx
-	pop	dx
-
-	XCHG	AL,AH
-	SHR	AX,1			;Convert to pages
-	MOV	DX,[PAGES]		;Total size of file in 512-byte pages
-	SUB	DX,AX			;Size of program in pages
-	CMP	DX,80H			;Fit in 64K? (128 * 512 = 64k)
-	JAE	TOOBIG
-	XCHG	DH,DL
-	SHL	DX,1			;Convert pages to bytes
-	MOV	AX,[LASTP]		;Get count of bytes in last page
-	OR	AX,AX			;If zero, use all of last page
-	JZ	WHOLEP
-
-	IF	OLDLINK
-	    CMP     AX,4		;Produced by old linker?
-	    JZ	    WHOLEP		;If so, use all of last page too
-	ENDIF
-
-	SUB	DX,200H 		;Subtract last page
-	ADD	DX,AX			;Add in byte count for last page
-WHOLEP:
-	MOV	[SIZ],DX
-	ADD	DX,15
-	SHR	DX,CL			;Convert bytes to paragraphs
-	MOV	BP,SEG LOAD
-	ADD	DX,BP			;Size + start = minimum memory (paragr.)
-	CMP	DX,BX			;Enough memory?
-	JA	TOOBIG
+        cmp     ax,cx
+        jne     BADEXE
+        cmp     [RELPT],5a4dh
+        jne     BADEXE
+        mov     ax,[HEADSIZ]
+        cmp     ax,2
+        jb      BADEXE
+        cmp     ax,1000h
+        jb      header_fits
+        jmp     TOOBIG
+header_fits:
+        mov     cl,4
+        shl     ax,cl
+        mov     di,ax                   ; exact byte offset of load module
+        mov     ax,[RELCNT]
+        or      ax,ax
+        jz      table_ok
+        cmp     [RELTAB],RUNVARSIZ
+        jb      BADEXE
+        mov     dx,4
+        mul     dx
+        add     ax,[RELTAB]
+        adc     dx,0
+        jnz     BADEXE
+        cmp     ax,di
+        ja      BADEXE
+table_ok:
+        mov     ax,[PAGES]
+        or      ax,ax
+        jz      BADEXE
+        dec     ax
+        mov     cx,512
+        mul     cx
+        mov     si,[LASTP]
+        cmp     si,cx
+        jae     BADEXE
+        or      si,si
+        jnz     have_tail
+        mov     si,cx
+have_tail:
+        add     ax,si
+        adc     dx,0
+        sub     ax,di
+        sbb     dx,0
+        jnc     size_valid
+        jmp     BADEXE
+size_valid:
+        or      dx,dx
+        jnz     TOOBIG
+        mov     [SIZ],ax
+        mov     dx,ax
+        mov     cl,4
+        shr     dx,cl
+        test    al,15
+        jz      whole_paras
+        inc     dx
+whole_paras:
+        mov     bp,SEG LOAD
+        add     dx,bp
+        jc      TOOBIG
+        cmp     dx,bx
+        ja      TOOBIG
+        ; A seek past EOF succeeds, even for an empty COM payload.
+        xor     cx,cx
+        xor     dx,dx
+        mov     bx,[handle1]
+        mov     ax,4202h
+        int     21h
+        jc      LseekError
+        sub     ax,di
+        sbb     dx,0
+        jc      short_module
+        or      dx,dx
+        jnz     module_present
+        cmp     ax,[SIZ]
+        jae     module_present
+short_module:
+        jmp     BADEXE
+module_present:
+        mov     dx,di
+        xor     cx,cx
+        mov     ax,4200h
+        int     21h
+        jc      LseekError
 	MOV	AX,[INITSS]
 	OR	AX,[INITSP]
 	OR	AX,[INITCS]
 	JMP	ERRORNZ
 
 TOOBIG:
-	pop	ds
-	ASSUME	DS:NOTHING						;AN000;
-	MESSAGE msgOutOfMemory						;AN000;
-	jmp	getout							;AN000;
+        MESSAGE msgOutOfMemory
+        jmp     conversion_failed
 
 LseekError:
 	jmp	DosError
@@ -786,6 +823,10 @@ xj:	MOV	AX,[INITIP]
 	pop	cx
 	pop	dx
 
+	cmp     [SIZ],ax
+	jae     com_fits
+	jmp     BADEXE
+com_fits:
 	SUB	[SIZ],AX		;And count decreased size
 	CMP	[RELCNT],0		;Must have no fixups
 	JNZ	ERRORNZ
@@ -850,9 +891,12 @@ LOADEXE:
 	POP	DS
 	ASSUME	DS:DATA 						;AN000;
 	pop	di
-	Jnc	HAVEXE			;Did we get it all?
-
-	jmp	DosError
+        jc      image_read_error
+        cmp     ax,cx
+        je      HAVEXE
+        jmp     BADEXE
+image_read_error:
+        jmp     DosError
 
 LseekError2:
 	jmp	DosError
@@ -891,14 +935,26 @@ RELOC:
 	Jnc	RDCMP
 	jmp	DosError
 RDCMP:
-	MOV	DI,[RELPT]		;Get offset of relocation pointer
-	MOV	AX,[RELSEG]		;Get segment
-	ADD	AX,BX			;Bias segment with actual load segment
-	MOV	ES,AX
-	ASSUME	ES:NOTHING						;AN000;
-	ADD	ES:[DI],BP		;Relocate
+        cmp     ax,4
+        jne     bad_relocation
+        mov     ax,[RELSEG]
+        mov     cx,16
+        mul     cx
+        add     ax,[RELPT]
+        adc     dx,0
+        jnz     bad_relocation
+        mov     di,ax
+        inc     ax                      ; both bytes must be inside the image
+        jz      bad_relocation
+        cmp     ax,[SIZ]
+        jae     bad_relocation
+        mov     es,bx
+        add     es:[di],bp
 	DEC	[RELCNT]		;Count off
 	JNZ	RELOC
+        jmp     short STORE
+bad_relocation:
+        jmp     BADEXE
 STORE:
 	MOV	AH,CREAT
 	MOV	DX,OFFSET file2
@@ -953,7 +1009,7 @@ NOROOM: 				;				     ;AN000;
 	pop	ds			;				     ;AN000;
 	ASSUME	DS:NOTHING		;				     ;AN000;
 	message msgNoDiskSpace		; Put out insufficient disk space    ;AN000;
-	jmp	getout			; message			     ;AN000;
+	jmp	conversion_failed			; message			     ;AN000;
 	RET				; return to main_init		     ;AN000;
 
 ;*******************************************************************************
@@ -964,22 +1020,24 @@ CloseError:								;AN000;
 
 	public	DosError						;AN000;
 DosError:								;AN000;
-	mov	es:FileNameSegment,ds	   ; save for opens, creates,	;AN000;
-	mov	es:FileNameOffset,dx					;AN000;
-
-	mov	bx,0			; get the extended error code	;AN000;
-	mov	ah,059h 						;AN000;
-	int	21h							;AN000;
-
-	mov	si,offset ds:Sublist_msg_exterror			;AC001;
-	extend_message							;AN001;
-	pop	ds							;AN001;
-
-getout: 								;AN000;
-	pop	ds							;AN000;
-	ASSUME	DS:NOTHING						;AN000;
-
-	ret								;AN000;
+        mov     ax,SEG DATA
+        mov     ds,ax
+        mov     FileNameSegment,ax
+        mov     FileNameOffset,dx
+        xor     bx,bx
+        mov     ah,59h
+        int     21h
+        push    ax
+        mov     ax,16                   ; prefix the DOS extended error text
+        mov     bx,2
+        xor     cx,cx
+        mov     dx,0ff00h
+        call    SysDispMsg
+        pop     ax
+        extend_message
+conversion_failed:
+        mov     ax,4c01h
+        int     21h
 
 
 LOCATE	ENDP

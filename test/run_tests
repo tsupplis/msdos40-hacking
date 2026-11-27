@@ -34,6 +34,7 @@ case "${1:-}" in
     export PCE_TEST_WORK="$suite/$job"
     mkdir "$PCE_TEST_WORK"
     case "$job" in
+      check_himem|check_install|check_memdisk|check_exe2bin|check_chkdsk) set -- "$PWD/test/$job" ;;
       check_*.*) set -- "$PWD/test/${job%.*}" "${job#*.}" ;;
       *)   set -- "$PWD/test/run_tests" "$job" ;;
     esac
@@ -51,7 +52,7 @@ case "${1:-}" in
     suite=$(mktemp -d "$PWD/test/work/regression.XXXXXX")
     # Schedule the independent disk layouts first; reboots within one layout
     # share its disk and must observe the previous boot's writes.
-    set -- check_bootmenu.selection check_hma.high check_hma.near check_hma.far check_hma.umb check_hma.upperfallback check_hma.fragmented check_ems.active check_ems.low check_placement.tables check_dir32.near check_dir32.high check_fat16.high check_fat16.near \
+    set -- check_exe2bin check_chkdsk check_harddisks.fastopen check_install check_himem check_memdisk check_bootmenu.selection check_hma.high check_hma.near check_hma.far check_hma.umb check_hma.upperfallback check_hma.fragmented check_ems.active check_ems.low check_placement.tables check_dir32.near check_dir32.high check_fat16.high check_fat16.near \
       check_fat16.far check_harddisks.one check_harddisks.two check_harddisks.four check_harddisks.gap \
       check_harddisks.extended check_harddisks.logical check_harddisks.limit check_harddisks.chains check_harddisks.primaries check_harddisks.mixed check_harddisks.format check_harddisks.fdisk check_ifs.low check_ifs.high check_edit.high check_edit.near check_edit.far $(list_cases)
     status=0

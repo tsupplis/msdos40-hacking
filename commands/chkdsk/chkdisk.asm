@@ -82,7 +82,7 @@ $$DO1:
 	    mov     cx,secs_per_64k	;an000;get maximum read 		;an005;bgb
 	    call    read_once		;an000;read it				;an005;bgb
 ;	$LEAVE	C								;an005;bgb
-	JC $$EN1
+	JC read_done
 	    mov     cx,es							;an005;bgb
 	    add     cx,paras_per_64k	; adjust transfer area			;an005;bgb
 	    mov     es,cx							;an005;bgb
@@ -93,6 +93,7 @@ $$DO1:
 	JMP SHORT $$DO1
 $$EN1:
 	call	read_once	    ;an000;read it				;an005;bgb
+read_done:
 	restorereg <es,dx,cx,bx,ax>						;an005;bgb
 	ret									;an005;bgb
 read_disk	endp								 ;an005;bgb
@@ -179,7 +180,7 @@ $$DO5:
 	    mov     cx,secs_per_64k	;an000;get maximum read 		;an005;bgb
 	    call   write_once		;an000;read it				;an005;bgb
 ;	$LEAVE	C								;an005;bgb
-	JC $$EN5
+	JC write_done
 	    mov     cx,es							;an005;bgb
 	    add     cx,paras_per_64k	; adjust transfer area			;an005;bgb
 	    mov     es,cx							;an005;bgb
@@ -190,6 +191,7 @@ $$DO5:
 	JMP SHORT $$DO5
 $$EN5:
 	call	write_once		;an000;read it				;an005;bgb
+write_done:
 	restorereg <es,dx,cx,bx,ax>						;an013;bgb
 	ret									;an005;bgb
 write_disk	endp								;an005;bgb

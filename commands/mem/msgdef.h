@@ -84,6 +84,8 @@
 #define BytesUnitMsg 82
 #define HmaActiveMsg 83
 #define HmaInactiveMsg 84
+#define InvalidSwitchMsg 85
+#define InvalidParamMsg 86
 
 #define ParseError1Msg			01
 #define ParseError10Msg 		10

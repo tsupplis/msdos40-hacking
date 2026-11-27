@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+"""Check the byte-level extent of a CHKDSK /F repair on a two-FAT volume."""
+import os
+from pathlib import Path
+import struct
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+with tempfile.TemporaryDirectory(dir=root / "test/work") as work:
+    folder = Path(work)
+    raw = folder / "disk.img"
+    disk = folder / "disk.pimg"
+    total = 240 * 4 * 17
+    start = 17
+    with raw.open("wb") as f:
+        f.truncate(total * 512)
+        f.seek(446)
+        f.write(struct.pack("<B3sB3sII", 0, bytes([1,1,0]), 4, bytes([3,17,239]),
+                            start, total - start))
+        f.seek(510)
+        f.write(b"\x55\xaa")
+    subprocess.run(["mformat", "-i", f"{raw}@@{start*512}", "-T", str(total-start),
+                    "-h", "4", "-s", "17", "-H", "17", "-c", "2", "-L", "256", "::"], check=True)
+    with raw.open("r+b") as f:
+        f.seek(start * 512 + 3)
+        f.write(b"MSDOS4.0")
+    expected = raw.read_bytes()
+    with raw.open("r+b") as f:
+        for sector in (start + 1, start + 257):
+            f.seek(sector * 512 + 200)
+            assert f.read(2) == bytes(2)
+            f.seek(-2, 1)
+            f.write(b"\xff\xff")  # orphan cluster 100
+    subprocess.run(["pce-img", "convert", "-q", "-g", "240", "4", "17", "-O", "pimg", raw, disk], check=True)
+    batch = folder / "repair.bat"
+    batch.write_text("echo N>b:\\no.txt\nchkdsk c: /f <b:\\no.txt\nif errorlevel 1 echo FAILED repair\n")
+    output = subprocess.check_output([root / "test/run_tests", batch, disk],
+                                     env=dict(os.environ, PCE_TEST_WORK=str(folder/"run")))
+    assert b"1,024 bytes disk space freed" in output, output
+    subprocess.run(["pce-img", "convert", "-q", "-O", "img", disk, raw], check=True)
+    assert raw.read_bytes() == expected, "repair must change only the two orphan FAT entries"
+print("PASS CHKDSK repaired both 256-sector FATs and preserved every other byte")
