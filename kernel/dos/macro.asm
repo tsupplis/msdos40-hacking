@@ -111,6 +111,58 @@ Installed = TRUE
 	I_need	EXTERR_LOCUS,BYTE	; Extended Error Locus
 	I_need	DrvErr,BYTE		; drive error
 
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry $AssignOper,216
+        DosCodeEntry $UserOper,217
+        DosCodeEntry DriveCdsEntry,218
+        DosCodeEntry DriveMapEntry,219
+        DosCodeEntry DriveInitEntry,220
+
+; INT 2Fh keeps the caller's SS. Supply DOSGROUP from resident CS.
+; The lookup returns DS:SI, initialization returns ES:DI, and mapping
+; preserves both pointers. POP preserves each service's carry result.
+        procedure GetCDSFromDrv,NEAR
+        push    es
+        push    cs
+        pop     es
+        call    DriveCdsEntry
+        pop     es
+        ret
+EndProc GetCDSFromDrv
+
+        procedure GetThisDrv,NEAR
+        push    es
+        push    cs
+        pop     es
+        call    DriveMapEntry
+        pop     es
+        ret
+EndProc GetThisDrv
+
+        procedure InitCDS,NEAR
+        push    ds
+        push    cs
+        pop     ds
+        call    DriveInitEntry
+        pop     ds
+        ret
+EndProc InitCDS
+
+; The redirector expects the original AX directly below its interrupt frame.
+AssignRedirector PROC NEAR
+        CallInstall NET_ASSOPER,multNet,30,AX,BX
+        ret
+AssignRedirector ENDP
+
+PrinterRedirector PROC NEAR
+        CallInstall PRINTER_GETSET_STRING,multNet,31,AX,DX
+        ret
+PrinterRedirector ENDP
+CODE ENDS
+
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+
 BREAK <$AssignOper -- Set up a Macro>
 
 ; Inputs:
@@ -139,7 +191,7 @@ BREAK <$AssignOper -- Set up a Macro>
 ; Returns:
 ;	Std Xenix style error return
 
-	procedure   $AssignOper,NEAR
+	procedure   DriveAssignment,NEAR
 ASSUME	DS:NOTHING,ES:NOTHING
 
 	CMP	AL,7				      ; set in_use ?		;AN000;
@@ -147,7 +199,7 @@ ASSUME	DS:NOTHING,ES:NOTHING
 srinuse:									;AN000;
 	PUSH	AX				      ; save al 		;AN000;
 	MOV	AL,DL				      ; AL= drive id		;AN000;
-	CALL	GetCDSFromDrv			      ; ds:si -> cds		;AN000;
+	CALL	LookupDriveCds			      ; ds:si -> cds		;AN000;
 	POP	AX				      ; 			;AN000;
 	JC	baddrv				      ; bad drive		;AN000;
 	CMP	WORD PTR [SI.curdir_devptr],0	      ; dpb ptr =0 ?		;AN000;
@@ -166,34 +218,25 @@ chk08:										;AN000;
 	CMP	AL,8				      ; reset inuse ?		;AN000;
 	JZ	srinuse 			      ; yes			;AN000;
 
-	IF	NOT INSTALLED
-	transfer NET_ASSOPER
-	ELSE
-	PUSH	AX
-	MOV	AX,(multnet SHL 8) OR 30
-	INT	2FH
-	POP	BX			; Don't zap error code in AX
-	JC	ASS_ERR
+        CallResident AssignRedirector
+        jc      ASS_ERR
 okdone:
-	transfer SYS_RET_OK
-
+        jmp     MacroSuccess
 ASS_ERR:
-	transfer SYS_RET_ERR
-	ENDIF
-
-EndProc $AssignOper
+        jmp     MacroError
+EndProc DriveAssignment
 
 Break <FIND_DPB - Find a DPB from a drive number>
 
-;   Inputs:	AL has drive number A = 0
+;   Inputs:	DS = DOSGROUP, AL has drive number A = 0
 ;   Outputs:	Carry Set
 ;		    No DPB for this drive number
 ;		Carry Clear
 ;		    DS:SI points to DPB for drive
 ;   registers modified: DS,SI
 Procedure FIND_DPB,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
-	LDS	SI,[DPBHEAD]
+	ASSUME	CS:DOSCODE,DS:DOSGroup,ES:NOTHING,SS:NOTHING
+	LDS	SI,DS:[DPBHEAD]
 DPB_LOOP:
 	CMP	SI,-1
 	JZ	NO_DPB
@@ -209,20 +252,20 @@ EndProc FIND_DPB
 
 Break <InitCDS - set up an empty CDS>
 
-;   Inputs:	ThisCDS points to CDS
+;   Inputs:	DS = DOSGROUP, ThisCDS points to CDS
 ;		AL has uppercase drive letter
 ;   Outputs:	ThisCDS is now empty
 ;		ES:DI point to CDS
 ;		Carry set if no DPB associated with drive
 ;   registers modified: AH,ES,DI
-Procedure InitCDS,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+Procedure ResetDriveCds,NEAR
+	ASSUME	CS:DOSCODE,DS:DOSGroup,ES:NOTHING,SS:NOTHING
 	MOV	AH,':'
 	PUSH	AX
 	SUB	AL,"A"-1                ; A = 1
-	CMP	[NUMIO],AL
+	CMP	DS:[NUMIO],AL
 	POP	AX
-	LES	DI,[THISCDS]
+	LES	DI,DS:[THISCDS]
 	MOV	ES:[DI.curdir_flags],0	; "free" CDS
 	JB	RET_OK			; Drive does not map a physical drive
 	MOV	WORD PTR ES:[DI.curdir_text],AX
@@ -247,7 +290,7 @@ PRET:
 	POP	DS
 	POP	AX
 RET_OK: return
-EndProc InitCDS
+EndProc ResetDriveCds
 
 Break <$UserOper - get/set current user ID (for net)>
 
@@ -267,8 +310,8 @@ Break <$UserOper - get/set current user ID (for net)>
 ;		If AL = 3 then CX bytes have been put at input ES:DI
 ;		If AL = 5 then DX is flag word
 
-Procedure   $UserOper,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+Procedure   NetworkUser,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	PUSH	AX
 	SUB	AL,1			; quick dispatch on 0,1
 	POP	AX
@@ -277,7 +320,8 @@ Procedure   $UserOper,NEAR
 	CMP	AL,5			; test for 2,3,4 or 5
 	JBE	UserPrint		; yep
 	MOV	EXTERR_LOCUS,errLoc_Unk ; Extended Error Locus
-	error	error_Invalid_Function	; not 0,1,2,3
+	MOV	AL,error_Invalid_Function
+	JMP	MacroError	; not 0,1,2,3
 
 UserGet:
 ; Transfer MYNAME to DS:DX
@@ -286,7 +330,7 @@ UserGet:
 	POP	ES
 	MOV	DI,DX			; destination
 	MOV	CX,[MYNUM]		; Get number
-	invoke	get_user_stack
+	CallResident get_user_stack
 	MOV	[SI.User_CX],CX 	; Set number return
 	Context DS			; point to DOSGroup
 ASSUME	DS:DOSGROUP
@@ -297,8 +341,7 @@ ASSUME	DS:NOTHING
 	REP	MOVSB			; blam.
 	XOR	AX,AX			; 16th byte is 0
 	STOSB
-UserBye:
-	transfer    sys_ret_ok		; no errors here
+	JMP         MacroSuccess		; no errors here
 
 UserSet:
 ASSUME	DS:NOTHING
@@ -313,21 +356,15 @@ ASSUME	DS:NOTHING
 
 UserPrint:
 	ASSUME	ES:NOTHING
-IF NOT Installed
-	transfer PRINTER_GETSET_STRING
-ELSE
-	PUSH	AX
-	MOV	AX,(multNET SHL 8) OR 31
-	INT	2FH
-	POP	DX			; Clean stack
-	JNC	OKPA
-	transfer SYS_RET_ERR
-
-OKPA:
-	transfer SYS_RET_OK
-ENDIF
-
-EndProc $UserOper
+        CallResident PrinterRedirector
+        jc      MacroError
+MacroSuccess:
+        CallResident SYS_RET_OK
+        ret
+MacroError:
+        CallResident SYS_RET_ERR
+        ret
+EndProc NetworkUser
 
 Break	<GetVisDrv - return visible drive>
 
@@ -341,8 +378,8 @@ Break	<GetVisDrv - return visible drive>
 ;   Registers modified: AL
 
 Procedure   GetVisDrv,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
-	CALL	GetThisDrv		; get inuse drive
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+	CALL	ResolveDrive		; get inuse drive
 	retc
 	SaveReg <DS,SI>
 	LDS	SI,ThisCDS
@@ -367,30 +404,43 @@ Break <Getthisdrv - map a drive designator (0=def, 1=A...)>
 ;		   ThisCDS points to macro
 ;   Registers modified: AL
 
-Procedure   GetThisDrv,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+; DOS services supply DOSGROUP from their stack. The multiplex gateway enters
+; ResolveDriveInGroup with the same ES contract on an application stack.
+Procedure   ResolveDrive,NEAR
+        push    es
+        push    ss
+        pop     es
+        call    ResolveDriveInGroup
+        pop     es
+        ret
+EndProc ResolveDrive
+
+Procedure   ResolveDriveInGroup,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:DOSGroup,SS:NOTHING
 	OR	AL,AL			; are we using default drive?
 	JNZ	GetMap			; no, go get the CDS pointers
-	MOV	AL,[CurDrv]		; get the current drive
+	MOV	AL,ES:[CurDrv]		; get the current drive
 	INC	AL			; Counteract next instruction
 GetMap:
 	DEC	AL			; 0 = A
 	SaveReg <DS,SI> 		; save world
-	mov	[EXTERR_LOCUS],errLOC_Disk
-	TEST	fSharing,-1		; Logical or Physical?
+	mov	ES:[EXTERR_LOCUS],errLOC_Disk
+	TEST	ES:[fSharing],-1		; Logical or Physical?
 	JZ	Not_SRVC		; Logical
 	SaveReg <AX,ES,DI>
-	MOV	WORD PTR ThisCDS,OFFSET DOSGroup:DummyCDS
-	MOV	WORD PTR ThisCDS+2,CS	;	ThisCDS = &DummyCDS;
+	MOV	WORD PTR ES:[ThisCDS],OFFSET DOSGroup:DummyCDS
+	MOV	WORD PTR ES:[ThisCDS+2],ES	;	ThisCDS = &DummyCDS;
 	ADD	AL,'A'
-	CALL	InitCDS 		;	InitCDS(c);
+	PUSH	ES
+	POP	DS
+	CALL	ResetDriveCds
 	TEST	ES:[DI.curdir_flags],curdir_inuse	; Clears carry
 	RestoreReg  <DI,ES,AX>
-	JZ	GetBerr 		; Not a physical drive.
+	JZ	GetBerr2		; No physical drive; DS:SI is not a CDS.
 	JMP	SHORT GetBye		; carry clear
 
 Not_SRVC:
-	invoke	GetCDSFromDrv
+	invoke	LookupDriveCdsInGroup
 	JC	GetBerr2		; Unassigned CDS -> return error already set
 	TEST	[SI.curdir_flags],curdir_inuse	; Clears Carry
 	JNZ	GetBye			; carry clear
@@ -401,12 +451,12 @@ GetBerr:
 GetBerr2:
 	MOV	AL,error_invalid_drive	;AN000;;IFS. invalid FAT drive
 notfat: 				;AN000;
-	MOV	[DrvErr],AL		;AN000;;IFS. save this for IOCTL
-	mov	[EXTERR_LOCUS],errLOC_UNK
+	MOV	ES:[DrvErr],AL		;AN000;;IFS. save this for IOCTL
+	mov	ES:[EXTERR_LOCUS],errLOC_UNK
 	STC
 GetBye: RestoreReg  <SI,DS>		; restore world
 	return
-EndProc GetThisDrv
+EndProc ResolveDriveInGroup
 
 Break <GetCDSFromDrv - convert a drive number to a CDS pointer>
 
@@ -422,24 +472,44 @@ Break <GetCDSFromDrv - convert a drive number to a CDS pointer>
 ;		    [THISCDS] = DS:SI
 ;   Registers modified: DS,SI
 
-Procedure   GetCDSFromDrv,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
-	CMP	AL,[CDSCount]		; is this a valid designator
+Procedure   LookupDriveCds,NEAR
+        push    es
+        push    ss
+        pop     es
+        call    LookupDriveCdsInGroup
+        pop     es
+        ret
+EndProc LookupDriveCds
+
+Procedure   LookupDriveCdsInGroup,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:DOSGroup,SS:NOTHING
+	CMP	AL,ES:[CDSCount]		; is this a valid designator
 	JB	GetCDS			; yes, go get the macro
 	STC				; signal error
 	return				; bye
 GetCDS:
 	SaveReg <BX,AX>
-	LDS	SI,[CDSAddr]		; get pointer to table
+	LDS	SI,ES:[CDSAddr]		; get pointer to table
 	MOV	BL,SIZE CurDir_list	; size in convenient spot
 	MUL	BL			; get net offset
 	ADD	SI,AX			; convert to true pointer
-	MOV	WORD PTR [ThisCDS],SI	; store convenient offset
-	MOV	WORD PTR [ThisCDS+2],DS ; store convenient segment
+	MOV	WORD PTR ES:[ThisCDS],SI	; store convenient offset
+	MOV	WORD PTR ES:[ThisCDS+2],DS ; store convenient segment
 	RestoreReg  <AX,BX>
 	CLC				; no error
 	return				; bye!
-EndProc GetCDSFromDrv
+EndProc LookupDriveCdsInGroup
 
-CODE ends
+DOSCODE ENDS
+
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC MacroEntries
+MacroEntries LABEL WORD
+        DW OFFSET DOSGROUP:$AssignOper_VECTOR, OFFSET DOSGROUP:DriveAssignment
+        DW OFFSET DOSGROUP:$UserOper_VECTOR, OFFSET DOSGROUP:NetworkUser
+        DW OFFSET DOSGROUP:DriveCdsEntry_VECTOR, OFFSET DOSGROUP:LookupDriveCdsInGroup
+        DW OFFSET DOSGROUP:DriveMapEntry_VECTOR, OFFSET DOSGROUP:ResolveDriveInGroup
+        DW OFFSET DOSGROUP:DriveInitEntry_VECTOR, OFFSET DOSGROUP:ResetDriveCds
+        DW 0
+DOSEND ENDS
 END

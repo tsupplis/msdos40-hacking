@@ -135,7 +135,7 @@ NOSCAN:
 	JBE	BADDRV		; Drive letter out of range
 
 	PUSH	AX
-	CallResident GetVisDrv
+	invoke GetVisDrv
 	POP	AX
 	JNC	HavDrv
 	CMP	[DrvErr],error_not_DOS_disk  ; if not FAt drive 		;AN000;

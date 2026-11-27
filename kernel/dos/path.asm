@@ -73,7 +73,7 @@ BREAK <$CURRENT_DIR - dump the current directory into user space>
 	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	CallResident ECritDisk
 	MOV	AL,DL			; get drive number (0=def, 1=A)
-	CallResident GetVisDrv		; grab it
+	invoke GetVisDrv		; grab it
 	JNC	CurrentValidate 	; no error -> go and validate dir
 CurdirErr:
 	CallResident LCritDisk
@@ -173,7 +173,7 @@ rmlset:
 	Jnz	rmerr			;	return (-1);
 	Context ES
 	xor	al,al			; al = 0 , ie drive a:
-rmloop: CallResident GetCDSFromDrv		; Get curdir for drive in al
+rmloop: invoke LookupDriveCds		; Get curdir for drive in al
 	jc	rmcont			; If error, exit loop & cont normally
 	CallResident StrCmp			; Are the 2 paths the same?
 	jz	rmerr			; Yes, report error.

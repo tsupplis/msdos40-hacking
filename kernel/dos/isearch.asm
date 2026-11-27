@@ -296,7 +296,7 @@ EndProc FindFirstLocal
 	MOV	WORD PTR ThisCDS,OFFSET DOSGROUP:DummyCDS
 	MOV	WORD PTR ThisCDS+2,SS
 	ADD	AL,'A'-1
-	CallResident InitCDS
+	invoke ResetDriveCds
 
 ;	invoke	GetThisDrv		; Set CDS pointer
 

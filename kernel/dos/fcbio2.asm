@@ -541,7 +541,7 @@ FCBOK2:
 	TEST	ES:[DI].sf_flags,devid_device
 	JNZ	FCBNoDrive		; do not munge drive on devices
 	MOV	AL,DS:[SI]		; get drive byte
-	CallResident GetThisDrv		; convert
+	invoke ResolveDrive		; convert
 	INC	AL
 	MOV	DS:[SI],AL		; stash in good drive letter
 FCBNoDrive:

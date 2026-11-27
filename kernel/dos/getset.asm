@@ -650,7 +650,7 @@ ASSUME	DS:NOTHING,ES:NOTHING
 
 	context DS
 	MOV	AL,DL
-	CallResident GetThisDrv		; Get drive
+	invoke ResolveDrive		; Get drive
 SET_AX_RET:
 	JC	BADFDRV
 	invoke	GetDiskInfo
@@ -733,7 +733,7 @@ ASSUME	DS:NOTHING,ES:NOTHING
 
 	MOV	AL,DL
 	INC	AL			; A=1, b=2...
-	CallResident GetVisDrv		; see if visible drive
+	invoke GetVisDrv		; see if visible drive
 	JC	SETRET			; errors do not set
 ;	LDS	SI,ThisCDS		; get CDS
 ;	TEST	[SI].curdir_flags,curdir_splice ; was it spliced?

@@ -29,6 +29,7 @@ parent:
     mov ah,4ah
     int 21h
     jc fail
+    call check_drive_mapping
     ; GETSET must preserve a caller-owned DTA and return the original vector.
     mov dx,pathname
     mov ah,1ah
@@ -361,6 +362,69 @@ vector_handler:
 fail:
     mov ax,4c01h
     int 21h
+; Multiplex drive services keep the application stack. The dispatcher takes
+; the caller's AX from the word pushed before INT 2Fh.
+check_drive_mapping:
+    push ds
+    mov ax,1                    ; zero-based B: -> DS:SI CDS
+    push ax
+    mov ax,1217h
+    int 2fh
+    pop bx
+    jc fail
+    cmp word [si],'B:'
+    jne fail
+    mov bx,ds
+    mov dx,si
+    pop ds
+    mov ax,'B'                  ; reset the selected scratch drive to its root
+    push ax
+    mov ax,121fh
+    int 2fh
+    pop ax
+    jc fail
+    mov ax,es
+    cmp ax,bx
+    jne fail
+    cmp di,dx
+    jne fail
+    cmp word [es:di+2],5ch      ; backslash and terminator
+    jne fail
+    mov ax,2                    ; one-based B: -> zero-based drive number
+    push ax
+    mov ax,1219h
+    int 2fh
+    pop bx
+    jc fail
+    cmp al,1
+    jne fail
+    mov ax,26                   ; Z: is beyond LASTDRIVE
+    push ax
+    mov ax,1219h
+    int 2fh
+    pop bx
+    jnc fail
+    cmp al,15
+    jne fail
+    ; A server IOCTL drive-attribute query takes no caller buffer.
+    ; Changing DS must never turn an absent physical drive into a valid one.
+    mov [server_query+14],ds
+    mov cx,16
+server_drive_query:
+    push cx
+    mov dx,server_query
+    mov ax,5d00h
+    int 21h
+    push cs                     ; server dispatch returns the DPL's DS
+    pop ds
+    pop cx
+    jnc fail
+    cmp ax,15
+    jne fail
+    inc word [server_query+12]
+    loop server_drive_query
+    ret
+
 check_handles:
     call check_ioctl
     push bx                     ; preserve the original open handle
@@ -528,6 +592,7 @@ directory db 'B:\SVCDIR',0
 broot db 'B:\',0
 renamed_dir db 'B:\SVCDIR2',0
 current_path times 64 db 0ffh
+server_query dw 4409h,26,0,0,0,0,0,0,0,0,0
 ioctl_packet times 256 db 0
 pathname db 'B:\SVCDIR\..\SVCTEST.TMP',0
 flatname db 'B:\SVCTEST.TMP',0

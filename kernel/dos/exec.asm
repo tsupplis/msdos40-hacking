@@ -679,13 +679,13 @@ fill8:					;AN000;
 	DEC	CL			; get 0FFh in CL
 	MOV	AL,BH
 	XOR	BH,BH
-	CallResident	GetVisDrv
+	invoke GetVisDrv
 	JNC	exec_BL
 	MOV	BH,CL
 exec_BL:
 	MOV	AL,BL
 	XOR	BL,BL
-	CallResident	GetVisDrv
+	invoke GetVisDrv
 	JNC	exec_Set_Return
 	MOV	BL,CL
 exec_set_return:

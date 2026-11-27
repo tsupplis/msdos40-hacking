@@ -448,7 +448,7 @@ epjc2:	JC	ChModErr		; get old error
 	POP	ES			   ;AN000;;MS.es:di-> source
 	XOR	AL,AL			   ;AN000;;MS.scan all CDS
 rnloop: 				   ;AN000;
-	CallResident GetCDSFromDrv		   ;AN000;;MS.
+	invoke LookupDriveCds		   ;AN000;;MS.
 	JC	dorn			   ;AN000;;MS.	end of CDS
 	CallResident StrCmp			   ;AN000;;MS.	current dir ?
 	JZ	rnerr			   ;AN000;;MS.	yes

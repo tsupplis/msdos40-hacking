@@ -1,6 +1,6 @@
 # DOS kernel HMA standard
 
-**Progress — 37 whole modules relocatable in DOSCODE.** PROC, ALLOC, CLOSE, BUF, DINFO, CREATE, ROM, MKNODE, FINFO, DUP, DISK, DISK2, DISK3, EXTATTR, FILE, ISEARCH, CPMIO, CPMIO2, ABORT, SEARCH, RENAME, OPEN, FAT, DIR, DIR2, DIRCALL, FCB, FCBIO, FCBIO2, MACRO2, GETSET, PARSE, TIME, DEV, PATH, HANDLE and IOCTL.
+**Progress — 38 whole modules relocatable in DOSCODE.** PROC, ALLOC, CLOSE, BUF, DINFO, CREATE, ROM, MKNODE, FINFO, DUP, DISK, DISK2, DISK3, EXTATTR, FILE, ISEARCH, CPMIO, CPMIO2, ABORT, SEARCH, RENAME, OPEN, FAT, DIR, DIR2, DIRCALL, FCB, FCBIO, FCBIO2, MACRO2, GETSET, PARSE, TIME, DEV, PATH, HANDLE, IOCTL and MACRO.
 
 Count the assembly input that produces the object file. Track included sources under their owning module. The inventory lists the affected service sources since v1.2.0. Update the progress line and inventory together after verification.
 
@@ -109,6 +109,12 @@ With `DOS=HIGH,UMB` and PCEHIMEM, moving HANDLE increased the largest executable
 
 INT 2Fh/122Bh uses the existing NLS stack check. Application callers reach IOCTL through INT 21h, which selects the DOS stack. NLSFUNC callers already on that stack retain their saved register frame. With the same `DOS=HIGH,UMB` boot, the largest executable block grew from 622,416 to 623,216 B (+800 B).
 
+## MACRO
+
+`MacroEntries` binds drive assignment, network user services and the three INT 2Fh drive services. Multiplex callers retain their application stack. The resident entries supply DOSGROUP in ES for CDS lookup (1217h) and drive mapping (1219h), or in DS for CDS initialization (121Fh). The CDS and DPB stay below A20. The two redirector adapters stack the original function before invoking INT 2Fh.
+
+With the same `DOS=HIGH,UMB` boot, the largest executable block grew from 623,216 to 623,504 B (+288 B). The six placement tests exercise the multiplex calls, the redirector stack arguments and error 15 for an absent physical drive in server mode.
+
 ## Linked modules and dependencies
 
 The module name is the object filename in the LINK response file. Each row lists the INCLUDE directives in the top-level assembly source and the other objects that supply its external code or data references in this build. Conditional INCLUDE directives appear even when disabled. The object dependencies come from MASM fixup records resolved against the defining objects' public symbols. A reference can be a call, pointer, dispatch-table entry or shared variable. Runtime calls through interrupt vectors and installed drivers require a separate interface review.
@@ -119,7 +125,7 @@ The module name is the object filename in the LINK response file. Each row lists
 
 **PROC example.** `proc.asm` directly includes `dosseg.asm`, `dossym.inc`, `devsym.inc` and `exec.asm`. In turn, `exec.asm` includes `ea.inc` and `version.inc`. `dosseg.asm` declares the shared segments and DOSGROUP. `exec.asm` emits code and data into those segments as part of PROC. Both are assembly-time dependencies. At link time, for example, PROC's `DosCallbackPtr` reference resolves to MISC and its near call to `AllocateBlock` resolves to ALLOC.
 
-Estimates use the current MASM object segment lengths and public-symbol offsets in `msdos.map`. “Up to” gives the module’s resident CODE size before allowing for gateways and callbacks. A named subset counts only those routine bodies. The net conventional-memory gain requires a before/after boot with the same configuration. For scale, TIME keeps 65 B resident for five gateways. The current build has 27,153 B in DOSCODE.
+Estimates use the current MASM object segment lengths and public-symbol offsets in `msdos.map`. “Up to” gives the module’s resident CODE size before allowing for gateways and callbacks. A named subset counts only those routine bodies. The net conventional-memory gain requires a before/after boot with the same configuration. For scale, TIME keeps 65 B resident for five gateways. The current build has 27,531 B in DOSCODE.
 
 Of the two modules with an existing resident or partial review, MISC has another 159 B in `$SETDPB` alone, excluding gateways. NIBDOS has 0 B to move under this model.
 
@@ -156,7 +162,7 @@ Of the two modules with an existing resident or partial review, MISC has another
 | IOCTL | dosseg.asm, dossym.inc, devsym.inc, ioctl.inc, ifssym.inc | CONST2, DEV, DISK, MACRO, MISC, MSCODE, MSCTRLC, MSDATA, MSDISP, NIBDOS, UTIL | DOSCODE, Whole Module Relocatable. Network interrupt adapters remain resident. |
 | ISEARCH | dosseg.asm, dossym.inc, devsym.inc, fastopen.inc, fastxxxx.inc | CONST2, CRIT, DIR, DIR2, MACRO, MISC, MSCODE, MSDATA, MSTABLE | DOSCODE, Whole Module Relocatable |
 | LOCK | dosseg.asm, dossym.inc, devsym.inc, lock.inc | CONST2, MISC2, MSCODE, MSCTRLC, MSDATA, NIBDOS, UTIL | Up to 179 B. Lock request and retry/error logic. Keep the lock buffer, SHARE calls and network calls resident. |
-| MACRO | dosseg.asm, dossym.inc, devsym.inc | CONST2, MSCODE, MSDATA, MSDISP, NIBDOS | Up to 413 B. Drive mapping, CDS lookup and user-ID services. Keep the INT 2Fh calls resident. |
+| MACRO | dosseg.asm, dossym.inc, devsym.inc | CONST2, MISC, MSCODE, MSDATA, MSDISP, NIBDOS | DOSCODE, Whole Module Relocatable. Multiplex entry adapters and redirector calls stay resident. |
 | MACRO2 | dosseg.asm, dossym.inc, devsym.inc | CONST2, CRIT, DIR2, FAT, FCB, MACRO, MISC, MISC2, MSCODE, MSDATA, NIBDOS, SEARCH | DOSCODE, Whole Module Relocatable |
 | MISC | dosseg.asm, dossym.inc, devsym.inc, bugtyp.asm | ABORT, ALLOC, BUF, CLOSE, CONST2, CPMIO, CPMIO2, CREATE, CRIT, DEV, DINFO, DIR, DIR2, DIRCALL, DISK, DISK2, DISK3, DUP, FAT, FCB, FCBIO, FCBIO2, FILE, FINFO, HANDLE, IOCTL, ISEARCH, MACRO, MACRO2, MKNODE, MSCODE, MSDATA, MSDISP, MSTABLE, NIBDOS, OPEN, PATH, PROC, RENAME, ROM, SEARCH, UTIL | Partially relocatable. Owns the module entry list, resident dispatch stub, near-placement callback and DOSCODE far-return stub. FCBLOAD handles A20 and far gateway frames. |
 | MISC2 | dosseg.asm, dossym.inc, fastseek.inc, fastxxxx.inc, bugtyp.asm | CONST2, FCB, FILE, HANDLE, IOCTL, MSDATA, MSTABLE, NIBDOS | 121 B in the string/exchange helpers and network predicates (392 B in CODE). Idle, indirect dispatch and NLS callbacks need separate review. |

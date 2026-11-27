@@ -929,7 +929,9 @@ RegenFileNoSharing:
 	MOV	AX,ES:[DI].sf_flags
 	AND	AX,03Fh
 	SaveReg <DS,SI>
-	CallResident Find_DPB
+	PUSH	SS
+	POP	DS
+	invoke Find_DPB
 	MOV	WORD PTR ES:[DI].sf_devptr,SI
 	MOV	WORD PTR ES:[DI].sf_devptr+2,DS
 	RestoreReg  <SI,DS>

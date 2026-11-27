@@ -613,6 +613,16 @@ CheckNetworkClose:
         MOV     AX,252Fh
         INT     21h
         CALL    CheckRedirectedIoctl
+        MOV     AX,5F02h                ; assignment-list query
+        INT     21h
+        JC      PrinterQuery
+        MOV     AssignReply,AX
+PrinterQuery:
+        MOV     AX,5E05h                ; get printer flags
+        INT     21h
+        JC      QueriesDone
+        MOV     PrinterReply,AX
+QueriesDone:
         PUSH    DS
         MOV     AX,1203h                ; obtain DOSGROUP in DS
         PUSH    AX
@@ -681,6 +691,10 @@ RestoreSFT:
         Check   JNZ
         CMP     AX,1234h
         Check   JE
+        CMP     AssignReply,5F02h
+        Check   JE
+        CMP     PrinterReply,5E05h
+        Check   JE
         CMP     IoctlResult,441Ch
         Check   JE
         CMP     OpenSeen,3
@@ -728,8 +742,35 @@ NetworkHook:
         JE      ReturnClose
         CMP     AX,112Bh
         JE      ReturnIoctl
+        CMP     AX,111Eh
+        JE      ReturnMacroQuery
+        CMP     AX,111Fh
+        JE      ReturnMacroQuery
         POPF
         JMP     CS:OldMultiplex
+ReturnMacroQuery:
+        POPF
+        PUSH    BP
+        MOV     BP,SP
+        MOV     DX,[BP+8]               ; original INT 21h function
+        POP     BP
+        CMP     AX,111Eh
+        JNE     CheckPrinterQuery
+        CMP     DX,5F02h
+        JMP     SHORT MacroQueryChecked
+CheckPrinterQuery:
+        CMP     DX,5E05h
+MacroQueryChecked:
+        JNE     BadIoctlPacket
+        CMP     CS:Hooked,0
+        JE      ReturnStackedFunction
+        CALL    ObserveA20
+ReturnStackedFunction:
+        MOV     AX,DX
+        CLC
+        RETF    2
+AssignReply  DW 0
+PrinterReply DW 0
 ReturnIoctl:
         POPF
         PUSH    BP

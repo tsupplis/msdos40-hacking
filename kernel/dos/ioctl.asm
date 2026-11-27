@@ -641,7 +641,7 @@ Get_Driver_BL:
 
 	PUSH	AX
 	MOV	AL,BL			; Drive
-	CallResident GETTHISDRV
+	invoke ResolveDrive
 	JNC	ioctl_goodrv		;AC000;IFS.
 	CMP	AL,error_not_dos_disk	;AN000;IFS.   if unknow media then
 	JZ	ioctl_goodrv		;AN000;IFS.	 let it go

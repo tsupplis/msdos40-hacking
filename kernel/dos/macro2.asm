@@ -180,7 +180,7 @@ TransPlainFCB:
 	MOV	[ExtFCB],-1		; signal extended FCB
 GetDrive:
 	LODSB				; get drive byte
-	CallResident GetThisDrv
+	invoke ResolveDrive
 	jc	BadPack
 	CALL	TextFromDrive		; convert 0-based drive to text
 ;
@@ -348,7 +348,7 @@ SetSplice:
 ; ES:DI point to buffer
 ;
 	CALL	ParseDriveLetter		; get drive and advance DS:SI
-	CallResident GetThisDrv		; Set ThisCDS and convert to 0-based
+	invoke ResolveDrive		; Set ThisCDS and convert to 0-based
 	jc	NoPath
 	CALL	TextFromDrive		; drop in new
 	LEA	BX,[DI+1]		; backup limit
@@ -493,7 +493,7 @@ CheckPath:
 ; call.
 ;
 	MOV	fSharing,-1		; simulate sharing dos call
-	CallResident GetThisDrv		; set ThisCDS and init DUMMYCDS
+	invoke ResolveDrive		; set ThisCDS and init DUMMYCDS
 	MOV	fSharing,0		;
 ;
 ; Now that we have noted that we have a device, we put it into a form that
@@ -514,7 +514,7 @@ CheckPath:
 ;
 DoFile:
 	ASSUME	DS:NOTHING
-	CallResident GetVisDrv		; get proper CDS
+	invoke GetVisDrv		; get proper CDS
 	MOV	AL,error_path_not_found ; Set up for possible bad file error
 	retc				; CARRY set -> bogus drive/spliced
 ;
@@ -1077,7 +1077,7 @@ Procedure   SplicePath,NEAR
 	RestoreReg <DI,ES>
 	XOR	AX,AX			;   for (i=1; s = GetCDSFromDrv (i); i++)
 SpliceScan:
-	CallResident GetCDSFromDrv
+	invoke LookupDriveCds
 	JC	SpliceDone
 	INC	AL
 	TEST	[SI.curdir_flags],curdir_splice
