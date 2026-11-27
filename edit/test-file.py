@@ -1,10 +1,15 @@
 """Exercise the DOS executable and the allocation/I/O failure build under emu2."""
 import os
 from pathlib import Path
+import struct
 import subprocess
 import tempfile
 
 root = Path(__file__).resolve().parent
+# LINK 3.65 silently ignores /STACK after the library field.
+for program in ("edit.exe", "testfile.exe"):
+    assert struct.unpack_from("<H", (root / program).read_bytes(), 0x10)[0] == 8192, program
+
 with tempfile.TemporaryDirectory() as folder:
     work = Path(folder)
     drive = work / "b"
@@ -28,7 +33,7 @@ with tempfile.TemporaryDirectory() as folder:
         target.write_bytes(data)
         p = run("testfile.exe", str(mode))
         assert p.returncode == 0 and b"EDIT PASS" in p.stdout, p
-        assert target.read_bytes() == data
+        assert target.read_bytes() == data.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
 
     for mode in (33, 34, 36, 37, 38, 39, 40):
         target.unlink(missing_ok=True)
@@ -45,7 +50,7 @@ with tempfile.TemporaryDirectory() as folder:
         p = run("testfile.exe", str(mode))
         assert p.returncode == 0 and b"EDIT PASS" in p.stdout, p
         if mode == 39:
-            assert target.read_bytes() == b"\n"
+            assert target.read_bytes() == b"\r\n"
         if mode == 34:
             assert target.read_bytes() == (b"\r\na\r\n"*50 + b"a"*31950)
         assert not list(drive.glob("*.tmp"))

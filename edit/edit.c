@@ -49,16 +49,17 @@ typedef struct {
     unsigned char eol; /* 0 at EOF, 1 for LF, 2 for CRLF */
 } erow;
 
-static struct {
+typedef struct {
     erow *row;
     int numrows, cap, cx, cy, top, height, width, dirty, eofmark;
     int matchlen, marked, ax, ay;
     long left;
     file_stamp saved, observed;
-    int confirm_save;
-    char *filename;
+    int confirm_save, needs_crlf;
+    char filename[FS_NAME];
     char message[160];
-} E;
+} editor_state;
+static editor_state E;
 
 static int reserveRows(int needed)
 {
@@ -99,10 +100,7 @@ static int editorInsertRow(int at, const char *s, int len, int eol)
     return 1;
 }
 
-static const char *ending(int eol)
-{
-    return eol == 2 ? "\r\n" : "\n";
-}
+static const char *ending(int eol) { return eol == 2 ? "\r\n" : "\n"; }
 
 static void countRow(file_stamp *stamp, const erow *row)
 {
@@ -112,17 +110,19 @@ static void countRow(file_stamp *stamp, const erow *row)
 
 /* Read bytes in binary mode. Only a final Ctrl-Z is a DOS EOF marker.
  * Refuse embedded NUL/Ctrl-Z instead of offering a truncated file to save. */
-static int editorOpen(char *filename)
+static int editorOpen(char *filename, int allow_new)
 {
     FILE *fp;
     char *line = NULL, *p;
     unsigned cap = 0;
     int len = 0, c, ok = 1, eol;
-    E.filename = filename;
+    strcpy(E.filename, filename);
     E.saved.size = -1;
+    if (!*filename)
+        return editorInsertRow(0, "", 0, 0);
     fp = fopen(filename, "rb");
     if (!fp)
-        return errno == ENOENT && editorInsertRow(0, "", 0, 0);
+        return allow_new && errno == ENOENT && editorInsertRow(0, "", 0, 0);
     if (isatty(fileno(fp))) {
         fclose(fp);
         return 0;
@@ -171,9 +171,15 @@ static int editorOpen(char *filename)
         ok = len <= MAX_LINE && editorInsertRow(E.numrows, line ? line : "", len, 0);
     if (ok) {
         int i;
+        /* Fingerprint disk bytes before normalizing rows for editing and saving. */
         fs_reset(&E.saved);
-        for (i = 0; i < E.numrows; ++i)
+        for (i = 0; i < E.numrows; ++i) {
             countRow(&E.saved, E.row + i);
+            if (E.row[i].eol == 1) {
+                E.row[i].eol = 2;
+                E.needs_crlf = 1;
+            }
+        }
         if (E.eofmark)
             fs_count(&E.saved, "\032", 1);
     }
@@ -204,7 +210,7 @@ static int editorSave(void)
     int i, status, ok = 1;
     erow *row;
     E.confirm_save = 0;
-    if (!E.dirty && E.saved.size >= 0) {
+    if (!E.dirty && !E.needs_crlf && E.saved.size >= 0) {
         strcpy(E.message, "No changes.");
         return 1;
     }
@@ -237,6 +243,7 @@ static int editorSave(void)
         status = fs_commit(temporary, E.filename, expected, &result);
         if (status == SAVE_OK) {
             E.saved = written;
+            E.needs_crlf = 0;
             E.dirty = 0;
             if (result.backup[0])
                 sprintf(E.message, "Saved. Previous: %s", leaf(result.backup));
@@ -246,8 +253,7 @@ static int editorSave(void)
         }
         if (status == SAVE_ERROR || unlink(temporary)) {
             if (result.backup[0])
-                sprintf(E.message, "Old:%s Edited:%s", leaf(result.backup),
-                        leaf(temporary));
+                sprintf(E.message, "Old:%s Edited:%s", leaf(result.backup), leaf(temporary));
             else
                 sprintf(E.message, "Save failed. Edited copy: %s", leaf(temporary));
             return 0;
@@ -482,8 +488,7 @@ static int replaceBlock(selection s, const erow *input, int count)
     }
     for (i = s.y; i <= s.endy; ++i)
         free(E.row[i].chars);
-    memmove(E.row + s.y + count, E.row + s.endy + 1,
-            (E.numrows - s.endy - 1) * sizeof(erow));
+    memmove(E.row + s.y + count, E.row + s.endy + 1, (E.numrows - s.endy - 1) * sizeof(erow));
     memcpy(E.row + s.y, fresh.rows, count * sizeof(erow));
     free(fresh.rows);
     E.numrows = total;
@@ -674,10 +679,7 @@ static int applyEdit(int key, selection s)
     return 1;
 }
 
-static long nextColumn(long col, char c)
-{
-    return c == '\t' ? (col | 7L) + 1 : col + 1;
-}
+static long nextColumn(long col, char c) { return c == '\t' ? (col | 7L) + 1 : col + 1; }
 
 static void editorRefreshScreen(void)
 {
@@ -740,8 +742,8 @@ static void editorRefreshScreen(void)
         }
         screenLine(y, line, n, 7, first, last);
     }
-    sprintf(status, "EDIT %.32s%s  Ln %d/%d Col %ld", E.filename, E.dirty ? " *" : "",
-            E.cy + 1, E.numrows, cursor + 1);
+    sprintf(status, "EDIT %.32s%s  Ln %d/%d Col %ld", *E.filename ? E.filename : "[Untitled]",
+            E.dirty ? " *" : "", E.cy + 1, E.numrows, cursor + 1);
     screenLine(E.height, status, strlen(status), 0x70, 0, 0);
     screenLine(E.height + 1, E.message, strlen(E.message), 7, 0, 0);
     screenCursor(E.cy - E.top, (int)(cursor - E.left));
@@ -766,19 +768,19 @@ static void editorHelp(void)
                                   "",
                                   "Ctrl-F          Find exact text",
                                   "Ctrl-Shift-F    Find ignoring case",
-                                  "In Find: arrows cycle matching lines.",
+                                  "In Find: arrows visit each match.",
                                   "Enter accepts. Esc restores position.",
-                                  "",
                                   "Ctrl-R          Replace all",
                                   "Ctrl-Shift-R    Replace ignoring case",
                                   "Ctrl-Z          Undo (five edits)",
-                                  "Ctrl-S          Save file",
+                                  "Ctrl-S Save   Ctrl-Shift-S Save As",
+                                  "Ctrl-O Open   F3/Shift-F3 Next/Prev",
                                   "Ctrl-Q          Quit (twice if unsaved)"};
     int row, key;
     const char *line;
     for (row = 0; row < E.height + 1; ++row) {
-        line = (unsigned)row < sizeof(lines) / sizeof(lines[0]) ? lines[row]
-                                                                : (const char *)"";
+        line =
+            (unsigned)row < sizeof(lines) / sizeof(lines[0]) ? lines[row] : (const char *)"";
         screenLine(row, line, strlen(line), row == 0 ? 0x70 : 7, 0, 0);
     }
     line = "Esc or F1 to return";
@@ -806,23 +808,83 @@ static char *findLiteral(char *text, const char *query, const unsigned char *fol
 
 /* Consume the rest of an overlong field inside the prompt. A pasted
  * suffix must never be interpreted as editor commands or document text. */
-static void rejectLongPrompt(void)
+static void rejectLongPrompt(int limit)
 {
     int key;
-    strcpy(E.message, "64-byte limit. Enter or Esc to cancel.");
+    sprintf(E.message, "%d-byte limit. Enter or Esc to cancel.", limit);
     editorRefreshScreen();
     do {
         key = editorReadKey();
     } while (key != 13 && key != 27);
-    strcpy(E.message, "Input exceeds 64 bytes. Cancelled.");
+    sprintf(E.message, "Input exceeds %d bytes. Cancelled.", limit);
 }
 
-/* Incremental literal search. Arrow keys cycle matching rows in either
- * direction; Escape restores the entry position. */
+static char last_query[PROMPT_LIMIT + 1];
+static int last_folded;
+
+/* Search a complete circuit, including the other side of the starting
+ * line after wrapping. Bounds apply to match starts, allowing overlaps. */
+static int findOccurrence(const char *query, const unsigned char *fold, int row, int column,
+                          int direction)
+{
+    int pass, first, last;
+    char *line, *scan, *hit, *best;
+    for (pass = 0; pass <= E.numrows; ++pass) {
+        line = E.row[row].chars;
+        first = 0;
+        last = E.row[row].size;
+        if (pass == 0 || pass == E.numrows) {
+            if ((direction > 0) == (pass == 0))
+                first = column;
+            else
+                last = column;
+        }
+        best = NULL;
+        if (first < 0)
+            first = 0;
+        if (first <= last) {
+            scan = line + first;
+            while ((hit = findLiteral(scan, query, fold)) != NULL && hit - line <= last) {
+                best = hit;
+                if (direction > 0)
+                    break;
+                scan = hit + 1;
+            }
+        }
+        if (best) {
+            E.cy = row;
+            E.cx = best - line;
+            return 1;
+        }
+        row += direction;
+        if (row < 0)
+            row = E.numrows - 1;
+        if (row == E.numrows)
+            row = 0;
+    }
+    return 0;
+}
+
+static void repeatFind(int direction)
+{
+    unsigned char fold[256];
+    if (!*last_query) {
+        strcpy(E.message, "Use Ctrl-F to enter search text.");
+        return;
+    }
+    if (last_folded)
+        caseTable(fold);
+    E.marked = 0;
+    strcpy(E.message, findOccurrence(last_query, last_folded ? fold : NULL, E.cy,
+                                     E.cx + direction, direction)
+                          ? last_query
+                          : "Text not found.");
+}
+
 static void editorFind(int folded)
 {
-    char query[PROMPT_LIMIT + 1], *match;
-    int len = 0, x = E.cx, y = E.cy, row = y, step, i, c;
+    char query[PROMPT_LIMIT + 1];
+    int len = 0, x = E.cx, y = E.cy, row, col, step, c;
     long left = E.left;
     int top = E.top;
     unsigned char fold[256];
@@ -838,43 +900,37 @@ static void editorFind(int folded)
             continue;
         }
         if (c == 27 || c == 13) {
+            if (c == 13 && len) {
+                strcpy(last_query, query);
+                last_folded = folded;
+            }
             strcpy(E.message, c == 13 && len && !E.matchlen ? "Text not found." : "");
             break;
         }
+        row = y;
+        col = x;
         step = 1;
-        if (c == ARROW_UP || c == ARROW_LEFT) {
-            step = -1;
-            row--;
-        } else if (c == ARROW_DOWN || c == ARROW_RIGHT)
-            row++;
-        else {
+        if (c == ARROW_UP || c == ARROW_LEFT || c == ARROW_DOWN || c == ARROW_RIGHT) {
+            step = c == ARROW_UP || c == ARROW_LEFT ? -1 : 1;
+            if (E.matchlen) {
+                row = E.cy;
+                col = E.cx + step;
+            }
+        } else {
             if (c == 8 && len)
                 len--;
             else if (c >= 32 && c <= 255) {
                 if (len == PROMPT_LIMIT) {
-                    rejectLongPrompt();
+                    rejectLongPrompt(PROMPT_LIMIT);
                     break;
                 }
                 query[len++] = (char)c;
             } else
                 continue;
             query[len] = 0;
-            row = y;
         }
-        E.matchlen = 0;
-        for (i = 0; len && i < E.numrows; i++, row += step) {
-            if (row < 0)
-                row = E.numrows - 1;
-            if (row >= E.numrows)
-                row = 0;
-            match = findLiteral(E.row[row].chars, query, folded ? fold : NULL);
-            if (match) {
-                E.matchlen = len;
-                E.cy = row;
-                E.cx = match - E.row[row].chars;
-                break;
-            }
-        }
+        E.matchlen =
+            len && findOccurrence(query, folded ? fold : NULL, row, col, step) ? len : 0;
     }
     if (c != 13 || !E.matchlen) {
         E.cx = x;
@@ -932,7 +988,7 @@ static int prepareRow(undo_entry *u, int y, char *from, char *to, unsigned char 
     return 1;
 }
 
-static int replacePrompt(const char *label, char *text)
+static int textPrompt(const char *label, char *text, int limit, int allow_tab)
 {
     int key, len = 0, visible = E.width - strlen(label) - 1;
     for (;;) {
@@ -943,16 +999,16 @@ static int replacePrompt(const char *label, char *text)
         if (key == 27 || key == 13) {
             if (key == 13)
                 return 1;
-            strcpy(E.message, "Replace cancelled.");
+            strcpy(E.message, "Cancelled.");
             return 0;
         }
         if (key == HELP_KEY)
             editorHelp();
         else if (key == 8 && len)
             --len;
-        else if (key == 9 || (key >= 32 && key <= 255)) {
-            if (len == PROMPT_LIMIT) {
-                rejectLongPrompt();
+        else if ((allow_tab && key == 9) || (key >= 32 && key <= 255)) {
+            if (len == limit) {
+                rejectLongPrompt(limit);
                 return 0;
             }
             text[len++] = (char)key;
@@ -992,17 +1048,103 @@ static int editorReplace(int folded)
 {
     char from[PROMPT_LIMIT + 1], to[PROMPT_LIMIT + 1];
     unsigned char table[256];
-    if (!replacePrompt(folded ? "Replace all (ignore case): " : "Replace all: ", from))
+    if (!textPrompt(folded ? "Replace all (ignore case): " : "Replace all: ", from,
+                    PROMPT_LIMIT, 1))
         return 1;
     if (!*from) {
         strcpy(E.message, "Replace cancelled.");
         return 1;
     }
-    if (!replacePrompt("With: ", to))
+    if (!textPrompt("With: ", to, PROMPT_LIMIT, 1))
         return 1;
     if (folded)
         caseTable(table);
     return replaceAll(from, to, folded ? table : NULL);
+}
+
+static int validName(const char *name)
+{
+    return *name && !strpbrk(name, "/*?\"") && strlen(name) < FS_NAME;
+}
+
+static int promptName(const char *label, char *name)
+{
+    if (!textPrompt(label, name, FS_NAME - 1, 0))
+        return 0;
+    if (!validName(name)) {
+        strcpy(E.message, "Invalid filename.");
+        return 0;
+    }
+    return 1;
+}
+
+static void freeRows(editor_state *doc)
+{
+    while (doc->numrows)
+        free(doc->row[--doc->numrows].chars);
+    free(doc->row);
+}
+
+/* Keep the current document and its undo records until the new file has
+ * loaded in full. The clipboard belongs to the editor across opens. */
+static void openDocument(void)
+{
+    editor_state old;
+    char name[FS_NAME];
+    int key;
+    if (!promptName("Open: ", name))
+        return;
+    if (E.dirty) {
+        strcpy(E.message, "Discard changes and open? Y/N");
+        editorRefreshScreen();
+        key = editorReadKey();
+        if (key != 'Y' && key != 'y') {
+            strcpy(E.message, "Open cancelled.");
+            return;
+        }
+    }
+    old = E;
+    memset(&E, 0, sizeof(E));
+    if (!editorOpen(name, 0)) {
+        freeRows(&E);
+        E = old;
+        strcpy(E.message, "Cannot load complete text file.");
+        return;
+    }
+    E.height = old.height;
+    E.width = old.width;
+    freeRows(&old);
+    while (history_count) {
+        undo_entry *u = &history[--history_count];
+        freeChanges(u->changes);
+        freeBlock(&u->removed);
+    }
+}
+
+static int saveAs(void)
+{
+    char name[FS_NAME], original[FS_NAME];
+    file_stamp saved;
+    saved = E.saved;
+    if (!promptName("Save as: ", name))
+        return 0;
+    strcpy(original, E.filename);
+    strcpy(E.filename, name);
+    E.saved.size = -1;
+    while (!editorSave()) {
+        if (E.confirm_save) {
+            strcpy(E.message, "File exists or changed. Ctrl-S replaces.");
+            editorRefreshScreen();
+            if (editorReadKey() == 19)
+                continue;
+            strcpy(E.message, "Save cancelled.");
+        }
+        E.confirm_save = 0;
+        strcpy(E.filename, original);
+        E.saved = saved;
+        return 0;
+    }
+    return 1;
 }
 
 static void editorLoop(void)
@@ -1058,9 +1200,17 @@ static void editorLoop(void)
         case HELP_KEY:
             editorHelp();
             break;
+        case 15:
+            openDocument();
+            break;
+        case FIND_NEXT:
+        case FIND_PREV:
+            repeatFind(c == FIND_NEXT ? 1 : -1);
+            break;
+        case SAVE_AS:
         case 19:
             was_dirty = E.dirty;
-            if (editorSave() && was_dirty) {
+            if (((c == SAVE_AS || !*E.filename) ? saveAs() : editorSave()) && was_dirty) {
                 /* Earlier undo positions now differ from the saved file. */
                 for (i = 0; i < history_count; ++i)
                     history[i].dirty = 1;
@@ -1093,13 +1243,11 @@ int main(int argc, char **argv)
         fputs("No help available\n", stderr);
         return 1;
     }
-    if (argc != 2 || !*argv[1] || strpbrk(argv[1], "/*?\"") || strlen(argv[1]) >= FS_NAME) {
-        fputs(argc == 1 ? "EDIT: Required parameters missing.\n"
-                        : "EDIT: Invalid parameter.\n",
-              stderr);
+    if (argc > 2 || (argc == 2 && !validName(argv[1]))) {
+        fputs("EDIT: Invalid parameter.\n", stderr);
         return 1;
     }
-    if (!editorOpen(argv[1])) {
+    if (!editorOpen(argc == 2 ? argv[1] : "", 1)) {
         fputs("EDIT: Cannot load complete text file.\n", stderr);
         return 1;
     }

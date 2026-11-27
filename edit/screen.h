@@ -12,6 +12,9 @@ enum editor_key {
     PAGE_DOWN,
     FIND_FOLDED,
     REPLACE_FOLDED,
+    FIND_NEXT,
+    FIND_PREV,
+    SAVE_AS,
     HELP_KEY
 };
 #define SELECT_KEY 512

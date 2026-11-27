@@ -82,6 +82,8 @@ int editorReadKey(void)
     int shifted = flags & 3;
     int ascii = key & 255, navigation;
 
+    if (shifted && ascii == 19)
+        return SAVE_AS;
     if (shifted && ascii == 18)
         return REPLACE_FOLDED;
     if (shifted && ascii == 6)
@@ -92,6 +94,10 @@ int editorReadKey(void)
     if (ascii && !(shifted && ascii >= '0' && ascii <= '9'))
         return ascii;
     switch (key >> 8) {
+    case 61:
+        return FIND_NEXT; /* F3 */
+    case 86:
+        return FIND_PREV; /* Shift-F3 */
     case 59:
         return HELP_KEY; /* F1 */
     case 75:

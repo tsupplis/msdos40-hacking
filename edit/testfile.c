@@ -167,8 +167,8 @@ static void undoFailures(void)
     fail_alloc = 0;
     need(undoEdit(), "retry undo");
     need(!history_count && !E.dirty && E.cx == 5 && !E.cy && E.numrows == 2 &&
-             E.row[0].eol == 1,
-         "restored LF and cursor");
+             E.row[0].eol == 2,
+         "restored line break and cursor");
     need(applyEdit(13, selected()) && undoEdit(), "undo line split");
     need(applyEdit(8, selected()) && undoEdit(), "undo backspace");
     need(!strcmp(E.row[0].chars, "first") && !strcmp(E.row[1].chars, "last"),
@@ -186,7 +186,7 @@ int main(int argc, char **argv)
         fail_close = 1;
     if (mode == 17)
         fail_read = 10;
-    result = editorOpen("B:EDIT.TXT");
+    result = editorOpen("B:EDIT.TXT", 1);
     if (mode == 39) {
         int n;
         need(result && E.numrows == 2, "replace source");
@@ -203,7 +203,7 @@ int main(int argc, char **argv)
         need(replaceAll("a", "aa", NULL) && history_count == 1, "one undo entry");
         need(!strcmp(E.row[0].chars, "aaaa") && !strcmp(E.row[1].chars, "aa"),
              "non-overlapping replacements");
-        need(undoEdit() && !E.dirty && E.row[0].eol == 1, "restore state");
+        need(undoEdit() && !E.dirty && E.row[0].eol == 2, "restore state");
         need(!strcmp(E.row[0].chars, "aa") && !strcmp(E.row[1].chars, "a"), "restore text");
         need(replaceAll("a", "", NULL) && editorSave(), "save global deletion");
         puts("EDIT PASS");

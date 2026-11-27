@@ -12,8 +12,8 @@ all: edit.exe
 %.obj: %.c
 	$(CL) $(CFLAGS) -Fo$@ $< -- PATH='C:\sdk\bin'
 
-edit.exe: edit.obj screen.obj fsave.obj
-	$(LINK) 'edit+screen+fsave,edit,NUL,, /STACK:8192;' -- LIB='C:\sdk\lib'
+edit.exe: edit.obj screen.obj fsave.obj Makefile
+	$(LINK) '/STACK:8192 edit+screen+fsave,edit,NUL;' -- LIB='C:\sdk\lib'
 
 edit.obj: screen.h fsave.h
 screen.obj: screen.h
@@ -24,8 +24,8 @@ test: edit.exe testfile.exe testsave.exe
 	python3 test-save.py
 
 testfile.obj: edit.c screen.h fsave.h
-testfile.exe: testfile.obj screen.obj fsave.obj
-	$(LINK) 'testfile+screen+fsave,testfile,NUL,, /STACK:8192;' -- LIB='C:\sdk\lib'
+testfile.exe: testfile.obj screen.obj fsave.obj Makefile
+	$(LINK) '/STACK:8192 testfile+screen+fsave,testfile,NUL;' -- LIB='C:\sdk\lib'
 
 testsave.obj: fsave.c fsave.h
 testsave.exe: testsave.obj
