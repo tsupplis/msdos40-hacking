@@ -126,6 +126,32 @@ vector_wrong:
     mov ah,39h
     int 21h
     jc fail
+    mov ah,3bh                  ; change B:'s directory while A: is default
+    mov dx,directory
+    int 21h
+    jc fail
+    mov dl,2
+    mov si,current_path
+    mov ah,47h
+    int 21h
+    jc fail
+    push ds
+    pop es
+    mov si,current_path
+    mov di,directory+3          ; DOS returns SVCDIR without drive or slash
+    mov cx,7                    ; include the terminating zero
+    repe cmpsb
+    jne fail
+    mov dx,directory
+    mov ah,3ah                  ; cannot remove a drive's current directory
+    int 21h
+    jnc fail
+    cmp ax,16
+    jne fail
+    mov dx,broot
+    mov ah,3bh
+    int 21h
+    jc fail
     mov dx,10h                  ; create a missing file
     call xopen
     jc fail
@@ -344,6 +370,8 @@ missing_name db 'A:\NOSUCH.EXE',0
 overlay_name db 'A:\SVCOVL.EXE',0
 overlay_block dw 0,0
 directory db 'B:\SVCDIR',0
+broot db 'B:\',0
+current_path times 64 db 0ffh
 pathname db 'B:\SVCDIR\..\SVCTEST.TMP',0
 flatname db 'B:\SVCTEST.TMP',0
 okmsg db 'HMA SERVICES PASS',13,10,'$'

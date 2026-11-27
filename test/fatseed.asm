@@ -10,7 +10,11 @@ org 100h
     cmp byte [buf+2],0ffh
     jne failed
     ; Cluster 340 starts at offset 510. Cluster 341 crosses sectors.
+%ifdef ORPHANS
+    mov word [buf+510],0ffffh   ; two one-cluster chains without directory entries
+%else
     mov word [buf+510],07ff7h
+%endif
     mov byte [buf+512],0ffh
     call write_fat
     jc failed

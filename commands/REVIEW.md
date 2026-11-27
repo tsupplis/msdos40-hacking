@@ -140,6 +140,7 @@ or `COMMAND: Invalid …`. Verify fixes before closing them.
 | Return zero after a successful report, as in DOS 6.0 | CLOSED |
 | Honor the PSP command-tail length and report invalid input on stderr | CLOSED |
 | Read the environment segment from PSP:2Ch and bound the /D owner-name lookup by the environment MCB | CLOSED |
+| Send /C allocation failures to stderr and return failure while preserving the summary | CLOSED |
 
 ## EXE2BIN
 
@@ -148,6 +149,7 @@ or `COMMAND: Invalid …`. Verify fixes before closing them.
 | Convert paragraph-aligned MZ images using the exact header length | CLOSED |
 | Validate file length, COM origin, relocation table and fixup targets before creating output | CLOSED |
 | Return failure on parser, conversion and DOS errors and prefix diagnostics | CLOSED |
+| Discard a partially parsed relocation segment before retrying | CLOSED |
 
 ## CHKDSK
 
@@ -157,6 +159,7 @@ or `COMMAND: Invalid …`. Verify fixes before closing them.
 | Propagate directory and individual FAT write failures to ERRORLEVEL | CLOSED |
 | Return immediately on failed intermediate reads and writes so the caller can use the alternate FAT | CLOSED |
 | Reject invalid switches and drives with command-prefixed errors on stderr | CLOSED |
+| Count only recovered files with successful directory writes and keep orphan clusters allocated in the free-space report | CLOSED |
 
 ## FASTOPEN
 
@@ -168,6 +171,7 @@ or `COMMAND: Invalid …`. Verify fixes before closing them.
 | Honor EMS mapping failures and unwind the handle and saved mapping after failed installation | CLOSED |
 | Clear the resident PSP environment pointer after releasing the environment | CLOSED |
 | Send prefixed diagnostics to stderr and document required drive and optional cache counts in DOSHELP | CLOSED |
+| Suppress consecutive purges only when they address the same drive | CLOSED |
 
 DOS 6.0 retains the PSP environment lookup error in MEM, the page-rounded MZ
 header in EXE2BIN, the intermediate I/O error branches in CHKDSK and the

@@ -411,8 +411,17 @@ GOTORPHNAM:				 ;di still points to entry		;ac048;bgb
 	STOSW				;					;ac048;bgb
 	restorereg <bx,dx,ax>	;offset, sector num, drive num			;ac048;bgb
 	mov	cx,1		;number of sectors = 1				;ac048;bgb
+	push	si		; clusters in this chain
 	call	DOINT26 	;write it out to disk				;ac048;bgb
-	ret									;ac048;bgb
+	pop	si
+	jc	entry_done
+	add	[orphsiz],si
+	sub	[lclus],si
+	add	word ptr orphcnt,1
+	adc	word ptr orphcnt+2,0
+	clc
+entry_done:
+	ret
 endproc fix_entry								;ac048;bgb
 										;ac048;bgb
 ;*****************************************************************************	;ac048;bgb;an047;bgb
@@ -822,6 +831,14 @@ NEXTCLUS2:
 	mov	word ptr temp_dd,dx	;get low word of lost clusters	     ;an049;bgb
 	mov	dx,word ptr orphcnt+2	;get hi  word of lost clusters		  ;an049;bgb
 	mov	word ptr temp_dd+2,dx	;get hi  word of lost clusters	     ;an049;bgb
+	cmp	[dofix],0
+	je	recovery_ready
+	mov	dx,[orphsiz]	; charge clusters to recovered files only after writing
+	add	[lclus],dx
+	mov	[orphsiz],0
+	mov	word ptr orphcnt,0
+	mov	word ptr orphcnt+2,0
+recovery_ready:
 	mov	BP,OFFSET DG:PHONEY_STACK ;Set BP to point to "root"		;ac048;bgb
 ;do for all dir entries:							;ac048;bgb
 MAKFILLP:									;ac048;bgb
@@ -840,7 +857,8 @@ GOTENT:     mov     [HAVFIX],1		;Making a fix				;ac048;bgb
 	    cmp     [DOFIX],0		;/f parameter specified?		;ac048;bgb
 ;	    $if     NZ			;yes- do the fix			;ac048;bgb
 	    JZ $$IF39
-		call	fix_entry						;ac048;bgb
+		call	fix_entry
+		jc	recovery_write_failed						;ac048;bgb
 ;	    $endif								;ac048;bgb
 $$IF39:
 ENTMADE:    restorereg <ax,di,si>					     ;ac048;bgb;an049;bgb
@@ -872,11 +890,19 @@ NXTORP: inc	ax								;ac048;bgb
     JMP SHORT $$DO37
 $$EN37:
 	restorereg <ax,ax>			;Clean Stack from si,di 	;ac048;bgb
+	cmp	[dofix],0
+	jne	root_full
+	mov	dx,word ptr temp_dd
 	sub	word ptr orphcnt,dx		;Couldn't make them all         ;ac048;bgb
-	sbb	word ptr orphcnt+2,0		;Couldn't make them all         ;ac048;bgb
+	mov	dx,word ptr temp_dd+2
+	sbb	word ptr orphcnt+2,dx		;Couldn't make them all         ;ac048;bgb
+root_full:
 	mov	dx,OFFSET DG:CREATMES						;ac048;bgb
 	mov	byte ptr [arg_buf],0						;ac048;bgb
 	call	EPRINT								;ac048;bgb
+	jmp	short RET100
+recovery_write_failed:
+	restorereg <ax,di,si>	; stop before reusing the failed directory sector
 RET100: pop	es			;restore es				;ac048;bgb
 	ret									;ac048;bgb
 										;ac048;bgb

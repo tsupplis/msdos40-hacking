@@ -205,7 +205,7 @@ struct memory_pool { unsigned long total, available, largest; };
 static struct memory_pool conventional, upper, extended, expanded;
 static int hasXms;
 static void DisplaySummary(int exact);
-static void DisplayClassification(void);
+static int DisplayClassification(void);
 static int Paging, PageLines, PageHeight;
 static void NextReportLine(void);
 static void ReportMessage(void);
@@ -277,6 +277,8 @@ char     *argv[];                                                               
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
+        int status = 0;
+
         check_help();
         sysloadmsg(&InRegs,&OutRegs);                                                                                            /* ;an000; */
         if ((OutRegs.x.cflag & CarryFlag) == CarryFlag)                                                                          /* ;an000; */
@@ -330,7 +332,7 @@ char     *argv[];                                                               
                                                                                                                                  /* ;an000; */
                                                                                                                                  /* ;an000; */
         if (Paging) StartPager();
-        if (DataLevel == 3) DisplayClassification();
+        if (DataLevel == 3) status = !DisplayClassification();
         else if (DataLevel > 0)                                                                                                       /* ;an000; */
               {                                                                                                                  /* ;an000; */
                 DisplayBaseDetail();                                                                                             /* ;an000; */
@@ -350,7 +352,7 @@ char     *argv[];                                                               
         ReadMemoryPools();
         DisplaySummary(DataLevel == 3);
                                                                                                                                  /* ;an000; */
-        exit(0);                        /* end of MEM main routine */                                                            /* ;an000; */
+        exit(status);                        /* end of MEM main routine */                                                            /* ;an000; */
                                                                                                                                  /* ;an000; */
         }                                                                                                                        /* ;an000; */
                                                                                                                                  /* ;an000; */
@@ -995,7 +997,7 @@ static int ClassifySystem(struct module_usage **rows, unsigned segment,
     return AddUsage(rows, SYSTEM_ROW_KEY, bytes, 0);
 }
 
-static void DisplayClassification(void)
+static int DisplayClassification(void)
 {
     struct ARENA far *arena, far *owner;
     struct module_usage *rows = NULL, *row;
@@ -1067,7 +1069,7 @@ static void DisplayClassification(void)
         ModuleLine(UtilityText(NameMsg), UtilityText(TotalMsg),
                    UtilityText(ConventionalMsg), UtilityText(UpperMemoryMsg));
         ModuleLine("--------", "-----------------", "-----------------", "-----------------");
-    } else ReportLine(UtilityText(ClassMemoryErrorMsg));
+    } else fprintf(stderr, "MEM: %Fs\n", UtilityText(ClassMemoryErrorMsg));
     while (rows) {
         char all[24], low[24], high[24];
         row = rows;
@@ -1082,6 +1084,7 @@ static void DisplayClassification(void)
         rows = row->next;
         free(row);
     }
+    return ok;
 }
 
 void ReadMemoryPools(void)

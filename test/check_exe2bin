@@ -11,12 +11,12 @@ program = root / "commands/exe2bin/exe2bin.exe"
 with tempfile.TemporaryDirectory(dir=root / "test/work") as work:
     folder = Path(work)
     env = dict(os.environ, EMU2_DOSVER="4.00", EMU2_DRIVE_C=work, EMU2_CWD="C:\\")
-    def check(image, expected):
+    def check(image, expected, answers=b"2\r\n2\r\n"):
         (folder / "input.exe").write_bytes(image)
         output = folder / "out.bin"
         output.write_bytes(b"keep")
         run = subprocess.run(["emu2", program, "input.exe", "out.bin"], cwd=work,
-                             env=env, input=b"2\r\n2\r\n", capture_output=True, timeout=5)
+                             env=env, input=answers, capture_output=True, timeout=5)
         assert (run.returncode == 0) == (expected is not None), run
         assert output.read_bytes() == (b"keep" if expected is None else expected)
 
@@ -35,6 +35,7 @@ with tempfile.TemporaryDirectory(dir=root / "test/work") as work:
     check(mz(bytes(256), ip=256)[:-1], None)
     check(mz(b"x", ip=256), None)
     check(mz(b"\x01\0", relocs=[(0, 0)]), b"\x03\0")
+    check(mz(b"\x01\0", relocs=[(0, 0)]), b"\x03\0", b"1G\r\n2\r\n")
     check(mz(b"xx", relocs=[(1, 0)]), None)
     check(mz(b"x"*65535), b"x"*65535)
     check(mz(b"x"*65536), None)

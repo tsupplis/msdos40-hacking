@@ -85,6 +85,11 @@ mkdir -p "$WORK"
 rm -f "$WORK"/ser1.out "$WORK"/pce.log
 cp "$IMG" "$WORK"/boot.img
 
+if [ "$(basename "$BAT")" = d_ansi.bat ]; then
+  nasm -f bin test/ansicurs.asm -o "$WORK/ansicurs.com"
+  mcopy -D o -i "$WORK/boot.img" "$WORK/ansicurs.com" ::ANSICURS.COM
+fi
+
 # drive B:
 if grep -q '^REM @blank-b' "$BAT"; then
   dd if=/dev/zero of="$WORK"/b.img bs=1474560 count=1 2>/dev/null

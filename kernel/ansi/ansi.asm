@@ -923,7 +923,7 @@ MOVCUR: CMP     BYTE PTR [BX],AH
         ADD     BYTE PTR [BX],AL
         LOOP    MOVCUR
 SETCUR: MOV     DX,WORD PTR COL
-        XOR     BX,BX
+        MOV     BH,BPAGE
         MOV     AH,2
         INT     16
         JMP     S1A
@@ -963,6 +963,7 @@ CUD:    .IF <GRAPHICS_FLAG EQ GRAPHICS_MODE>   ; WGR                            
           MOV     AH,DEFAULT_LENGTH            ; WGR                                     ;AN000;
         .ELSE                                  ; WGR                                     ;AN000;
           MOV     AH,BYTE PTR [REQ_TXT_LENGTH] ; WGR                                     ;AN000;
+          DEC     AH                             ; text row count to last BIOS row
         .ENDIF                                 ; WGR                                     ;AN000;
         MOV     AL,1                           ; WGR                                     ;AN000;
         JMP     CUU1
@@ -1044,7 +1045,7 @@ BIN2ASC:MOV     DL,10
         RET
 DSR:    MOV     AH,REQ_CRSR_POS         ; WGR                                            ;AN000;
         PUSH    BX                      ; WGR                                            ;AN000;
-        XOR     BH,BH                   ; WGR                                            ;AN000;
+        MOV     BH,BPAGE                   ; WGR                                            ;AN000;
         INT     10H                     ; WGR                                            ;AN000;
         POP     BX                      ; WGR                                            ;AN000;
         PUSH    DX                      ; WGR                                            ;AN000;

@@ -188,7 +188,7 @@ NAMMADE:
 ;	6. multiply the sectors times the number of bytes per sector.  This
 ;	   yields the number of bytes in the file.
 ;*****************************************************************************
-;SI is start cluster, returns filesize as DX:AX
+;SI is start cluster, returns cluster count in SI and filesize in DX:AX
 Procedure getfilsiz,near
     savereg <bx,cx>
 	XOR	AX,AX			;zero out low word
@@ -210,6 +210,7 @@ NCLUS:		CALL	UNPACK		;find the next cluster
 	    JMP SHORT $$DO9
 $$EN9:
 GOTEOF:
+	    mov     si,ax		; retain cluster count for recovery accounting
 	    MOV     BL,[CSIZE]		;get sectors per cluster
 	    XOR     BH,BH
 	    MUL     BX			;clusters * secs/cluster = sectors

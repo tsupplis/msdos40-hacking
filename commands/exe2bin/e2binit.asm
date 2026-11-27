@@ -850,6 +850,7 @@ GETSEG:
 ;;dcl;; MOV	BYTE PTR [SI-1],0	;Any digits?
 	cmp	BYTE PTR [SI-1],0	;Any digits?			;AC000;
 	JZ	GETSEG
+	xor	bx,bx			; start each response at zero
 DIGLP:
 	LODSB
 	SUB	AL,"0"

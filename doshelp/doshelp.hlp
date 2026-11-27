@@ -13,6 +13,11 @@ ANSI.SYS     Add ANSI console support.
    /X              Allow extended keys to be redefined.
    /L              Keep the line count when switching modes.
    /K              Use the conventional keyboard interface.
+
+ Console sequences start with ESC (ASCII 27) followed by [.
+   row;colH        Position the cursor (top left is 1;1).
+   6n              Report cursor position as ESC[row;colR.
+   2J, K           Clear the screen, or clear to the end of the line.
 APPEND       Search additional directories when opening data files.
 
  APPEND [path[;path...]] [/X[:ON|OFF]] [/PATH:ON|OFF] [/E]

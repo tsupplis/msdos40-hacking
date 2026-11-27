@@ -95,7 +95,7 @@ PUBLIC	 VECTOR_Delete										  ;AN000;
 
 ; Following data variables are accessed by all other segments
 call_cnt	       DW    0									;AN000;
-Purge_Flag	       DW    0		   ; =1 if last call is PURGE function
+Last_Purge_Drive       DB    0ffh	   ; consecutive purges of this drive are redundant
 Prev_drv_id	       DB    -1 	   ; previous request drive id
 Main_name_cache_seg    DW    Cseg_Init	   ; default to Init1 seg				;AN000;
 Main_Num_Of_drives     DW    0		   ; number of drives					;AN000;
@@ -356,7 +356,7 @@ Fsk_Cont:
 	cmp	al,FONC_Purge		   ; PURGE call ??					       ;AN000;
 	je	chk_05			   ; yes - continue						;AN000;
 
-	mov	cs:Purge_Flag, 0	   ; reset purge flag
+	mov	cs:Last_Purge_Drive, 0ffh	   ; reset purge flag
 	cmp	al,FSK_Open		   ; OPEN call							;AN000;
 	jne	chk_12			   ; jump if not						;AN000;
 	CALL	FSEEK_OPEN										;AN000;
@@ -392,13 +392,13 @@ Chk_16:
 	jmp	short exit										      ;AN000;
 
 Chk_05:
-	cmp	cs:Purge_Flag, 1	   ; previous call is purge ??				    ;AN000;
+	cmp	cs:Last_Purge_Drive, dl	   ; previous call is purge ??				    ;AN000;
 	jne	Purge_buffs		   ; no - purge the buffers
 	clc				   ; yes - exit
 	jmp	short exit										      ;AN000;
 
 Purge_Buffs:
-	mov	cs:Purge_Flag,1 	   ; set purge flag
+	mov	cs:Last_Purge_Drive,dl	   ; remember the purged drive
 	cmp	CS:Main_Total_Ext_Count,0	    ; reset fseek buffs??
 	je	reset_fopen		   ; no - reset fopen
 	CALL	FSEEK_PURGE		   ; reset extent cache 			    ;AN000;
@@ -422,7 +422,7 @@ Reset_Exit:
 ;-----------------------------------------------------------------------------
 DISPATCH_FOPEN: 		      ; dispatch FOPEN functions
 	cld											   ;AN000;
-	mov	cs:Purge_Flag, 0      ; reset purge flag
+	mov	cs:Last_Purge_Drive, 0ffh      ; reset purge flag
 	cmp	al, FONC_update 								   ;AN000;
 	jne	Chk_02										   ;AN000;
 	CALL	CS:Fopen_Update       ; UPDATE							   ;AN000;

@@ -2,6 +2,7 @@
 """Check the byte-level extent of a CHKDSK /F repair on a two-FAT volume."""
 import os
 from pathlib import Path
+import shutil
 import struct
 import subprocess
 import tempfile
@@ -41,3 +42,34 @@ with tempfile.TemporaryDirectory(dir=root / "test/work") as work:
     subprocess.run(["pce-img", "convert", "-q", "-O", "img", disk, raw], check=True)
     assert raw.read_bytes() == expected, "repair must change only the two orphan FAT entries"
 print("PASS CHKDSK repaired both 256-sector FATs and preserved every other byte")
+
+# Exercise directory writes independently of FAT writes. Stop after a failed
+# sector write so a subsequent write cannot commit a previously rejected entry.
+with tempfile.TemporaryDirectory(dir=root / "test/work") as work:
+    folder = Path(work)
+    boot = folder / "boot.img"
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), boot)
+    for name, source, defines in [
+        ("orphans", "fatseed", ["-DORPHANS"]),
+        ("failroot", "fatfail", ["-DFAIL_SECTOR=19"]),
+        ("failnext", "fatfail", ["-DFAIL_SECTOR=19", "-DALLOW_WRITES=1"]),
+    ]:
+        program = folder / (name + ".com")
+        subprocess.run(["nasm", *defines, "-f", "bin", root / ("test/" + source + ".asm"),
+                        "-o", program], check=True)
+        subprocess.run(["mcopy", "-i", boot, program, "::"], check=True)
+    for count, hook in enumerate(["failroot", "failnext", "rem allow both writes"]):
+        batch = folder / "recover.bat"
+        batch.write_text("orphans\nif errorlevel 1 echo FAILED seed\n" + hook +
+                         "\necho Y>a:yes.txt\nchkdsk b: /f <a:yes.txt\n"
+                         "if errorlevel 1 echo WRITE-FAILED\n")
+        run = folder / str(count)
+        output = subprocess.check_output([root / "test/run_tests", batch],
+                                         env=dict(os.environ, PCE_TEST_WORK=str(run), IMG=str(boot)))
+        assert (b"WRITE-FAILED" in output) == (count < 2), output
+        recovered = [line.strip() for line in output.splitlines() if b"recovered files" in line]
+        assert recovered == ([f"{512*count:,} bytes in {count} recovered files".encode()] if count else []), output
+        files = subprocess.check_output(["mdir", "-b", "-i", run / "b.img", "::"]).splitlines()
+        assert files == [f"::/FILE{i:04}.CHK".encode() for i in range(count)], files
+        assert b"1,456,640 bytes available on disk" in output, output
+print("PASS CHKDSK recovery counts and free space after zero, one and two successful writes")
