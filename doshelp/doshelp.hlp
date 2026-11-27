@@ -868,11 +868,6 @@ VERIFY       Control verification of disk writes.
  VERIFY [ON|OFF]
 
    ON, OFF         Enable or disable verification of disk writes.
-VI           Start the STevie-based screen editor.
-
- VI [filename]
-
-   filename        File to edit.
 VOL          Display the disk volume label.
 
  VOL [drive:]
