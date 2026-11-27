@@ -129,7 +129,7 @@ Procedure DeleteFcbFiles,NEAR
 	invoke TranslateFcbPath		; convert FCB to path
 	JC	BadPath 		; signal no deletions
 	Context DS
-	CallResident DOS_Delete		; wham
+	invoke DOS_Delete		; wham
 	JC	BadPath
 GoodPath:
 	XOR AL,AL

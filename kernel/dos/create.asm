@@ -53,7 +53,6 @@ Installed = TRUE
         DosCodeEntry DOS_Create,44
         DosCodeEntry DOS_Create_New,129
         DosCodeEntry SET_MKND_ERR,130
-        DosCodeEntry Set_Media_ID,131
         DosCodeEntry Set_EXT_mode,132
 ; The redirector takes the create attributes on the interrupt caller's stack.
 CreateNetworkExtended:
@@ -237,7 +236,7 @@ Create_ok:
 ; drive number to force a Build BPB after Media Check.
 
 ;;; FASTOPEN 8/29/86
-	CallResident FastOpen_Delete
+	invoke FastOpen_Delete
 ;;; FASTOPEN 8/29/86
 	mov	al,[SATTRIB]
 	test	al,attr_volume_id
@@ -405,7 +404,6 @@ CreateEntries LABEL WORD
         DW OFFSET DOSGROUP:DOS_Create_VECTOR, OFFSET DOSGROUP:CreateFile
         DW OFFSET DOSGROUP:DOS_Create_New_VECTOR, OFFSET DOSGROUP:CreateExclusiveFile
         DW OFFSET DOSGROUP:SET_MKND_ERR_VECTOR, OFFSET DOSGROUP:MapCreateError
-        DW OFFSET DOSGROUP:Set_Media_ID_VECTOR, OFFSET DOSGROUP:SetMediaId
         DW OFFSET DOSGROUP:Set_EXT_mode_VECTOR, OFFSET DOSGROUP:SetExtendedMode
         DW 0
 DOSEND ENDS

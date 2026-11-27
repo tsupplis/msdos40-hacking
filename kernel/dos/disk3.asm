@@ -214,7 +214,7 @@ HAVSTART:
 ;;; 11/5/86 FastSeek
 	MOV	[FSeek_logclus],DX   ; delete EOF (FFFFH)
 	INC	[FSeek_logclus]
-	CallResident FastSeek_Truncate    ;
+	invoke FastSeek_Truncate    ;
 ;;; 11/5/86 FastSeek
 	invoke	AllocateClusters
 	JNC	DOWRTJ
@@ -266,7 +266,7 @@ NOGROW:
 	JZ	NULL_FILE	      ;FS. yes					;AN000;
 	MOV	[FSeek_logclus],DX    ;FS. delete EOF (FFFFH)			;AN000;
 	INC	[FSeek_logclus]       ;FS.					;AN000;
-	CallResident FastSeek_Truncate     ;FS.					;AN000;
+	invoke FastSeek_Truncate     ;FS.					;AN000;
 NULL_FILE:
 ;;; 11/5/86 FastSeek
 	invoke	AllocateClusters
@@ -444,7 +444,7 @@ SET_ACC_ERRWJ2:
 	JC	SET_ACC_ERRW
 ;;; 11/5/86 FastSeek
 	MOV	[FSeek_logclus],DX    ; truncate clusters starting from DX
-	CallResident FastSeek_Truncate
+	invoke FastSeek_Truncate
 ;;; 11/5/86 FastSeek
 	JCXZ	RELFILE
 	invoke	AllocateClusters
@@ -484,7 +484,7 @@ KILLFIL:
 	XCHG	BX,ES:[DI.sf_firclus]
 	POP	ES
 ;; 11/5/86 FastSeek
-	CallResident Delete_FSeek   ; delete fastseek entry
+	invoke Delete_FSeek   ; delete fastseek entry
 
 	OR	BX,BX
 	JZ	UPDATEJ
@@ -498,7 +498,7 @@ KILLFIL:
 	MOV	DL,ES:[BP.dpb_drive]	 ; get current drive
 	MOV	CX,BX			 ; first cluster #
 	MOV	AH,2			 ; delete cache entry by drive:firclus
-	CallResident FastOpen_Update 	 ; call fastopen
+	invoke FastOpen_Update 	 ; call fastopen
 	POP	DX
 	POP	CX
 	POP	AX

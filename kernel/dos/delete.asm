@@ -69,6 +69,43 @@ Installed = TRUE
 	i_need	DMAADD,DWORD
 	i_need	RENAMEDMA,BYTE
 
+; Absolute disk I/O also calls Fast_Dispatch on the application's stack.
+; Keep the far calls to installed caches and the sharer in resident CODE.
+procedure Fast_Dispatch,NEAR
+        ASSUME SS:NOTHING,DS:NOTHING,ES:NOTHING
+	PUSH	AX			      ; save ax 			;AN000;
+	MOV	AL,AH			      ; al=fastseek ID			;AN000;
+	XOR	AH,AH			      ; 				;AN000;
+	DEC	AX			      ; 				;AN000;
+	SHL	AX,1			      ; times 4 to get entry offset	;AN000;
+	SHL	AX,1								;AN000;
+										;AN000;
+	MOV	SI,OFFSET DOSGROUP:FastTable + 2	; index to the		;AN000;
+	ADD	SI,AX					; fastxxxx entry	;AN000;
+	POP	AX					; restore ax		;AN000;
+	CALL	DWORD PTR CS:[SI]			; call fastseek 	;AN000;
+	return
+EndProc Fast_Dispatch
+
+CallFastOpen PROC NEAR
+        MOV     BX,OFFSET DOSGROUP:FastTable + 2
+        CALL    DWORD PTR CS:[BX]
+        RET
+CallFastOpen ENDP
+
+CloseSharedFile PROC NEAR
+if installed
+	Call	CS:[JShare + 13 * 4]
+else
+	Call	ShCloseFile
+endif
+        RET
+CloseSharedFile ENDP
+CODE ENDS
+
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+
 ; Inputs:
 ;	[WFP_START] Points to WFP string ("d:/" must be first 3 chars, NUL
 ;		terminated)
@@ -105,10 +142,10 @@ fileFound   = 01h
 fileDeleted = 10h
 
 	procedure   DOS_DELETE,NEAR
-	DOSAssume   CS,<DS>,"DOS_Delete"
+	DOSAssume   SS,<DS>,"DOS_Delete"
 	ASSUME	ES:NOTHING
 
-	Invoke	TestNet
+	CallResident TestNet
 	JNC	LOCAL_DELETE
 ;	invoke	OWN_SHARE2		       ;IFS. IFS owns share ?		;AN000;
 ;	JZ	ifsshare		       ;IFS. yes			;AN000;
@@ -136,16 +173,17 @@ ifsshare:
 
 
 IF NOT Installed
-	transfer NET_DELETE
+	CallResident NET_DELETE
+	return
 ELSE
 	MOV	AX,(multNET SHL 8) OR 19
-	INT	2FH
+	CallResident DosMultiplex
 	return
 ENDIF
 
 LOCAL_DELETE:
 	MOV	[FoundDel],00	; No files found and no files deleted
-	EnterCrit   critDisk
+	CallResident ECritDisk
 	MOV	WORD PTR [CREATING],0E500H  ; Assume not del *.*
 	MOV	SI,[WFP_START]
 SKPNUL:
@@ -188,7 +226,7 @@ CHECK_ATTS:
 	MOV	[DELALL],0	     ; DEL *.* - flag deleting all
 NOT_ALL:
 	MOV	[NoSetDir],1
-	invoke	GetPathNoSet
+	invoke	ResolvePathWithFlags
 	ASSUME	ES:NOTHING
 	JNC	Del_found
 	JNZ	bad_path
@@ -198,7 +236,7 @@ No_file:
 	MOV	AX,error_file_not_found
 ErrorReturn:
 	STC
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 	return
 
 bad_path:
@@ -253,13 +291,13 @@ DEL_SHARE_OK:
 	Assert	ISBUF,<DS,DI>,"Del_Share_OK"
 	TEST	[DI.buf_flags],buf_dirty  ;LB. if already dirty 		;AN000;
 	JNZ	yesdirty		  ;LB.	  don't increment dirty count   ;AN000;
-	invoke	INC_DIRTY_COUNT 	  ;LB.					;AN000;
+	invoke	IncrementDirtyCount 	  ;LB.					;AN000;
 	OR	[DI.buf_flags],buf_dirty
 yesdirty:
 	MOV	[BX],AH 		; Put in E5H or 0
 	MOV	BX,[SI] 		; Get firclus pointer
 	POP	DS
-	DOSAssume   CS,<DS>,"Del_Share_OK"
+	DOSAssume   SS,<DS>,"Del_Share_OK"
 	OR	[FoundDel],fileDeleted	; Deleted file
 	CMP	BX,2
 	JB	DELEXT			; File has invalid FIRCLUS (too small)
@@ -269,7 +307,7 @@ yesdirty:
 	CALL	Delete_FSeek		; delete the fastseek entry
 ;; FastSeek 10/27/86
 
-	invoke	RELEASE 		; Free file data
+	invoke	ReleaseClusters 		; Free file data
 	JC	No_fileJ
 ; DOS 3.3  FastOpen
 
@@ -291,9 +329,9 @@ DELEXT:
 ;; Extended Attributes
 DELNXT:
 	LES	BP,[THISDPB]		; Possible to get here without this set
-	invoke	GETENTRY		; Registers need to be reset
+	invoke	ReadDirectoryEntry		; Registers need to be reset
 	JC	No_fileJ
-	invoke	NEXTENT
+	invoke	NextDirectoryMatch
 if DEBUG
 	JC	Flsh
 	JMP	DelFile
@@ -303,7 +341,7 @@ ELSE
 ENDIF
 	LES	BP,[THISDPB]		; NEXTENT sets ES=DOSGROUP
 	MOV	AL,ES:[BP.dpb_drive]
-	invoke	FLUSHBUF
+	invoke	FlushBuffers
 	JC	No_fileJ
 ;
 ; Now we need to test FoundDel for our flags.  The cases to consider are:
@@ -328,13 +366,13 @@ ASSUME	ES:NOTHING
 	SUB	AH,'A'                  ; Convert to 0-based
 	mov	byte ptr [VOLCHNG_FLAG],AH
 	XOR	BH,BH			;>32mb delte volume id from boot record ;AN000;
-	invoke	Set_Media_ID		;>32mb set voulme id to boot record	;AN000;
-	invoke	FATRead_CDS		; force media check
+	invoke	SetMediaId		;>32mb set voulme id to boot record	;AN000;
+	invoke	ReadDirectoryFAT		; force media check
 	POP	DI
 	POP	ES
 	POP	AX
 No_Set_Flag:
-	LeaveCrit   critDisk		; carry is clear
+	CallResident LCritDisk		; carry is clear
 	return
 DelError:
 	TEST	FoundDel,fileFound	; not deleted.	Did we find file?
@@ -385,13 +423,13 @@ ASSUME	ES:DOSGROUP
 	MOV	DS,WORD PTR [CURBUF+2]	; DS:SI -> entry (FCB style name)
 	MOV	BX,DI		; Set backup limit for skipback
 	ADD	BX,2		; Skip over d: to point to leading '\'
-	invoke	StrLen		; CX is length of ES:DI including NUL
+	CallResident StrLen		; CX is length of ES:DI including NUL
 	DEC	CX		; Don't include nul in count
 	ADD	DI,CX		; Point to NUL at end of string
-	invoke	SkipBack	; Back up one element
+	invoke	PreviousPathComponent	; Back up one element
 	INC	DI		; Point to start of last element
 	MOV	[SAVE_BX],DI	;IFS. save for DOS_RENAME			   ;AN000;
-	invoke	PackName	; Transfer name from entry to ASCIZ tail.
+	invoke	PackSearchName	; Transfer name from entry to ASCIZ tail.
 	POP	SI		; Get back entry pointers
 	POP	BX
 	PUSH	BX
@@ -401,24 +439,20 @@ ASSUME	DS:DOSGROUP
 ;
 ; Close the file if possible by us.
 ;
-if installed
-	Call	JShare + 13 * 4
-else
-	Call	ShCloseFile
-endif
+	CallResident CloseSharedFile
 	MOV	WORD PTR [THISSFT+2],DS
 	MOV	WORD PTR [THISSFT],OFFSET DOSGROUP:AUXSTACK - (SIZE sf_entry)
 				; Scratch space
 	XOR	AH,AH		; Indicate file to DOOPEN (high bit off)
-	invoke	DOOPEN		; Fill in SFT for share check
+	invoke	OpenNode		; Fill in SFT for share check
 	LES	DI,[THISSFT]
 	MOV	ES:[DI.sf_mode],sharing_deny_both   ; requires exclusive access
 	MOV	ES:[DI.sf_ref_count],1	; Pretend open
-	invoke	ShareEnter
+	CallResident ShareEnter
 	jc	CheckDone
 	LES	DI,[THISSFT]
 	MOV	ES:[DI.sf_ref_count],0	; Pretend closed and free
-	invoke	SHAREEND		; Tell sharer we're done with THISSFT
+	CallResident SHAREEND		; Tell sharer we're done with THISSFT
 	CLC
 CheckDone:
 	LES	BP,[THISDPB]
@@ -452,8 +486,7 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	MOV	SI,[WFP_Start]			       ; ds:si points to path name
 	MOV	AL,FONC_delete			       ; al = 3
 fastinvoke:
-	MOV	BX,OFFSET DOSGROUP:FastTable + 2
-	CALL	DWORD PTR [BX]			       ; call fastopen
+	CallResident CallFastOpen
 
 	POP	AX		; restore registers
 	POP	BX
@@ -530,18 +563,7 @@ EndProc FastSeek_Open								;AN000;
 ASSUME	DS:NOTHING,ES:NOTHING							;AN000;
 										;AN000;
 	MOV	AH,FastSeek_ID		      ; fastseek ID  = 1		;AN000;
- entry Fast_Dispatch			      ; future fastxxxx entry		;AN000;
-	PUSH	AX			      ; save ax 			;AN000;
-	MOV	AL,AH			      ; al=fastseek ID			;AN000;
-	XOR	AH,AH			      ; 				;AN000;
-	DEC	AX			      ; 				;AN000;
-	SHL	AX,1			      ; times 4 to get entry offset	;AN000;
-	SHL	AX,1								;AN000;
-										;AN000;
-	MOV	SI,OFFSET DOSGROUP:FastTable + 2	; index to the		;AN000;
-	ADD	SI,AX					; fastxxxx entry	;AN000;
-	POP	AX					; restore ax		;AN000;
-	CALL	DWORD PTR CS:[SI]			; call fastseek 	;AN000;
+	CallResident Fast_Dispatch
 	return
 EndProc FSeek_dispatch
 
@@ -738,7 +760,7 @@ EndProc FS_doit 								;AN000;
 ;	same as DOS_SEARCH_FIRST
 ;
 	procedure  IFS_SEARCH_FIRST,NEAR					;AN000;
-	DOSAssume   CS,<DS>,"IFS_SEARCH_FIRST"                                  ;AN000;
+	DOSAssume   SS,<DS>,"IFS_SEARCH_FIRST"                                  ;AN000;
 	ASSUME	ES:NOTHING							;AN000;
 
 ;	MOV	WORD PTR [DMAADD+2],DS	       ;IFS. replace with scratch area	;AN000;;AN000;
@@ -758,7 +780,7 @@ EndProc IFS_SEARCH_FIRST							;AN000;
 ;	same as REN_DEL_CHECK
 ;
 	procedure  IFS_REN_DEL_CHECK,NEAR					;AN000;
-	DOSAssume   CS,<DS>,"IFS_REN_DEL_CHECK"                                 ;AN000;
+	DOSAssume   SS,<DS>,"IFS_REN_DEL_CHECK"                                 ;AN000;
 	ASSUME	ES:NOTHING							;AN000;
 
 ;	MOV	AX,WORD PTR [DMAADD+2]	       ;IFS. set up			;AN000;;AN000;
@@ -773,5 +795,10 @@ EndProc IFS_SEARCH_FIRST							;AN000;
 ;	return									;AN000;
 EndProc IFS_REN_DEL_CHECK							;AN000;
 
-CODE	ENDS
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC DeleteEntries
+DeleteEntries LABEL WORD
+        DW 0                    ; all functional callers are in DOSCODE
+DOSEND ENDS
     END

@@ -247,7 +247,7 @@ set_check_device:
 
 set_check_share:
 	POP	AX			; Get new attributes
-	CallResident REN_DEL_Check
+	invoke REN_DEL_Check
 	JNC	set_do
 	MOV	AX,error_sharing_violation
 	jmp	short	ok_bye
@@ -269,7 +269,7 @@ yesdirty:
 	MOV	AH,0		  ; dir entry update
 	MOV	DL,AL		  ; drive number A=0,B=1,,
 	MOV	DI,BX		  ; ES:DI -> dir entry
-	CallResident FastOpen_Update
+	invoke FastOpen_Update
 	POP	DI
 	POP	DX
 ;;;; 9/11/86 F.C update fastopen cache

@@ -71,7 +71,6 @@ include EA.inc
         EXTRN FCB_SELECTED:NEAR
         DosCodeEntry FIGREC,66
         DosCodeEntry ALLOCATE,65
-        DosCodeEntry RELEASE,133
 CODE ENDS
 DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
         ASSUME CS:DOSCODE,SS:DOSGROUP
@@ -130,7 +129,7 @@ entry   SKPCLP
         MOV     [Temp_Var2],BX                    ; save physical cluster       ;AN000;
                                                   ; PTR P005079
 SKPCLP2:
-        CallResident FastSeek_Lookup                   ; ask for next cluster #      ;AN000;
+        invoke FastSeek_Lookup                   ; ask for next cluster #      ;AN000;
         JC      LookupMiss
         JMP     clusfound
 LookupMiss:
@@ -149,7 +148,7 @@ noteof:
         MOV     [FSeek_logclus],DX                ; use current                 ;AN000;
         MOV     BX,[Temp_Var2]                    ; retore pysical cluster      ;AN000;
         MOV     DI,BX                             ; insert cureent cluster      ;AN000;
-        CallResident FastSeek_Insert                   ; insert cluster # to         ;AN000;
+        invoke FastSeek_Insert                   ; insert cluster # to         ;AN000;
         INC     [FSeek_logclus]                   ; get next inserted position  ;AN000;
         JMP     SHORT do_norm
 OnCache:
@@ -168,7 +167,7 @@ do_norm:
         RET
 WalkCluster:
 
-        CallResident FastSeek_Insert                   ; insert cluster # to         ;AN000;
+        invoke FastSeek_Insert                   ; insert cluster # to         ;AN000;
 cluss:                                                                          ;AN000;
         PUSH    BX                                ; FastSeek                    ;AN000;
         MOV     BX,DI
@@ -388,7 +387,7 @@ Break   <NEXTSEC -- Compute next sector to read or write>
         TEST    [FastSeekflg],FS_begin  ; from R/W                              ;AN000;
         JZ      do_norm2                ; no                                    ;AN000;
 look2:                                                                          ;AN000;
-        CallResident FastSeek_Lookup         ; call lookup                           ;AN000;
+        invoke FastSeek_Lookup         ; call lookup                           ;AN000;
         JNC     clusgot                 ; found one                             ;AN000;
 
         CMP     DI,1                              ; valid drive ,e.g. C,D...    ;AN000;
@@ -404,7 +403,7 @@ parfound2:
 do_norm2:
         invoke ReadClusterEntry
         JC      NONEXT
-        CallResident FastSeek_Insert         ; call insert                           ;AN000;
+        invoke FastSeek_Insert         ; call insert                           ;AN000;
         AND     [FastSeekflg],FS_no_insert  ; clear insert flag                 ;AN000;
                                                                                 ;AN000;
 clusgot:
@@ -475,7 +474,7 @@ OPTCLUS:
         JZ      do_norm3                          ; no                          ;AN000;
         TEST    [FastSeekflg],FS_insert           ; is in insert mode ?         ;AN000;
         JNZ     do_norm3                          ; yes                         ;AN000;
-        CallResident FastSeek_Lookup                   ; call lookup                 ;AN000;
+        invoke FastSeek_Lookup                   ; call lookup                 ;AN000;
         JNC     clusgot2                          ; found one                   ;AN000;
 
         CMP     DI,1                              ; valid drive ,e.g. C,D...    ;AN000;
@@ -492,7 +491,7 @@ do_norm3:
         invoke ReadClusterEntry
         JC      OP_ERR
 clusgot2:
-        CallResident FastSeek_Insert         ; call insert                           ;AN000;
+        invoke FastSeek_Insert         ; call insert                           ;AN000;
         INC     [FSeek_logclus]         ; insert to next position               ;AN000;
 ;;; 11/5/86 FastSeek                                                            ;AN000;
         ADD     CL,AL
@@ -785,7 +784,7 @@ dofastk:
         PUSH    CX
         MOV     CX,BX                             ; set up firclus #
         MOV     [FSeek_firclus],BX                ; update firclus varible
-        CallResident FastSeek_Open                     ; create this file entry
+        invoke FastSeek_Open                     ; create this file entry
         POP     CX
 do_norm5:
         POP     ES
@@ -947,7 +946,7 @@ Break   <FS_TRUNC_EOF - truncate EOF for Fastseek>
         PUSH    [FSeek_logclus]                   ;                             ;AN000;
         PUSH    [FSeek_logsave]                   ; logclus=logsave             ;AN000;
         POP     [FSeek_logclus]                   ; delete EOF                  ;AN000;
-        CallResident FastSeek_Truncate                 ;                             ;AN000;
+        invoke FastSeek_Truncate                 ;                             ;AN000;
         POP     [FSeek_logclus]                   ; redo the look up            ;AN000;
         CLC                                                                     ;AN000;
 noteof2:                                                                        ;AN000;
@@ -960,7 +959,6 @@ DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
 RomEntries LABEL WORD
         DW OFFSET DOSGROUP:FIGREC_VECTOR, OFFSET DOSGROUP:ClusterToSector
         DW OFFSET DOSGROUP:ALLOCATE_VECTOR, OFFSET DOSGROUP:AllocateClusters
-        DW OFFSET DOSGROUP:RELEASE_VECTOR, OFFSET DOSGROUP:ReleaseClusters
         DW 0
 DOSEND ENDS
     END

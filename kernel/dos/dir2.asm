@@ -72,7 +72,6 @@ asmvar	Kanji
         DosCodeEntry StartSrch,57
         DosCodeEntry MatchAttributes,58
         DosCodeEntry GetPath,45
-        DosCodeEntry GetPathNoSet,46
         DosCodeEntry DevName,169
         DosCodeEntry CheckThisDevice,171
 ; Enter the installed FASTOPEN callback from the resident kernel.
@@ -1374,7 +1373,6 @@ Dir2Entries LABEL WORD
         DW OFFSET DOSGROUP:StartSrch_VECTOR, OFFSET DOSGROUP:StartDirectorySearch
         DW OFFSET DOSGROUP:MatchAttributes_VECTOR, OFFSET DOSGROUP:MatchDirectoryAttributes
         DW OFFSET DOSGROUP:GetPath_VECTOR, OFFSET DOSGROUP:ResolvePath
-        DW OFFSET DOSGROUP:GetPathNoSet_VECTOR, OFFSET DOSGROUP:ResolvePathWithFlags
         DW OFFSET DOSGROUP:DevName_VECTOR, OFFSET DOSGROUP:FindDeviceName
         DW OFFSET DOSGROUP:CheckThisDevice_VECTOR, OFFSET DOSGROUP:CheckPathDevice
         DW 0

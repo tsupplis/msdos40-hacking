@@ -360,7 +360,7 @@ SHARE_OK:
 	MOV	CX,ES:[DI.sf_firclus]		   ; first cluster #		;AN000;
 	LES	DI,ES:[DI.sf_devptr]		   ; pointer to DPB		;AN000;
 	MOV	DL,ES:[DI.dpb_drive]		   ; drive #			;AN000;
-	CallResident FastSeek_Open			   ; call fastseek		;AN000;
+	invoke FastSeek_Open			   ; call fastseek		;AN000;
 no_fastseek:
 
 ;; DOS 4.00 10/27/86

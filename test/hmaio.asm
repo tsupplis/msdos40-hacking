@@ -295,6 +295,16 @@ Full:   CALL    WriteFile
         INT     21h
         CMP     AL,0FFh
         Check   JE
+        MOV     AH,13h                  ; delete the exact FCB match, then verify absence
+        MOV     DX,OFFSET FindFCB
+        INT     21h
+        OR      AL,AL
+        Check   JZ
+        MOV     AH,11h
+        MOV     DX,OFFSET FindFCB
+        INT     21h
+        CMP     AL,0FFh
+        Check   JE
         JMP     SHORT Passed
 CheckShare:
         MOV     AX,1000h                ; share installation check
@@ -328,7 +338,7 @@ Print:  CMP     Hooked,0
         PUSH    DX
         CALL    SwapHooks
         POP     DX
-        CMP     Seen,63                 ; growth, truncation, FCB save and check
+        CMP     Seen,127                ; includes the rename/delete sharing callback
         JNE     BadCallback
         CMP     CallbackA20,0
         JE      PrintResult
@@ -411,6 +421,7 @@ SwapHooks:
         SwapVector 14,UpdateEntry
         SwapVector 10,SaveEntry
         SwapVector 11,CheckEntry
+        SwapVector 13,DeleteEntry
         POPF
         RET
 
@@ -464,6 +475,12 @@ CheckHook:
         CALL    ObserveA20
         POPF
         JMP     CS:CheckEntry
+DeleteHook:
+        PUSHF
+        OR      CS:Seen,64
+        CALL    ObserveA20
+        POPF
+        JMP     CS:DeleteEntry
 ObserveA20:
         PUSH    AX
         PUSH    BX
@@ -476,6 +493,7 @@ ObserveA20:
 UpdateEntry DD  UpdateHook
 SaveEntry DD    SaveHook
 CheckEntry DD   CheckHook
+DeleteEntry DD  DeleteHook
 XmsEntry DD     0
 Hooked  DB      0
 Seen    DB      0
@@ -613,6 +631,12 @@ CheckNetworkClose:
         MOV     AX,252Fh
         INT     21h
         CALL    CheckRedirectedIoctl
+        MOV     DX,OFFSET RemoteName
+        MOV     AH,41h                  ; unlink must propagate the redirector error
+        INT     21h
+        JNC     AssignQuery
+        MOV     DeleteReply,AX
+AssignQuery:
         MOV     AX,5F02h                ; assignment-list query
         INT     21h
         JC      PrinterQuery
@@ -695,6 +719,10 @@ RestoreSFT:
         Check   JE
         CMP     PrinterReply,5E05h
         Check   JE
+        CMP     DeleteSeen,1
+        Check   JE
+        CMP     DeleteReply,5
+        Check   JE
         CMP     IoctlResult,441Ch
         Check   JE
         CMP     OpenSeen,3
@@ -736,12 +764,33 @@ IoctlTestDone:
 LocalIfsHeader DB 14 DUP (0)            ; IFSREMOTE clear in attribute at +12
 IoctlResult DW 0
 
+ReturnDelete:
+        POPF
+        INC     CS:DeleteSeen
+        CMP     CS:Hooked,0
+        JE      DenyDelete
+        CALL    ObserveA20
+DenyDelete:
+        MOV     AX,5
+        STC
+        RETF    2
+DeleteSeen  DB 0
+DeleteReply DW 0
+RemoteName  DB '\\SERVER\SHARE\DELETE.TMP',0
+
+ReturnClose:
+        POPF
+        MOV     AX,1234h
+        STC
+        RETF    2
 NetworkHook:
         PUSHF
         CMP     AX,1106h
         JE      ReturnClose
         CMP     AX,112Bh
         JE      ReturnIoctl
+        CMP     AX,1113h
+        JE      ReturnDelete
         CMP     AX,111Eh
         JE      ReturnMacroQuery
         CMP     AX,111Fh
@@ -796,11 +845,6 @@ IoctlPacketOk:
         RETF    2
 BadIoctlPacket:
         XOR     AX,AX
-        STC
-        RETF    2
-ReturnClose:
-        POPF
-        MOV     AX,1234h
         STC
         RETF    2
 OldMultiplex DD 0

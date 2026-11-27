@@ -2,6 +2,7 @@
 """Check BIOS disk order, logical volumes and persisted writes after reboot."""
 import os
 import re
+import shutil
 from pathlib import Path
 import string
 import struct
@@ -87,6 +88,13 @@ def check(folder, count, skip=None, logical=None, extra=(), operation=None):
     letters = list(zip(string.ascii_uppercase[2:], labels))
     batch = folder / "drives.bat"
     batch.with_suffix(".cfg").write_text("LASTDRIVE=Z\n")
+    env = dict(os.environ, PCE_TEST_WORK=str(folder / "run"))
+    if operation == "fastopen":
+        # Exercise the same installed cache with conventional and high DOSCODE.
+        image = folder / "fastopen.img"
+        shutil.copyfile(env.get("IMG", root / "media/msdos40_full.img"), image)
+        subprocess.run(["mcopy", "-o", "-i", image, root / "pce/pcehimem.sys", "::HIMEM.SYS"], check=True)
+        env["IMG"] = str(image)
     for boot in range(2):
         lines = []
         if operation == "fastopen":
@@ -95,6 +103,15 @@ def check(folder, count, skip=None, logical=None, extra=(), operation=None):
             args = " ".join(letter + (":=10" if i % 2 else ":")
                             for i, (letter, _) in enumerate(letters))
             lines += ["fastopen " + args, "if errorlevel 1 echo FAILED install"]
+            if boot:
+                batch.with_suffix(".cfg").write_text("LASTDRIVE=Z\nDOS=HIGH\nDEVICE=HIMEM.SYS\n")
+                lines += ["mem", r"copy D:\DRIVE.TXT D:\CACHE.TMP", r"type D:\CACHE.TMP",
+                          r"ren D:\CACHE.TMP CACHE.OLD",
+                          r"if not exist D:\CACHE.OLD echo FAILED rename",
+                          r"del D:\CACHE.OLD",
+                          r"if exist D:\CACHE.TMP echo FAILED old name",
+                          r"if exist D:\CACHE.OLD echo FAILED deleted name",
+                          r"echo CACHE REUSED>D:\CACHE.TMP", r"type D:\CACHE.TMP"]
         for letter, label in letters:
             lines.append(f"vol {letter}:")
             if boot == 0:
@@ -105,9 +122,13 @@ def check(folder, count, skip=None, logical=None, extra=(), operation=None):
             lines.append("mem")
         batch.write_text("\n".join(lines) + "\n")
         run = subprocess.run([root / "test/run_tests", batch, *disks], stdout=subprocess.PIPE,
-                                         env=dict(os.environ, PCE_TEST_WORK=str(folder / "run")))
+                                         env=env)
         output = run.stdout
         if run.returncode:
+            raise RuntimeError(output.decode("cp437"))
+        if operation == "fastopen" and (b"FAILED" in output or
+                (boot and (b"CACHE REUSED" not in output.splitlines() or
+                           b"DOS is using the High Memory Area." not in output.splitlines()))):
             raise RuntimeError(output.decode("cp437"))
         for letter, label in letters:
             if f"Volume in drive {letter} is {label}".upper().encode() not in output.upper():

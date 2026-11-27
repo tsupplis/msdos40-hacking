@@ -362,7 +362,7 @@ ASSUME	DS:NOTHING
 	LES	BP,[THISDPB]
 	MOV	BX,[DIRSTART]
 ;; FastSeek 10/27/86
-	CallResident Delete_FSeek		; delete the fastseek entry
+	invoke Delete_FSeek		; delete the fastseek entry
 ;; FastSeek 10/27/86
 	invoke	ReleaseClusters 		; Release data in sub dir
 	JC	NOTDIRPATHPOP		; Screw up
@@ -385,7 +385,7 @@ ASSUME	DS:NOTHING
 ;DOS 3.3 FastOpen  6/16/86  F.C.
 	PUSH	DS
 	context DS
-	CallResident FastOpen_Delete 	; call fastopen to delete an entry
+	invoke FastOpen_Delete 	; call fastopen to delete an entry
 	POP	DS
 ;DOS 3.3 FastOpen  6/16/86  F.C.
 

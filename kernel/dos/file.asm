@@ -388,7 +388,7 @@ BREAK <UnlinkFile - delete a file entry>
 	Context DS
 	mov	ch,attr_hidden+attr_system   ; unlink appropriate files
 	call	SetAttrib
-	CallResident DOS_Delete		; remove that file
+	invoke DOS_Delete		; remove that file
 	JC	UnlinkE 		; error is there
 
 

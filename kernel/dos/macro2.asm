@@ -149,7 +149,6 @@ EndProc PathSpoolCheck
         EXTRN FCB_SELECTED:NEAR
         DosCodeEntry TransFCB,80
         DosCodeEntry TransPathSet,82
-        DosCodeEntry SkipBack,84
         DosCodeEntry Splice,85
         DosCodeEntry PathSepGotCh,86
         DosCodeEntry $NameTrans,177
@@ -1308,7 +1307,6 @@ DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
 Macro2Entries LABEL WORD
         DW OFFSET DOSGROUP:TransFCB_VECTOR, OFFSET DOSGROUP:TranslateFcbPath
         DW OFFSET DOSGROUP:TransPathSet_VECTOR, OFFSET DOSGROUP:TranslatePathSet
-        DW OFFSET DOSGROUP:SkipBack_VECTOR, OFFSET DOSGROUP:PreviousPathComponent
         DW OFFSET DOSGROUP:Splice_VECTOR, OFFSET DOSGROUP:SplicePath
         DW OFFSET DOSGROUP:PathSepGotCh_VECTOR, OFFSET DOSGROUP:MatchPathSeparator
         DW OFFSET DOSGROUP:$NameTrans_VECTOR, OFFSET DOSGROUP:CanonicalizeUserPath

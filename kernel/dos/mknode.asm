@@ -70,7 +70,6 @@ include devsym.inc
         DosCodeEntry NEWDIR,67
         DosCodeEntry SETDOTENT,68
         DosCodeEntry MakeNode,69
-        DosCodeEntry DOOPEN,71
         DosCodeEntry CHECK_VIRT_OPEN,134
 CODE ENDS
 DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
@@ -143,7 +142,7 @@ ADDINGDIR:
         MOV     DL,ES:[BP.dpb_drive]       ; drive #
         MOV     CX,[DIRSTART]              ; first cluster #
         MOV     BP,BX                      ; CLUSNUM
-        CallResident FastOpen_Update
+        invoke FastOpen_Update
         POP     BP
         POP     AX
         POP     CX
@@ -844,7 +843,7 @@ ASSUME  DS:NOTHING
         PUSH    DX              ; Save sector number
 
         MOV     BX,CX
-        CallResident Delete_FSeek    ; FS. delete Fastseek Clusters                  ;AN000;
+        invoke Delete_FSeek    ; FS. delete Fastseek Clusters                  ;AN000;
         invoke  ReleaseClusters         ; Free any data allocated
         POP     DX
         POP     [HIGH_SECTOR]                  ;F.C. >32mb                      ;AN000;
@@ -905,7 +904,6 @@ MknodeEntries LABEL WORD
         DW OFFSET DOSGROUP:NEWDIR_VECTOR, OFFSET DOSGROUP:ExtendDirectory
         DW OFFSET DOSGROUP:SETDOTENT_VECTOR, OFFSET DOSGROUP:SetDotEntry
         DW OFFSET DOSGROUP:MakeNode_VECTOR, OFFSET DOSGROUP:CreateNode
-        DW OFFSET DOSGROUP:DOOPEN_VECTOR, OFFSET DOSGROUP:OpenNode
         DW OFFSET DOSGROUP:CHECK_VIRT_OPEN_VECTOR, OFFSET DOSGROUP:CloseVirtualOpen
         DW 0
 DOSEND ENDS

@@ -137,7 +137,7 @@ LocalClose:
 	JZ	nofastsk	       ;FS. yes, dont do it			;AN000;
 	LDS	SI,ES:[DI.sf_devptr]   ;FS.					;AN000;
 	MOV	DL,[SI.dpb_drive]      ;FS. dl= drive				;AN000;
-	CallResident FastSeek_Close	       ;FS. invoke fastseek			;AN000;
+	invoke FastSeek_Close	       ;FS. invoke fastseek			;AN000;
 nofastsk:
 	Context DS
 	SaveReg <AX,BX>
@@ -256,7 +256,7 @@ do_update2:				;AN011;F.O.
 	MOV	CX,[OLD_FIRSTCLUS]	;AN011;F.O.
 do_update:				  ;AN005;
 	Context DS
-	CallResident FastOpen_Update 	; invoke fastopen
+	invoke FastOpen_Update 	; invoke fastopen
 	POP	DX
 
 ;;; 10/1/86  update fastopen cache

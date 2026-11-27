@@ -210,13 +210,13 @@ notdir:
 ; [SATTRIB] is also set.
 	MOV	SI,BX
 	ADD	SI,dir_first
-	CallResident REN_DEL_Check
+	invoke REN_DEL_Check
 	JNC	REN_OK1
 	MOV	AX,error_sharing_violation
 	JMP	RENAME_POP
 
 REN_OK1:				;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-	CallResident FastOpen_Delete 	; delete dir info in fastopen DOS 3.3
+	invoke FastOpen_Delete 	; delete dir info in fastopen DOS 3.3
 	MOV	SI,[REN_WFP]		; Swap source and destination
 	MOV	[WFP_START],SI
 	MOV	[CURR_DIR_END],-1	; No current dir on dest
@@ -377,13 +377,13 @@ NEXT_SOURCE:
 ;
 	JC	RENAME_OVER
 	LEA	SI,[BX].dir_First
-	CallResident REN_DEL_Check
+	invoke REN_DEL_Check
 	JNC	REN_OK2
 	MOV	AX,error_sharing_violation
 	JMP	RENAME_CLEAN
 
 REN_OK2:				;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-	CallResident FastOpen_Delete 	; delete dir info in fastopen DOS 3.3
+	invoke FastOpen_Delete 	; delete dir info in fastopen DOS 3.3
 	JMP	BUILDDEST
 
 RENAME_OVER:

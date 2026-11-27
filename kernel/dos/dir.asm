@@ -61,9 +61,7 @@ asmvar	Kanji
         EXTRN FCB_SELECTED:NEAR
         DosCodeEntry FindEntry,50
         DosCodeEntry Srch,51
-        DosCodeEntry NextEnt,52
         DosCodeEntry MetaCompare,53
-        DosCodeEntry GetEntry,54
         DosCodeEntry GetEnt,55
         DosCodeEntry SetDirSrch,56
 CODE ENDS
@@ -459,9 +457,7 @@ DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
 DirEntries LABEL WORD
         DW OFFSET DOSGROUP:FindEntry_VECTOR, OFFSET DOSGROUP:FindDirectoryEntry
         DW OFFSET DOSGROUP:Srch_VECTOR, OFFSET DOSGROUP:ScanDirectory
-        DW OFFSET DOSGROUP:NextEnt_VECTOR, OFFSET DOSGROUP:NextDirectoryMatch
         DW OFFSET DOSGROUP:MetaCompare_VECTOR, OFFSET DOSGROUP:CompareDirectoryName
-        DW OFFSET DOSGROUP:GetEntry_VECTOR, OFFSET DOSGROUP:ReadDirectoryEntry
         DW OFFSET DOSGROUP:GetEnt_VECTOR, OFFSET DOSGROUP:ReadDirectoryPosition
         DW OFFSET DOSGROUP:SetDirSrch_VECTOR, OFFSET DOSGROUP:SetDirectorySearch
         DW 0
