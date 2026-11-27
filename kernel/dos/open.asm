@@ -389,7 +389,7 @@ procedure OpenShareError,NEAR
 	CMP	CL,sharing_compat
 	JNE	NO_HARD_ERR
 HARD_ERR:
-	CallResident SHARE_VIOLATION,DS
+	invoke HandleShareViolation
 	retnc				; User wants retry
 NO_HARD_ERR:
 	MOV	AX,error_sharing_violation

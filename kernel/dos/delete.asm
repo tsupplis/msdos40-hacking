@@ -448,7 +448,7 @@ ASSUME	DS:DOSGROUP
 	LES	DI,[THISSFT]
 	MOV	ES:[DI.sf_mode],sharing_deny_both   ; requires exclusive access
 	MOV	ES:[DI.sf_ref_count],1	; Pretend open
-	CallResident ShareEnter
+	invoke  ShareEnter
 	jc	CheckDone
 	LES	DI,[THISSFT]
 	MOV	ES:[DI.sf_ref_count],0	; Pretend closed and free

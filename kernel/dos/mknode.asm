@@ -367,7 +367,7 @@ make_share:
         LES     DI,[THISSFT]
 ;       MOV     ES:[DI.sf_mode],sharing_compat + open_for_both
         SaveReg <SI,BX>         ; Save CURBUF pointers
-        CallResident ShareEnter
+        invoke  ShareEnter
         jnc     MakeEndShare
 ;
 ; User failed request.
@@ -403,7 +403,7 @@ make_new:
         retnz                   ; Don't "open" directories, so don't
                                 ;   tell the sharer about them
         SaveReg <AX,BX,SI>      ; Save AL code
-        CallResident ShareEnter
+        invoke  ShareEnter
         RestoreReg  <SI,BX,AX>
         retnc
 ;
@@ -456,7 +456,7 @@ MakeEndShare:
         retc                            ; bye if error
         SaveReg <AX,BX,SI>
         PUSHF
-        CallResident ShareEnter
+        invoke  ShareEnter
         POPF
         RestoreReg  <SI,BX,AX>
 ;

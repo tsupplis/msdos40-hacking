@@ -26,6 +26,9 @@ Installed = True
 	I_need  RetryCount,WORD
 	i_need  JShare,DWORD
 
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry SHARE_VIOLATION,222
+
 ; Inputs:
 ;       [THISSFT] Points to filled in local file/device SFT for new
 ;               instance of file sf_mode ALWAYS has mode (even on FCB SFTs)
@@ -55,41 +58,6 @@ endif
 
 EndProc SHARE_CHECK
 
-; Inputs:
-;       [THISDPB] Set
-;       AX has error code
-; Function:
-;       Handle Sharing errors
-; Outputs:
-;       Carry set if user says FAIL, causes error_sharing_violation
-;       Carry clear if user wants a retry
-;
-; DS, ES, DI preserved, others destroyed
-
-	procedure   SHARE_VIOLATION,NEAR
-	DOSAssume   CS,<DS>,"Share_Violation"
-	ASSUME  ES:NOTHING
-
-	PUSH    DS
-	PUSH    ES
-	PUSH    DI
-	MOV     [READOP],0                      ; All share errors are reading
-	MOV     [ALLOWED],allowed_FAIL + allowed_RETRY
-	LES     BP,[THISDPB]
-	MOV     DI,1                            ; Fake some registers
-	MOV     CX,DI
-	MOV     DX,ES:[BP.dpb_dir_sector]
-	invoke  HARDERR
-	POP     DI
-	POP     ES
-	POP     DS
-	CMP     AL,1
-	retz                    ; 1 = retry, carry clear
-	STC
-	return
-
-EndProc SHARE_VIOLATION
-
 ;   ShareEnd - terminate sharing info on a particular SFT/UID/PID.  This does
 ;       NOT perform a close, it merely asserts that the sharing information
 ;       for the SFT/UID/PID may be safely released.
@@ -111,6 +79,47 @@ endif
 
 EndProc ShareEnd
 
+CODE    ENDS
+
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+
+; Inputs:
+;       [THISDPB] Set
+;       AX has error code
+; Function:
+;       Handle Sharing errors
+; Outputs:
+;       Carry set if user says FAIL, causes error_sharing_violation
+;       Carry clear if user wants a retry
+;
+; DS, ES, DI preserved, others destroyed
+
+	procedure   HandleShareViolation,NEAR
+	ASSUME  DS:DOSGROUP        ; supplied by the multiplex or filesystem caller
+	ASSUME  ES:NOTHING
+
+	PUSH    DS
+	PUSH    ES
+	PUSH    DI
+	MOV     [READOP],0                      ; All share errors are reading
+	MOV     [ALLOWED],allowed_FAIL + allowed_RETRY
+	LES     BP,[THISDPB]
+	MOV     DI,1                            ; Fake some registers
+	MOV     CX,DI
+	MOV     DX,ES:[BP.dpb_dir_sector]
+	CallResident HARDERR,DS
+	POP     DI
+	POP     ES
+	POP     DS
+	CMP     AL,1
+	JE      ShareResponse           ; 1 = retry, carry clear
+	STC
+ShareResponse:
+	return
+
+EndProc HandleShareViolation
+
 break <ShareEnter - attempt to enter a node into the sharing set>
 
 ;
@@ -124,7 +133,7 @@ break <ShareEnter - attempt to enter a node into the sharing set>
 ;   Registers modified: all
 
 Procedure   ShareEnter,NEAR
-	DOSAssume   CS,<DS>,"ShareEnter"
+	DOSAssume   SS,<DS>,"ShareEnter"
 	assume  es:nothing
 
 	SaveReg <CX>
@@ -135,17 +144,24 @@ attempt:
 	XOR     AX,AX
 	MOV     ES:[DI.sf_MFT],AX       ; indicate free SFT
 	SaveReg <CX>
-	call    Share_Check             ; attempt to enter into the sharing set
+	CallResident SHARE_CHECK        ; attempt to enter into the sharing set
 	RestoreReg  <CX>
 	jnc     done                    ; success, let the user see this
-	invoke  Idle                    ; wait a while
+	CallResident Idle               ; wait a while
 	loop    attempt                 ; go back for another attempt
-	call    Share_violation         ; signal the problem to the user
+	call    HandleShareViolation         ; signal the problem to the user
 	jnc     retry                   ; user said to retry, go do it
 done:
 	RestoreReg  <CX>
 	return
 EndProc ShareEnter
 
-CODE    ENDS
+DOSCODE ENDS
+
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC ShareEntries
+ShareEntries LABEL WORD
+        DW OFFSET DOSGROUP:SHARE_VIOLATION_VECTOR, OFFSET DOSGROUP:HandleShareViolation
+        DW 0
+DOSEND ENDS
     END

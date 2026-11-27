@@ -58,10 +58,7 @@ CheckIO: CMP     AL,'h'
         Check   JNC
         OR      AX,AX
         Check   JNZ
-        MOV     AX,4310h
-        INT     2Fh
-        MOV     WORD PTR XmsEntry,BX
-        MOV     WORD PTR XmsEntry+2,ES
+        CALL    GetXmsEntry
         MOV     CX,2000                 ; known leap day on this scratch boot
         MOV     DX,021Dh
         MOV     AH,2Bh
@@ -334,6 +331,7 @@ CheckShare:
         CMP     AX,32
         Check   JE
         CALL    Close
+        CALL    CheckShareRetry
 Passed: MOV     DX,OFFSET Success
         JMP     SHORT Print
 Failed: MOV     DX,OFFSET Failure
@@ -429,6 +427,120 @@ SwapHooks:
         SwapVector 13,DeleteEntry
         POPF
         RET
+
+; Refuse a new file at SHARE slot 1. Exercise the public multiplex entry
+; inside DOS, then let ShareEnter exhaust its retries and undo the create.
+CheckShareRetry:
+        MOV     AX,58FEh                ; observe A20 only when DOS uses the HMA
+        INT     21h
+        Check   JNC
+        OR      AX,AX
+        JZ      InstallShareHooks
+        CALL    GetXmsEntry
+InstallShareHooks:
+        MOV     AX,3524h
+        INT     21h
+        MOV     WORD PTR OldInt24Share,BX
+        MOV     WORD PTR OldInt24Share+2,ES
+        MOV     DX,OFFSET ShareCritical
+        MOV     AX,2524h
+        INT     21h
+        CALL    SwapShareEnter
+        MOV     DX,OFFSET ShareName
+        XOR     CX,CX
+        MOV     AH,3Ch
+        INT     21h
+        PUSHF
+        CALL    SwapShareEnter
+        PUSH    DS
+        LDS     DX,OldInt24Share
+        MOV     AX,2524h
+        INT     21h
+        POP     DS
+        POPF
+        Check   JC
+        CMP     CallbackA20,0
+        Check   JE
+        CMP     MultiplexResult,1
+        Check   JE
+        CMP     ShareCalls,4
+        Check   JE
+        MOV     DX,OFFSET ShareName
+        MOV     AX,4300h                ; the failed create removed its entry
+        INT     21h
+        Check   JC
+        CMP     AX,2
+        Check   JE
+        RET
+
+SwapShareEnter:
+        MOV     AX,3521h
+        INT     21h
+        PUSHF
+        CLI
+        SwapVector 1,ShareEntry
+        POPF
+        RET
+
+RefuseShare:
+        PUSHF
+        CMP     CS:ShareCalls,4         ; bound an erroneous retry after Fail
+        JB      RefuseActive
+        POPF
+        JMP     CS:ShareEntry
+RefuseActive:
+        POPF
+        CALL    ObserveShareA20
+        CMP     CS:ShareCalls,0
+        JNE     ReturnConflict
+        PUSH    BX
+        PUSH    CX
+        PUSH    DX
+        PUSH    SI
+        PUSH    BP
+        MOV     AX,32                  ; stacked error for INT 2Fh/120Ah
+        PUSH    AX
+        MOV     AX,120Ah
+        INT     2Fh
+        POP     AX
+        JC      MultiplexDone          ; first handler reply was Retry
+        PUSH    AX
+        MOV     AX,120Ah
+        INT     2Fh
+        POP     AX
+        JNC     MultiplexDone          ; second handler reply was Fail
+        INC     CS:MultiplexResult
+MultiplexDone:
+        POP     BP
+        POP     SI
+        POP     DX
+        POP     CX
+        POP     BX
+ReturnConflict:
+        MOV     AX,32
+        STC
+        RETF
+
+ShareCritical:
+        CALL    ObserveShareA20
+        INC     CS:ShareCalls
+        MOV     AL,1                    ; Retry then Fail for each pair
+        TEST    CS:ShareCalls,1
+        JNZ     ShareReply
+        MOV     AL,3
+ShareReply:
+        IRET
+ObserveShareA20:
+        CMP     WORD PTR CS:XmsEntry+2,0
+        JE      ShareA20Done
+        CALL    ObserveA20
+ShareA20Done:
+        RET
+ShareEntry DD   RefuseShare
+OldInt24Share DD 0
+ShareName DB    'A:\SHRPROBE.TMP',0
+ShareCalls DB   0
+MultiplexResult DB 0
 
 ; Force a conflict on the open FCB. Retry must repeat the request and Fail
 ; must complete it without advancing the current record.
@@ -540,6 +652,12 @@ DeleteHook:
         CALL    ObserveA20
         POPF
         JMP     CS:DeleteEntry
+GetXmsEntry:
+        MOV     AX,4310h
+        INT     2Fh
+        MOV     WORD PTR XmsEntry,BX
+        MOV     WORD PTR XmsEntry+2,ES
+        RET
 ObserveA20:
         PUSH    AX
         PUSH    BX

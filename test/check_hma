@@ -67,7 +67,7 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
         expected_layout = "n" if layout == "fragmented" else layout[0]
         commands = [f"hmaio {expected_layout}"]
         if layout == "high":
-            commands = ["share", *commands, "hmaio s"]
+            commands = ["share", *commands]
         if layout in ("high", "umb", "upperfallback", "fragmented"):
             commands.extend(["umbcheck", "umbcheck"])
         commands.append("hmasvc")
@@ -93,7 +93,7 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
         ])
         if layout != "high":
             commands.append("share")
-        commands.append("lockio")
+        commands.extend(["hmaio s", "lockio"])
         batch.write_text("\n".join(commands) + "\n")
         batch.with_suffix(".cfg").write_text(config + "\n")
         output = subprocess.check_output(
