@@ -1780,7 +1780,7 @@ PRTINI:	MOV	AH,01H			; LPT4:)
         cmp dl,82h
         je CheckInput
         mov FileOut,1
-        jmp short Preserve
+        mov KeepScreen,1
 CheckInput:
         xor bx,bx
         mov ax,4400h
@@ -1789,7 +1789,7 @@ CheckInput:
         and dl,81h
         cmp dl,81h
         je ConsoleInit
-Preserve:
+        mov FileIn,1
         mov KeepScreen,1
 ConsoleInit:
 	MOV	AH,03H			; Get and save initial screen cursor
@@ -1881,7 +1881,8 @@ CRTOK3:	MOV	AL,AH			; INT 10H conveniently gives us the
         cmp KeepScreen,0
         je ClearDisplay
         mov KeepScreen,0        ; Explicit SCREEN and CLS keep their normal behavior.
-        call SCNCLR             ; Initialize editor state without clearing video RAM.
+        EXTRN ScreenHome:NEAR
+        call ScreenHome         ; Initialize editor state without drawing the key line.
         mov bh,ACTPAG
         mov ah,03h
         int 10h
@@ -2328,7 +2329,8 @@ FKEY40	DB	6D,5D,1D	; (?!?) Function key display format for 40x25
 FKEY80	DB	6D,10D,1D	; (?!?) Function key display format for 80x25
 
 
-PUBLIC FileOut
+PUBLIC FileOut,FileIn
+FileIn DB 0
 FileOut DB 0
 KeepScreen DB 0
 VirtualText DB 0

@@ -444,6 +444,7 @@ SMLSTK:	MOV	AL,DL		;SUBTRACT STACK SIZE FROM TOP MEM
 
 	EXTRN	GETHED:NEAR	;OEM heading retrieval routine
 DSEG	SEGMENT PUBLIC 'DATASG'
+	EXTRN FileIn:BYTE,FileOut:BYTE
 	EXTRN	KEYSW:WORD	;Function key on flag
 DSEG	ENDS
 	MOV	AL,LOW 255D	;if heading is printed, display Fn keys also
@@ -476,6 +477,10 @@ PRNTND:
 ??L005:
 	XOR	AL,AL
 	MOV	BYTE PTR KEYSW,AL	;Show current status of keys
+	cmp FileIn,0
+        jne KEYSOF
+        cmp FileOut,0
+        jne KEYSOF
 	CALL	SKEYON		;Set function key display on
 KEYSOF:	MOV	AL,LOW 377O
 	MOV	BYTE PTR INITFG,AL	;Set the initialization complete flag

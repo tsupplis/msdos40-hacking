@@ -239,13 +239,15 @@ SCNLOC:	MOV	BYTE PTR CSRX,AH
 ;**                         on entry:
 ;
 	EXTRN	KEYDSP:NEAR,GRPINI:NEAR
-SCNCLR:
+SCNCLR: call ScreenHome
+        jmp KEYDSP
+        PUBLIC ScreenHome
+ScreenHome:
 	CALL	TTBINI		;Clear the terminator table
 	CALL	GRPINI		;Home the graphics cursor
 	CALL	WHOME		;DX=cursor home
 	MOV	AX,DX
-	CALL	SCNLOC		;set cursor position
-	JMP	KEYDSP		;Conditionally display softkeys and return
+	jmp SCNLOC
 ;** END SUBROUTINE SCNCLR
 
 ;SUBROUTINE SCNPOS              ; Read current cursor location

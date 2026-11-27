@@ -85,7 +85,11 @@ DSEG	SEGMENT PUBLIC 'DATASG'
 	EXTRN	SEMFLG:WORD	; Flag - zero indicates INPUT; statement(no crlf
 				;       at end of input line)
 	EXTRN	F_INST:WORD	; Flag - =^O377 indicates insert mode
-	EXTRN	BUF:WORD	; Buffer where line of data is returned
+	EXTRN FileIn:BYTE,FileOut:BYTE
+StreamInput DB ?
+SkipLF DB 0
+InputEOF DB 0
+        EXTRN	BUF:WORD	; Buffer where line of data is returned
 				;   NOTE: assumes non-blank at BUF-1
 	EXTRN	F_EDIT:WORD	; Flag - non-zero indicates INLIN active
 	EXTRN	AUTFLG:WORD	; AUTO mode flag
@@ -151,6 +155,12 @@ SINLIN:	OR	AL,AL		; Indicate INPUT statement line input
 INLIN0:
 	SBB	AL,AL		; If INPUT statement AL=0, else AL=-1
 	MOV	BYTE PTR F_EDPG,AL	; Save flag
+        cmp FileIn,0
+        je ScreenInput
+        jmp StreamLine
+ScreenInput:
+        or al,al                ; Restore the input mode flags for SCNMRK below.
+
 	MOV	AL,BYTE PTR F_EDIT	; Get old value of F.EDIT(in case of EDIT statement)
 	MOV	BYTE PTR F_EDIT,LOW 377O	; Indicate executing INLIN
 	CALL	SCNMRK		; Set up for edit
@@ -267,12 +277,98 @@ INCRTX:	MOV	BYTE PTR 0[BX],LOW 0	; Terminate BUF
 	CALL	OUTDO		; Move to end of logical
 	MOV	BYTE PTR F_EDIT,LOW 0
 	CALL	CRDO		; Move to first posn beyond this logical
-INCRTF:	MOV	BX,OFFSET BUF-1	; Return BUF - 1
+INCRTF: cmp byte ptr F_EDPG,0
+        je InputReturn
+        cmp FileOut,2           ; Retry stdout for the next direct command.
+        jne InputReturn
+        mov FileOut,1
+InputReturn: clc
+        MOV	BX,OFFSET BUF-1	; Return BUF - 1
 	PUSHF	
 	CALL	CLRFLG		; Clear miscellaneous status flags
 	POPF	
 	RET	
 
+
+        EXTRN SYSTEM:NEAR,DERRPE:NEAR,DERIOE:NEAR
+; Read a DOS text line into BUF without involving the BIOS editor.
+StreamLine:
+        mov di,offset BUF
+        xor si,si               ; Nonzero if this line overflowed BUF.
+StreamNext:
+        call StreamGet
+        jc StreamEnd
+        cmp al,10D
+        je StreamLineDone
+        cmp al,13D
+        jne StreamStore
+        mov SkipLF,1
+        jmp short StreamLineDone
+StreamStore:
+        cmp di,offset BUF+BUFLEN
+        jb StreamAppend
+        mov si,1
+        jmp short StreamNext
+StreamAppend:
+        mov [di],al
+        inc di
+        jmp short StreamNext
+StreamEnd:
+        cmp di,offset BUF
+        jne StreamLineDone
+        cmp byte ptr F_EDPG,0
+        jne StreamExit
+        jmp DERRPE
+StreamExit:
+        xor al,al               ; SYSTEM requires ZF set.
+        jmp SYSTEM
+StreamLineDone:
+        or si,si
+        jz StreamReturn
+        jmp LBOERR
+StreamReturn:
+        mov byte ptr [di],0
+        jmp INCRTF
+
+        PUBLIC StreamGet
+; Read standard input, preserving caller registers except AX. Carry means EOF.
+StreamGet:
+        push bx
+        push cx
+        push dx
+StreamGetNext:
+        cmp InputEOF,0
+        jne StreamGetEnd
+        xor bx,bx
+        mov dx,offset StreamInput
+        mov cx,1
+        mov ah,3fh
+        int 21h
+        jnc StreamGetRead
+        mov InputEOF,1
+        jmp DERIOE
+StreamGetRead:
+        or ax,ax
+        jz StreamGetEnd
+        mov al,StreamInput
+        cmp al,1ah
+        je StreamGetEnd
+        cmp SkipLF,0
+        je StreamGetOK
+        mov SkipLF,0
+        cmp al,10D
+        je StreamGetNext
+StreamGetOK:
+        clc
+        jmp short StreamGetDone
+StreamGetEnd:
+        mov InputEOF,1
+        stc
+StreamGetDone:
+        pop dx
+        pop cx
+        pop bx
+        ret
 
 ;SUBROUTINE EDTBRK              ; Routine which initializes when break detected
 ;**                             ; This is called by the STOP code

@@ -75,9 +75,14 @@ SCNINI:
 ;SCNTRM is called to Clean-up Screen when BASIC terminates
 ;
 	EXTRN	TKEYOF:NEAR
-SCNTRM:	CALL	TKEYOF		;Turn off KEY display
+DSEG SEGMENT PUBLIC 'DATASG'
+        EXTRN KEYSW:WORD
+DSEG ENDS
+SCNTRM: cmp byte ptr KEYSW,0
+        je ScreenTermPos
+        CALL    TKEYOF		;Turn off KEY display
 	EXTRN	SCNPOS:NEAR
-	CALL	SCNPOS		;[DX]=current cursor location
+ScreenTermPos: CALL SCNPOS	;[DX]=current cursor location
 	RET	
 
 ;SCNCLS - perform any device dependent close functions.
@@ -236,20 +241,53 @@ RET22:	RET
 ; Output [AX], destroys AX
 ;
 DSEG SEGMENT PUBLIC 'DATASG'
-        EXTRN FileOut:BYTE
+        EXTRN FileOut:BYTE,ONELIN:WORD,ONEFLG:WORD,INITFG:WORD
+StreamByte DB ?
 DSEG ENDS
 SCNOL2:
         or si,si                ; Explicit SCRN: files still target the display.
         jnz DisplayChar
         cmp FileOut,0
         je DisplayChar
+        cmp byte ptr F_EDIT,0   ; The interactive editor reads its echo from video RAM.
+        jne DisplayChar
+        push bx
+        push cx
         push dx
         push ax
-        mov dl,al
-        mov ah,2
+        xor bx,bx
+        mov bl,FileOut
+        mov StreamByte,al
+        mov dx,offset StreamByte
+        mov cx,1
+        mov ah,40h
         int 21h
+        jc StreamIOError
+        cmp ax,cx
+        je StreamWritten
+        mov ax,offset DERDFL
+        jmp short StreamFailure
+StreamIOError:
+        mov ax,offset DERIOE
+StreamFailure:
+        cmp bl,2                ; Never recurse while reporting a failed write.
+        je StreamWritten
+        cmp byte ptr INITFG,0
+        je StreamDiagnostic
+        cmp ONELIN,0
+        je StreamDiagnostic
+        cmp byte ptr ONEFLG,0
+        je StreamRaise
+StreamDiagnostic:
+        mov FileOut,2           ; Send the diagnostic and next prompt to stderr.
+StreamRaise:
+        jmp ax                  ; BASIC error unwinding restores the stack.
+        EXTRN DERDFL:NEAR,DERIOE:NEAR
+StreamWritten:
         pop ax
         pop dx
+        pop cx
+        pop bx
         cmp al,10D
         je StreamDone
         inc byte ptr CSRX
