@@ -45,7 +45,7 @@ static size_t test_write(const void *p, size_t size, size_t n, FILE *f)
 #define fclose test_close
 #define fwrite test_write
 
-#define fgetc test_getc
+#define READ_BYTE test_getc
 #define main edit_main
 #include "edit.c"
 #undef main

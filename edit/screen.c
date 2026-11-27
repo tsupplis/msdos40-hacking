@@ -1,5 +1,5 @@
 /* IBM PC text modes. BIOS writes honour the active display page and avoid
- * CGA snow. Cache displayed cells so cursor movement performs no repaint. */
+ * CGA snow. Cache displayed cells to skip unchanged text and attributes. */
 #include <bios.h>
 #include <dos.h>
 #include <string.h>

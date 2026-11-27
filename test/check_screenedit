@@ -38,7 +38,9 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
     run("mcopy", "-o", "-i", image, "auto.bat", "::AUTOEXEC.BAT")
     (folder / "unix").write_bytes(b"one one\none\r\nlast\x1a")
     (folder / "bad").write_bytes(b"binary\0")
-    for name in ("unix", "bad"):
+    (folder / "wide").write_bytes(b"a"*160 + b"Z\r\n\t" + b"b"*78 + b"Q\r\n" +
+                                  b"a"*80 + b"\tR")
+    for name in ("unix", "bad", "wide"):
         run("mcopy", "-i", "b.img", name, "::" + name)
     write_config(folder)
     with (folder / "pce.log").open("wb") as log:
@@ -345,6 +347,19 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
                 key(confirm)
                 expect("Save cancelled." if confirm == "ESC" else "Saved.", anywhere=True)
                 expect("EDIT unix" if confirm == "ESC" else "EDIT draft", anywhere=True)
+            key("+Ctrl o -Ctrl")
+            expect("Open:", anywhere=True)
+            type_text("wide")
+            key("Return")
+            expect("EDIT wide", anywhere=True)
+            key("+ShiftLeft End -ShiftLeft")
+            attrs = expect("Col 162", anywhere=True)
+            # Leftmost display column is 82 (zero-based). Row 2 has a tab
+            # before the viewport, and row 3 has one straddling its edge.
+            cells = (folder / "screen.bin").read_bytes()[::2]
+            assert cells[:80] == b"a"*78 + b"Z "
+            assert attrs[:79] == bytes([0x70])*79 and attrs[79] == 7
+            assert cells[80:85] == b"bbbbQ" and cells[160:167] == b"      R"
             key("+Ctrl q -Ctrl")
             expect("Q>")
         finally:

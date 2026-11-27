@@ -32,6 +32,11 @@ int main(int argc, char **argv)
     save_result recovery;
 
     need(argc == 2, "mode argument");
+    /* Standard CRC-32 check vector, split as it can be across DOS reads. */
+    fs_reset(&original);
+    fs_count(&original, "1234", 4);
+    fs_count(&original, "56789", 5);
+    need(original.size == 9 && ~original.crc == 0xcbf43926UL, "CRC-32 check vector");
     failure = atoi(argv[1]);
     f = fs_create(temp, sizeof(temp), "B:BASE.DAT");
     need(f != NULL && !strncmp(temp, "B:", 2), "same drive temporary");

@@ -108,6 +108,11 @@ static void countRow(file_stamp *stamp, const erow *row)
     fs_count(stamp, ending(row->eol), row->eol);
 }
 
+/* The diagnostic build substitutes a reader that injects a stream error. */
+#ifndef READ_BYTE
+#define READ_BYTE(stream) getc(stream)
+#endif
+
 /* Read bytes in binary mode. Only a final Ctrl-Z is a DOS EOF marker.
  * Refuse embedded NUL/Ctrl-Z instead of offering a truncated file to save. */
 static int editorOpen(char *filename, int allow_new)
@@ -127,10 +132,10 @@ static int editorOpen(char *filename, int allow_new)
         fclose(fp);
         return 0;
     }
-    while ((c = fgetc(fp)) != EOF) {
+    while ((c = READ_BYTE(fp)) != EOF) {
         if (c == 26) {
             E.eofmark = 1;
-            ok = fgetc(fp) == EOF;
+            ok = READ_BYTE(fp) == EOF;
             break;
         }
         if (!c) {
@@ -679,7 +684,10 @@ static int applyEdit(int key, selection s)
     return 1;
 }
 
-static long nextColumn(long col, char c) { return c == '\t' ? (col | 7L) + 1 : col + 1; }
+static long nextColumn(long col, char c)
+{
+    return c == '\t' ? (col | 7L) + 1 : col + 1;
+}
 
 static void editorRefreshScreen(void)
 {
@@ -690,8 +698,12 @@ static void editorRefreshScreen(void)
     int start, end, ry;
     erow *r = &E.row[E.cy];
     s = selected();
-    for (i = 0; i < E.cx; i++)
-        cursor = nextColumn(cursor, r->chars[i]);
+    cursor = E.cx;
+    if (memchr(r->chars, '\t', E.cx)) {
+        cursor = 0;
+        for (i = 0; i < E.cx; ++i)
+            cursor = nextColumn(cursor, r->chars[i]);
+    }
     if (cursor < E.left)
         E.left = cursor;
     if (cursor >= E.left + E.width)
@@ -716,7 +728,16 @@ static void editorRefreshScreen(void)
                 end = start + E.matchlen;
             }
             col = 0;
-            for (i = 0; i < r->size && n < E.width; i++) {
+            i = 0;
+            if (E.left) {
+                /* Without tabs, hidden display columns map directly to bytes. */
+                int prefix = E.left < r->size ? (int)E.left : r->size;
+                if (!memchr(r->chars, '\t', prefix)) {
+                    i = prefix;
+                    col = prefix;
+                }
+            }
+            for (; i < r->size && n < E.width; i++) {
                 next = nextColumn(col, r->chars[i]);
                 if (i == start)
                     first = n;

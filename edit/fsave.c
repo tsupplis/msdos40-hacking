@@ -71,28 +71,27 @@ void fs_reset(file_stamp *stamp)
 
 void fs_count(file_stamp *stamp, const char *data, unsigned count)
 {
-    static const unsigned long nibble[16] = {0,
-                                             0x1db71064UL,
-                                             0x3b6e20c8UL,
-                                             0x26d930acUL,
-                                             0x76dc4190UL,
-                                             0x6b6b51f4UL,
-                                             0x4db26158UL,
-                                             0x5005713cUL,
-                                             0xedb88320UL,
-                                             0xf00f9344UL,
-                                             0xd6d6a3e8UL,
-                                             0xcb61b38cUL,
-                                             0x9b64c2b0UL,
-                                             0x86d3d2d4UL,
-                                             0xa00ae278UL,
-                                             0xbdbdf21cUL};
+    /* A byte's reflected CRC-32 contribution is the XOR of its two
+     * nibble contributions. The low nibble advances eight polynomial
+     * steps and the high nibble four (polynomial EDB88320h). */
+    static const unsigned long low[16] = {
+        0x00000000UL, 0x77073096UL, 0xee0e612cUL, 0x990951baUL,
+        0x076dc419UL, 0x706af48fUL, 0xe963a535UL, 0x9e6495a3UL,
+        0x0edb8832UL, 0x79dcb8a4UL, 0xe0d5e91eUL, 0x97d2d988UL,
+        0x09b64c2bUL, 0x7eb17cbdUL, 0xe7b82d07UL, 0x90bf1d91UL
+    };
+    static const unsigned long high[16] = {
+        0x00000000UL, 0x1db71064UL, 0x3b6e20c8UL, 0x26d930acUL,
+        0x76dc4190UL, 0x6b6b51f4UL, 0x4db26158UL, 0x5005713cUL,
+        0xedb88320UL, 0xf00f9344UL, 0xd6d6a3e8UL, 0xcb61b38cUL,
+        0x9b64c2b0UL, 0x86d3d2d4UL, 0xa00ae278UL, 0xbdbdf21cUL
+    };
     unsigned long crc = stamp->crc;
+    unsigned byte;
     stamp->size += count;
     while (count--) {
-        crc ^= (unsigned char)*data++;
-        crc = (crc >> 4) ^ nibble[crc & 15];
-        crc = (crc >> 4) ^ nibble[crc & 15];
+        byte = (unsigned char)crc ^ (unsigned char)*data++;
+        crc = (crc >> 8) ^ low[byte & 15] ^ high[byte >> 4];
     }
     stamp->crc = crc;
 }
