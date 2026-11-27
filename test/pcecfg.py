@@ -12,7 +12,7 @@ def write_config(folder, *hard_disks, readonly_boot=False):
     boot = folder / "boot.img"
     if not boot.is_file():
         raise FileNotFoundError(boot)
-    config = (root / "test/msdos-high.cfg").read_text()
+    config = Path(os.environ.get("PCE_TEST_CONFIG", root / "test/msdos-high.cfg")).read_text()
     # Replace only the file field of drive A, regardless of its default image.
     drive_a = r'(?ms)(^disk\s*\{\s*drive\s*=\s*0x00\s*\n[^}]*?^\s*file\s*=\s*)"[^"]*"'
     boot_file = f'"{boot}"'

@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+"""Compare the two 640x350 modes with 3.23 on the supported PCE display profiles."""
+from concurrent.futures import ThreadPoolExecutor
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+
+
+def check_profile(profile):
+    adapter, memory, switches = profile
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        image = folder / "data.img"
+        subprocess.run(["mformat", "-C", "-f", "1440", "-i", image, "::"], check=True)
+        fixture = folder / "screen.bas"
+        fixture.write_bytes((root / "test/gw64k.bas").read_text().replace("\n", "\r\n").encode("ascii") + b"\x1a")
+        for source, name in [(root / "gwbasic/gwbasic.ref", "REF.EXE"),
+                             (root / "gwbasic/gwbasic.exe", "DEV.EXE"), (fixture, "SCREEN.BAS")]:
+            subprocess.run(["mcopy", "-i", image, source, "::" + name], check=True)
+        batch = folder / "screen.bat"
+        batch.write_text("b:\nref screen.bas\nren check.out ref.out\ndev screen.bas\n")
+        config = (root / "test/msdos-high.cfg").read_text()
+        template = folder / "display.cfg"
+        template.write_text(config.replace('device = "ega"\n\tswitches = 0x09',
+                                           f'device = "ega"\n\tmemory = {memory}K\n\tswitches = {switches:#04x}'))
+        work = folder / "guest"
+        subprocess.run([root / "test/run_tests", batch], cwd=root, check=True, stdout=subprocess.DEVNULL,
+                       env=dict(os.environ, PCE_TEST_CONFIG=str(template), PCE_VIDEO=adapter,
+                                PCE_TEST_WORK=str(work), PCE_TEST_FLOPPY_B=str(image)))
+        if adapter == "ega" and f"switches={switches:02X} memory={memory}K" not in (work / "pce.log").read_text():
+            raise SystemExit(f"{profile}: PCE did not confirm the requested EGA profile")
+        expected = []
+        for mode in (9, 10):
+            expected.append(f"SCREEN {mode}")
+            if (mode == 10) != (adapter == "ega" and switches == 0x0a):
+                expected.append("ERROR 5 30")
+                continue
+            four = memory == 64 or mode == 10
+            expected.extend(["CORNER 3", "LIMIT 3" if four else "LIMIT 15",
+                             "85 85 51 51" if four else "85 51 0 0"])
+            expected.extend(["FILL 2 1 0", "SPRITE 9 2 2", "XOR 0", "AND 2",
+                             "PRESET 1" if four else "PRESET 13"])
+            expected.extend(["ERROR 5 100"] if memory == 64 else ["PAGE 0 3", "PAGE 1 1", "COPY 3"])
+        expected.append("DONE")
+        for name in ("REF.OUT", "CHECK.OUT"):
+            data = subprocess.check_output(["mtype", "-i", work / "b.img", "::" + name])
+            lines = [" ".join(line.split()) for line in data.removesuffix(b"\x1a").decode("ascii").splitlines()]
+            if lines != expected:
+                raise SystemExit(f"{profile} {name}: expected {expected}, observed {lines}")
+        print(f"PASS {adapter} {memory}K switches={switches:#04x}" if adapter == "ega" else "PASS VGA", flush=True)
+
+
+profiles = [("ega", size, switches) for size in (64, 256) for switches in (0x09, 0x0a)]
+with ThreadPoolExecutor(max_workers=3) as pool:
+    list(pool.map(check_profile, [*profiles, ("vga", 256, 0x09)]))

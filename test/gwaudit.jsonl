@@ -99,7 +99,7 @@
 {"exe": {"RESULT.TXT": " 81 \nDONE"}, "id": 209, "ref": {"RESULT.TXT": " 81 \nDONE"}}
 {"exe": {"RESULT.TXT": " 2 \nDONE"}, "id": 210, "ref": {"RESULT.TXT": " 2 \nDONE"}}
 {"exe": {"RESULT.TXT": " 1 \nDONE"}, "id": 211, "ref": {"RESULT.TXT": " 1 \nDONE"}}
-{"exe": {"RESULT.TXT": " 3 \nDONE"}, "id": 215, "ref": {"RESULT.TXT": "ERROR 5  100 "}}
+{"exe": {"RESULT.TXT": "ERROR 5  100 "}, "id": 215, "ref": {"RESULT.TXT": "ERROR 5  100 "}}
 {"exe": {"RESULT.TXT": " 0 \n 3 \nDONE"}, "id": 216, "ref": {"RESULT.TXT": " 0 \n 3 \nDONE"}}
 {"exe": {"RESULT.TXT": " 1             3             2             2             0 \nDONE"}, "id": 217, "ref": {"RESULT.TXT": " 1             3             2             2             0 \nDONE"}}
 {"exe": {"RESULT.TXT": "-1             3 \n 0             3 \nDONE"}, "id": 218, "ref": {"RESULT.TXT": "-1             3 \n 0             3 \nDONE"}}

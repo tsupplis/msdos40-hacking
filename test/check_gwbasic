@@ -115,6 +115,7 @@ with tempfile.TemporaryDirectory() as tmp:
         subprocess.run(["nasm", "-f", "bin", filler, "-o", folder / "fill.com"], check=True)
         for file in (folder / "seed.com", probe, input_probe, commands, full, folder / "fill.com", lang, prog):
             subprocess.run(["mcopy", "-o", "-i", image, file, "::"], check=True)
+        subprocess.run(["mcopy", "-t", "-i", image, root / "test/gwfile.bas", "::GWFILE.BAS"], check=True)
         batch = folder / "check.bat"
         batch.write_text("b:\na:gwbasic a:smoke.bas\na:gwbasic a:gwvideo.bas\n"
                          "a:gwbasic a:gwlang.bas\na:gwbasic /nob <a:gwprog.txt >nul\n"
@@ -124,7 +125,10 @@ with tempfile.TemporaryDirectory() as tmp:
                          "if errorlevel 1 goto screenfail\n"
                          "a:gwbasic /nob <a:lines.txt >lines.out\n"
                          "a:fill\na:gwbasic a:full.bas >a:empty.txt\nctty com1\n"
-                         "a:gwbasic a:probe.bas <a:cr.txt >a:empty.txt\ngoto checked\n"
+                         "a:gwbasic a:probe.bas <a:cr.txt >a:empty.txt\n"
+                         "set GWFILE=CHECK\na:gwbasic a:gwfile.bas >plain.out\n"
+                         "copy /b a:retry.dat plain.dat >nul\ndel a:retry.dat\n"
+                         "a:share\na:fill\na:gwbasic a:gwfile.bas >shared.out\ngoto checked\n"
                          ":screenfail\nctty com1\necho FAILED screen preservation\n:checked\n")
         work = folder / "guest"
         subprocess.run([root / "test/run_tests", batch], cwd=root, check=True,
@@ -136,6 +140,15 @@ with tempfile.TemporaryDirectory() as tmp:
             raise SystemExit(f"Unexpected command stream output {lines!r}")
         disk_error = subprocess.check_output(["mtype", "-i", work / "b.img", "::FULL.TXT"])
         check_text(disk_error, b" 61 \r\n")
+        for output in ("PLAIN.OUT", "SHARED.OUT"):
+            report = subprocess.check_output(["mtype", "-i", work / "b.img", "::" + output])
+            if report.splitlines() != [b"OPEN FILE PROTECTED", b"HANDLE LIMIT", b"DISK FULL"]:
+                raise SystemExit(f"Unexpected file recovery report in {output}: {report!r}")
+        for drive, name in (("b.img", "PLAIN.DAT"), ("boot.img", "RETRY.DAT")):
+            contents = subprocess.check_output(["mtype", "-i", work / drive, "::" + name])
+            if contents != b"A" * 128 + b"B\x1a":
+                raise SystemExit(f"Write retry produced incorrect contents in {name}: {contents!r}")
+        print("PASS ENVIRON$, handle exhaustion and disk-full retry with and without SHARE")
         diagnostics = (work / "ser1.out").read_bytes().lower()
         if b"disk full in 10" not in diagnostics:
             raise SystemExit(f"Missing disk-full diagnostic on stderr: {diagnostics!r}")
@@ -151,11 +164,10 @@ with tempfile.TemporaryDirectory() as tmp:
         if not eof or [row.split() for row in values.splitlines()] != [
             [b"1", b"2", b"0"], [b"1", b"1", b"0"], [b"2", b"1", b"0"],
             [b"1", b"1", b"0"], [b"14", b"0"], [b"13", b"13", b"0"], [b"11"], [b"12", b"12", b"9", b"0"], *[
-                row for mode, color in ((b"7", b"14"), (b"8", b"14"), (b"9", b"14"), (b"10", b"3"))
-                for row in ([[b"NO", b"MONO", b"BIOS"]] if mode == b"10" and os.environ.get("PCE_VIDEO", "vga") == "vga"
-                            else ([mode, color, b"0", b"0"], [b"2", b"1", b"0"], [color], [b"1"],
-                                  [b"9", b"2", b"3", b"0"], [b"0"], [b"3"], [b"0" if mode == b"10" else b"12"], [color], [color]))
-            ], [b"3"],
+                row for mode, color in ((b"7", b"14"), (b"8", b"14"), (b"9", b"14"))
+                for row in ([mode, color, b"0", b"0"], [b"2", b"1", b"0"], [color], [b"1"],
+                            [b"9", b"2", b"3", b"0"], [b"0"], [b"3"], [b"12"], [color], [color])
+            ], [b"NO", b"MONO", b"BIOS"], [b"3"],
         ]:
             raise SystemExit(f"Unexpected graphics pixel results {video!r}")
         print("PASS CGA and EGA corner pixels and independent pages, filled rectangles, COLOR, PAINT and return to text")
