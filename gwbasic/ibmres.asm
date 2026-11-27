@@ -587,6 +587,9 @@ STMDSX:
 	R2	PALETTE,PALETE
 	R2	LCOPY,LCOPYS
 	R2	CALLS,CALLSL
+        dw 3 dup (offset SNERR)
+        QQ=QQ+3
+        R PCOPY
 ;*************************************************************************
 ;*** The DEBUG entry should be the last entry in the FE Dispatch table ***
 ;*************************************************************************
@@ -661,6 +664,7 @@ DTABX:
 	Q	DRAW
 	DB	0
 ETABX:
+	Q	ENVIRON
 	DB	0
 FTABX:
 	Q	FIELD
@@ -695,6 +699,7 @@ NTABX:
 OTABX:
 	DB	0
 PTABX:
+        Q PCOPY
 	Q	PUT
 	Q	PAINT
 	Q	PLAY
@@ -952,6 +957,8 @@ EVALX:	CMP	AL,LOW 376O
 
 EVALNS:	INC	BX
 	MOV	AL,BYTE PTR [BX]
+	cmp al,low offset $ENVIRON
+        je EnvValue
 	CMP	AL,LOW OFFSET $DATE$
 	JZ	SHORT DATEV	;Brif DATE$
 	CMP	AL,LOW OFFSET $TIME$
@@ -961,6 +968,10 @@ EVALNS:	INC	BX
 	DEC	BX
 	MOV	AL,BYTE PTR [BX]
 	RET	
+
+EnvValue: pop cx
+        extrn EnvFunc:near
+        jmp EnvFunc
 
 DATEV:	POP	CX		;Get rid of the hook return address.
 	JMP	DATEF		;Do DATE function.

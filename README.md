@@ -24,7 +24,7 @@ We are progressing along the following roles:
 | **Stability** | Apply the documented Microsoft and IBM fixes and regression-test the rebuilt system. Progressive focused review of the whole code base |
 | **Memory** | Surpass DOS 3.3 and approach DOS 5.0, targeting at least 610 Kbytes free. UMB allocation and XMS reporting are available. Strong XMS, EMS, HMA, UMB implementations, Selected kernel services can run in the HMA or UMB and Main DOS to UMB |
 | **Storage** | Support for up to 8 physical disks, Integration of all patches, reliability testing |
-| **Usability** | Stay MS-DOS, smooth the angles. Command-line editing and recall, clearer memory diagnostics, BASIC (`gwbasic.exe` and `mbasic.com`) and a screen editor (`vi.exe`) on the full floppy. |
+| **Usability** | Stay MS-DOS, smooth the angles. Command-line editing and recall, clearer memory diagnostics, GW-BASIC (`gwbasic.exe`) and a screen editor (`vi.exe`) on the full floppy. |
 | **Compatibility** | Match closely or exceed DOS 5.0 commands and functionality. For example some 6.X DOS command have been reimplemented and Y2K has a stronger enforcement (4 digit dates are mandatory) |
 
 <p align="center">
@@ -124,19 +124,19 @@ The survey compares the commands shipped here with the command syntax and option
 | `fdisk` | No known gaps | Manage up to eight BIOS hard disks. `/STATUS` reports disk usage and DOS volumes. `/MBR` restores the master boot code on the first fixed disk. It preserves partition entries when the boot signature is present and installs an empty table when it is absent. |  |
 | `find` | No known gaps | `/I` ignores case when matching and preserves the spelling of displayed lines. |  |
 | `format` | Gaps identified | `/Q` quick format. | *won't implement — Recoverable formatting, `/U`, and `/F` for 2.88 MB media.* |
+| `gwbasic` | Project extra | Run a BASIC program or start the interactive editor. See `HELP GWBASIC` for options. |  |
 | `help [command]` | Project extra | With no argument, HELP pages the topic index on the console. Specify a topic for a one-screen reference. |  |
 | `if` | No known gaps | `IF [NOT] DIREXIST path command` tests for a directory. Wildcards match directories only. |  |
 | `keyb` | No known gaps | `/E` selects enhanced keyboard handling when installing on XT or AT. |  |
 | `deltree` | Project extra | Delete files and directory trees, including protected files. Use `/Y` to skip confirmation. |  |
 | `loadfix` | No known gaps | Run a DOS executable above the first 64 KiB and return its exit code. |  |
 | `loadhigh` (`lh`) | No known gaps | Run an external program in upper memory when it fits. |  |
-| `mbasic` | Project extra | BASIC interpreter on the full floppy. |  |
 | `mem` | Gaps identified | Show total, used, and free memory by pool and the largest usable blocks. `/C` (`/CLASSIFY`) groups modules by memory usage. Combine `/P` with `/C` or `/D` (`/DEBUG`) to page console output. Alone, `/P` pages the summary. | `/PROGRAM` lists loaded programs. |
 | `move` | Project extra | Move files within or between drives, or rename a directory in its parent. |  |
 | `more [filename]` | No known gaps | Page a file by name. |  |
 | `printfix` | Missing command |  | Suppress printer status checks for printers that cannot answer them. |
 | `restore` | No known gaps | `/D` lists matching backup paths and preserves destination files. |  |
-| `select` | No same-name DOS 5.0 utility | `SELECT MENU` installs DOS from the distribution or full floppy. Both install `HIMEM.SYS` and `UMBS.SYS` for optional configuration. The full floppy also installs `MBASIC.COM` and `VI.EXE`. |  |
+| `select` | No same-name DOS 5.0 utility | `SELECT MENU` installs DOS from the distribution or full floppy. Both install `HIMEM.SYS` and `UMBS.SYS` for optional configuration. The full floppy also installs `GWBASIC.EXE` and `VI.EXE`. |  |
 | `setver` | Missing command |  | Display or edit the per-program DOS version table. |
 | `sys` | Gaps identified |  | *won't implement — Transfer `COMMAND.COM`, recognize both IBM and Microsoft system-file names when replacing an installation, and allow the first three contiguous sectors of `IO.SYS` to reside later in the data area. The placement change also requires boot-loader support.* |
 | `tree` | No known gaps | `/L` displays directory names in lowercase. Combine it with `/A` for ASCII branches or `/F` to include files. |  |
@@ -146,7 +146,7 @@ The survey compares the commands shipped here with the command syntax and option
 
 | Status | Commands |
 |---|---|
-| *Won't implement* | *`cv`, `doskey`, `dosshell`, `edit`, `expand`, `mirror`, `msherc`, `qbasic`, `setup`, `undelete`, `unformat`*<br><br>*The full floppy provides `vi` for editing and `mbasic` for BASIC.* |
+| *Won't implement* | *`cv`, `doskey`, `dosshell`, `edit`, `expand`, `mirror`, `msherc`, `qbasic`, `setup`, `undelete`, `unformat`*<br><br>*The full floppy provides `vi` for editing and `gwbasic` for BASIC.* |
 | No known gaps | `append`, `assign`, `break`, `call`, `cd` (`chdir`), `chcp`, `chkdsk`, `cls`, `command.com`, `ctty`, `date`, `diskcomp`, `echo`, `edlin`, `exe2bin`, `exit`, `for`, `goto`, `graftabl`, `graphics`, `join`, `label`, `md` (`mkdir`), `mode`, `nlsfunc`, `path`, `pause`, `print`, `prompt`, `rd` (`rmdir`), `recover`, `rem`, `ren` (`rename`), `replace`, `set`, `share`, `shift`, `sort`, `subst`, `time`, `truename`, `type`, `verify`, `vol` |
 
 The batch comparison covers `CALL` with arguments, `ECHO` and leading `@`, `FOR %%v IN (...) DO`, `GOTO` and labels, `IF [NOT]` with ERRORLEVEL, string equality or EXIST, `PAUSE`, `REM`, `SHIFT`, positional arguments and environment expansion. All eight DOS 5.0 batch commands are present. A batch fixture booted on both systems produced identical output for CALL/SHIFT, FOR, IF, GOTO, environment expansion and a blank ECHO line. Individual command rows record project extensions.

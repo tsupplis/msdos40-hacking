@@ -2344,6 +2344,85 @@ SCRFIN:	CLC				; We are done
 SCRERR:	STC
 	RET
 
+; Copy page storage without selecting either page or moving the cursor.
+        public PCOPY
+        extrn GETBYT:near,SYNCHR:near
+PCOPY:  call GETBYT
+        push ax
+        call SYNCHR
+        db ','
+        call GETBYT
+        pop dx
+        push bx
+        mov dh,al               ; DL source, DH destination
+        mov al,CRTMOD
+        xor ah,ah
+        cmp al,0dh
+        jae CopyPlanar
+        mov bx,offset CSEG:TOTPAG
+        xlat cs:[bx]
+        mov bx,0b800h
+        cmp CRTMOD,7
+        jne CopyCheck
+        mov bx,0b000h
+        jmp short CopyCheck
+CopyPlanar:
+        sub al,0dh
+        shl ax,1
+        shl ax,1
+        mov bx,ax
+        ; BIOS 0Fh and 10h are BASIC modes 10 and 9 respectively.
+        cmp bl,8D
+        jb CopyMemory
+        xor bl,4
+CopyMemory:
+        mov al,EgaMemory
+        add bx,ax
+        mov al,cs:EgaPages[bx]
+        mov bx,0a000h
+CopyCheck:
+        cmp dl,al
+        jae CopyError
+        cmp dh,al
+        jae CopyError
+        cmp dl,dh
+        je CopyDone
+        push ds
+        push es
+        xor ax,ax
+        mov es,ax
+        mov cx,es:[44ch]        ; BIOS page stride in bytes per plane
+        mov al,dl
+        mov di,dx
+        mul cx
+        mov si,ax
+        mov ax,di
+        mov al,ah
+        xor ah,ah
+        mul cx
+        mov di,ax
+        mov ds,bx
+        mov es,bx
+        cmp bx,0a000h
+        jne CopyBytes
+        mov dx,3ceh
+        mov ax,0105h            ; Write mode 1 copies all four EGA latches.
+        out dx,ax
+CopyBytes:
+        cld
+        rep movsb
+        cmp bx,0a000h
+        jne CopyFinish
+        mov ax,0005h
+        out dx,ax
+CopyFinish:
+        pop es
+        pop ds
+CopyDone: pop bx
+        ret
+CopyError: pop bx
+        jmp FCERR
+
 ; Internal function: pretend to the BIOS that the active video display page
 ; is ACTPAG, but without actually switching to it
 ;

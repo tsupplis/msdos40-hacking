@@ -2360,6 +2360,106 @@ GETTIM:	DOSIO	GTIM		;Get Time from MS-DOS
 	EXTRN	DERDNA:NEAR
 	JMP	DERDNA		;Device unavailable error
 
+        public EnvFunc
+        extrn PARCHK:near,CONINT:near
+; ENVIRON$(name) returns the value, ENVIRON$(index) the complete entry.
+EnvFunc:
+        call CHRGTR
+        call SYNCHR
+        db '$'
+        call PARCHK
+        push bx
+        call GETYPR
+        jz EnvName
+        call CONINT
+        or dl,dl
+        jz EnvInvalid
+        xor cx,cx
+        jmp short EnvScan
+EnvName:
+        call FRESTR
+        xor cx,cx
+        mov cl,[bx]
+        jcxz EnvInvalid
+        mov si,[bx+1]
+        mov bx,si
+        add bx,cx
+EnvValidate:
+        cmp byte ptr [bx-1],'='
+        je EnvInvalid
+        dec bx
+        cmp bx,si
+        jne EnvValidate
+EnvScan:
+        push es
+        push dx
+        mov ah,51h
+        int 21h
+        mov es,bx
+        mov ax,es:[2ch]
+        pop dx
+        xor di,di
+        or ax,ax
+        jz EnvEmpty
+        mov es,ax
+        cld
+EnvEntry:
+        cmp byte ptr es:[di],0
+        je EnvEmpty
+        jcxz EnvIndex
+        push si
+        push cx
+        push di
+        repe cmpsb
+        pop bx
+        pop cx
+        pop si
+        jne EnvSkipName
+        cmp byte ptr es:[di],'='
+        jne EnvSkipName
+        inc di
+        jmp short EnvFound
+EnvSkipName: mov di,bx
+        jmp short EnvNext
+EnvIndex:
+        dec dl
+        jz EnvFound
+EnvNext:
+        inc di
+        cmp byte ptr es:[di-1],0
+        jne EnvNext
+        jmp short EnvEntry
+EnvInvalid: jmp FCERR
+EnvFound:
+        mov si,di
+        xor cx,cx
+EnvLength:
+        cmp byte ptr es:[di],0
+        je EnvCopy
+        inc di
+        inc cl
+        jnz EnvLength
+        pop es
+        jmp EnvInvalid
+EnvEmpty: xor cx,cx
+EnvCopy: mov al,cl
+        push es
+        push si
+        push cx
+        call STRINI
+        pop cx
+        pop si
+        pop es
+        mov di,dx
+        jcxz EnvDone
+EnvChar: mov al,es:[si]
+        mov [di],al
+        inc si
+        inc di
+        loop EnvChar
+EnvDone: pop es
+        jmp PUTNEW
+
 PUBLIC	PALETE
 PALETE:
 	JMP	SNERR

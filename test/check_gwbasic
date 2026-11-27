@@ -103,7 +103,21 @@ with tempfile.TemporaryDirectory() as tmp:
         for file in (folder / "seed.com", probe, input_probe, commands, full, folder / "fill.com", lang, prog):
             subprocess.run(["mcopy", "-o", "-i", image, file, "::"], check=True)
         batch = folder / "check.bat"
-        batch.write_text("b:\na:gwbasic a:smoke.bas\na:gwbasic a:gwvideo.bas\n"
+        # Make the boot sector's directory read leave a nonzero BASIC flag.
+        # Byte 15 is the high byte of the first FAT entry's creation time.
+        with image.open("r+b") as disk:
+            boot = disk.read(512)
+            sector_size = int.from_bytes(boot[11:13], "little")
+            reserved = int.from_bytes(boot[14:16], "little")
+            fat_sectors = int.from_bytes(boot[22:24], "little")
+            disk.seek((reserved + boot[16] * fat_sectors) * sector_size + 15)
+            disk.write(b"\x50")
+        flag = folder / "flag.asm"
+        flag.write_text("bits 16\norg 100h\nxor ax,ax\nmov es,ax\n"
+                        "mov al,[es:050fh]\nmov ah,4ch\nint 21h\n")
+        subprocess.run(["nasm", "-f", "bin", flag, "-o", folder / "flag.com"], check=True)
+        subprocess.run(["mcopy", "-o", "-i", image, folder / "flag.com", "::"], check=True)
+        batch.write_text("b:\na:flag\nif errorlevel 1 echo FAILED BASIC boot flag\na:gwbasic a:smoke.bas\na:gwbasic a:gwvideo.bas\n"
                          "a:gwbasic a:gwlang.bas\na:gwbasic /nob <a:gwprog.txt >nul\n"
                          "ctty con\na:seed\na:gwbasic /nob a:probe.bas >stream.txt\n"
                          "a:seed check\nif errorlevel 1 goto screenfail\n"
@@ -141,7 +155,7 @@ with tempfile.TemporaryDirectory() as tmp:
                 row for mode, color in ((b"7", b"14"), (b"8", b"14"), (b"9", b"14"), (b"10", b"3"))
                 for row in ([[b"NO", b"MONO", b"BIOS"]] if mode == b"10" and os.environ.get("PCE_VIDEO", "vga") == "vga"
                             else ([mode, color, b"0", b"0"], [b"2", b"1", b"0"], [color], [b"1"],
-                                  [b"9", b"2", b"3", b"0"], [b"0"], [b"3"], [b"0" if mode == b"10" else b"12"]))
+                                  [b"9", b"2", b"3", b"0"], [b"0"], [b"3"], [b"0" if mode == b"10" else b"12"], [color], [color]))
             ], [b"3"],
         ]:
             raise SystemExit(f"Unexpected graphics pixel results {video!r}")
@@ -164,10 +178,13 @@ with tempfile.TemporaryDirectory() as tmp:
             guest.mkdir()
             shutil.copyfile(interpreter, guest / "basic.exe")
             shutil.copyfile(lang, guest / lang.name)
+            matrix = guest / "gwmatrix.bas"
+            matrix.write_bytes(dos_text(root / "test" / matrix.name) + b"\x1a")
             guest_env = dict(env, EMU2_DRIVE_C=str(guest))
-            for argv, stdin in [([lang.name], b""), ([], prog.read_bytes())]:
+            for argv, stdin in [([lang.name], b""), ([matrix.name], b""), ([], prog.read_bytes())]:
                 subprocess.run([emu, "basic.exe", *argv], cwd=guest, env=guest_env,
                                input=stdin, stdout=subprocess.DEVNULL, check=True, timeout=15)
+            check_text((guest / "matrix.out").read_bytes(), b"OK\r\n")
             check_shared(lambda name: (guest / name).read_bytes())
             print(f"PASS shared MBASIC cases with {interpreter.name}")
         result = (folder / "result.txt").read_bytes()

@@ -18,6 +18,10 @@ The shared language regressions adapt cases from `cpm86-msbasic/tests`. They che
 
 With the 3.23 reference present, `make check` also exchanges ASCII, tokenized and protected programs, sequential data, random records and BSAVE blocks in both directions. The check covers the shared language subset. The suite checks matching physical file lengths. The directory commands and `TIMER` keyword use the 3.23 token values. Their implementation draws on TK Chia's GWBASICA updates.
 
+### GW-BASIC 3.23 compatibility work
+
+The [numbered 3.23 equivalence inventory](EQUIVALENCE.md) records observed matches, known differences, untested behavior, and intentional startup changes.
+
 ## Startup and display
 
 `GWBASIC /NOB /NOR DEMO.BAS` loads the program and stops at the editor's `Ok` prompt. Type `LIST` to inspect it or `RUN` to execute it. The switches follow the CP/M-86 MBASIC 5.50 command-line extensions. They accept mixed case and may appear before or after the filename.

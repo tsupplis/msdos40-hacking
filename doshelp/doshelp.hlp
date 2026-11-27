@@ -454,6 +454,19 @@ GRAPHICS     Enable printing of graphics screens.
    /B              Include the background.
    /LCD            Select the LCD screen.
    /PRINTBOX:name  Select a print box. Short form: /PB:name.
+GWBASIC      Run a BASIC program or start the interactive editor.
+
+ GWBASIC [filename] [/NOB[ANNER]] [/NOR[UN]] [/M:n] [/C:n] [/F:n] [/S:n]
+
+   filename        Load and run the program. Omit it for the Ok prompt.
+   /NOB[ANNER]     Hide the banner, free-byte count, and function-key labels.
+   /NOR[UN]        Load the program and wait at the Ok prompt. RUN starts it.
+   /M:n            Set the data segment limit in bytes (decimal or &H hex).
+   /C:n            Set the serial buffer size in bytes.
+   /F:n, /S:n      Accepted. Files and records are allocated dynamically.
+
+   Options may precede or follow the filename. Type SYSTEM to return to DOS.
+   Example: GWBASIC /NOB DEMO.BAS /NOR
 HELP         List help topics or read about one topic.
 
  HELP [topic]
@@ -538,18 +551,6 @@ LOADHIGH     Run an external program in upper memory when available.
  LH program [arguments]
 
    program         External command to run.
-MBASIC       Start the BASIC interpreter.
-
- MBASIC [filename] [/NOB[ANNER]] [/NOR[UN]] [/M:n] [/F:n] [/S:n]
-
-   filename        Load and run the program.
-   /NOB[ANNER]     Hide the banner and free-byte count.
-   /NOR[UN]        Load the program and stay at the Ok prompt.
-   /M:n            Data segment limit in bytes (decimal or &H hex).
-   /F:n, /S:n      Accepted but ignored.
-
-   Options ignore case and may appear before or after the filename.
-   Example: MBASIC /NOB DEMO.BAS /NOR
 MD           Create a directory.
 
  MD [drive:]path
