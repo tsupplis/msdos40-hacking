@@ -525,7 +525,7 @@ DeadFCB:
 FCBOK:
 	CallResident IsSFTNet		       ;AN007;F.C. >32mb  Non Fat file?
 	JNZ	FCBOK2			       ;AN007;F.C. >32mb  yes
-	CallResident CheckShare		       ;AN000;F.C. >32mb  share around?
+	invoke	CheckShare		       ;AN000;F.C. >32mb  share around?
 	JNZ	FCBOK2			       ;AN000;F.C. >32mb  yes
 	CMP	WORD PTR ES:[DI].sf_dirsec+2,0 ;AN000;F.C. >32mb  if dirsec >32mb
 	JZ	FCBOK2			       ;AN000;F.C. >32mb    then error

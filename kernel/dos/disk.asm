@@ -926,7 +926,7 @@ write_cont:				;AN000;
 	MOV	CX,0FFFFH		;AN000;;MS. check for lock on whole file
 Not_Truncate:				;AN000;
 	MOV	AL,80H			;AN000;;MS. check write access
-	CallResident LOCK_CHECK		;AN000;;MS. check lock
+	invoke	LOCK_CHECK		;AN000;;MS. check lock
 	POP	CX			;AN000;;MS. restore reg
 	JNC	WRITE_OK		;AN000;;MS. lock ok
 	invoke	WRITE_LOCK_VIOLATION	;AN000;;MS. issue I24
@@ -956,7 +956,7 @@ ASSUME	DS:NOTHING,ES:NOTHING		       ;AN000;
 	return				       ;AN000;;MS.
 do_retry:				;AN000;
 	MOV	AL,0			;AN000;;MS. check read access
-	CallResident LOCK_CHECK		;AN000;;MS. check lock
+	invoke	LOCK_CHECK		;AN000;;MS. check lock
 	JNC	READ_OK 		;AN000;;MS. lock ok
 	invoke	READ_LOCK_VIOLATION	;AN000;;MS. issue I24
 	JNC	CHECK_READ_LOCK 	;AN000;;MS. retry

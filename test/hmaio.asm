@@ -270,7 +270,11 @@ Full:   CALL    WriteFile
         CALL    FcbCall
         MOV     AH,0Fh
         CALL    FcbCall
-        MOV     BYTE PTR Fcb+32,0       ; current record
+        MOV     BYTE PTR Fcb+32,0       ; OPEN leaves the caller's current record intact
+        CMP     Hooked,0
+        JE      ReadFirstRecord
+        CALL    CheckLockViolation
+ReadFirstRecord:
         MOV     WORD PTR Cache,0
         MOV     AH,14h
         CALL    FcbCall
@@ -418,12 +422,67 @@ SwapHooks:
         INT     21h
         PUSHF
         CLI
+        SwapVector 8,RangeEntry
         SwapVector 14,UpdateEntry
         SwapVector 10,SaveEntry
         SwapVector 11,CheckEntry
         SwapVector 13,DeleteEntry
         POPF
         RET
+
+; Force a conflict on the open FCB. Retry must repeat the request and Fail
+; must complete it without advancing the current record.
+CheckLockViolation:
+        MOV     AX,3524h
+        INT     21h
+        MOV     WORD PTR OldInt24Lock,BX
+        MOV     WORD PTR OldInt24Lock+2,ES
+        MOV     DX,OFFSET LockCritical
+        MOV     AX,2524h
+        INT     21h
+        MOV     LockFault,1
+        MOV     DX,OFFSET Fcb
+        MOV     AH,14h
+        INT     21h
+        MOV     LockFault,0
+        PUSH    AX
+        PUSH    DS
+        LDS     DX,OldInt24Lock
+        MOV     AX,2524h
+        INT     21h
+        POP     DS
+        POP     AX
+        OR      AL,AL
+        Check   JNZ
+        CMP     CriticalCalls,2
+        Check   JE
+        CMP     BYTE PTR Fcb+32,0
+        Check   JE
+        RET
+RangeHook:
+        PUSHF
+        CMP     CS:LockFault,0
+        JNE     RangeConflict
+        POPF
+        JMP     CS:RangeEntry
+RangeConflict:
+        CALL    ObserveA20
+        POPF
+        STC
+        RETF
+LockCritical:
+        INC     CS:CriticalCalls
+        MOV     AL,1                    ; Retry
+        CMP     CS:CriticalCalls,1
+        JE      LockResponse
+        MOV     CS:LockFault,0          ; bound a spurious third attempt
+        MOV     AL,3                    ; Fail
+LockResponse:
+        IRET
+OldInt24Lock DD 0
+RangeEntry DD   RangeHook
+LockFault DB    0
+CriticalCalls DB 0
 
 ; The resident sharer must see A20 released on every callback.
 UpdateHook:
@@ -723,6 +782,8 @@ RestoreSFT:
         Check   JE
         CMP     DeleteReply,5
         Check   JE
+        CMP     LockReplies,2
+        Check   JE
         CMP     IoctlResult,441Ch
         Check   JE
         CMP     OpenSeen,3
@@ -749,6 +810,7 @@ CheckRedirectedIoctl:
         OR      WORD PTR ES:[DI+5],8080h
         MOV     WORD PTR ES:[DI+55],OFFSET LocalIfsHeader
         MOV     ES:[DI+57],CS
+        CALL    CheckRemoteLocks
         XOR     BX,BX
         MOV     CX,004Ah
         MOV     DX,OFFSET Payload
@@ -761,6 +823,30 @@ CheckRedirectedIoctl:
         MOV     IoctlResult,AX
 IoctlTestDone:
         RET
+; The redirector receives one resident eight-byte range and the original
+; lock/unlock function in BX. Return a distinctive documented lock error.
+CheckRemoteLocks:
+        PUSH    DI
+        MOV     AX,5C00h
+        CALL    RemoteLock
+        MOV     AX,5C01h
+        CALL    RemoteLock
+        POP     DI
+        RET
+RemoteLock:
+        XOR     BX,BX                   ; stdin has the temporary remote flag
+        MOV     CX,2
+        MOV     DX,3
+        MOV     SI,4
+        MOV     DI,5
+        INT     21h
+        JNC     RemoteLockDone
+        CMP     AX,33
+        JNE     RemoteLockDone
+        INC     LockReplies
+RemoteLockDone:
+        RET
+LockReplies DB 0
 LocalIfsHeader DB 14 DUP (0)            ; IFSREMOTE clear in attribute at +12
 IoctlResult DW 0
 
@@ -783,14 +869,50 @@ ReturnClose:
         MOV     AX,1234h
         STC
         RETF    2
+ReturnLock:
+        POPF
+        CMP     CX,1
+        JNE     BadLockPacket
+        MOV     AX,DS
+        MOV     SI,SS                   ; DOS stack on this INT 21h path
+        CMP     AX,SI
+        JNE     BadLockPacket
+        MOV     SI,DX
+        CMP     WORD PTR [SI],3
+        JNE     BadLockPacket
+        CMP     WORD PTR [SI+2],2
+        JNE     BadLockPacket
+        CMP     WORD PTR [SI+4],5
+        JNE     BadLockPacket
+        CMP     WORD PTR [SI+6],4
+        JNE     BadLockPacket
+        MOV     AL,CS:LockReplies
+        MOV     AH,5Ch
+        CMP     AX,BX
+        JNE     BadLockPacket
+        CMP     CS:Hooked,0
+        JE      RejectRange
+        CALL    ObserveA20
+RejectRange:
+        MOV     AX,33
+        STC
+        RETF    2
+BadLockPacket:
+        MOV     AX,1
+        STC
+        RETF    2
 NetworkHook:
         PUSHF
+        CMP     AX,110Ah
+        JE      ReturnLock
         CMP     AX,1106h
         JE      ReturnClose
         CMP     AX,112Bh
         JE      ReturnIoctl
         CMP     AX,1113h
-        JE      ReturnDelete
+        JNE     CheckMacroQuery
+        JMP     ReturnDelete
+CheckMacroQuery:
         CMP     AX,111Eh
         JE      ReturnMacroQuery
         CMP     AX,111Fh

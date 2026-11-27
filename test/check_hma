@@ -30,7 +30,7 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
     install_probe(root, folder, image)
     install_asm_probe(root, folder, image, "umbcheck")
     subprocess.run(["mcopy", "-o", "-i", image, root / "pce/pcehimem.sys", "::HIMEM.SYS"], check=True)
-    for name in ("hmasvc", "procabrt"):
+    for name in ("hmasvc", "procabrt", "lockio"):
         probe = folder / (name + ".com")
         subprocess.run(["nasm", "-f", "bin", root / "test" / (name + ".asm"), "-o", probe], check=True)
         subprocess.run(["mcopy", "-i", image, probe, "::" + probe.name], check=True)
@@ -91,6 +91,9 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
             r"if not direxist A:\RENTEST echo DIRECTORY PASS",
             ":dirdone",
         ])
+        if layout != "high":
+            commands.append("share")
+        commands.append("lockio")
         batch.write_text("\n".join(commands) + "\n")
         batch.with_suffix(".cfg").write_text(config + "\n")
         output = subprocess.check_output(
@@ -102,7 +105,7 @@ with tempfile.TemporaryDirectory(dir=work) as temp:
             if len(upper) != 2 or upper[0] != upper[1]:
                 raise RuntimeError(f"child failed to release its UMB allocations: {lines!r}")
         expected = sum(cmd.startswith("hmaio ") for cmd in commands)
-        required = (b"! OUTT PASS", b"HMA SERVICES PASS", b"RENAME PASS", b"DIRECTORY PASS", b"ENDTEST")
+        required = (b"! OUTT PASS", b"HMA SERVICES PASS", b"RENAME PASS", b"DIRECTORY PASS", b"LOCK PASS", b"ENDTEST")
         if lines.count(b"HMA I/O PASS") != expected or any(line not in lines for line in required):
             raise RuntimeError(f"{layout}: {output.decode('cp437')}")
         batch.write_text("REM @blank-b\nprocabrt\n")

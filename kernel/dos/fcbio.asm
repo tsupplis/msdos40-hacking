@@ -226,7 +226,7 @@ NoAttr:
 	XOR	AH,AH
 	PUSH	AX
 ;;; 9/8/86 F.C. save SFT attribute and restore it back when close is done
-	CallResident CheckShare
+	invoke	CheckShare
 	JNZ	NoStash
 	MOV	AL,Attrib
 	MOV	ES:[DI].sf_attr,AL	; attempted attribute for close
@@ -455,7 +455,7 @@ ELSE
 ENDIF
 SaveLocal:
 	IF	Installed
-	CallResident CheckShare
+	invoke	CheckShare
 	JZ	SaveNoShare		; no sharer
 	JMP	SaveShare		; sharer present
 
@@ -670,7 +670,7 @@ lru3:
 	TEST	ES:[DI].sf_flags,sf_isnet   ;	  if (!net[i]
 	JNZ	lru35
 if installed
-	CallResident CheckShare		;		&& !sharing)
+	invoke	CheckShare		;		&& !sharing)
 	JZ	lru5			;	  else
 ENDIF
 ;
@@ -723,7 +723,7 @@ lru75:
 lru8:
 	TEST	ES:[DI].sf_flags,sf_isnet
 	jnz	lru85			; is for network, go check age
-	CallResident CheckShare		; sharer here?
+	invoke	CheckShare		; sharer here?
 	jz	lru86			; no, go check lru
 ;
 ; Network or sharer.  Check age
@@ -765,7 +765,7 @@ lru11:
 	TEST	ES:[DI].sf_flags,sf_isNet
 	JNZ	LRUClose
 IF INSTALLED
-	CallResident CheckShare
+	invoke	CheckShare
 	JZ	LRUDone
 ENDIF
 ;
@@ -834,7 +834,7 @@ Procedure   FCBRegen,NEAR
 ; around, presume that we have cycled out the FCB and give the hard error.
 ; Otherwise, just return with carry set.
 ;
-	CallResident CheckShare		; test for sharer
+	invoke	CheckShare		; test for sharer
 	JNZ	RegenFail		; yep, fail this.
 	MOV	AX,multNet SHL 8	; install check on multnet
 	CallResident DosMultiplex
@@ -853,7 +853,7 @@ RegenDead:
 ; fail the operation.
 ;
 RegenNoSharing:
-	CallResident CheckShare		; Sharing around?
+	invoke	CheckShare		; Sharing around?
 	JNZ	RegenFail
 ;
 ; Find an SFT for this guy.

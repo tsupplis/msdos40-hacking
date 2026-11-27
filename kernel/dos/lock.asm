@@ -38,6 +38,42 @@ Installed = TRUE
 	i_need	Lock_Buffer,DWORD	;AN000; DOS 4.00
 	i_need	Temp_Var,WORD		;AN000; DOS 4.00
 
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry $LockOper,221
+
+; The installed sharer receives the original registers and returns carry.
+; Invoke its far entries from resident CODE on the DOS stack.
+SetSharedRange PROC NEAR
+if installed
+        CALL    CS:[JShare + 6 * 4]
+else
+        CALL    Set_Block
+endif
+        RET
+SetSharedRange ENDP
+
+ClearSharedRange PROC NEAR
+if installed
+        CALL    CS:[JShare + 7 * 4]
+else
+        CALL    Clr_Block
+endif
+        RET
+ClearSharedRange ENDP
+
+CheckSharedRange PROC NEAR
+if installed
+        CALL    CS:[JShare + 8 * 4]
+else
+        CALL    Chk_Block
+endif
+        RET
+CheckSharedRange ENDP
+CODE ENDS
+
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+
 BREAK <$LockOper - Lock Calls>
 
 ;
@@ -76,7 +112,7 @@ BREAK <$LockOper - Lock Calls>
 ;	       = error_invalid_function
 ;	       = error_lock_violation
 
-	procedure   $LockOper,NEAR
+	procedure   LockFileRange,NEAR
 ASSUME	DS:NOTHING,ES:NOTHING
 ;	MOV	BP,AX			;MS. BP=AX				;AN000;
 ;	AND	BP,7FH			;MS. clear bit 7			;AN000;
@@ -87,13 +123,17 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	JA	lock_bad_func		;AN000;;MS. no,
 
 	PUSH	DI			       ; Save LengthLow
-	invoke	SFFromHandle		       ; ES:DI -> SFT
+	CallResident SFFromHandle		       ; ES:DI -> SFT
 	JNC	lock_do 		       ; have valid handle
 	POP	DI			       ; Clean stack
-	error	error_invalid_handle
+	MOV	AL,error_invalid_handle
+	JMP	SHORT lockerror
 lock_bad_func:
 	MOV	EXTERR_LOCUS,errLoc_Unk        ; Extended Error Locus
-	error	error_invalid_function
+	MOV	AL,error_invalid_function
+lockerror:
+	CallResident SYS_RET_ERR
+	return
 
 ; Align_buffer call has been deleted, since it corrupts the DTA  (6/5/88) P5013
 
@@ -124,12 +164,19 @@ old_33:
 	MOV	WORD PTR [BP.Lock_length],CX	;AN000;;MS. set low length
 	MOV	WORD PTR [BP.Lock_length+2],SI	;AN000;;MS. set high length
 	MOV	CX,1				;AN000;;MS. one range
-	PUSH	CS				;AN000;;MS.
+	PUSH	SS				; DOSGROUP holds the range
 	POP	DS				;AN000;;MS. DS:DX points to
 	MOV	DX,BP				;AN000;;MS.   Lock_Buffer
-	TEST	AL,Unlock_all			;AN000;;MS. function 1
-	JNZ	DOS_Unlock			;AN000;;MS. yes
-	JMP	DOS_Lock			;AN000;;MS. function 0
+        TEST    ES:[DI.sf_flags],sf_isnet
+        JZ      LocalRange
+        MOV     AX,(multNet SHL 8) OR 10
+        CallResident DosMultiplex
+        JMP     SHORT ValChk
+LocalRange:
+        TEST    AL,Unlock_all
+        JNZ     DOS_Unlock
+        CallResident SetSharedRange
+        JMP     SHORT ValChk
 ;;chk_lock_mul: 				;AN000;
 ;	POP	SI				;AN000;;MS. pop low length
 ;	TEST	ES:[DI.sf_flags],sf_isnet	;AN000;;MS. net handle?
@@ -182,42 +229,13 @@ old_33:
 ;	JMP	WriteUnlock			 ;AN000;;MS. do write unlock
 						 ;AN000;;MS.
 DOS_Unlock:
-	TEST	ES:[DI.sf_flags],sf_isnet
-	JZ	LOCAL_UNLOCK
-;;	invoke	OWN_SHARE			 ;AN000;;MS. IFS owns share ?
-;;	JNZ	LOCAL_UNLOCK			 ;AN000;;MS. no
-
-	CallInstall Net_Xlock,multNet,10
-	JMP	SHORT ValChk
-LOCAL_UNLOCK:
-if installed
-	Call	JShare + 7 * 4
-else
-	Call	clr_block
-endif
+        CallResident ClearSharedRange
 ValChk:
-	JNC	Lock_OK
-lockerror:
-	transfer SYS_RET_ERR
-Lock_OK:
-	MOV	AX,[Temp_VAR]			 ;AN000;;MS. AX= number of bytes
-	transfer SYS_Ret_OK
-DOS_Lock:
-	TEST	ES:[DI.sf_flags],sf_isnet
-	JZ	LOCAL_LOCK
-;;	invoke	OWN_SHARE			 ;AN000;;MS. IFS owns share ?
-;;	JNZ	LOCAL_LOCK			 ;AN000;;MS. no
-	CallInstall NET_XLock,multNet,10
-	JMP	ValChk
-LOCAL_LOCK:
-if installed
-	Call	JShare + 6 * 4
-else
-	Call	Set_Block
-endif
-	JMP	ValChk
-
-EndProc $LockOper
+        JC      lockerror
+        MOV     AX,SS:[Temp_VAR]
+        CallResident SYS_RET_OK
+        return
+EndProc LockFileRange
 
 BREAK <Set_Lock>
 
@@ -300,20 +318,16 @@ BREAK <Set_Lock_Buffer>
 ; Outputs of SETUP preserved
 
 	procedure   LOCK_CHECK,NEAR
-	DOSAssume   CS,<DS>,"Lock_Check"
+	DOSAssume   SS,<DS>,"Lock_Check"
 	ASSUME	ES:NOTHING
 
 	MOV	BX,RetryCount		; Number retries
 LockRetry:
 	SaveReg <BX,AX> 		; MS. save regs 			;AN000;
-if installed
-	call	JShare + 8 * 4
-else
-	Call	chk_block
-endif
+	CallResident CheckSharedRange
 	RestoreReg  <AX,BX>		; MS. restrore regs			;AN000;
 	retnc				; There are no locks
-	Invoke	Idle			; wait a while
+	CallResident Idle			; wait a while
 	DEC	BX			; remember a retry
 	JNZ	LockRetry		; more retries left...
 	STC
@@ -332,7 +346,7 @@ EndProc LOCK_CHECK
 ; DS, ES, DI, CX preserved, others destroyed
 
 	procedure   LOCK_VIOLATION,NEAR
-	DOSAssume   CS,<DS>,"Lock_Violation"
+	DOSAssume   SS,<DS>,"Lock_Violation"
 	ASSUME	ES:NOTHING
 
 	PUSH	DS
@@ -345,7 +359,7 @@ EndProc LOCK_CHECK
 	MOV	DI,1				; Fake some registers
 	MOV	CX,DI
 	MOV	DX,ES:[BP.dpb_first_sector]
-	invoke	HARDERR
+	CallResident HARDERR
 	POP	CX
 	POP	DI
 	POP	ES
@@ -362,11 +376,18 @@ IF  INSTALLED
 ; do a retz to return error
 ;
 Procedure   CheckShare,NEAR
-	ASSUME	CS:DOSGROUP,ES:NOTHING,DS:NOTHING,SS:NOTHING
-	CMP	fShare,0
+	ASSUME	CS:DOSCODE,ES:NOTHING,DS:NOTHING,SS:DOSGROUP
+	CMP	SS:[fShare],0
 	return
 EndProc CheckShare
 ENDIF
 
-CODE	ENDS
+DOSCODE ENDS
+
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC LockEntries
+LockEntries LABEL WORD
+        DW OFFSET DOSGROUP:$LockOper_VECTOR, OFFSET DOSGROUP:LockFileRange
+        DW 0
+DOSEND ENDS
     END

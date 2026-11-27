@@ -421,7 +421,7 @@ ERR_ON_CHECK:
 	POP	CX
 	JNE	NO_HARD_ERR
 HARD_ERR:
-	CallResident LOCK_VIOLATION
+	invoke	LOCK_VIOLATION
 	retnc				; User wants Retrys
 NO_HARD_ERR:
 	XOR	CX,CX			;No bytes transferred
