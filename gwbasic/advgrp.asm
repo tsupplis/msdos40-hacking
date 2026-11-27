@@ -1157,6 +1157,8 @@ DRWTAB:	DB	"U"+128D	;UP
 	ADR	MCLXEQ
 	DB	"C"+128D	;COLOR
 	ADR	DCOLR
+	DB      "P"+128D        ; Fill at the current graphics cursor
+        ADR     DrawPaint
 	DB	"S"+128D	;SCALE
 	ADR	DSCALE
 	DB	00		;END OF TABLE
@@ -1298,6 +1300,31 @@ DSTFLG:	MOV	BX,OFFSET DRWFLG
 	OR	AL,BYTE PTR [BX]
 	MOV	BYTE PTR [BX],AL	;STORE UPDATED BYTE
 	RET	
+
+DrawPaint:
+        jnc DrawPaintError
+        push dx
+        call FETCHZ
+        cmp al,','
+        jne DrawPaintError
+        call VALSCN
+        or dh,dh
+        jnz DrawPaintError
+        pop ax
+        or ah,ah
+        jnz DrawPaintError
+        push dx
+        call SETATR
+        pop dx
+        jc DrawPaintError
+        push dx
+        call INTQUE
+        pop dx
+        push GRPACX
+        push GRPACY
+        jmp GOTBRD
+DrawPaintError:
+        jmp FCERR
 
 DANGLE:	JAE	SHORT NCFCER	;ERROR IF NO ARG
 	MOV	AL,DL		;MAKE SURE LESS THAN 4

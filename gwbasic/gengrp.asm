@@ -116,7 +116,7 @@ SCAND:	MOV	AL,BYTE PTR [BX]	;GET THE CURRENT CHARACTER
 	CALL	SYNCHR
 	DB	OFFSET "("	;SKIP OVER OPEN PAREN
 	CALL	GETIN2		;SCAN X INTO [D,E]
-	PUSH	DX		;SAVE WHILE SCANNING Y
+ScanY: PUSH	DX		;SAVE WHILE SCANNING Y
 	CALL	SYNCHR
 	DB	OFFSET 44D	;SCAN COMMA
 	CALL	GETIN2		;GET Y INTO [D,E]
@@ -124,7 +124,12 @@ SCAND:	MOV	AL,BYTE PTR [BX]	;GET THE CURRENT CHARACTER
 	DB	OFFSET ")"
 	POP	CX		;GET BACK X INTO [B,C]
 	POPF			;RECALL IF RELATIVE OR NOT
-SCANN:	PUSH	BX		;SAVE TEXT POINTER
+        jmp short SCANN
+PointAbsY:
+        or al,1
+        pushf
+        jmp short ScanY
+SCANN:  PUSH	BX		;SAVE TEXT POINTER
 	MOV	BX,GRPACX	;GET OLD POSITION
 	JZ	SHORT SCXREL	;IF ZERO,RELATIVE SO USE OLD BASE
 	MOV	BX,0		;IN ABSOLUTE CASE, JUST Y USE ARGEUMENT
@@ -201,7 +206,31 @@ POINT:
 	MOV	BX,GRPACX
 	PUSH	BX
 	XCHG	BX,DX		;Put the text pointer back in HL.
-	CALL	SCAND		;READ THE SPECIFICATION OF THE POINT
+	cmp byte ptr [bx],'('
+        jne PointStep
+        call CHRGTR
+        call GETIN2
+        cmp byte ptr [bx],')'
+        jne PointPair
+        cmp dx,3
+        jbe PointSelector
+        jmp FCERR
+PointSelector:
+        push dx
+        call CHRGTR
+        pop dx
+        push bx
+        mov bx,GRPACX
+        test dl,1
+        jz PNTNOT
+        mov bx,GRPACY
+        jmp short PNTNOT
+PointPair:
+        ; SCAND saves ZF for absolute versus STEP coordinates before parsing Y.
+        call PointAbsY
+        jmp short ReadPoint
+PointStep: call SCAND
+ReadPoint:
 	PUSH	BX		;SAVE THE TEXT POINTER
 	CALL	SCALXY		;SCALE THE POINT
 	MOV	BX,OFFSET 0-1	;ASSUME ILLEGAL POINT
@@ -349,16 +378,48 @@ GLINE:
 	CALL	ATRSCN		;SCAN THE ATTRIBUTE
 	POP	DX		;GET BACK THE FIRST POINT
 	POP	CX
-	JZ	SHORT DOLINE	;IF STATEMENT ENDED ITS A NORMAL LINE
+	jnz LineOptions
+        jmp DOLINE
+LineOptions:
 	CALL	SYNCHR
 	DB	OFFSET 44D	;OTHERWISE MUST HAVE A COMMA
-	CALL	SYNCHR
-	DB	OFFSET "B"	;AND A "B"
+	cmp al,','
+        je StyledLine
+        CALL SYNCHR
+        DB OFFSET "B"
 	JNZ	SHORT ??L004
 	JMP	BOXLIN		;IF JUST "B" THE NON-FILLED BOX
 ??L004:
-	CALL	SYNCHR
+        cmp al,','
+        je StyledBox
+        CALL SYNCHR
 	DB	OFFSET "F"	;MUST BE FILLED BOX
+        jz DOBOXF
+        call ReadStyle          ; BF validates the style and fills solid.
+        jmp short DOBOXF
+StyledLine:
+        call ReadStyle
+        mov LineMask,ax
+        call DOLINE
+        jmp short EndStyle
+StyledBox:
+        call ReadStyle
+        mov LineMask,ax
+        call BOXLIN
+EndStyle:
+        mov LineMask,0ffffh
+        ret
+ReadStyle:
+        push cx
+        push dx
+        call SYNCHR
+        db ','
+        call GETIN2
+        mov ax,dx
+        pop dx
+        pop cx
+        ret
+
 DOBOXF:	PUSH	BX		;SAVE THE TEXT POINTER
 	CALL	SCALXY		;SCALE FIRST POINT
 	CALL	XCHGAC		;SWITCH POINTS
@@ -525,6 +586,8 @@ HLFDE:	MOV	AL,DH
 
 	EXTRN	GRPSIZ:NEAR	;Get screen pixel dimension routine (OEM)
 DSEG	SEGMENT PUBLIC 'DATASG'
+	public LineMask
+LineMask dw 0ffffh
 	EXTRN	DRWSCL:WORD,DRWANG:WORD
 DSEG	ENDS
 

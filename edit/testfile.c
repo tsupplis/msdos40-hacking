@@ -164,6 +164,32 @@ int main(int argc, char **argv)
     if (mode == 16) fail_close = 1;
     if (mode == 17) fail_read = 10;
     result = editorOpen("B:EDIT.TXT");
+    if (mode == 39) {
+        int n;
+        need(result && E.numrows == 2,"replace source");
+        for (n = 1; n <= 4; ++n) {
+            allocations = 0; fail_alloc = n;
+            need(!replaceAll("a","bb",NULL),"allocation failure");
+            need(!E.dirty && !history_count && !strcmp(E.row[0].chars,"aa")
+                 && !strcmp(E.row[1].chars,"a"),"replace failure atomic");
+        }
+        fail_alloc = 0;
+        need(replaceAll("a","a",NULL) && !history_count,"identical is no edit");
+        need(replaceAll("a","aa",NULL) && history_count == 1,"one undo entry");
+        need(!strcmp(E.row[0].chars,"aaaa") && !strcmp(E.row[1].chars,"aa"),
+             "non-overlapping replacements");
+        need(undoEdit() && !E.dirty && E.row[0].eol == 1,"restore state");
+        need(!strcmp(E.row[0].chars,"aa") && !strcmp(E.row[1].chars,"a"),
+             "restore text");
+        need(replaceAll("a","",NULL) && editorSave(),"save global deletion");
+        puts("EDIT PASS"); return 0;
+    }
+    if (mode == 40) {
+        need(result && !replaceAll("a","aa",NULL),"oversize row rejected");
+        need(!E.dirty && !history_count && !strcmp(E.row[0].chars,"a") &&
+             E.row[1].size == 32766,"oversize preserves all rows");
+        puts("EDIT PASS"); return 0;
+    }
     if (mode == 38) {
         need(result,"undo source loaded");
         undoFailures();

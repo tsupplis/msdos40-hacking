@@ -30,8 +30,12 @@ with tempfile.TemporaryDirectory() as folder:
         assert p.returncode == 0 and b"EDIT PASS" in p.stdout, p
         assert target.read_bytes() == data
 
-    for mode in (33, 34, 36, 37, 38):
+    for mode in (33, 34, 36, 37, 38, 39, 40):
         target.unlink(missing_ok=True)
+        if mode == 39:
+            target.write_bytes(b"aa\na")
+        if mode == 40:
+            target.write_bytes(b"a\r\n" + b"a"*32766)
         if mode == 38:
             target.write_bytes(b"first\nlast")
         if mode == 33:
@@ -40,6 +44,8 @@ with tempfile.TemporaryDirectory() as folder:
             target.write_bytes(b"a"*32000)
         p = run("testfile.exe", str(mode))
         assert p.returncode == 0 and b"EDIT PASS" in p.stdout, p
+        if mode == 39:
+            assert target.read_bytes() == b"\n"
         if mode == 34:
             assert target.read_bytes() == (b"\r\na\r\n"*50 + b"a"*31950)
         assert not list(drive.glob("*.tmp"))

@@ -41,7 +41,7 @@ determine the usable document size.
 
 | Measurement | Largest complete load | First refused |
 |---|---:|---:|
-| emu2, file-test build, 78 bytes plus CRLF per line | 486,320 bytes | 486,400 bytes |
+| emu2, file-test build, 78 bytes plus CRLF per line | 481,200 bytes | 481,280 bytes |
 | emu2, file-test build, 1,022 bytes plus CRLF per line | 588,800 bytes | 589,824 bytes |
 
 The production executable also passed an interactive edit, find and save

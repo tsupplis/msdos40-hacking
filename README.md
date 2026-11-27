@@ -15,7 +15,7 @@ _The remaining gaps are in the work:_
 - _completion of emm386 functionalities in line with DOS 5.0_
 - _setver_
 - _more to UMB and HMA_
-- _undo, Save As and search-and-replace for EDIT_
+- _Save As for EDIT_
 
 We are progressing along the following roles:
 
@@ -46,6 +46,7 @@ Based on hharte’s [4.01 reconstruction](https://github.com/lotharsm/MS-DOS/tre
 | `commands/` | `command.com`, external commands and `select` |
 | `common/`, `mapper/`, `messages/` | Shared objects, libraries and messages |
 | `asminc/`, `include/`, `sdk/` | Headers and vintage build tools |
+| [`edit/`](edit/README.md) | Full-screen DOS text editor derived from Kilo |
 | [`gwbasic/`](gwbasic/README.md) | Microsoft GW-BASIC with the MIT-licensed PC reconstruction by Diomidis Spinellis, Stjepan Gros and TK Chia |
 | `media/` | Floppy image rules and startup files |
 
@@ -117,7 +118,7 @@ The survey compares the commands shipped here with the command syntax and option
 | `debug` | No known gaps | Type `?` at the debugger prompt for a one-screen command reference, including the EMS commands in the shipped build. |  |
 | `del` (`erase`) | No known gaps | `/Q` skips the bulk-delete confirmation. An explicit `/P` still prompts for each file. |  |
 | `dir` | No known gaps | `/B` prints bare names, one per line. `/L` displays ASCII letters in filenames in lowercase. `/A[:]` filters by D, R, H, S, or A. `/O[:]` orders by N (name), E (extension), S (size), D (date), or G (directories first). `/2Y` restores two-digit year display. Prefix a letter with `-` to exclude an attribute or reverse a key. `/P` pages console output. `DIRCMD` presets switches, and `/-` disables a preset switch on the command line. `/W` displays dotted filenames and brackets directory names. `/S` lists matching entries in subdirectories. With `/B`, it prints full paths. |  |
-| `edit` | Project command | Kilo-based full-screen text editor, built with Microsoft C 5.1. [Usage and limits](commands/edit/README.md). |  |
+| `edit` | Project command | Kilo-based full-screen text editor, built with Microsoft C 5.1. [Usage and limits](edit/README.md). |  |
 | `diskcopy` | No known gaps | `/V` asks the disk driver to verify each destination track after writing it. |  |
 | `emm386` | Missing command |  | The EMM386.EXE command interface for querying and changing expanded-memory operation. The full floppy ships EMM386.SYS. |
 | `fastopen` | No known gaps | Cache paths on up to 24 fixed-disk volumes (`C:` through `Z:`) across eight BIOS hard disks. |  |
@@ -291,5 +292,5 @@ MIT unless a subdirectory specifies otherwise. [license.md](LICENSE.md)
 
 ## Credits
 
-- **EDIT** derives from Kilo, written by Salvatore Sanfilippo (antirez) in 2016. Kilo is distributed under the BSD 2-Clause license. [Kilo source](https://github.com/antirez/kilo) · [License](commands/edit/LICENSE.md)
+- **EDIT** derives from Kilo, written by Salvatore Sanfilippo (antirez) in 2016. Kilo is distributed under the BSD 2-Clause license. [Kilo source](https://github.com/antirez/kilo) · [License](edit/LICENSE.md)
 - **GW-BASIC** uses Microsoft's 1983 interpreter and the PC reconstruction by Diomidis Spinellis, Stjepan Gros and TK Chia, distributed under the MIT license. [Microsoft source](https://github.com/microsoft/GW-BASIC) · [Spinellis reconstruction](https://github.com/dspinellis/GW-BASIC) · [TK Chia fork](https://codeberg.org/tkchia/GW-BASIC) · [License](gwbasic/LICENSE.md)
