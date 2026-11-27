@@ -48,7 +48,8 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
     run("mcopy", "-o", "-i", image, "auto.bat", "::AUTOEXEC.BAT")
     write_config(folder)
     with (folder / "pce.log").open("wb") as log:
-        proc = subprocess.Popen(["pce-ibmpc", "-c", "pce.cfg", "-t", "null", "-g", "vga"],
+        pce = os.environ.get("PCE_HEADLESS") or "pce-ibmpc"
+        proc = subprocess.Popen([pce, "-c", "pce.cfg", "-t", "null", "-g", "vga"],
                                 cwd=folder, stdin=subprocess.PIPE, stdout=log, stderr=log)
         def send(command):
             proc.stdin.write((command + "\n").encode())
@@ -70,6 +71,10 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
                 send('c 200000\nsave "screen.bin" bin b800:0 fa0')
                 while not dump.exists() or dump.stat().st_size != 4000:
                     if proc.poll() is not None or time.monotonic() >= deadline:
+                        if not screen:
+                            binary = shutil.which(pce) or pce
+                            raise RuntimeError(f"No first screen capture from {binary}. "
+                                               "Set PCE_HEADLESS to a monitor-capable headless build.")
                         raise RuntimeError(f"PCE screen capture timed out, last screen\n{screen}")
                     time.sleep(.01)
                 data = dump.read_bytes()[::2].decode("cp437")
