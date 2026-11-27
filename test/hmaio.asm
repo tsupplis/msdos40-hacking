@@ -465,6 +465,10 @@ InstallShareHooks:
         Check   JE
         CMP     ShareCalls,4
         Check   JE
+        CMP     AttemptsBeforeRetry,DefaultShareTries
+        Check   JE
+        CMP     ShareAttempts,DefaultShareTries
+        Check   JE
         MOV     DX,OFFSET ShareName
         MOV     AX,4300h                ; the failed create removed its entry
         INT     21h
@@ -490,6 +494,7 @@ RefuseShare:
         JMP     CS:ShareEntry
 RefuseActive:
         POPF
+        INC     CS:ShareAttempts
         CALL    ObserveShareA20
         CMP     CS:ShareCalls,0
         JNE     ReturnConflict
@@ -524,6 +529,12 @@ ReturnConflict:
 ShareCritical:
         CALL    ObserveShareA20
         INC     CS:ShareCalls
+        CMP     CS:ShareCalls,3         ; first two calls are the explicit 120Ah probes
+        JNE     ShareResponseCode
+        MOV     AL,CS:ShareAttempts     ; first create-time prompt answers Retry
+        MOV     CS:AttemptsBeforeRetry,AL
+        MOV     CS:ShareAttempts,0      ; count fresh attempts before Fail
+ShareResponseCode:
         MOV     AL,1                    ; Retry then Fail for each pair
         TEST    CS:ShareCalls,1
         JNZ     ShareReply
@@ -540,6 +551,9 @@ ShareEntry DD   RefuseShare
 OldInt24Share DD 0
 ShareName DB    'A:\SHRPROBE.TMP',0
 ShareCalls DB   0
+DefaultShareTries EQU 3                 ; these scratch boots use the DOS default
+ShareAttempts DB 0
+AttemptsBeforeRetry DB 0
 MultiplexResult DB 0
 
 ; Force a conflict on the open FCB. Retry must repeat the request and Fail
