@@ -72,7 +72,7 @@ IBMCSR=IBMLIK
 ;EXTERNAL ROUTINES:
 
 	EXTRN	OUTDO:NEAR	; Character output(GIO86)
-	EXTRN	KEYIN:NEAR	; Key input(expands any string keys-GIOKYB)
+	EXTRN	ReadEditorKey:NEAR
 	EXTRN	SCNMRK:NEAR	; Mark current posn as start of line(SCNDRV)
 	EXTRN	SCNRDL:NEAR	; Read current logical line(SCNDRV)
 	EXTRN	CRDO:NEAR	; BASIC new line routine
@@ -86,9 +86,6 @@ DSEG	SEGMENT PUBLIC 'DATASG'
 				;       at end of input line)
 	EXTRN	F_INST:WORD	; Flag - =^O377 indicates insert mode
 	EXTRN FileIn:BYTE,FileOut:BYTE
-StreamInput DB ?
-SkipLF DB 0
-InputEOF DB 0
         EXTRN	BUF:WORD	; Buffer where line of data is returned
 				;   NOTE: assumes non-blank at BUF-1
 	EXTRN	F_EDIT:WORD	; Flag - non-zero indicates INLIN active
@@ -159,7 +156,10 @@ INLIN0:
         jne ReadStreamLine
         cmp FileOut,0
         je ScreenInput
-ReadStreamLine: jmp StreamLine
+ReadStreamLine:
+        extrn StreamLine:near
+        call StreamLine
+        jmp INCRTF
 ScreenInput:
         or al,al                ; Restore the input mode flags for SCNMRK below.
 
@@ -180,7 +180,7 @@ INLLOP:
 	EXTRN	STCTYP:NEAR
 	CLC			; Signal for insert or overwrite cursor
 	CALL	STCTYP		; Set new cursor type
-	CALL	KEYIN		; AX=key value
+	CALL	ReadEditorKey	; AX=key value
 ;At this point we can have three classes of characters:
 ;   CF=1 indicates 2 byte char with 2 sub classes:
 ;       AH=FF indicates editor control function
@@ -189,11 +189,9 @@ INLLOP:
 ;       AL=FF indicates a 3 byte key with scan code in DX - these are ignored
 ;       AL<>FF indicates a 1 byte key to echo, except if char is CR.
 	JB	INL2BY		; BRIF 2-byte character, check for editor controls
+        JZ      INLLOP          ; Unassigned extended key
 	CMP	AL,LOW OFFSET CHRRET
 	JZ	INLRET		; BRIF CR, terminate line input
-        EXTRN   EditKey:NEAR
-        CALL    EditKey         ; Map keyboard input only, leaving PRINT and INKEY$ alone.
-        JZ      INLLOP          ; Unassigned extended key
 	JMP	SHORT INLOP0	; Not 3-bytes, just echo single byte
 INL2BY:
 ;** IF CURRENT_CHAR IS CONTROL_CHAR
@@ -290,88 +288,6 @@ InputReturn: clc
 	POPF	
 	RET	
 
-
-        EXTRN SYSTEM:NEAR,DERRPE:NEAR,DERIOE:NEAR
-; Read a DOS text line into BUF without involving the BIOS editor.
-StreamLine:
-        mov di,offset BUF
-        xor si,si               ; Nonzero if this line overflowed BUF.
-StreamNext:
-        call StreamGet
-        jc StreamEnd
-        cmp al,10D
-        je StreamLineDone
-        cmp al,13D
-        jne StreamStore
-        mov SkipLF,1
-        jmp short StreamLineDone
-StreamStore:
-        cmp di,offset BUF+BUFLEN
-        jb StreamAppend
-        mov si,1
-        jmp short StreamNext
-StreamAppend:
-        mov [di],al
-        inc di
-        jmp short StreamNext
-StreamEnd:
-        cmp di,offset BUF
-        jne StreamLineDone
-        cmp byte ptr F_EDPG,0
-        jne StreamExit
-        jmp DERRPE
-StreamExit:
-        xor al,al               ; SYSTEM requires ZF set.
-        jmp SYSTEM
-StreamLineDone:
-        or si,si
-        jz StreamReturn
-        jmp LBOERR
-StreamReturn:
-        mov byte ptr [di],0
-        jmp INCRTF
-
-        PUBLIC StreamGet
-; Read standard input, preserving caller registers except AX. Carry means EOF.
-StreamGet:
-        push bx
-        push cx
-        push dx
-StreamGetNext:
-        cmp InputEOF,0
-        jne StreamGetEnd
-        xor bx,bx
-        mov dx,offset StreamInput
-        mov cx,1
-        mov ah,3fh
-        int 21h
-        jnc StreamGetRead
-        extrn SaveDosError:near
-        call SaveDosError
-        mov InputEOF,1
-        jmp DERIOE
-StreamGetRead:
-        or ax,ax
-        jz StreamGetEnd
-        mov al,StreamInput
-        cmp al,1ah
-        je StreamGetEnd
-        cmp SkipLF,0
-        je StreamGetOK
-        mov SkipLF,0
-        cmp al,10D
-        je StreamGetNext
-StreamGetOK:
-        clc
-        jmp short StreamGetDone
-StreamGetEnd:
-        mov InputEOF,1
-        stc
-StreamGetDone:
-        pop dx
-        pop cx
-        pop bx
-        ret
 
 ;SUBROUTINE EDTBRK              ; Routine which initializes when break detected
 ;**                             ; This is called by the STOP code

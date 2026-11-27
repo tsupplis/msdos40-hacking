@@ -120,10 +120,7 @@ DSEG	ENDS
 
         extrn FRESTR:near,CONINT:near,GETFBC:near
 DSEG segment public 'DATASG'
-        public TileLength,TileBytes,TileBack
-TileBack db 0
-TileLength dw 0
-TileBytes db 255 dup (?)
+        extrn TileLength:word,TileBytes:byte,TileBack:byte
 DSEG ends
 
 PAINT:				;GET (X,Y) OF START
@@ -1396,8 +1393,7 @@ DrawPaintError:
         jmp FCERR
 
 DSEG segment public 'DATASG'
-        public DrawFraction
-DrawFraction dw 8080h           ; X and Y remainders, biased by half a pixel.
+        extrn DrawFraction:word
 TurnCos dd ?
 TurnSinX dd ?
 TurnSinY dd ?

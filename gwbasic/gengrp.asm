@@ -701,9 +701,18 @@ LINCN3:	POP	DX		;GET BACK Y1
 	CALL	HLFDE
 	POP	CX		;GET COUNT IN [B,C]
 	INC	CX		;NUMBER OF POINTS IS DELTA PLUS ONE
-	EXTRN	LINLP3:NEAR
-	JMP	LINLP3
-
+LINLP3: rol LineMask,1
+        jnc SkipLinePixel
+        CALL SETC		;SET CURRENT POINT
+SkipLinePixel:
+	ADD	DX,WORD PTR MINDEL	;ADD SMALL DELTA TO SUM
+	CMP	DX,WORD PTR MAXDEL	;TIME TO UPDATE MINOR?
+	JB	LINLOP		;NO, UPDATE MAJOR AND CONTINUE
+	SUB	DX,WORD PTR MAXDEL	;UPDATE SUM FOR NEXT POINT
+	CALL	 WORD PTR MINUPD+1	;ADVANCE MINOR AXIS
+LINLOP:	CALL	 WORD PTR MAXUPD+1	;UPDATE MAJOR AXIS
+	LOOP	LINLP3		;CONTINUE UNTIL COUNT EXHAUSTED
+	RET
 
 HLFDE:	MOV	AL,DH
 	OR	AL,AL		;CLEAR CARRY
@@ -722,19 +731,24 @@ HLFDE:	MOV	AL,DH
 
 	EXTRN	GRPSIZ:NEAR	;Get screen pixel dimension routine (OEM)
 DSEG	SEGMENT PUBLIC 'DATASG'
-	public LineMask
+        public DrawFraction
+DrawFraction dw 8080h           ; X and Y remainders, biased by half a pixel.
 LineMask dw 0ffffh
-	EXTRN	DRWSCL:WORD,DRWANG:WORD,DrawFraction:WORD
+	EXTRN	DRWSCL:WORD,DRWANG:WORD
 DSEG	ENDS
 
 ;GRPRST resets graphics.  It is called at CLEARC and during INIT
 ;Entry - none
 ;Exit  - all registers preserved
 ;
+        extrn ResetCoords:near,ClearView:near
 GRPRST:
-        call ResetCoords
-        PUSH	AX
+	PUSH	AX
 	PUSH	CX
+        push dx
+        call GRPSIZ
+        call ResetCoords
+        pop dx
 	PUSH	BX
 	XOR	AL,AL
 	MOV	BYTE PTR DRWSCL,AL	;Draw scale init
@@ -778,14 +792,113 @@ GrpIniDone:
 DSEG segment public 'DATASG'
         extrn ViewX:word,ViewY:word,ClipLeft:word,ClipTop:word
         extrn ClipRight:word,ClipBottom:word,Extent:word
+WindowCorners dd 4 dup (0)      ; Two (X,Y) pairs of MBF singles.
 Rect    dw 4 dup (0)
 FillAttr dw 0
 EdgeAttr dw 0
 DSEG ends
-        extrn CheckGraphics:near,ScreenOption:near,RefreshScale:near,EOSCHK:near
+        extrn RefreshScale:near,EOSCHK:near
+        extrn $SCREEN:abs,SetWindow:near,MapCoordinate:near
+
+; Returns AX = 1 for SCREEN, zero otherwise, with BX on the first operand.
+ScreenOption:
+        cmp al,low offset $SCREEN
+        jne NoScreen
+        call CHRGTR
+        mov ax,1
+        ret
+NoScreen: xor ax,ax
+        ret
+
+; Entry for statements. Keep the EOS flags supplied by the dispatcher.
+CheckGraphics:
+        pushf
+        cmp Extent,-1
+        je BadGraphics
+        popf
+        ret
+
+BadGraphics: jmp FCERR
+
+public WindowStmt
+WindowStmt:
+        call CheckGraphics
+        jnz WindowArgs
+        mov WindowActive,0
+        ret
+WindowArgs:
+        call ScreenOption
+        push ax
+        mov di,offset WindowCorners
+        call WorldPair
+        call SYNCHR
+        db offset MINUTK
+        mov di,offset WindowCorners+8
+        call WorldPair
+        call EOSCHK
+        pop ax
+        mov di,offset WindowCorners
+        call SetWindow
+        jc BadGraphics
+        ret
+
+WorldPair:
+        push di
+        call SYNCHR
+        db '('
+        pop di
+        call WorldValue
+        push di
+        call SYNCHR
+        db ','
+        pop di
+        call WorldValue
+        call SYNCHR
+        db ')'
+        ret
+WorldValue:
+        push di
+        call FRMEVL
+        push bx
+        call FRCSNG
+        pop si
+        pop bx
+        push si
+        call MOVMF              ; BX advances to the next single.
+        mov di,bx
+        pop bx
+        ret
+
+public PmapFunc
+PmapFunc:
+        call CHRGTR
+        call SYNCHR
+        db '('
+        call FRMEVL
+        push bx
+        call FRCSNG
+        call MOVRF
+        pop bx
+        push cx
+        push dx
+        call SYNCHR
+        db ','
+        call GETBYT
+        push dx
+        call SYNCHR
+        db ')'
+        pop ax
+        pop dx
+        pop cx
+        cmp al,3
+        jbe ValidSelector
+        jmp FCERR
+ValidSelector:
+        jmp MapCoordinate
+
 public ViewStmt
-ViewStmt:
         extrn $PRINT:abs,ViewPrint:near
+ViewStmt:
         pushf                   ; Graphics VIEW uses the incoming EOS flag.
         cmp al,low offset $PRINT
         jne GraphicsView
@@ -795,6 +908,7 @@ GraphicsView:
         popf
         call CheckGraphics
         jnz ViewArgs
+        call GRPSIZ
         call ClearView
         jmp ViewHome
 ViewArgs:
@@ -949,24 +1063,6 @@ OrderedPixels:
         jb PixelsValid
 InvalidPixels: jmp FCERR
 PixelsValid: ret
-
-public ResetCoords
-ResetCoords:
-        mov WindowActive,0
-ClearView:
-        mov ViewActive,0
-        mov ViewX,0
-        mov ViewY,0
-        push cx
-        push dx
-        call GRPSIZ
-        dec cx
-        dec dx
-        mov Extent,cx
-        mov Extent+4,dx
-        pop dx
-        pop cx
-        ret
 
 ; Erase the active graphics viewport using the current background.
 public ClearViewport

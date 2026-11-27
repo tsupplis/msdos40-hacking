@@ -466,5 +466,15 @@ ENDM
 	R	SOFTKY,1	;used by key trapping in GWSTS
 	R	F_SUPR,1	; Flag - non-zero =  super shift expansion
 
+; ON PLAY threshold and pending crossing, shared with the sound interrupt.
+public PlayLevel,PlayPending
+PlayLevel db 0
+PlayPending db 0
+
+; DOS standard stream redirection state, shared by input, output and startup.
+PUBLIC FileOut,FileIn
+FileIn DB 0
+FileOut DB 0
+
 DSEG	ENDS
 	END

@@ -104,7 +104,7 @@ DSEG	SEGMENT PUBLIC 'DATASG'
 	ASSUME DS:DSEG
 	EXTRN	LINCNT:WORD	; Number of lines
 	EXTRN	CRTWID:WORD	; Characters per line
-        extrn PrintRange:byte
+        extrn PrintRange:byte,ViewActive:byte
 	EXTRN	WDOTOP:WORD	; Top line in window(1-[LINCNT])
 	EXTRN	WDOBOT:WORD	; Bottom line in window([WDOTOP]-[LINCNT])
 	EXTRN	WDOLFT:WORD	; Leftmost column in window(1-[CRTWID])
@@ -235,6 +235,28 @@ SCNLOC:	MOV	BYTE PTR CSRX,AH
 	MOV	BYTE PTR CSRY,AL
 	RET	
 ;** END SUBROUTINE SCNLOC
+
+; AL = CLS scope, or zero with carry set for the default. When both
+; windows are active, an unqualified CLS clears the graphics viewport.
+        public ClearScreen
+        extrn ClearViewport:near,CLRSCN:near
+ClearScreen:
+        jnc ClearScope
+        cmp ViewActive,0
+        jne ClearGraphics
+        cmp PrintRange,0
+        je ClearPhysical
+        mov al,2
+        jmp short ClearPhysical
+ClearScope:
+        cmp al,1
+        jne ClearPhysical
+        cmp ViewActive,0
+        je ClearPhysical
+ClearGraphics:
+        jmp ClearViewport
+ClearPhysical:
+        jmp CLRSCN
 
 ;SUBROUTINE SCNCLR(X,Y):        ; Clear Screen, Home Text & Graphics Cursor,
 ;                               ; Refresh Function Key Display

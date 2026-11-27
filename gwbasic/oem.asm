@@ -695,6 +695,7 @@ RGHTC2:	INC	PIXOFS
 ;	AX, BX, CX, DX, BP
 ;
 DSEG segment public 'DATASG'
+        extrn FileOut:byte,FileIn:byte
         extrn GXPOS:word,GYPOS:word
         extrn ViewActive:byte,ViewX:word,ViewY:word
         extrn ClipLeft:word,ClipRight:word,ClipTop:word,ClipBottom:word
@@ -1029,7 +1030,10 @@ PaintLeft dw 0
 PaintRight dw 0
 PaintTop dw 0
 PaintBottom dw 0
-        extrn TileLength:word,TileBytes:byte,TileBack:byte
+        public TileLength,TileBytes,TileBack
+TileBack db 0
+TileLength dw 0
+TileBytes db 255D dup (?)
 TileRow dw 0
 PaintColor db 0
 PaintBorder db 0
@@ -2529,7 +2533,12 @@ CgaColors:	MOV	BX,0203H
 	JNZ	CRTOK3
 	MOV	BX,0101H
 CRTOK3: extrn ResetCoords:near
+        push cx
+        push dx
+        call GRPSIZ
         call ResetCoords
+        pop dx
+        pop cx
         MOV	AL,AH			; INT 10H conveniently gives us the
 					; number of character columns
 	MOV	CL,25D			; Assume 25 rows
@@ -2750,16 +2759,9 @@ SCRERR:	STC
 	RET
 
 ; Copy page storage without selecting either page or moving the cursor.
-        public PCOPY
-        extrn GETBYT:near,SYNCHR:near
-PCOPY:  call GETBYT
-        push ax
-        call SYNCHR
-        db ','
-        call GETBYT
-        pop dx
+        public CopyPage
+CopyPage:                       ; DL = source, DH = destination. Preserve BX.
         push bx
-        mov dh,al               ; DL source, DH destination
         mov al,CRTMOD
         xor ah,ah
         cmp al,0dh
@@ -3261,9 +3263,6 @@ FKEY40	DB	6D,5D,1D	; (?!?) Function key display format for 40x25
 FKEY80	DB	6D,10D,1D	; (?!?) Function key display format for 80x25
 
 
-PUBLIC FileOut,FileIn
-FileIn DB 0
-FileOut DB 0
 KeepScreen DB 0
 PUBLIC QuietVideo
 QuietVideo DB 0

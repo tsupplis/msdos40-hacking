@@ -37,6 +37,16 @@ Starting another program with RUN after the nested fault also leaves EXTERR(0) a
 
 Additional paired PCE startup probes found that 3.23 prints .8414709848078965 for SIN(1#) under /D and .841471 without it. The historical case 280 uses MKS$, which forces single precision. With /I/F:2/S:64, 3.23 rejects file number 7 with error 52 and random record length 129 with error 5. With /M:49152,3071 it reports out of memory, while /M:49152,3072 starts successfully. 4.01N rejects the three switch forms at startup.
 
+Supplementary PCE VGA probes for cases 196 and 223 compared 3.23 with 4.01N before and after the graphics parser move. Both 4.01N builds produced identical reports. The numbered cases cover the successful graphics-mode forms. Two additional behaviors remain open.
+
+| Input | 3.23 | 4.01N |
+|---|---|---|
+| In `SCREEN 7`, set `VIEW (10,20)-(40,80)` and `WINDOW (-1,-2)-(3,6)` before each attempt. Try `WINDOW (1,2)-(1,3)` or `WINDOW (1,2)-(3,2)`, then inspect `PMAP(0,0)` and `PMAP(0,1)` after `RESUME NEXT`. | Error 5, then (−8, −15) | Error 5, then the previous mapping (8, 45) |
+| With the same starting bounds, try `WINDOW (1,2)-(3,4) JUNK`. | Error 2, then (−15, 120) | Error 2, then (8, 45) |
+| After the preceding sequence, issue `WINDOW` and `SCREEN 0`, then evaluate `PMAP(7,I)` for selectors 0 through 3. | 7 for each selector | 0 for each selector |
+
+A fresh interpreter in `SCREEN 0` returned 0 for `PMAP(7,3)` in both versions.
+
 ## Differences by work area
 
 Each row below groups failed observations for investigation. The count measures inventory coverage; shared causes and the number of required changes still need diagnosis. Input echo, printer formatting and adapter selection can differ even when a program computes the same value.
@@ -247,7 +257,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 193 | `PALETTE attribute,color` | Display | Matched | PCE, case 193, color 15 maps to 1Fh and -1 preserves it |
 | 194 | `PALETTE USING` | Display | Matched | PCE, case 194, integer array starting at index 2 sets attribute 1 |
 | 195 | `PCOPY` | Display | Matched | Reference page-copy probe and [independent page checks](../test/gwvideo.bas) |
-| 196 | `PMAP` | Display | Matched | PCE, case 196, four mapping selectors, inverse fractions, and default rounding |
+| 196 | `PMAP` | Display | Matched | PCE, case 196, four mapping selectors, inverse fractions, and default rounding. See the supplementary text-mode probe above. |
 | 197 | `POINT(x,y)` | Display | Matched | X |
 | 198 | `POINT(selector)` | Display | Matched | PCE, case 198, selectors 0–3 and pixel readback in SCREEN 7. Both preserve the cursor after SCREEN 0 and a chained RUN |
 | 199 | `POS` | Display | Matched | Q, case 199 |
@@ -274,7 +284,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 220 | `VIEW PRINT range` | Display | Matched | PCE, case 220. Clearing and scrolling rows 5–10 preserve sentinel characters on rows 4 and 11. |
 | 221 | `VIEW PRINT reset` | Display | Matched | PCE, case 221. A single-row window scrolls in place. Reset homes the cursor and releases the LOCATE range restriction. |
 | 222 | `WIDTH screen` | Display | Matched | Q, case 222 |
-| 223 | `WINDOW` | Display | Matched | PCE, case 223, Cartesian Y, fractional STEP and physical pixel readback |
+| 223 | `WINDOW` | Display | Matched | PCE, case 223, Cartesian Y, fractional STEP and physical pixel readback. See the supplementary rejected-WINDOW probes above. |
 | 224 | `WINDOW SCREEN` | Display | Matched | PCE, case 224, screen-oriented Y on a relative viewport |
 | 225 | `WINDOW reset` | Display | Matched | PCE, case 225, reset preserves pixel cursor and restores identity mapping |
 | 226 | `INP` | Devices | Matched | Q, case 226 |

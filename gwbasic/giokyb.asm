@@ -273,6 +273,16 @@ KBSIN2:
 	CLC			;clear carry (not EOF)
 KBSINX:	RET	
 
+; Keep KEYIN's two-byte controls (CF set). Translate other keys only
+; for the screen editor. An unbound extended key returns ZF set.
+        public ReadEditorKey
+        extrn EditKey:near
+ReadEditorKey:
+        call KEYIN
+        jc EditorKeyDone
+        jmp EditKey
+EditorKeyDone: ret
+
 ;KEYIN turns cursor on if no key is available.
 ; It then waits for key from keyboard (if one wasn't already there).
 ; Exit - if Z is true, no key was ready, else [AX]=key
@@ -886,6 +896,23 @@ DSEG	SEGMENT PUBLIC 'DATASG'
 	EXTRN	CSRTYP:WORD,CSRFLG:WORD
 DSEG	ENDS
 	EXTRN	CSRDSP:NEAR
+DSEG    SEGMENT PUBLIC 'DATASG'
+        extrn QuietVideo:byte,CSRX:word,CSRY:word
+DSEG    ENDS
+        public RestoreCursor
+; Restore the user cursor after a statement if BASIC owns the display.
+RestoreCursor:
+        cmp QuietVideo,0
+        jne RestoreDone
+        push dx
+        mov dl,byte ptr CSRY
+        mov dh,byte ptr CSRX
+        mov byte ptr CSRTYP,3
+        call SETCSR
+        pop dx
+RestoreDone:
+        ret
+
 	PUBLIC	SETCSR
 SETCSR:	PUSH	AX
 	MOV	AL,BYTE PTR CSRTYP	;Get cursor type

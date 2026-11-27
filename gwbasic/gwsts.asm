@@ -93,46 +93,23 @@ DSEG	ENDS
 	CR=13D
 	LF=10D
 	PAGE	
-;CLS: CLear Screen issues an escape sequence to clear
-;     the CRT.  Sequences are ANSII standard whereas the machine
-;     default is not.  CLS resets the graphics cursor position.
-;ENTRY - none
-;EXIT  - none
-;USES  - none
-;
-	EXTRN	CLRSCN:NEAR
-CLS:    extrn ClearViewport:near
+; CLS [scope]. Carry from SCNINT distinguishes an omitted scope.
+        extrn ClearScreen:near
 DSEG segment public 'DATASG'
-        extrn ViewActive:byte,WDOTOP:byte,WDOBOT:byte
+        extrn WDOTOP:byte,WDOBOT:byte
         public PrintRange
 PrintRange db 0                 ; Explicit VIEW PRINT also restricts LOCATE.
 DSEG ends
-        CALL SCNINT		;Test for optional parameter
-	jnc ExplicitClear
-        cmp ViewActive,0
-        jne DefaultGraphicsClear
-        cmp PrintRange,0
-        je ExplicitClear
-        mov al,2
-        jmp short ExplicitClear
-DefaultGraphicsClear:
-        mov al,1
-ExplicitClear:
-        PUSH AX
-        CALL EOSCHK		;Test for end of statement
-	POP AX
-        PUSH BX
-        cmp al,1
-        jne ClearPhysical
-        cmp ViewActive,0
-        je ClearPhysical
-        call ClearViewport
+CLS:    call SCNINT
+        pushf
+        push ax
+        call EOSCHK
+        pop ax
+        popf
+        push bx
+        call ClearScreen
         pop bx
         ret
-ClearPhysical:
-        CALL CLRSCN
-	POP	BX
-	RET	
 	PAGE	
 ;LOCATE: Parse the following syntax:
 ;       LOCATE [Y] [, [X] [, [CURSOR] [, [START] [, [STOP] ]]]
@@ -486,7 +463,8 @@ DSKVER:	POP	BX		;Restore text pointer
 
 	PAGE	
 	SUBTTL  Parsing Routines for GWSTS
-	PUBLIC	SCNINT,EOSCHK
+	PUBLIC	SCNINT
+	EXTRN	EOSCHK:NEAR,EOSCH1:NEAR
 
 ;SCNINT: Test for an optional integer parameter.
 ;       If a comma or EOL is discovered assume parameter is missing.
@@ -523,44 +501,6 @@ OMITD:	INC	BX
 NOMORE:	MOV	AH,AL		;Save terminator
 	MOV	AL,LOW 0D	;Set param value to 0, save flags
 	STC			;Flag param. not found
-	RET	
-	PAGE	
-;EOSCHK: Detect garbage beyond end of statement
-;ENTRY - BX = text pointer
-;EXIT  - AL = 0 & all other registers preserved or
-;      - Exit on error through FCERR
-;
-EOSCHK:
-	DEC	BX		;Back up text pointer
-EOSCH1:
-	CALL	CHRGTR		;Get next character (skipping blanks)
-	JZ	EOSCKX		;End of statement
-	JMP	SNERR		;Not EOS - error
-EOSCKX:	RET	
-
-	PAGE	
-	SUBTTL  Graphics Support Specific to the 8086
-
-	PUBLIC	LINLP3
-DSEG	SEGMENT PUBLIC 'DATASG'
-	extrn LineMask:word
-	EXTRN	MINDEL:WORD,MAXDEL:WORD,MINUPD:WORD,MAXUPD:WORD
-DSEG	ENDS
-	EXTRN	SETC:NEAR
-
-;LINLP3: Inner loop of line code.
-
-LINLP3: rol LineMask,1
-        jnc SkipLinePixel
-        CALL SETC		;SET CURRENT POINT
-	SkipLinePixel:
-	ADD	DX,WORD PTR MINDEL	;ADD SMALL DELTA TO SUM
-	CMP	DX,WORD PTR MAXDEL	;TIME TO UPDATE MINOR?
-	JB	LINLOP		;NO, UPDATE MAJOR AND CONTINUE
-	SUB	DX,WORD PTR MAXDEL	;UPDATE SUM FOR NEXT POINT
-	CALL	 WORD PTR MINUPD+1	;ADVANCE MINOR AXIS
-LINLOP:	CALL	 WORD PTR MAXUPD+1	;UPDATE MAJOR AXIS
-	LOOP	LINLP3		;CONTINUE UNTIL COUNT EXHAUSTED
 	RET	
 	PAGE	
 	SUBTTL  VARPT2 - VARPTR$ Function
@@ -2655,6 +2595,27 @@ PaletteNext:
         ret
 BadPalette:
         jmp FCERR
+
+; MOTOR [value]. With no argument, toggle the current motor state.
+        public MOTOR
+        extrn ToggleMotor:near,SetMotor:near
+MOTOR:  jnz MotorArgument
+        jmp ToggleMotor
+MotorArgument:
+        call GETBYT
+        jmp SetMotor
+
+; PCOPY source,destination. The display driver checks the page limits.
+        public PCOPY
+        extrn CopyPage:near
+PCOPY:  call GETBYT
+        push ax
+        call SYNCHR
+        db ','
+        call GETBYT
+        pop dx
+        mov dh,al
+        jmp CopyPage
 
 
 DSEG	SEGMENT PUBLIC 'DATASG'

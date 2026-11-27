@@ -18,39 +18,32 @@ Origin  dd 2 dup (0)            ; World coordinate at pixel zero on each axis.
 Span    dd 2 dup (0)            ; Signed world span, negative for Cartesian Y.
 UnitsPerPixel dd 2 dup (0)
 ScaleBy dd 2 dup (0)            ; Pixels per world unit.
-Corners dd 4 dup (0)            ; Statement operands, validated before installing.
         extrn GRPACX:word,GRPACY:word,GXPOS:word,GYPOS:word
 DSEG    ends
 CSEG    segment public 'CODESG'
         assume cs:CSEG,ds:DSEG
-        extrn CHRGTR:near,SYNCHR:near,GETIN2:near,GETBYT:near,FRMEVL:near
-        extrn EOSCHK:near,FCERR:near,MINUTK:abs,$SCREEN:abs
-        extrn FRCINT:near,FRCSNG:near,CONSIH:near,MAKINT:near
+        extrn FRCINT:near,CONSIH:near,MAKINT:near
         extrn MOVMF:near,MOVFM:near,MOVRF:near,MOVFR:near
         extrn FSUB:near,FADD:near,FDIV:near,FMULT:near,FCOMP:near,VALSNG:near
 
-BadCoord: jmp FCERR
-
-; Entry for statements. Keep the EOS flags supplied by the dispatcher.
-public CheckGraphics,ScreenOption,RefreshScale
-CheckGraphics:
-        pushf
-        cmp Extent,-1
-        je BadCoord
-        popf
+; CX = screen width and DX = height, both consumed. In text mode the
+; zero width gives Extent = -1, used by CheckGraphics. VIEW alone keeps WINDOW.
+public ResetCoords,ClearView
+ResetCoords:
+        mov WindowActive,0
+ClearView:
+        mov ViewActive,0
+        mov ViewX,0
+        mov ViewY,0
+        dec cx
+        dec dx
+        mov Extent,cx
+        mov Extent+4,dx
         ret
 
-; Returns AX = 1 for SCREEN, zero otherwise, with BX on the first operand.
-ScreenOption:
-        cmp al,low offset $SCREEN
-        jne NoScreen
-        call CHRGTR
-        mov ax,1
-        ret
-NoScreen: xor ax,ax
-        ret
+public RefreshScale
 
- ; Keep the axis index and the other MBF operand across the string move.
+; Keep the axis index and the other MBF operand across the string move.
 LoadSingle:
         push di
         push cx
@@ -64,66 +57,33 @@ StoreSingle:
         pop di
         ret
 
-public WindowStmt
-WindowStmt:
-        call CheckGraphics
-        jnz WindowArgs
-        mov WindowActive,0
-        ret
-WindowArgs:
-        call ScreenOption
-        push ax
-        mov di,offset Corners
-        call WorldPair
-        call SYNCHR
-        db offset MINUTK
-        mov di,offset Corners+8
-        call WorldPair
-        call EOSCHK
-        pop ax
+; DI points to four writable MBF singles (x1,y1,x2,y2). AX is
+; 1 for WINDOW SCREEN, 0 for Cartesian Y. Preserve BX. Carry means an empty axis.
+public SetWindow
+SetWindow:
         push bx
         push ax
-        xor di,di
         xor ax,ax               ; X always increases to the right.
         call OrderWorld
         pop ax
+        jc WindowDone
         xor ax,1                ; Cartesian Y decreases down the screen.
-        mov di,4
+        add di,4
         call OrderWorld
+        jc WindowDone
+        mov bx,di               ; Y endpoints, then X four bytes earlier.
+        push bx
+        sub bx,4
         xor di,di
         call InstallAxis
+        pop bx
         mov di,4
         call InstallAxis
         mov WindowActive,1
         call RefreshScale
         call SyncWorld
-        pop bx
-        ret
-
-WorldPair:
-        push di
-        call SYNCHR
-        db '('
-        pop di
-        call WorldValue
-        push di
-        call SYNCHR
-        db ','
-        pop di
-        call WorldValue
-        call SYNCHR
-        db ')'
-        ret
-WorldValue:
-        push di
-        call FRMEVL
-        push bx
-        call FRCSNG
-        pop si
-        pop bx
-        push si
-        call StoreSingle
-        mov di,bx
+        clc
+WindowDone:
         pop bx
         ret
 
@@ -131,37 +91,40 @@ WorldValue:
 OrderWorld:
         push ax
         push di
-        lea bx,Corners[di]
+        mov bx,di
         call LoadSingle
-        mov cx,word ptr Corners[di+10]
-        mov dx,word ptr Corners[di+8]
+        mov cx,word ptr [di+10]
+        mov dx,word ptr [di+8]
         call FCOMP
         pop di
-        je InvalidWorld
         mov cl,al
         pop ax
+        je InvalidWorld
         test cl,cl
         js Ascending
         xor al,1
 Ascending:
         test al,al
         jz WorldOrdered
-        mov ax,word ptr Corners[di]
-        xchg ax,word ptr Corners[di+8]
-        mov word ptr Corners[di],ax
-        mov ax,word ptr Corners[di+2]
-        xchg ax,word ptr Corners[di+10]
-        mov word ptr Corners[di+2],ax
-WorldOrdered: ret
-InvalidWorld: jmp FCERR
+        mov ax,word ptr [di]
+        xchg ax,word ptr [di+8]
+        mov word ptr [di],ax
+        mov ax,word ptr [di+2]
+        xchg ax,word ptr [di+10]
+        mov word ptr [di+2],ax
+WorldOrdered: ret               ; TEST above cleared carry.
+InvalidWorld: stc               ; Equal endpoints.
+        ret
 
+; BX points to the first endpoint of the axis, DI selects X (0) or Y (4).
 InstallAxis:
-        lea bx,Corners[di]
+        push bx
         call LoadSingle
         lea bx,Origin[di]
         call StoreSingle
-        mov dx,word ptr Corners[di+8]
-        mov cx,word ptr Corners[di+10]
+        pop bx
+        mov dx,[bx+8]
+        mov cx,[bx+10]
         push di
         call FSUB               ; Last endpoint minus first.
         pop di
@@ -252,30 +215,11 @@ HomeCoords:
         mov GRPACY,bx
         jmp SyncWorld
 
-public PmapFunc
-PmapFunc:
-        call CHRGTR
-        call SYNCHR
-        db '('
-        call FRMEVL
+; Map the MBF single in CX:DX using PMAP selector AL (0..3).
+; Return the BASIC numeric result with BX preserved.
+public MapCoordinate
+MapCoordinate:
         push bx
-        call FRCSNG
-        call MOVRF
-        pop bx
-        push cx
-        push dx
-        call SYNCHR
-        db ','
-        call GETBYT
-        push dx
-        call SYNCHR
-        db ')'
-        pop ax
-        pop dx
-        pop cx
-        push bx
-        cmp al,3
-        ja InvalidMap
         push ax
         call MOVFR
         call VALSNG
@@ -304,7 +248,6 @@ MapInteger: call FRCINT
 MapResult: call MAKINT
         pop bx
         ret
-InvalidMap: jmp FCERR
 ; Cohen-Sutherland clipping in viewport pixels. A shared outcode also
 ; rejects filled rectangles wholly outside one edge. AX = mask for CX,DX.
 Outcode:

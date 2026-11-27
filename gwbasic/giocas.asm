@@ -27,18 +27,16 @@ DSEG SEGMENT PUBLIC 'DATASG'
         assume ds:DSEG
 MotorOn db 0
 DSEG ENDS
-        extrn GETBYT:near,CassetteMotor:near
-PUBLIC MOTOR
-MOTOR:  jnz MotorArgument
+        extrn CassetteMotor:near
+        public ToggleMotor,SetMotor
+ToggleMotor:
         mov dl,MotorOn
         xor dl,1
-        jmp short SetMotor
-MotorArgument:
-        call GETBYT
+SetMotor:                       ; DL = 0 for off, nonzero for on.
         or dl,dl
-        jz SetMotor
+        jz MotorReady
         mov dl,1
-SetMotor:
+MotorReady:
         mov MotorOn,dl
         jmp CassetteMotor
 

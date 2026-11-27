@@ -337,6 +337,14 @@ SYNCHR:
 SYNCON:	JMP	CHRCON		;REST OF CHRGET
 SYNERR:	JMP	SNERR		;IFE CYB
 
+; Check the token at BX (EOSCHK) or immediately after it (EOSCH1).
+; Return with ZF set at the statement terminator, or raise Syntax error.
+        PUBLIC  EOSCHK,EOSCH1
+EOSCHK: DEC     BX
+EOSCH1: CALL    CHRGTR
+        JNZ     SHORT SYNERR
+        RET
+
 	SUBTTL TRAP ROUTINES - ON, OFF, STOP, INIT, REQUEST, FREE, RESET
 ;
 ;Trap flag bit definitions(Routines shift bits - don't change)

@@ -2163,20 +2163,8 @@ DSEG	SEGMENT PUBLIC 'DATASG'
 	EXTRN	FREFDB:WORD
 DSEG	ENDS
 FINPRT:
-	EXTRN	SETCSR:NEAR
-DSEG	SEGMENT PUBLIC 'DATASG'
-	EXTRN	CSRY:WORD,CSRX:WORD,CSRTYP:WORD
-        EXTRN QuietVideo:BYTE
-DSEG    ENDS
-        cmp QuietVideo,0
-        jne FinishFiles
-        PUSH    DX
-	MOV	DL,BYTE PTR CSRY
-	MOV	DH,BYTE PTR CSRX	;DX=current posn
-	MOV	BYTE PTR CSRTYP,LOW 3D	;Set to user cursor
-	CALL	SETCSR		;Display the cursor
-	POP	DX
-FinishFiles:
+        extrn RestoreCursor:near
+        call RestoreCursor
 	MOV	SI,WORD PTR FREFDB
 	OR	SI,SI
 	JZ	NFRFDB		;branch if no FDB needs to be released
@@ -2190,6 +2178,94 @@ NFRFDB:	XOR	AX,AX
 	MOV	WORD PTR PTRFIL,AX	;future I/O will use Keyboard/CRT
 RET45:	RET	
 	PAGE	
+DSEG segment public 'DATASG'
+        extrn BUF:word,F_EDPG:word
+StreamInput DB ?
+SkipLF DB 0
+InputEOF DB 0
+DSEG ends
+        public StreamLine
+        extrn SYSTEM:near,DERIOE:near,LBOERR:near
+; Read a DOS text line into BUF without involving the BIOS editor.
+StreamLine:
+        mov di,offset BUF
+        xor si,si               ; Nonzero if this line overflowed BUF.
+StreamNext:
+        call StreamGet
+        jc StreamEnd
+        cmp al,10D
+        je StreamLineDone
+        cmp al,13D
+        jne StreamStore
+        mov SkipLF,1
+        jmp short StreamLineDone
+StreamStore:
+        cmp di,offset BUF+BUFLEN
+        jb StreamAppend
+        mov si,1
+        jmp short StreamNext
+StreamAppend:
+        mov [di],al
+        inc di
+        jmp short StreamNext
+StreamEnd:
+        cmp di,offset BUF
+        jne StreamLineDone
+        cmp byte ptr F_EDPG,0
+        jne StreamExit
+        jmp DERRPE
+StreamExit:
+        xor al,al               ; SYSTEM requires ZF set.
+        jmp SYSTEM
+StreamLineDone:
+        or si,si
+        jz StreamReturn
+        jmp LBOERR
+StreamReturn:
+        mov byte ptr [di],0
+        ret
+
+        PUBLIC StreamGet
+; Read standard input, preserving caller registers except AX. Carry means EOF.
+StreamGet:
+        push bx
+        push cx
+        push dx
+StreamGetNext:
+        cmp InputEOF,0
+        jne StreamGetEnd
+        xor bx,bx
+        mov dx,offset StreamInput
+        mov cx,1
+        mov ah,3fh
+        int 21h
+        jnc StreamGetRead
+        call SaveDosError
+        mov InputEOF,1
+        jmp DERIOE
+StreamGetRead:
+        or ax,ax
+        jz StreamGetEnd
+        mov al,StreamInput
+        cmp al,1ah
+        je StreamGetEnd
+        cmp SkipLF,0
+        je StreamGetOK
+        mov SkipLF,0
+        cmp al,10D
+        je StreamGetNext
+StreamGetOK:
+        clc
+        jmp short StreamGetDone
+StreamGetEnd:
+        mov InputEOF,1
+        stc
+StreamGetDone:
+        pop dx
+        pop cx
+        pop bx
+        ret
+
 	SUBTTL  MSDOS   Abort/Initialization/Termination Processing
 
 DSEG	SEGMENT PUBLIC 'DATASG'

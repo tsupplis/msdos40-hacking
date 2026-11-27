@@ -21,7 +21,7 @@ here wholesale.
 	.SALL
 
 DSEG SEGMENT PUBLIC 'DATASG'
-        extrn EVENT:byte,TRPTBL:byte
+        extrn EVENT:byte,TRPTBL:byte,PlayLevel:byte,PlayPending:byte
 DSEG ENDS
 	EXTRN	INITQ:NEAR,NUMQ:NEAR,LFTQ:NEAR,GETQ:NEAR,PUTQ:NEAR
 
@@ -297,9 +297,7 @@ CSEG	ENDS
 DSEG	SEGMENT PUBLIC 'DATASG'
 
 OIRQ0	DD	-1			; Original IRQ 0 vector
-public PlayLevel,PlayPending,WaitingNotes
-PlayLevel db 0
-PlayPending db 0
+public WaitingNotes
 WaitingNotes db 0
 SNDQDS DB	8D DUP(?)		; Descriptor structure for sound queue
 SNDQUE	DB	SNDQSZ DUP(?)		; Buffer for sound queue
