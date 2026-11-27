@@ -291,5 +291,5 @@ MIT unless a subdirectory specifies otherwise. [license.md](LICENSE.md)
 
 ## Credits
 
-- **EDIT** derives from Kilo, written by Salvatore Sanfilippo (antirez) in 2016, via its CP/M-86 port. Kilo is distributed under the BSD 2-Clause license. [Kilo source](https://github.com/antirez/kilo) · [License](commands/edit/LICENSE.md)
+- **EDIT** derives from Kilo, written by Salvatore Sanfilippo (antirez) in 2016. Kilo is distributed under the BSD 2-Clause license. [Kilo source](https://github.com/antirez/kilo) · [License](commands/edit/LICENSE.md)
 - **GW-BASIC** uses Microsoft's 1983 interpreter and the PC reconstruction by Diomidis Spinellis, Stjepan Gros and TK Chia, distributed under the MIT license. [Microsoft source](https://github.com/microsoft/GW-BASIC) · [Spinellis reconstruction](https://github.com/dspinellis/GW-BASIC) · [TK Chia fork](https://codeberg.org/tkchia/GW-BASIC) · [License](gwbasic/LICENSE.md)
