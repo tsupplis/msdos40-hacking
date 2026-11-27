@@ -612,6 +612,7 @@ CheckNetworkClose:
         MOV     DX,OFFSET NetworkHook
         MOV     AX,252Fh
         INT     21h
+        CALL    CheckRedirectedIoctl
         PUSH    DS
         MOV     AX,1203h                ; obtain DOSGROUP in DS
         PUSH    AX
@@ -680,15 +681,82 @@ RestoreSFT:
         Check   JNZ
         CMP     AX,1234h
         Check   JE
+        CMP     IoctlResult,441Ch
+        Check   JE
         CMP     OpenSeen,3
         Check   JE
         RET
+; Temporarily attach a local IFS header to stdin on this scratch boot.
+; Save and restore the real SFT before any console output or disk access.
+CheckRedirectedIoctl:
+        XOR     BX,BX
+        MOV     AX,1220h                ; ES:DI -> stdin's JFN
+        PUSH    AX
+        INT     2Fh
+        POP     AX
+        JC      IoctlTestDone
+        MOV     BL,ES:[DI]
+        MOV     AX,1216h                ; ES:DI -> SFT for that JFN
+        PUSH    AX
+        INT     2Fh
+        POP     AX
+        JC      IoctlTestDone
+        PUSH    WORD PTR ES:[DI+5]      ; sf_flags
+        PUSH    WORD PTR ES:[DI+55]     ; sf_IFS_HDR
+        PUSH    WORD PTR ES:[DI+57]
+        OR      WORD PTR ES:[DI+5],8080h
+        MOV     WORD PTR ES:[DI+55],OFFSET LocalIfsHeader
+        MOV     ES:[DI+57],CS
+        XOR     BX,BX
+        MOV     CX,004Ah
+        MOV     DX,OFFSET Payload
+        MOV     AX,440Ch
+        INT     21h
+        POP     WORD PTR ES:[DI+57]
+        POP     WORD PTR ES:[DI+55]
+        POP     WORD PTR ES:[DI+5]
+        JC      IoctlTestDone
+        MOV     IoctlResult,AX
+IoctlTestDone:
+        RET
+LocalIfsHeader DB 14 DUP (0)            ; IFSREMOTE clear in attribute at +12
+IoctlResult DW 0
+
 NetworkHook:
         PUSHF
         CMP     AX,1106h
         JE      ReturnClose
+        CMP     AX,112Bh
+        JE      ReturnIoctl
         POPF
         JMP     CS:OldMultiplex
+ReturnIoctl:
+        POPF
+        PUSH    BP
+        MOV     BP,SP
+        MOV     AX,[BP+8]               ; caller's function after IP, CS, FLAGS
+        POP     BP
+        CMP     AX,440Ch
+        JNE     BadIoctlPacket
+        CMP     CX,004Ah
+        JNE     BadIoctlPacket
+        MOV     AX,DS
+        MOV     SI,CS
+        CMP     AX,SI
+        JNE     BadIoctlPacket
+        CMP     DX,OFFSET Payload
+        JNE     BadIoctlPacket
+        CMP     CS:Hooked,0
+        JE      IoctlPacketOk
+        CALL    ObserveA20
+IoctlPacketOk:
+        MOV     AX,441Ch
+        CLC
+        RETF    2
+BadIoctlPacket:
+        XOR     AX,AX
+        STC
+        RETF    2
 ReturnClose:
         POPF
         MOV     AX,1234h

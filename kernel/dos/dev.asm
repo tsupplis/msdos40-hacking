@@ -456,7 +456,7 @@ ASSUME	DS:DOSGROUP,ES:NOTHING
 ;
 ; Is the SFT for the net?  If so, no action necessary.
 ;
-	CallResident Test_IFS_Remote,DS 						;AC000;
+	invoke IsRemoteSft 						;AC000;
 	JNZ	OPCLS_DONE		; NOP on net SFTs
 	XOR	AH,AH			; Unit
 	TEST	ES:[DI.sf_flags],devid_device

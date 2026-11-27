@@ -50,6 +50,36 @@ include ifssym.inc			 ;AN000;
 	I_need	USER_IN_AX,WORD 		;AN000;
 	I_need	Temp_Var2,WORD			;AN000;
 
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry $IOCTL,214
+        DosCodeEntry TEST_IFS_REMOTE,215
+
+; The redirector reads the original IOCTL function just below its interrupt frame.
+IoctlRedirector PROC NEAR
+        MOV     AX,SS:[User_In_AX]
+        CMP     AH,69h
+        JNE     IoctlNetFunction
+        MOV     AX,440Dh                ; media ID uses generic block IOCTL
+IoctlNetFunction:
+        PUSH    AX
+        MOV     DS,SI                   ; caller's packet segment
+        MOV     AX,(multNET SHL 8) OR 43
+        INT     2Fh
+        POP     BX
+        RET
+IoctlRedirector ENDP
+
+IoctlDriveShared PROC NEAR
+        MOV     AX,0300h
+        CLC
+        INT     int_IBM
+        RET
+IoctlDriveShared ENDP
+CODE ENDS
+
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
+
 BREAK <IOCTL - munge on a handle to do device specific stuff>
 
 ;
@@ -244,7 +274,7 @@ BREAK <IOCTL - munge on a handle to do device specific stuff>
 ;	USES	ALL
 ;
 
-	procedure   $IOCTL,NEAR
+	procedure   DeviceControl,NEAR
 	ASSUME	DS:NOTHING,ES:NOTHING
 	MOV	SI,DS			; Stash DS for calls 2,3,4 and 5
 	context DS
@@ -252,10 +282,11 @@ BREAK <IOCTL - munge on a handle to do device specific stuff>
 	JBE	ioctl_check_char	; char	device
 	JMP	ioctl_check_block	; Block device
 ioctl_check_char:
-	invoke	SFFromHandle		; ES:DI -> SFT
+	CallResident SFFromHandle		; ES:DI -> SFT
 	JNC	ioctl_check_permissions ; have valid handle
 ioctl_bad_handle:
-	error	error_invalid_handle
+	MOV	AL,error_invalid_handle
+	JMP	IoctlError
 
 ioctl_check_permissions:
 	CMP	AL,2
@@ -267,7 +298,8 @@ ioctl_check_permissions:
 	AND	DH,0FEH 		;AN000;MS.allow DH=01H
 	POP	DX			;AN000;MS.
 	JZ	ioctl_check_device	; can I set with this data?
-	error	error_invalid_data	; no DH <> 0
+	MOV	AL,error_invalid_data	; no DH <> 0
+	JMP	IoctlError
 
 ioctl_bad_funj2:
 	JMP	ioctl_bad_fun
@@ -283,7 +315,7 @@ ioctl_check_device:
 do_exception:
 	OR	BYTE PTR ES:[DI.sf_flags+1],DH;AN000;MS.;set 100H bit for disk full
 
-	transfer    SYS_RET_OK
+	JMP	IoctlSuccess
 
 
 
@@ -299,9 +331,9 @@ ioctl_read:
 	MOV	AH,BYTE PTR ES:[DI.SDEVATT+1]	; Get high byte
 ioctl_no_high:
 	MOV	DX,AX
-	invoke	get_user_stack
+	CallResident get_user_stack
 	MOV	[SI.user_DX],DX
-	transfer    SYS_RET_OK
+	JMP	IoctlSuccess
 
 ioctl_control_string:
 	TEST	ES:[DI.sf_flags],devid_device	; can I?
@@ -334,19 +366,19 @@ ioctl_check_block:
 	MOV	AH,3
 ioctl_get_status:
 	PUSH	AX
-	invoke	GET_IO_SFT
+	invoke	GetConsoleSft
 	POP	AX
 	JNC	DO_IOFUNC
 	JMP	ioctl_bad_handle	; invalid SFT
 
 DO_IOFUNC:
-	invoke	IOFUNC
+	invoke	DeviceFunction
 	MOV	AH,AL
 	MOV	AL,0FFH
 	JNZ	ioctl_status_ret
 	INC	AL
 ioctl_status_ret:
-	transfer SYS_RET_OK
+	JMP	IoctlSuccess
 
 ioctl_rem_media_check:			; 4=2,5=3,6=4,7=5,8=6,9=7,10=8,11=9
 	JE	ioctl_rem_mediaj
@@ -388,23 +420,23 @@ Set_Retry_Parameters:
 goodtr:
 	MOV	RetryCount,DX		; Set new retry count
 doneok:
-	transfer	Sys_Ret_Ok	; Done
+	JMP	IoctlSuccess	; Done
 
 ; Generic IOCTL entry point.
 ;	here we invoke the Generic IOCTL using the IOCTL_Req structure.
 ;	SI:DX -> Users Device Parameter Table
 ;	IOCALL -> IOCTL_Req structure
 GENERICIOCTLHANDLE:
-	invoke	SFFromHandle		; Get SFT for device.
+	CallResident SFFromHandle		; Get SFT for device.
 	jnc	goodh
 	JMP	ioctl_bad_handlej
 goodh:
 ;	test	word ptr [DI.sf_flags],sf_isnet
-	CALL	TEST_IFS_REMOTE 	;AN000;;IFS. test if remote
+	CALL	IsRemoteSft 	;AN000;;IFS. test if remote
 	JZ	okokok			;AN000;;IFS.
 	jmp	ioctl_bad_fun		; Cannot do this over net.
 okokok:
-	TEST	[DI.sf_flags],sf_isnet	;AN000;IFS.; local IFS
+	TEST	ES:[DI.sf_flags],sf_isnet	;AN000;IFS.; local IFS
 	JNZ	callifs 		;AN000;IFS.; yes
 
 
@@ -426,25 +458,14 @@ GENERICIOCTL:
 	POP	ES				 ;AN000;IFS.
 	JZ	Do_GenIOCTL			 ;AN000;IFS.	 ; no
 callifs:
-	CMP	byte ptr [User_In_AX+1],69H  ;AN000;	     ;IFS.
-	JNZ	is44xx			     ;AN000;	     ;IFS.
-	MOV	AX,440DH		     ;AN000;	     ;IFS.
-	PUSH	AX			     ;AN000;	     ;IFS.
-	JMP	SHORT callrose		     ;AN000;	     ;IFS.
-is44xx:
-	PUSH	[User_In_AX]		     ;AN000;	     ;IFS. call IFSFUNC
-callrose:
-	MOV	DS,SI			     ;AN000;	     ;IFS.
-	MOV	AX,(multNET SHL 8) or  43    ;AN000;	     ;IFS.
-	INT	2FH			     ;AN000;	     ;IFS.
-	POP	BX			     ;AN000;	     ;IFS.
+	CallResident IoctlRedirector
 	JNC	doneok			     ;AN000;	     ;IFS.
 	MOV	DI,AX			     ;AN000;	     ;IFS.
 	JMP	device_err		     ;AN000;	     ;IFS.
 Do_GenIOCTL:
 	test	ES:[DI.SDEVATT],DEV320	; Can device handle Generic IOCTL funcs
 	jz	ioctl_bad_fun
-	PUSH	ES			; DEVIOCALL2 expects Device header block
+	PUSH	ES			; IssueDeviceRequest expects Device header block
 	PUSH	DI			; in DS:SI
 	;set up Generic IOCTL Request Block
 	MOV	byte ptr IOCALL.ReqLen,(size IOCTL_Req)
@@ -470,7 +491,8 @@ ASSUME DS:NOTHING			; DS:SI -> Device header.
 IOCtl_Handle_RedirJ:
 	JMP	IOCTL_Handle_Redir
 ioctl_bad_fun:
-	error	error_invalid_function
+	MOV	AL,error_invalid_function
+	JMP	IoctlError
 
 ioctl_bad_handlej:
 	jmp	ioctl_bad_handle
@@ -497,13 +519,13 @@ ASSUME	DS:NOTHING
 	POP	ES
 	MOV	BX,OFFSET DOSGROUP:IOCALL   ; ES:BX -> Call header
 	SaveReg <DS,SI>
-	invoke	DEVIOCALL2
+	invoke	IssueDeviceRequest
 	RestoreReg <SI,DS>
 	MOV	AX,[IOCALL.REQSTAT]	; Get Status word
 	AND	AX,STBUI		; Mask to busy bit
 	MOV	CL,9
 	SHR	AX,CL			; Busy bit to bit 0
-	transfer    SYS_RET_OK
+	JMP	IoctlSuccess
 
 ; Function 9
 Ioctl_Drive_attr:
@@ -529,9 +551,7 @@ ASSUME	DS:NOTHING
 	ADD	BL,"A"
 	MOV	[SI],BL
 	MOV	WORD PTR [SI+1],003AH	; ":",0
-	MOV	AX,0300H
-	CLC
-	INT	int_IBM
+	CallResident IoctlDriveShared
 	JNC	ioctlLocal		; Not shared
 	OR	DX,0200H		; Shared, bit 9
 IOCTLLocal:
@@ -540,19 +560,20 @@ IOCTLLocal:
 	OR	DX,8000h
 
 ioctl_set_DX:
-	invoke	get_user_stack
+	CallResident get_user_stack
 	MOV	[SI.user_DX],DX
-	transfer    SYS_RET_OK
+	JMP	IoctlSuccess
 
 ioctl_drv_err:
 	MOV	AL,[DrvErr]		;AN000;IFS. DrvErr is saved in GetThisDrv
-	transfer SYS_RET_ERR		;AN000;IFS.
+	JMP	IoctlError		;AN000;IFS.
 
 ; Function 10
 Ioctl_Handle_redir:
-	invoke	SFFromHandle		; ES:DI -> SFT
+	CallResident SFFromHandle		; ES:DI -> SFT
 	JNC	ioctl_got_sft		; have valid handle
-	error	error_invalid_handle
+	MOV	AL,error_invalid_handle
+	JMP	IoctlError
 
 ioctl_got_sft:
 	MOV	DX,ES:[DI.sf_flags]	; Get flags
@@ -562,7 +583,7 @@ ioctl_bad_funj:
 	JMP	ioctl_bad_fun
 
 ioctl_get_dev:
-	DOSAssume   CS,<DS>,"IOCTL/IOCtl_Get_Dev"
+	DOSAssume   SS,<DS>,"IOCTL/IOCtl_Get_Dev"
 	CALL	Check_If_Net
 	JNZ	ioctl_bad_funj		; There are no "net devices", and they
 					;   certainly don't know how to do this
@@ -596,23 +617,23 @@ ASSUME	DS:NOTHING
 	POP	ES
 	MOV	BX,OFFSET DOSGROUP:IOCALL   ; ES:BX -> Call header
 ioctl_do_IO:
-	invoke	DEVIOCALL2
+	invoke	IssueDeviceRequest
 	TEST	[IOCALL.REQSTAT],STERR	    ;Error?
 	JNZ	Ioctl_string_err
 	MOV	AX,[IOSCNT]		; Get actual bytes transferred
-	transfer    SYS_RET_OK
+	JMP	IoctlSuccess
 
 Ioctl_string_err:
 	MOV	DI,[IOCALL.REQSTAT]	;Get Error
 device_err:
 	AND	DI,STECODE		; mask out irrelevant bits
 	MOV	AX,DI
-	invoke	SET_I24_EXTENDED_ERROR
-	mov	ax, cs:extErr
-	transfer    SYS_RET_ERR
+	CallResident SET_I24_EXTENDED_ERROR
+	mov	ax, ss:[ExtErr]
+	JMP	IoctlError
 
 Get_Driver_BL:
-	DOSAssume   CS,<DS>,"Get_Driver_BL"
+	DOSAssume   SS,<DS>,"Get_Driver_BL"
 	ASSUME	ES:NOTHING
 ; BL is drive number (0=default)
 ; Returns pointer to device in ES:DI, unit number in BL if carry clear
@@ -620,7 +641,7 @@ Get_Driver_BL:
 
 	PUSH	AX
 	MOV	AL,BL			; Drive
-	invoke	GETTHISDRV
+	CallResident GETTHISDRV
 	JNC	ioctl_goodrv		;AC000;IFS.
 	CMP	AL,error_not_dos_disk	;AN000;IFS.   if unknow media then
 	JZ	ioctl_goodrv		;AN000;IFS.	 let it go
@@ -660,7 +681,7 @@ ioctl_bad_drv:
 Check_If_Net:
 	CALL	Get_Driver_BL
 	JC	ioctl_drv_err_pop	; invalid drive letter
-entry TEST_IFS_REMOTE2
+TEST_IFS_REMOTE2:
 	PUSH	ES
 	PUSH	DI
 	LES	DI,[THISCDS]
@@ -712,15 +733,15 @@ ASSUME	DS:NOTHING
 	POP	ES
 	MOV	BX,OFFSET DOSGROUP:IOCALL   ; ES:BX -> Call header
 	SaveReg <DS,SI>
-	invoke	DEVIOCALL2
+	invoke	IssueDeviceRequest
 	RestoreReg <SI,DS>
 	test	[IOCALL.REQSTAT],STERR
 	jnz	ioctl_string_errj
 	MOV	AL,BYTE PTR [IOCALL.REQUNIT]	; Get owner returned by device
 						; owner returned is 1-based.
-	transfer    SYS_RET_OK
+	JMP	IoctlSuccess
 
-EndProc $IOCTL
+EndProc DeviceControl
 
 
 ;Input: ES:DI -> SFT
@@ -728,7 +749,7 @@ EndProc $IOCTL
 ;Output: Z flag set, local file
 ;
 
-	procedure   TEST_IFS_REMOTE,NEAR  ;AN000;
+	procedure   IsRemoteSft,NEAR  ;AN000;
 	ASSUME	DS:NOTHING,ES:NOTHING	  ;AN000;
 
 	TEST	ES:[DI.sf_flags],sf_isnet ;AN000;;IFS.	ifs ?
@@ -739,7 +760,21 @@ EndProc $IOCTL
 	JMP	TEST_REMOTE	       ;AN000;;IFS.
 nonifs: 			       ;AN000;
 	return			       ;AN000;;IFS.
-EndProc TEST_IFS_REMOTE 	       ;AN000;
+EndProc IsRemoteSft 	       ;AN000;
 
-CODE ENDS
+IoctlSuccess:
+        CallResident SYS_RET_OK
+        ret
+IoctlError:
+        CallResident SYS_RET_ERR
+        ret
+DOSCODE ENDS
+
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC IoctlEntries
+IoctlEntries LABEL WORD
+        DW OFFSET DOSGROUP:$IOCTL_VECTOR, OFFSET DOSGROUP:DeviceControl
+        DW OFFSET DOSGROUP:TEST_IFS_REMOTE_VECTOR, OFFSET DOSGROUP:IsRemoteSft
+        DW 0
+DOSEND ENDS
 END

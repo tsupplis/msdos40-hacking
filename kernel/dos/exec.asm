@@ -207,7 +207,7 @@ exec_check_2:
 	MOV	exec_fh,AX
 	MOV	BX,AX
 	XOR	AL,AL
-	CallResident	$IOCTL
+	invoke DeviceControl
 	JC	Exec_bombJ
 	TEST	DL,devid_ISDEV
 	JZ	exec_check_environ

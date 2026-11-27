@@ -362,6 +362,7 @@ fail:
     mov ax,4c01h
     int 21h
 check_handles:
+    call check_ioctl
     push bx                     ; preserve the original open handle
     mov bx,32
     mov ah,67h
@@ -453,6 +454,52 @@ check_handles:
     cmp dx,285dh
     jne fail
     ret
+; BX is an open disk file. Exercise handle, drive and driver-packet IOCTLs.
+check_ioctl:
+    push bx
+    mov ax,4400h
+    int 21h
+    jc fail
+    test dl,80h                 ; a file, not a character device
+    jnz fail
+    mov bx,0ffffh
+    mov ax,4400h
+    int 21h
+    jnc fail
+    cmp ax,6
+    jne fail
+    mov bx,26                   ; LASTDRIVE=E on the scratch boot
+    mov ax,4408h
+    int 21h
+    jnc fail
+    cmp ax,15
+    jne fail
+    mov bx,2                    ; B: is a 1.44 MB floppy
+    mov ax,4409h
+    int 21h
+    jc fail
+    test dx,1000h
+    jnz fail
+    mov cx,0860h                ; get default device parameters
+    mov dx,ioctl_packet
+    mov ax,440dh
+    int 21h
+    jc fail
+    cmp word [ioctl_packet+7],512
+    jne fail
+    mov word [ioctl_packet+7],0
+    push ds
+    mov bp,0dh                  ; multiplex IOCTL uses BP for the subfunction
+    mov ax,122bh
+    push ax
+    int 2fh
+    pop di
+    pop ds
+    jc fail
+    cmp word [ioctl_packet+7],512
+    jne fail
+    pop bx
+    ret
 xopen:
     mov ax,6c00h
     mov bx,2
@@ -481,6 +528,7 @@ directory db 'B:\SVCDIR',0
 broot db 'B:\',0
 renamed_dir db 'B:\SVCDIR2',0
 current_path times 64 db 0ffh
+ioctl_packet times 256 db 0
 pathname db 'B:\SVCDIR\..\SVCTEST.TMP',0
 flatname db 'B:\SVCTEST.TMP',0
 okmsg db 'HMA SERVICES PASS',13,10,'$'

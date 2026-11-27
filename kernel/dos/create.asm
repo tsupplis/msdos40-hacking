@@ -334,7 +334,7 @@ EndProc CreateExclusiveFile
 	PUSH	DX		;AN000;;>32mb
 	XOR	BH,BH		;AN000;;>32mb
 
-	CallResident $IOCTL		;AN000;;>32mb
+	invoke DeviceControl		;AN000;;>32mb
 	POP	DX		;AN000;;>32mb
 	POP	BX		;AN000;;>32mb
 	JC	geterr		;AN000;;>32mb
@@ -357,7 +357,7 @@ doset:					       ;AN000;
 	MOV	CX,0846H	;AN001;;>32mb
 	MOV	AL,0DH		;AN000;;>32mb
 	XOR	BH,BH		;AN000;;>32mb
-	CallResident $IOCTL		;AN000;;>32mb  set volume id
+	invoke DeviceControl		;AN000;;>32mb  set volume id
 geterr: 			;AN000;
 	PUSH	SS		;AN000;>32mb
 	POP	DS		;AN000;>32mb   ds= dosgroup

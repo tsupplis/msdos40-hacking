@@ -539,10 +539,17 @@ Break	<NLS_IOCTL - do $IOCTL for NLSFUNC   >
 Procedure   NLS_IOCTL,NEAR
 	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:NOTHING
 
+	call    NlsCheckStack
+        je      NlsIoctlInternal
+        mov     ax,bp
+        mov     ah,44h
+        int     21h
+        ret
+NlsIoctlInternal:
 	PUSH	[user_SP]	 ; save user stack
 	PUSH	[user_SS]
 	CALL	Fake_User_Stack
-	MOV	AX,BP	     ; set up correct interface for $LSEEK
+	MOV	AX,BP	     ; IOCTL subfunction
 	invoke	$IOCTL
 	POP	[user_SS]	 ; restore user stack
 	POP	[user_SP]

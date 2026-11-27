@@ -309,12 +309,14 @@ DosCodeEnd LABEL BYTE
         EXTRN Macro2Entries:WORD,FcbEntriesTable:WORD
         EXTRN FcbIoEntries:WORD,FcbIo2Entries:WORD
         EXTRN GetsetEntries:WORD,ParseEntries:WORD,TimeEntries:WORD,DevEntries:WORD,PathEntries:WORD,HandleEntries:WORD
+        EXTRN IoctlEntries:WORD
         PUBLIC DosCodeModules
 DosCodeModules LABEL WORD
         DW OFFSET DOSGROUP:GetsetEntries
         DW OFFSET DOSGROUP:ParseEntries
         DW OFFSET DOSGROUP:TimeEntries
         DW OFFSET DOSGROUP:DevEntries
+        DW OFFSET DOSGROUP:IoctlEntries
         DW OFFSET DOSGROUP:HandleEntries
         DW OFFSET DOSGROUP:PathEntries
         DW OFFSET DOSGROUP:FcbIoEntries
