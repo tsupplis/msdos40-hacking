@@ -70,6 +70,13 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
                     break
             raise AssertionError(f"Expected {suffix!r}, screen was\n{screen}")
 
+        def fill_prompt(label):
+            # Wait for each chunk to echo before queuing more BIOS keystrokes.
+            expect(label, anywhere=True)
+            for count in range(4, 65, 4):
+                type_text("aaaa")
+                expect(label + " " + "a" * count, anywhere=True)
+
         try:
             expect("Ctrl-S Save", anywhere=True)
             expect("hello   world", anywhere=True)
@@ -85,10 +92,10 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
 
             # Exercise the exact limit, then exceed it in all three fields.
             key("+Ctrl r -Ctrl")
-            type_text("a" * 64)
+            fill_prompt("Replace all:")
             key("Return")
             expect("With:", anywhere=True)
-            type_text("a" * 64)
+            fill_prompt("With:")
             key("Return")
             expect("0 replacements.", anywhere=True)
             for command, field in (("r", "from"), ("r", "to"), ("f", "find")):
@@ -97,7 +104,8 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
                     type_text("hello")
                     key("Return")
                     expect("With:", anywhere=True)
-                type_text("a" * 64 + "b")
+                fill_prompt({"from": "Replace all:", "to": "With:", "find": "Find:"}[field])
+                key("b")
                 expect("64-byte limit.", anywhere=True)
                 type_text("xyz")
                 key("ESC" if field == "to" else "Return")
