@@ -74,6 +74,8 @@ The 4.01 reconstruction changes 12 source files and corrects encoding in 17 othe
 | `fdisk` | Prevent logical-drive table overflow by rejecting partition chains longer than 23 entries. |
 | `format` | Stop on a failed final FAT write. Update the partition type only for the matching volume. |
 
+Review driven fixes can be looked at in [REVIEW.md](commands/REVIEW.md)
+
 ## Command-line editing
 
 | Key | Action |
