@@ -4,13 +4,13 @@ Target: the project’s 3.23 DOS binary and 4.01N under identical inputs. The al
 
 Sources: [Microsoft GW-BASIC User’s Reference and Guide, July 1987](https://bitsavers.computerhistory.org/pdf/microsoft/msdos_3.3/MS-DOS_GW-BASIC_198707.pdf), [1989 guide and command-line reference](https://bitsavers.trailing-edge.com/pdf/microsoft/gw-basic/Microsoft_GW-BASIC_Users_Guide_and_Reference_1989.pdf). Supplementary syntax must be verified against the project’s executable.
 
-402 work items: 319 matched, 74 different, 6 inconclusive, 3 intentional.
+402 work items: 320 matched, 73 different, 6 inconclusive, 3 intentional.
 
 ## Evidence
 
 Matched records an observed matching case. It does not qualify the entire form or its error paths. Untested means a direct behavioral comparison has not been recorded here. The default guest is MS-DOS 4.01N. Display work uses PCE EGA/VGA or QEMU VGA. Event tests require the corresponding event source, file locking requires a SHARE-enabled configuration for successful operations, and printer and serial tests require a captured output device.
 
-- Q — [paired DOS observations](../test/gwaudit.jsonl) from [check_gwaudit](../test/check_gwaudit) and [probe inputs](../test/gwcases.txt). Each interpreter runs its probes in one QEMU guest. Results retain the reference and build outputs. Statement acceptance alone leaves device delivery, audio, timing and underlying limits unqualified.
+- Q — [paired DOS observations](../test/gwaudit.jsonl) from [check_gwaudit](../test/check_gwaudit) and [probe inputs](../test/gwcases.txt). Q entries record historical QEMU runs. Case 216 was rechecked on both PCE adapters. Results retain the reference and build outputs. Statement acceptance alone leaves device delivery, audio, timing and underlying limits unqualified.
 - A — [arithmetic and language probes](../test/gwmatrix.bas), checked against the optional reference.
 - L — [shared language assertions](../test/gwlang.bas), executed by [check_gwbasic](../test/check_gwbasic) on both interpreters.
 - P — [shared program-management session](../test/gwprog.txt), with output and listing assertions in check_gwbasic.
@@ -20,11 +20,11 @@ Matched records an observed matching case. It does not qualify the entire form o
 
 ## Running the paired regression
 
-With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 62 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Each interpreter runs the BASIC fixtures in succession and writes one report on the scratch floppy.
+With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 63 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Each interpreter runs the BASIC fixtures in succession and writes one report on the scratch floppy.
 
-The explicit full command `test/check_gwaudit --check` uses QEMU for all 239 probes, with one boot per interpreter. It batches the same 62 fixtures and restores booted DOS for individual cases requiring separate observations, including BIOS keyboard and cursor capture. Use `test/check_gwaudit --check 373` for an isolated selection or omit `--check` for JSONL output.
+PCE is the default for the paired audit, including single cases such as `test/check_gwaudit --check 216`. Set `PCE_VIDEO=ega` or `PCE_VIDEO=vga` to select the adapter. The historical 239-probe runner requires explicit `--qemu`; it covers additional observations such as BIOS keyboard input and cursor position.
 
-The gate enforces the 175 QEMU cases marked **Matched** against both the live 3.23 run and its recorded output. Incomplete observations fail in every category. The summary counts the 58 known differences and six inconclusive probes separately. A known difference that now matches is reported for review. After verifying a fix, update that case’s JSONL record, matrix status and counts together. The remaining inventory rows use the other evidence listed above.
+The gate enforces the 176 recorded cases marked **Matched** against both the live 3.23 run and its recorded output. Incomplete observations fail in every category. The summary counts the 57 known differences and six inconclusive probes separately. A known difference that now matches is reported for review. After verifying a fix, update that case’s JSONL record, matrix status and counts together. The remaining inventory rows use the other evidence listed above.
 
 ## Differences by work area
 
@@ -39,7 +39,7 @@ Each row below groups failed observations for investigation. The count measures 
 | Keyboard, editor and function keys | 12 | 182, 185, 294, 295, 297, 299, 301, 358, 359, 389, 390, 393 |
 | Coordinates, viewports and text windows | 10 | 196, 198, 217, 218, 219, 220, 221, 223, 224, 225 |
 | Palette, drawing and tiled fill | 8 | 191, 192, 193, 194, 348, 351, 354, 356 |
-| Video modes, pages and EGA memory | 3 | 215, 216, 342 |
+| Video modes, pages and EGA memory | 2 | 215, 342 |
 | Serial I/O | 4 | 233, 395, 396, 397 |
 | Timer events | 4 | 271, 272, 273, 274 |
 | Music queue, events and PLAY syntax | 5 | 247, 263, 264, 265, 266 |
@@ -265,7 +265,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 213 | `SCREEN 8` | Display | Matched | X |
 | 214 | `SCREEN 9` | Display | Matched | X |
 | 215 | `SCREEN 10` | Display | Different | Q, case 215; 3.23 ERROR 5  100, 4.01N 3  / DONE |
-| 216 | `SCREEN active and visible pages` | Display | Different | Q, case 216; 3.23 0  /  3  / DONE, 4.01N 3  /  3  / DONE |
+| 216 | `SCREEN active and visible pages` | Display | Matched | PCE EGA and VGA, case 216; both read 0 on page 0 and 3 on page 1 |
 | 217 | `VIEW graphics` | Display | Different | syntax error |
 | 218 | `VIEW SCREEN` | Display | Different | Q, case 218; 3.23 3  / DONE, 4.01N ERROR 2  100 |
 | 219 | `VIEW reset` | Display | Different | Q, case 219; 3.23 3  / DONE, 4.01N ERROR 2  100 |

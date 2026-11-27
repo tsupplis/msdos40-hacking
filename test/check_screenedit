@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
 
     image = folder / "boot.img"
     shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
-    if subprocess.check_output(["mtype", "-i", image, "::EDIT.EXE"]) != (root / "commands/edit/edit.exe").read_bytes():
+    if subprocess.check_output(["mtype", "-i", image, "::EDIT.EXE"]) != (root / "edit/edit.exe").read_bytes():
         raise AssertionError("stale EDIT on test image")
     sample = (b"hello\tworld\r\n" + (b"a"*78+b"\r\n")*1800 +
               b"needle\nlast\x82")
@@ -29,9 +29,12 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
     fullcase = (b"test line "*100+b"\r\n")*200
     (folder / "full.txt").write_bytes(fullcase)
     run("mcopy", "-i", "b.img", "full.txt", "::FULL.TXT")
+    (folder / "locked.txt").write_bytes(b"protected")
+    run("mcopy", "-i", "b.img", "locked.txt", "::LOCKED.TXT")
+    run("mattrib", "-i", "b.img", "+r", "::LOCKED.TXT")
     (folder / "fill.bin").write_bytes(bytes(960000))
     run("mcopy", "-i", "b.img", "fill.bin", "::FILL.BIN")
-    (folder / "auto.bat").write_bytes(b"@echo off\r\nprompt Q$G\r\nedit B:\\source.txt\r\nedit B:\\full.txt\r\nedit B:\\new.txt\r\nmode co40\r\nedit B:\\narrow.txt\r\nmode co80\r\necho DONE\r\n")
+    (folder / "auto.bat").write_bytes(b"@echo off\r\nprompt Q$G\r\nedit B:\\source.txt\r\nedit B:\\full.txt\r\nedit B:\\locked.txt\r\nedit B:\\new.txt\r\nmode co40\r\nedit B:\\narrow.txt\r\nmode co80\r\necho DONE\r\n")
     run("mcopy", "-o", "-i", image, "auto.bat", "::AUTOEXEC.BAT")
     write_config(folder)
     with (folder / "pce.log").open("wb") as log:
@@ -115,6 +118,14 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
             key("+Ctrl q -Ctrl")
             expect("Unsaved changes", anywhere=True)
             key("+Ctrl q -Ctrl")
+            expect("EDIT B:\\locked.txt", anywhere=True)
+            key("x")
+            for _ in range(3):
+                key("+Ctrl s -Ctrl")
+                expect("Destination is protected.", anywhere=True)
+            key("+Ctrl q -Ctrl")
+            expect("Unsaved changes", anywhere=True)
+            key("+Ctrl q -Ctrl")
             expect("EDIT B:\\new.txt", anywhere=True)
             type_text("new")
             key("Return")
@@ -140,10 +151,18 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
             key("End")
             key("+Ctrl v -Ctrl")
             expect("filenew", anywhere=True)
+            key("+Ctrl z -Ctrl")
+            expect("Ln 2/2 Col 5", anywhere=True)
+            key("+Ctrl v -Ctrl")
+            expect("filenew", anywhere=True)
             key("+ShiftLeft")
             key("Home")
             expect("Col 1", anywhere=True)
             key("-ShiftLeft")
+            key("+Ctrl x -Ctrl")
+            expect("Cut.", anywhere=True)
+            key("+Ctrl z -Ctrl")
+            expect("Undone.", anywhere=True)
             key("+Ctrl x -Ctrl")
             expect("Cut.", anywhere=True)
             key("+Ctrl v -Ctrl")
@@ -151,6 +170,10 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
             key("Home")
             expect("Col 1", anywhere=True)
             key("-ShiftLeft")
+            key("z")
+            expect("Ln 3/3 Col 2", anywhere=True)
+            key("+Ctrl z -Ctrl")
+            expect("Undone.", anywhere=True)
             key("z")
             expect("Ln 3/3 Col 2", anywhere=True)
             key("+Ctrl +ShiftLeft")
@@ -175,6 +198,17 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
             assert cells[960:979] == b"Esc or F1 to return"
             key("ESC")
             expect("narrow.txt", anywhere=True)
+            type_text("abcdef")
+            for col in range(6, 1, -1):
+                key("+Ctrl z -Ctrl")
+                expect(f"Col {col}", anywhere=True)
+            key("+Ctrl z -Ctrl")
+            expect("Nothing to undo.", anywhere=True)
+            key("+Ctrl s -Ctrl")
+            expect("Saved.", anywhere=True)
+            key("x")
+            key("+Ctrl z -Ctrl")
+            expect("Undone.", anywhere=True)
             key("+Ctrl q -Ctrl")
             expect("Q>")
         finally:
@@ -190,5 +224,11 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
     print(f"PASS interactive EDIT on {len(sample):,} bytes, saved file verified")
     assert subprocess.check_output(["mtype", "-i", folder / "b.img", "::FULL.TXT"]) == fullcase
     assert subprocess.check_output(["mtype", "-i", folder / "b.img", "::NEW.TXT"]) == b"xnew\r\nfilenew\r\nz"
+    assert subprocess.check_output(["mtype", "-i", folder / "b.img", "::NARROW.TXT"]) == b"a"
+    print("PASS five-level Ctrl-Z, clipboard edits and undo to saved state")
     print("PASS shifted selection, copy/cut/paste, replacement and both search modes")
+    assert subprocess.check_output(["mtype", "-i", folder / "b.img", "::LOCKED.TXT"]) == b"protected"
+    listing = subprocess.check_output(["mdir", "-b", "-i", folder / "b.img", "::"])
+    assert b".TMP" not in listing.upper()
+    print("PASS repeated protected saves kept the original without temporary files")
     print("PASS full disk preserved original and dirty buffer; created new file")

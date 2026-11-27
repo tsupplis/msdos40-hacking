@@ -20,7 +20,8 @@ with tempfile.TemporaryDirectory() as work:
     dos = drive / "DOS"
     dos.mkdir()
     for program in ["command.com", *external]:
-        shutil.copy(root / "commands" / Path(program).stem / program, drive)
+        directory = root if program == "edit.exe" else root / "commands"
+        shutil.copy(directory / Path(program).stem / program, drive)
     shutil.copy(root / "commands/help/help.com", dos)
     database = dos / "doshelp.hlp"
     database.write_bytes((root / "doshelp/doshelp.hlp").read_bytes().replace(b"\n", b"\r\n"))

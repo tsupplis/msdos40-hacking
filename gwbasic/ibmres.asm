@@ -573,7 +573,10 @@ STMDSX:
 	R	CIRCLE
 	R	DRAW
 	R2	PLAY,PLAYS
+        public PlayToken,TimerToken
+        PlayToken=0FE00h+QQ
 	R	TIMER
+        TimerToken=0FE00h+QQ
 	R	ERDEV
 	R	IOCTL
 	R	CHDIR
@@ -957,7 +960,12 @@ EVALX:	CMP	AL,LOW 376O
 
 EVALNS:	INC	BX
 	MOV	AL,BYTE PTR [BX]
-	cmp al,low offset $ENVIRON
+	cmp al,low offset $PLAY
+        jne CheckEnv
+        pop cx
+        extrn PlayCount:near
+        jmp PlayCount
+CheckEnv: cmp al,low offset $ENVIRON
         je EnvValue
 	CMP	AL,LOW OFFSET $DATE$
 	JZ	SHORT DATEV	;Brif DATE$

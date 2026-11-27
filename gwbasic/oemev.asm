@@ -20,6 +20,9 @@ though only in binary form.  These are indicated.
         *
 	.SALL
 
+DSEG SEGMENT PUBLIC 'DATASG'
+extrn TimerLeft:dword,TimerPeriod:dword,TimerPending:byte,TRPTBL:byte
+DSEG ENDS
 	EXTRN	FCERR:NEAR
 
 ; Internal function: initialize event handling
@@ -112,8 +115,25 @@ ISRTIC:	PUSH	DS
 	PUSH	AX
 	PUSH	DX
 ITICDS:	MOV	AX,0			; This is patched to say DSEG
-	MOV	DS,AX
-	CALL	WORD PTR RDTRGP		; Test if any joystick buttons are
+	MOV DS,AX
+        test byte ptr TRPTBL+3*TIMOFF,1
+        jz TickInputs
+        mov ax,word ptr TimerLeft
+        or ax,word ptr TimerLeft+2
+        jz TickInputs
+        sub word ptr TimerLeft,1
+        sbb word ptr TimerLeft+2,0
+        mov ax,word ptr TimerLeft
+        or ax,word ptr TimerLeft+2
+        jnz TickInputs
+        mov ax,word ptr TimerPeriod
+        mov word ptr TimerLeft,ax
+        mov ax,word ptr TimerPeriod+2
+        mov word ptr TimerLeft+2,ax
+        mov TimerPending,1
+        mov EVENT,1
+TickInputs:
+        CALL	WORD PTR RDTRGP		; Test if any joystick buttons are
 	AND	AL,11110000B		; pressed; if so, handle them
 	CMP	AL,11110000B		; (FIXME: is it actually OK to maybe
 	JNZ	TICSTR			; call the BIOS within this ISR?)
@@ -431,7 +451,7 @@ PEN98VM	DW	0			; Last known valid character column
 					; & row --- PEN(9) value minus 1,
 					; PEN(8) value minus 1
 
-	PUBLIC	EVENT
+		PUBLIC	EVENT
 EVENT	DB	0			; Whether an event has occurred
 					; since the last time we polled for
 					; an event; _only_ the lowest bit

@@ -20,9 +20,12 @@ here wholesale.
         *
 	.SALL
 
+DSEG SEGMENT PUBLIC 'DATASG'
+        extrn PlayLevel:byte,PlayPending:byte,EVENT:byte,TRPTBL:byte
+DSEG ENDS
 	EXTRN	INITQ:NEAR,NUMQ:NEAR,LFTQ:NEAR,GETQ:NEAR,PUTQ:NEAR
 
-	SNDQSZ	EQU	80H		; Size of the sound queue in bytes
+	SNDQSZ	EQU	104H		; Size of the sound queue in bytes
 					; Each musical note takes up 4 bytes
 
 	P0PULS	EQU	0BA7H		; Number of PIT counter 0 pulses per
@@ -74,22 +77,7 @@ I0NXT:	PUSH	BX			; Nope, we are not playing a note now
 	CALL	NUMQ			; & play it as the current note
 	CMP	AX,4
 	JB	I0NON1
-	CALL	GETQ			; First get the PIT pulse count &
-	OUT	42H,AL			; send it to PIT 2
-	MOV	AH,AL
-	CALL	GETQ
-	OUT	42H,AL
-	ADD	AX,-1			; Handle the case where we have a
-	SBB	AH,AH			; "rest" note (PIT pulse count = 0)!
-	IN	AL,61H
-	AND	AX,0000001111111100B
-	OR	AL,AH
-	OUT	61H,AL
-	CALL	GETQ			; Then get the duration --- assumed
-	XCHG	AH,AL			; to be non-zero --- & store it
-	CALL	GETQ
-	XCHG	AH,AL
-	MOV	NOTTIC,AX
+	call StartNote
 	POP	SI
 	POP	BX
 	JMP	I0FWD2			; Dispatch to the original IRQ 0
@@ -107,6 +95,40 @@ I0NON2:	ADD	SNDBAS,P0PULS		; Reset PIT 0 to 18.2 Hz once we
 	OUT	80H,AL
 	OUT	40H,AL
 	JMP	I0FWD
+
+; Consume the first waiting segment with interrupts disabled. SI = sound queue.
+StartNote:
+	CALL	GETQ			; First get the PIT pulse count &
+	OUT	42H,AL			; send it to PIT 2
+	MOV	AH,AL
+	CALL GETQ
+        test al,80h
+        jnz GapDequeued
+        dec WaitingNotes
+        mov bl,WaitingNotes
+        inc bl
+        cmp bl,PlayLevel
+        jne OutputDivisor
+        test byte ptr TRPTBL+3*PLAYOFF,1
+        jz OutputDivisor
+        mov PlayPending,1
+        mov EVENT,1
+GapDequeued:
+        and al,7fh
+OutputDivisor:
+        OUT 42H,AL
+        ADD AX,-1			; Handle the case where we have a
+	SBB	AH,AH			; "rest" note (PIT pulse count = 0)!
+	IN	AL,61H
+	AND	AX,0000001111111100B
+	OR	AL,AH
+	OUT	61H,AL
+	CALL	GETQ			; Then get the duration --- assumed
+	XCHG	AH,AL			; to be non-zero --- & store it
+	CALL	GETQ
+	XCHG	AH,AL
+	MOV	NOTTIC,AX
+        ret
 
 ; Internal function: really finish initializing sound support
 ; This should only be called after DSEG has been moved to its final location
@@ -167,7 +189,14 @@ SNDTR2:	CLI
 ;	(?)
 ;
 PUBLIC	DONOTE
-DONOTE:	PUSH	AX
+DONOTE: xor ah,ah
+        jmp short NoteEntry
+        public NoteGap
+NoteGap: mov ah,80h             ; Internal articulation gap, no BASIC queue entry.
+NoteEntry:
+        push di
+        mov di,ax
+        PUSH AX
 	PUSH	BX
 	PUSH	CX
 	PUSH	DX
@@ -186,6 +215,7 @@ DONOTE:	PUSH	AX
 	OUT	40H,AL
 	MOV	SNDTIC,-1
 	MOV	NOTTIC,0
+        mov WaitingNotes,0
 	MOV	AX,SNDQSZ
 	CALL	INITQ			; Initialize the sound queue
 	STI
@@ -207,7 +237,12 @@ HVNOTE:	PUSHF				; Input AL = 0 or 1: play note
 	ADD	AX,BX
 	ADC	DX,0012H
 	DIV	CX			; AX = 1,193,181 / CX, rounded off
-HVREST:	CLI
+HVREST: CLI
+        mov bx,di
+        or ah,bh
+        js QueueSegment
+        inc WaitingNotes
+QueueSegment:
 	CALL	PUTQ			; Enqueue the PIT pulse count
 	MOV	AL,AH
 	CALL	PUTQ
@@ -217,6 +252,7 @@ HVREST:	CLI
 	CALL	PUTQ
 	CMP	SNDTIC,-1		; If necessary, reprogram PIT 0 to
 	JNZ	MAYFLS			; 400 Hz
+        call StartNote           ; First note is playing when PLAY returns.
 	MOV	SNDTIC,0
 	MOV	AL,P0PULS AND 0FFH
 	OUT	40H,AL
@@ -235,6 +271,7 @@ FINNOT:	POP	SI
 	POP	CX
 	POP	BX
 	POP	AX
+        pop di
 	CLC
 	RET
 
@@ -255,7 +292,9 @@ CSEG	ENDS
 DSEG	SEGMENT PUBLIC 'DATASG'
 
 OIRQ0	DD	-1			; Original IRQ 0 vector
-SNDQDS	DB	8D DUP(?)		; Descriptor structure for sound queue
+public WaitingNotes
+WaitingNotes db 0
+SNDQDS DB	8D DUP(?)		; Descriptor structure for sound queue
 SNDQUE	DB	SNDQSZ DUP(?)		; Buffer for sound queue
 NOTTIC	DW	0			; Number of fast timer ticks left
 					; for currently playing note

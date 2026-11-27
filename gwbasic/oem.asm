@@ -1226,6 +1226,69 @@ SEGINI:	CALL	SNDSTA			; _Really_ start sound support
 ;
 ; ATRMSK:PIXOFS holds the linear EGA pixel index (up to 223999).
 EgaPixel:
+        cmp PIXBTS,4
+        jne EgaBiosPixel
+        ; Planar 16-color modes. Some BIOSes ignore BH for pixel I/O.
+        ; Convert the linear bit index to a byte within the active page.
+        push es
+        push bx
+        push cx
+        push dx
+        push ax
+        mov bx,PIXOFS
+        mov cl,3
+        shr bx,cl
+        mov al,ATRMSK
+        xor ah,ah
+        mov cl,13D
+        shl ax,cl
+        or bx,ax
+        xor ax,ax
+        mov es,ax
+        add bx,es:[44eh]        ; PAGHAK maintains the active page base.
+        mov ax,0a000h
+        mov es,ax
+        mov cl,byte ptr PIXOFS
+        and cl,7
+        mov ch,80h
+        shr ch,cl
+        mov dx,3ceh
+        pop ax
+        cmp ah,0dh
+        je EgaReadPlanes
+        mov cl,al
+        mov ax,0205h            ; Write mode 2 expands the color to four planes.
+        out dx,ax
+        mov al,8D
+        mov ah,ch
+        out dx,ax
+        mov al,es:[bx]          ; Load the latches to preserve adjacent pixels.
+        mov es:[bx],cl
+        mov ax,0ff08h
+        out dx,ax
+        mov ax,0005h
+        out dx,ax
+        jmp short EgaPixelDone
+EgaReadPlanes:
+        xor cl,cl
+        mov ax,0304h            ; Read map select, planes 3 through 0.
+EgaReadPlane:
+        out dx,ax
+        test es:[bx],ch
+        jz EgaReadBit
+        stc
+EgaReadBit:
+        rcl cl,1
+        dec ah
+        jns EgaReadPlane
+        mov al,cl
+EgaPixelDone:
+        pop dx
+        pop cx
+        pop bx
+        pop es
+        ret
+EgaBiosPixel:
         push bx
         push cx
         push dx

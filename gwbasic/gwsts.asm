@@ -549,7 +549,16 @@ VARRT2:
 ; DONOTE(AL: voice (0=forground, 1=back), CX:frequency, DX:duration (1=18.7ms))
 ; queues note for execution, saves all regs.
 ;
-PLAYS:	MOV	DX,OFFSET PLYTAB	;POINT TO PLAY COMMAND TABLE
+PLAYS:  cmp al,low offset $ON
+        je PlayControl
+        cmp al,low offset $STOP
+        je PlayControl
+        cmp al,low offset $OFF
+        jne PlayMusic
+PlayControl:
+        mov dx,offset TRPTBL+3*PLAYOFF
+        jmp EventControl
+PlayMusic: MOV	DX,OFFSET PLYTAB	;POINT TO PLAY COMMAND TABLE
 	JMP	MACLNG
 
 PLYTAB:	DB	"A"		;THE NOTES A-G
@@ -790,7 +799,12 @@ PLYNO7:
 	SHR	AX,CL		;pause after note is 1/8 or 1/4
 	XOR	CX,CX		;Freq = 0 for pause
 	OR	AX,AX		;Pause = 0?
-	JNZ	PLYNO9		;Brif not
+	jz PLYNO8
+        mov dx,ax
+        mov al,byte ptr MMODE
+        extrn NoteGap:near
+        call NoteGap
+        jmp POLKEY
 PLYNO8:
 	RET			; else do nothing
 PLYNO9:
@@ -1018,7 +1032,21 @@ DSEG	ENDS
 CHKIN1:	PUSH	BX
 	PUSH	CX
 	PUSH	DX
-	CALL	POLKEY		;trap Function keys, CTL-C, CTL-S
+	xor al,al
+        xchg al,PlayPending
+        or al,al
+        jz PollTimer
+        mov al,PLAYOFF
+        call EVTRP
+PollTimer:
+        xor al,al
+        xchg al,TimerPending
+        or al,al
+        jz PollOther
+        mov al,TIMOFF
+        call EVTRP
+PollOther:
+        CALL	POLKEY		;trap Function keys, CTL-C, CTL-S
 	EXTRN	POLCOM:NEAR
 	CALL	POLCOM		;trap COM interrupts
 NOACOM:
@@ -1159,6 +1187,26 @@ ONGOTP:	PUSH	BX		;Text pointer in case not us.
 	CALL	CHRGTR		;[AL] = 2nd byte of 2-byte token
 	MOV	AH,CH		;[AH] = 1st byte
 NT2BTK:
+        extrn PlayToken:abs,TimerToken:abs
+        cmp ax,PlayToken
+        jne CheckTimerEvent
+        call GETSUB
+        dec al
+        cmp al,32
+        jae FCERR2
+        inc al
+        mov PlayLevel,al
+        mov cx,PLAYOFF*256
+        jmp short ONSTM
+CheckTimerEvent:
+        cmp ax,TimerToken
+        jne CheckKeyEvent
+        call CHRGTR
+        call PARCHK
+        call SetInterval
+        mov cx,TIMOFF*256
+        jmp short ONSTM
+CheckKeyEvent:
 	CMP	AX,OFFSET $KEY2B
 	MOV	CX,OFFSET (400O*KEYOFF)+NMKEYT
 	JZ	ONFUN		;Brif ON KEY...
@@ -2484,8 +2532,69 @@ DSEG	SEGMENT PUBLIC 'DATASG'
 DSEG	ENDS
 	EXTRN	ERROR:NEAR
 
-PUBLIC	TIMER
-TIMER:
+; The IRQ handlers latch crossings. BASIC delivers requests between statements.
+DSEG SEGMENT PUBLIC 'DATASG'
+        public PlayLevel,PlayPending,TimerPending,TimerPeriod,TimerLeft
+PlayLevel db 0
+PlayPending db 0
+TimerPending db 0
+TimerPeriod dd 0
+TimerLeft dd 0
+        extrn WaitingNotes:byte
+DSEG ends
+
+        public PlayCount
+PlayCount:
+        call GETSUB
+        push bx
+        xor bx,bx
+        mov bl,WaitingNotes
+        call MAKINT
+        pop bx
+        ret
+
+SetInterval:
+        push bx
+        call FRCSNG
+        mov bx,word ptr $FACM1
+        test bl,80h
+        jnz BadInterval
+        cmp bh,81h              ; One second through one day.
+        jb BadInterval
+        cmp bx,9128h
+        ja BadInterval
+        jb ValidInterval
+        cmp word ptr $FACLO,0c000h
+        ja BadInterval
+ValidInterval:
+        mov bx,8511h            ; BIOS ticks per second, in MBF.
+        mov dx,0a6f0h
+        call $FMULS
+        extrn $QINT:near
+        call $QINT
+        xor bh,bh
+        pushf
+        cli
+        mov word ptr TimerPeriod,dx
+        mov word ptr TimerPeriod+2,bx
+        mov word ptr TimerLeft,dx
+        mov word ptr TimerLeft+2,bx
+        mov TimerPending,0
+        popf
+        pop bx
+        mov al,[bx]
+        ret
+BadInterval:
+        jmp FCERR
+
+PUBLIC TIMER
+TIMER:  mov dx,offset TRPTBL+3*TIMOFF
+EventControl:
+        push ax
+        call EOSCH1
+        pop ax
+        jmp EVSET
+
 PUBLIC	ERDEV
 ERDEV:
 PUBLIC	IOCTL

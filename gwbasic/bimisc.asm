@@ -454,8 +454,20 @@ PUBLIC	INITRP
 INITRP:
 DSEG	SEGMENT PUBLIC 'DATASG'
 	EXTRN	TRPTBL:WORD
+	extrn TimerPeriod:dword,TimerLeft:dword,TimerPending:byte,PlayPending:byte,PlayLevel:byte
 DSEG	ENDS
-	MOV	BX,OFFSET TRPTBL	;HL=TRAP TABLE ADDRESS
+        xor ax,ax
+        pushf
+        cli
+        mov word ptr TimerPeriod,ax
+        mov word ptr TimerPeriod+2,ax
+        mov word ptr TimerLeft,ax
+        mov word ptr TimerLeft+2,ax
+        mov TimerPending,al
+        mov PlayPending,al
+        mov PlayLevel,al
+        popf
+        MOV BX,OFFSET TRPTBL ;HL=TRAP TABLE ADDRESS
 	MOV	CH,LOW OFFSET NUMTRP	;B=NUMBER OF TRAPS
 	XOR	AL,AL
 INITP0:	MOV	BYTE PTR [BX],AL	;TRAP OFF

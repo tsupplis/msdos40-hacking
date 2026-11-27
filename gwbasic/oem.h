@@ -34,7 +34,9 @@
 ;** (END OF VERSION SPECIFIC VALUES) *****************************************
 ;Pascal program HFILE searches for the previous line - DO NOT MODIFY
 ;
-	NUMTRP=NMKEYT+NMCOMT+NMPENT+NMSTRT
+	PLAYOFF=NMKEYT+NMCOMT+NMPENT+NMSTRT
+	TIMOFF=PLAYOFF+1
+	NUMTRP=TIMOFF+1
 	GW=1			;GW BASIC
 	ESCCTL=0		;Escape Sequence processing in SCROUT
 	GWDBUG=0		;DEBUG statement (TEST VERSIONS ONLY)

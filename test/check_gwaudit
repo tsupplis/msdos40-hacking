@@ -18,7 +18,9 @@ root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("ids", nargs="*", type=int, help="inventory rows (default: all probes)")
 parser.add_argument("--jobs", default=1, type=int, help="concurrent DOS guests (maximum two)")
-parser.add_argument("--quick", action="store_true", help="run the cases that share one BASIC session")
+backend = parser.add_mutually_exclusive_group()
+backend.add_argument("--qemu", action="store_true", help="use the historical QEMU audit, including interactive probes")
+backend.add_argument("--quick", action="store_true", help="run the cases that share one BASIC session")
 parser.add_argument("--check", action="store_true",
                     help="enforce matched inventory cases against the recorded reference")
 args = parser.parse_args()
@@ -185,8 +187,8 @@ def read(image, name):
 grouped = {
     5, 8, 27, 30, 31, 32, 33, 35, 57, 58, 61, 63, 68, 69, 73, 105, 110,
     111, 119, 122, 123, 128, 133, 134, 135, 164, 166, 167, 168,
-    226, 227, 228, 230, 231, 232, 234, 241, 242, 243, 247, 251, 255,
-    259, 263, 267, 305, 307, 308, 328, 329, 343, 344, 362, 373, 379, 381,
+    216, 226, 227, 228, 230, 231, 232, 234, 241, 242, 243, 247, 251, 255,
+    259, 263, 264, 265, 266, 267, 271, 272, 273, 274, 305, 307, 308, 328, 329, 343, 344, 362, 373, 379, 381,
     385, 386, 387, 388, 399, 402,
 }
 
@@ -239,7 +241,7 @@ def pce_group(ids, folder, image, data):
     work = folder / "pce"
     run = subprocess.run([root / "test/run_tests", batch], cwd=root, capture_output=True,
                          env=dict(os.environ, IMG=str(image), PCE_TEST_WORK=str(work),
-                                  PCE_TEST_FLOPPY_B=str(data), SECS="12"))
+                                  PCE_TEST_FLOPPY_B=str(data), SECS="25"))
     if run.returncode:
         raise RuntimeError((run.stdout + run.stderr).decode("cp437") + "\n" +
                            (work / "pce.log").read_text(errors="replace")[-2000:])
@@ -347,9 +349,9 @@ def run_batch(ids, version, template, data):
 
 
 def main():
-    ids = args.ids or sorted(grouped if args.quick else cases)
-    if args.quick and set(ids) - grouped:
-        parser.error("requested case requires the full audit")
+    ids = args.ids or sorted(cases if args.qemu else grouped)
+    if not args.qemu and set(ids) - grouped:
+        parser.error("requested case has no PCE probe yet (historical runner: --qemu)")
     if args.jobs < 1:
         parser.error("--jobs must be positive")
     if set(ids) - cases.keys():
@@ -377,7 +379,7 @@ def main():
         put(data, folder, "TARGET.BAS", '10 GOTO 20\n20 OPEN "VALUE.OUT" FOR OUTPUT AS #2:PRINT #2,"TARGET";X:CLOSE:SYSTEM\n')
         for ext in ("ref", "exe"):
             install(data, root / ("gwbasic/gwbasic." + ext), ext + ".EXE")
-        if args.quick:
+        if not args.qemu:
             ref_results, exe_results = pce_group(ids, folder, template, data)
         else:
             with concurrent.futures.ThreadPoolExecutor(max_workers=min(args.jobs, 2)) as pool:
@@ -404,7 +406,7 @@ def main():
             print(f"FAIL case {n}: {reason}; expected={baseline[n]!r} "
                   f"ref={ref!r} exe={exe!r}", file=sys.stderr, flush=True)
     if args.check:
-        print(f"GW-BASIC {'PCE' if args.quick else 'QEMU'} audit: " + ", ".join(
+        print(f"GW-BASIC {'QEMU' if args.qemu else 'PCE'} audit: " + ", ".join(
             f"{counts[k]} {k.lower()}" for k in
             ("Matched", "Different", "Inconclusive", "Intentional", "Failed")))
         return int(bool(counts["Failed"]))
