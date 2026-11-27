@@ -14,7 +14,7 @@ _The remaining gaps are in the work:_
 - _completion of emm386 functionalities in line with DOS 5.0_
 - _setver_
 - _more to UMB and HMA_
-- _fully fledged text editor ([vi]([mbasic](https://github.com/tsupplis/cpm86-vi) as a reasonable place holder)_
+- _fully fledged text editor ([vi](https://github.com/tsupplis/cpm86-vi) as a reasonable place holder)_
 - _fully fledged gwbasic ([mbasic](https://github.com/tsupplis/cpm86-msbasic) reconstructed msbasic as a solid place holder)_
 
 We are progressing along the following roles:
