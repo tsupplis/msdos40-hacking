@@ -4,7 +4,7 @@ Target: the project’s 3.23 DOS binary and 4.01N under identical inputs. The al
 
 Sources: [Microsoft GW-BASIC User’s Reference and Guide, July 1987](https://bitsavers.computerhistory.org/pdf/microsoft/msdos_3.3/MS-DOS_GW-BASIC_198707.pdf), [1989 guide and command-line reference](https://bitsavers.trailing-edge.com/pdf/microsoft/gw-basic/Microsoft_GW-BASIC_Users_Guide_and_Reference_1989.pdf). Supplementary syntax must be verified against the project’s executable.
 
-402 work items: 318 matched, 75 different, 6 inconclusive, 3 intentional.
+402 work items: 319 matched, 74 different, 6 inconclusive, 3 intentional.
 
 ## Evidence
 
@@ -20,9 +20,11 @@ Matched records an observed matching case. It does not qualify the entire form o
 
 ## Running the paired regression
 
-With `gwbasic/gwbasic.ref` present, root `make check` runs QEMU case 373 after building and checking the DOS image (two guest boots). Run all 239 probes with `test/check_gwaudit --check`. This also uses two DOS boots, sequentially by default. Each guest checkpoints DOS before starting BASIC, then restores that state and mounts a fresh data floppy for each probe. Printer capture is delimited per probe. The audit requires `qemu-system-i386` and mtools. For a single case, run `test/check_gwaudit --check 373`. Omit `--check` to emit both observations as JSONL for diagnosis.
+With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 62 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Each interpreter runs the BASIC fixtures in succession and writes one report on the scratch floppy.
 
-The gate enforces the 174 QEMU cases marked **Matched** against both the live 3.23 run and its recorded output. Incomplete observations fail in every category. The summary counts the 59 known differences and six inconclusive probes separately. A known difference that now matches is reported for review. After verifying a fix, update that case’s JSONL record, matrix status and counts together. The remaining inventory rows use the other evidence listed above.
+The explicit full command `test/check_gwaudit --check` uses QEMU for all 239 probes, with one boot per interpreter. It batches the same 62 fixtures and restores booted DOS for individual cases requiring separate observations, including BIOS keyboard and cursor capture. Use `test/check_gwaudit --check 373` for an isolated selection or omit `--check` for JSONL output.
+
+The gate enforces the 175 QEMU cases marked **Matched** against both the live 3.23 run and its recorded output. Incomplete observations fail in every category. The summary counts the 58 known differences and six inconclusive probes separately. A known difference that now matches is reported for review. After verifying a fix, update that case’s JSONL record, matrix status and counts together. The remaining inventory rows use the other evidence listed above.
 
 ## Differences by work area
 
@@ -40,7 +42,7 @@ Each row below groups failed observations for investigation. The count measures 
 | Video modes, pages and EGA memory | 3 | 215, 216, 342 |
 | Serial I/O | 4 | 233, 395, 396, 397 |
 | Timer events | 4 | 271, 272, 273, 274 |
-| Music queue, events and PLAY syntax | 6 | 247, 263, 264, 265, 266, 362 |
+| Music queue, events and PLAY syntax | 5 | 247, 263, 264, 265, 266 |
 | Startup switches | 3 | 280, 281, 286 |
 | Joystick, printer and cassette | 3 | 242, 400, 401 |
 
@@ -409,7 +411,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 359 | `KEY macros` | Display | Different | Q, case 359; output differs |
 | 360 | `SCREEN color switch` | Display | Matched | Q, case 360 |
 | 361 | `PLAY note and accidental` | Sound | Matched | Q, case 361; statement accepted and returned |
-| 362 | `PLAY octave and octave shifts` | Sound | Different | Q, case 362; 3.23 DONE, 4.01N ERROR 5  100 |
+| 362 | `PLAY octave and octave shifts` | Sound | Matched | Q, case 362; both accept relative octave shifts. Speaker output uncaptured. |
 | 363 | `PLAY note number and rest` | Sound | Matched | Q, case 363; statement accepted and returned |
 | 364 | `PLAY length and dotted note` | Sound | Matched | Q, case 364; statement accepted and returned |
 | 365 | `PLAY tempo` | Sound | Matched | Q, case 365; statement accepted and returned |

@@ -11,7 +11,7 @@ root = Path(__file__).resolve().parents[1]
 table = (root / "commands/command/tdata.asm").read_text().split("COMTAB\tDB")[1]
 names = re.findall(r'DB\s+\d+,"([A-Z]+)",', "DB" + table.split("Terminate command table")[0])
 external = """append.exe assign.com attrib.exe backup.com chkdsk.com comp.com debug.com
-deltree.exe diskcomp.com diskcopy.com edlin.com exe2bin.exe fastopen.exe fc.exe
+deltree.exe diskcomp.com diskcopy.com edit.exe edlin.com exe2bin.exe fastopen.exe fc.exe
 fdisk.exe find.exe format.com graftabl.com graphics.com join.exe keyb.com label.com
 mem.exe mode.com more.com nlsfunc.exe print.com recover.com replace.exe restore.com
 select.com select.exe share.exe sort.exe subst.exe sys.com tree.com loadfix.com move.exe xcopy.exe""".split()

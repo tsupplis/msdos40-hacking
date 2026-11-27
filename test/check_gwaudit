@@ -1,0 +1,414 @@
+#!/usr/bin/env python3
+"""Compare isolated DOS runs. Output JSONL retains both observations, including timeouts."""
+import argparse
+import concurrent.futures
+from collections import Counter
+import json
+import os
+from pathlib import Path
+import re
+import select
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+
+root = Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("ids", nargs="*", type=int, help="inventory rows (default: all probes)")
+parser.add_argument("--jobs", default=1, type=int, help="concurrent DOS guests (maximum two)")
+parser.add_argument("--quick", action="store_true", help="run the cases that share one BASIC session")
+parser.add_argument("--check", action="store_true",
+                    help="enforce matched inventory cases against the recorded reference")
+args = parser.parse_args()
+cases = {}
+for line in (root / "test/gwcases.txt").read_text().splitlines():
+    if line and not line.startswith("#"):
+        key, body = line.split("|", 1)
+        cases[int(key)] = body
+
+# File reports survive screen changes and keep banner differences out of pixel tests.
+streams = {53, 70, 72, 81, 102, 113, 114, 120, 149, 157, 162, 163, 170, 182, 185, 331, 359, 369, 372}
+direct = {
+    4: 'AUTO 100,5\nPRINT 1\n',
+    20: '10 STOP\n20 OPEN "VALUE.OUT" FOR OUTPUT AS #2:PRINT #2,42:CLOSE:SYSTEM\nRUN\nCONT',
+    38: '10 REM OLD\nEDIT 10',
+    83: '10 REM FIRST\n20 REM LAST\nLIST',
+    276: 'PRINT 3+4',
+    277: 'PRINT "STDIN"',
+    290: '10 PRINT "NUMBERED"\nRUN',
+    291: '10 PRINT "OLD"\n10 PRINT "NEW"\nRUN',
+    292: '10 PRINT "OLD"\n20 PRINT "KEPT"\n10\nRUN',
+    293: 'PRINT 6*7',
+    382: '10 REM FIRST\n20 REM SECOND\n30 REM THIRD\nLIST 20-30',
+    383: '10 REM FIRST\n20 REM SECOND\nLIST .',
+}
+switches = {275: "", 278: "", 279: "", 280: "/D", 281: "/I", 282: "/C:256",
+            283: "/F:6", 284: "/S:256", 285: "/M:49152", 286: "/M:49152,4096"}
+cases.update(dict.fromkeys(direct, ""))
+cases.update(dict.fromkeys(switches, 'PRINT "RUNNING";LEN(MKS$(SIN(1#))):PRINT #1,"RUNNING"'))
+
+
+# BIOS-keyboard cases are evaluated at the live Ok prompt in VGA text mode.
+# Snapshots include the character cells and BIOS cursor, excluding the key bar.
+editor = {
+    4: "auto 100,5|ret|print 7|ret",
+    20: '10 stop|ret|20 print 42|ret|run|ret|cont|ret',
+    38: '10 rem OLD|ret|edit 10|ret',
+    276: 'print 7|ret',
+    83: "10 rem A|ret|20 rem B|ret|list|ret",
+    290: "10 print 7|ret|run|ret",
+    291: "10 print 1|ret|10 print 2|ret|run|ret",
+    292: "10 print 1|ret|20 print 2|ret|10|ret|run|ret",
+    293: "print 7|ret",
+    382: "10 rem A|ret|20 rem B|ret|list 20|ret",
+    383: "10 rem A|ret|20 rem B|ret|list .|ret",
+    294: 'ABCDE|left|left|X|up|down|right',
+    295: 'ABC DEF|ctrl-left|X|ctrl-right',
+    296: 'ABC|home|end',
+    297: 'ABCDE|left|left|insert|X|delete',
+    298: 'ABCDE|backspace|X',
+    299: 'ABCDE|esc|XYZ',
+    300: 'ABC|tab|X|shift-tab',
+    301: 'f1|esc|f2|esc|f3|esc|f4|esc|f5|esc|f6|esc|f7|esc|f8|esc|f9|esc|f10',
+    302: '10 goto 10|ret|run|ret|ctrl-pause',
+    303: 'ABC DEF|ctrl-b|X',
+    304: 'abcdef'*14+'|backspace|Z',
+    389: 'ABCDE|left|left|ctrl-end',
+    390: 'ABCDE|ctrl-home|Q',
+    391: 'ABC|ctrl-ret|XYZ',
+    392: 'ABC|ctrl-s|space|XYZ',
+    393: 'ctrl-print|ABC|ctrl-print',
+    394: 'ctrl-g',
+}
+
+
+class Monitor:
+    def __init__(self, vm, folder):
+        self.vm = vm
+        self.dump = folder / "dump.bin"
+        self.response()
+
+    def response(self):
+        data = bytearray()
+        while not data.endswith(b"(qemu) "):
+            if not select.select([self.vm.stdout], [], [], 8)[0]:
+                raise TimeoutError("QEMU monitor stopped responding")
+            chunk = os.read(self.vm.stdout.fileno(), 8192)
+            if not chunk:
+                raise RuntimeError("QEMU monitor closed")
+            data.extend(chunk)
+        # HMP echoes the command on the first line, followed by its diagnostics.
+        return bytes(data).split(b"\r\n", 1)[-1].removesuffix(b"(qemu) ").strip()
+
+    def request(self, text):
+        self.vm.stdin.write(text.encode() + b"\n")
+        self.vm.stdin.flush()
+        diagnostic = self.response()
+        if diagnostic:
+            raise RuntimeError(f"QEMU {text}: {diagnostic!r}")
+
+    def memory(self, address, size):
+        self.request(f'pmemsave {address} {size} "{self.dump}"')
+        return self.dump.read_bytes()
+
+    def screen(self):
+        data = self.memory("0xb8000", 4000)[::2].decode("cp437")
+        return [data[k:k+80].rstrip() for k in range(0, 1920, 80)]
+
+
+def monitor_case(monitor, n):
+    deadline = time.monotonic() + 8
+    while time.monotonic() < deadline:
+        rows = monitor.screen()
+        if any("READY" in row for row in rows) and any(row.startswith("Ok") for row in rows):
+            break
+        time.sleep(.05)
+    else:
+        return {"incomplete": True, "screen": [r for r in rows if r]}
+    keys = {" ": "spc", ",": "comma", ".": "dot", "space": "spc"}
+    def wait_ticks(count):
+        # The BIOS clock advances at about 18 Hz. Pace input in guest time so
+        # a descheduled VM can process the key release before the next press.
+        def ticks():
+            return int.from_bytes(monitor.memory("0x46c", 4), "little")
+
+        start = ticks()
+        deadline = time.monotonic() + 5
+        while (ticks() - start) % 0x1800B0 < count:
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"case {n}: BIOS clock stopped during keyboard input")
+            time.sleep(.025)
+
+    def key(k):
+        monitor.request("sendkey " + k + " 20")
+        wait_ticks(2)
+
+    for part in editor[n].split("|"):
+        if part in ("ret","left","right","up","down","insert","delete","backspace","esc","tab","home","end","space") or part.startswith(("ctrl-","shift-")) or re.fullmatch(r"f\d+", part):
+            key(keys.get(part, part))
+        else:
+            for c in part:
+                key("shift-" + c.lower() if c.isupper() else keys.get(c,c))
+    wait_ticks(4)
+    rows = monitor.screen()
+    cursor = monitor.memory("0x450", 2)
+    result = {"screen": "\n".join(rows).rstrip(), "cursor": list(cursor)}
+    return result
+
+cases.update(dict.fromkeys(editor, ""))
+
+def command(*argv, **kwargs):
+    return subprocess.run(argv, check=True, stdout=subprocess.DEVNULL, **kwargs)
+
+
+def install(image, host, name):
+    command("mcopy", "-o", "-i", image, host, "::" + name)
+
+
+def put(image, folder, name, content):
+    host = folder / name
+    host.write_bytes(content.replace("\n", "\r\n").encode("ascii"))
+    install(image, host, name)
+
+
+def read(image, name):
+    r = subprocess.run(["mtype", "-i", image, "::" + name], capture_output=True)
+    if r.returncode:
+        return None
+    return r.stdout.partition(b"\x1a")[0].decode("cp437").replace("\r\n", "\n").rstrip("\n")
+
+
+# These probes report through #1 and return to the harness. They need no
+# interactive input, separate command line, or persistent device/file change.
+grouped = {
+    5, 8, 27, 30, 31, 32, 33, 35, 57, 58, 61, 63, 68, 69, 73, 105, 110,
+    111, 119, 122, 123, 128, 133, 134, 135, 164, 166, 167, 168,
+    226, 227, 228, 230, 231, 232, 234, 241, 242, 243, 247, 251, 255,
+    259, 263, 267, 305, 307, 308, 328, 329, 343, 344, 362, 373, 379, 381,
+    385, 386, 387, 388, 399, 402,
+}
+
+
+def prepare_group(ids, folder, drive):
+    # RUN clears BASIC variables and opens the next fixture. Keeping the
+    # original line numbers preserves ERL and the targets of GOTO and RESUME.
+    programs = []
+    for i, n in enumerate(ids):
+        lines = ['10 OPEN "GROUP.OUT" FOR APPEND AS #1:ON ERROR GOTO 10000',
+                 f'20 PRINT #1,"CASE {i}"']
+        lines.extend(f"{100+j*10} {line}" for j, line in enumerate(cases[n].split("~")))
+        lines.extend(['9800 PRINT #1,"DONE":GOTO 10010',
+                      '10000 PRINT #1,"ERROR";ERR;ERL:RESUME 10010'])
+        next_case = f'RUN "P{i+1}.BAS"' if i+1 < len(ids) else "SYSTEM"
+        lines.append("10010 CLOSE:" + next_case)
+        program = folder / f"P{i}.BAS"
+        program.write_bytes(("\r\n".join(lines) + "\r\n").encode("ascii"))
+        programs.append(program)
+    command("mcopy", "-i", drive, *programs, "::")
+
+
+def run_group(ids, version, folder, data, monitor):
+    drive = folder / "group.img"
+    shutil.copyfile(data, drive)
+    prepare_group(ids, folder, drive)
+    put(drive, folder, "RUN.BAT", f"@echo off\nb:\n{version} P0.BAS\necho FINISHED > DONE.TXT\n")
+    start_probe(monitor, drive)
+    wait_done(drive)
+    monitor.request("stop")
+    monitor.request("eject probe")
+    if not finished(drive):
+        raise RuntimeError(f"{version}: BASIC did not return to DOS")
+    return group_results(ids, drive, "GROUP.OUT")
+
+
+def group_results(ids, drive, filename):
+    output = read(drive, filename) or ""
+    parts = re.split(r"^CASE (\d+)\n", output, flags=re.M)
+    if parts[0] or parts[1::2] != list(map(str, range(len(ids)))):
+        raise RuntimeError(f"{filename}: incomplete BASIC batch")
+    return [{"RESULT.TXT": part.rstrip("\n")} for part in parts[2::2]]
+
+
+def pce_group(ids, folder, image, data):
+    prepare_group(ids, folder, data)
+    batch = folder / "audit.bat"
+    batch.write_text("b:\ndate 01-03-2001\nref P0.BAS\nren GROUP.OUT REF.OUT\n"
+                     "if exist R.DAT del R.DAT\nexe P0.BAS\nren GROUP.OUT EXE.OUT\n")
+    work = folder / "pce"
+    run = subprocess.run([root / "test/run_tests", batch], cwd=root, capture_output=True,
+                         env=dict(os.environ, IMG=str(image), PCE_TEST_WORK=str(work),
+                                  PCE_TEST_FLOPPY_B=str(data), SECS="12"))
+    if run.returncode:
+        raise RuntimeError((run.stdout + run.stderr).decode("cp437") + "\n" +
+                           (work / "pce.log").read_text(errors="replace")[-2000:])
+    return [group_results(ids, work / "b.img", name) for name in ("REF.OUT", "EXE.OUT")]
+
+
+def start_probe(monitor, drive):
+    monitor.request("loadvm ready")
+    monitor.request(f'change probe "{drive}" raw')
+    monitor.request("cont")
+    monitor.request("sendkey ret 20")
+
+
+def finished(drive):
+    return (read(drive, "DONE.TXT") or "").strip() == "FINISHED"
+
+
+def wait_done(drive):
+    deadline = time.monotonic() + 12
+    while not finished(drive) and time.monotonic() < deadline:
+        time.sleep(.05)
+
+
+def run_case(n, version, folder, data, monitor, printer):
+    drive = folder / "case.img"
+    shutil.copyfile(data, drive)
+    body = cases[n].split("~")
+    program = ['10 OPEN "RESULT.TXT" FOR OUTPUT AS #1:ON ERROR GOTO 10000']
+    program.extend(f"{100+i*10} {line}" for i, line in enumerate(body))
+    program.extend(['9800 PRINT #1,"DONE":CLOSE:SYSTEM',
+                    '10000 PRINT #1,"ERROR";ERR;ERL:CLOSE:SYSTEM'])
+    if n in editor:
+        program = ['10 KEY OFF:CLS:PRINT "READY":END']
+    put(drive, folder, "CASE.BAS", "\n".join(program) + "\n")
+    control = direct.get(n, {70: 'A,17', 72: 'ABC', 81: 'one, two', 120: '203',
+                             151: 'CONT', 146: 'EXIT'}.get(n, ''))
+    put(drive, folder, "IN.TXT", control + "\nSYSTEM\n")
+    exe = version
+    invocation = exe if n in direct else exe + " CASE.BAS"
+    if n in switches and switches[n]:
+        invocation += " " + switches[n]
+    if n in direct or n in streams or n in (39, 84, 146, 151, 236):
+        invocation += " <IN.TXT"
+    if n in direct or n in streams or n in switches:
+        invocation += " >>CAPTURE.OUT" if n == 279 else " >CAPTURE.OUT"
+    if n in editor:
+        invocation = version + " CASE.BAS"
+    if n == 279:
+        put(drive, folder, "CAPTURE.OUT", "PREFIX\n")
+    put(drive, folder, "RUN.BAT", f"@echo off\nb:\n{invocation}\necho FINISHED > DONE.TXT\n")
+    printer_start = printer.stat().st_size
+    start_probe(monitor, drive)
+    if n in editor:
+        result = monitor_case(monitor, n)
+    else:
+        wait_done(drive)
+    monitor.request("stop")
+    monitor.request("eject probe")
+    if n not in editor:
+        result = {name: value for name in ("RESULT.TXT", "VALUE.OUT", "CLEAR.OUT", "LIST.OUT", "CAPTURE.OUT")
+                  if (value := read(drive, name)) is not None}
+        if not finished(drive):
+            result["incomplete"] = True
+    with printer.open("rb") as capture:
+        capture.seek(printer_start)
+        output = capture.read()
+    if output or n == 393:
+        result["LPT"] = output.hex()
+    return result
+
+
+def run_batch(ids, version, template, data):
+    with tempfile.TemporaryDirectory(dir="/tmp") as tmp:
+        folder = Path(tmp)
+        printer = folder / "printer"
+        with subprocess.Popen(["qemu-system-i386", "-accel", "tcg", "-m", "16",
+                               "-rtc", "base=2001-01-03T12:34:00,clock=vm", "-display", "none",
+                               "-serial", "null", "-parallel", "file:" + str(printer), "-monitor", "stdio",
+                               "-boot", "a", "-drive", f"if=floppy,index=0,format=raw,snapshot=on,file={template}",
+                               "-drive", "if=floppy,index=1,id=probe"],
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE) as vm:
+            try:
+                monitor = Monitor(vm, folder)
+                deadline = time.monotonic() + 12
+                while "AUDIT READY" not in monitor.screen():
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError("DOS did not reach the audit batch")
+                    time.sleep(.05)
+                monitor.request("stop")
+                monitor.request("savevm ready")
+                shared = [n for n in ids if n in grouped]
+                observations = iter(run_group(shared, version, folder, data, monitor) if shared else [])
+                results = []
+                for index, n in enumerate(ids, 1):
+                    if n in grouped:
+                        results.append(next(observations))
+                    else:
+                        results.append(run_case(n, version, folder, data, monitor, printer))
+                    if index % 50 == 0 or index == len(ids):
+                        print(f"{version}: {index}/{len(ids)} probes completed", file=sys.stderr)
+                return results
+            finally:
+                vm.terminate()
+                vm.wait(timeout=5)
+
+
+def main():
+    ids = args.ids or sorted(grouped if args.quick else cases)
+    if args.quick and set(ids) - grouped:
+        parser.error("requested case requires the full audit")
+    if args.jobs < 1:
+        parser.error("--jobs must be positive")
+    if set(ids) - cases.keys():
+        parser.error("no probe for one or more IDs")
+    if args.check:
+        inventory = (root / "gwbasic/EQUIVALENCE.md").read_text()
+        statuses = {int(n): status for n, status in re.findall(
+            r"^\| (\d+) \| [^|]+ \| [^|]+ \| (\w+) \|", inventory, re.M)}
+        baseline = {r["id"]: r["ref"] for r in map(json.loads,
+                    (root / "test/gwaudit.jsonl").read_text().splitlines())}
+        if baseline.keys() != cases.keys():
+            parser.error("probe IDs differ from the recorded baseline")
+        for n in ids:
+            if statuses.get(n) not in ("Matched", "Different", "Inconclusive", "Intentional"):
+                parser.error(f"case {n} has no recognized inventory status")
+        counts = Counter()
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        template, data = folder / "boot.img", folder / "data.img"
+        shutil.copyfile(root / "media/msdos40_full.img", template)
+        put(template, folder, "CONFIG.SYS", "FILES=30\nBUFFERS=20\n")
+        put(template, folder, "AUTOEXEC.BAT", "@echo off\necho AUDIT READY\npause >nul\nb:\\run.bat\n")
+        command("mformat", "-C", "-f", "1440", "-i", data, "::")
+        put(data, folder, "SAMPLE.TXT", "ALPHA\n")
+        put(data, folder, "TARGET.BAS", '10 GOTO 20\n20 OPEN "VALUE.OUT" FOR OUTPUT AS #2:PRINT #2,"TARGET";X:CLOSE:SYSTEM\n')
+        for ext in ("ref", "exe"):
+            install(data, root / ("gwbasic/gwbasic." + ext), ext + ".EXE")
+        if args.quick:
+            ref_results, exe_results = pce_group(ids, folder, template, data)
+        else:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(args.jobs, 2)) as pool:
+                ref_results, exe_results = pool.map(
+                    lambda version: run_batch(ids, version, template, data), ("ref", "exe"))
+        for n, ref, exe in zip(ids, ref_results, exe_results):
+            result = {"id": n, "ref": ref, "exe": exe}
+            if not args.check:
+                print(json.dumps(result, sort_keys=True), flush=True)
+                continue
+            status = statuses[n]
+            if any(not obs or obs.get("incomplete") for obs in (ref, exe)):
+                reason = "incomplete observation"
+            elif status == "Matched" and ref != exe:
+                reason = "4.01N differs from 3.23"
+            elif status == "Matched" and ref != baseline[n]:
+                reason = "both outputs differ from the recorded reference"
+            else:
+                counts[status] += 1
+                if status == "Different" and ref == exe:
+                    print(f"REVIEW case {n}: previously different, now matches")
+                continue
+            counts["Failed"] += 1
+            print(f"FAIL case {n}: {reason}; expected={baseline[n]!r} "
+                  f"ref={ref!r} exe={exe!r}", file=sys.stderr, flush=True)
+    if args.check:
+        print(f"GW-BASIC {'PCE' if args.quick else 'QEMU'} audit: " + ", ".join(
+            f"{counts[k]} {k.lower()}" for k in
+            ("Matched", "Different", "Inconclusive", "Intentional", "Failed")))
+        return int(bool(counts["Failed"]))
+
+
+if __name__ == "__main__":
+    sys.exit(main())
