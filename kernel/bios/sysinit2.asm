@@ -1464,15 +1464,9 @@ INT24:
 ;	 POP	 AX
 ;	 IRET				 ;BACK TO USER
 
-	IF	ALTVECT
-BOOTMES DB	13,10,"MS-DOS version "
-	DB	MAJOR_VERSION + "0"
-	DB	"."
-	DB	(MINOR_VERSION / 10) + "0"
-	DB	(MINOR_VERSION MOD 10) + "0"
-	DB	13,10
-	DB	"Copyright 1981,88 Microsoft Corp.",13,10,"$"
-	ENDIF
+        public BootMes
+        include msbio.cl7               ; startup banner, discarded with SYSINIT
+        db '$'                          ; DOS function 09h terminator
 
 include copyrigh.inc			;P1821; Copyright statement
 

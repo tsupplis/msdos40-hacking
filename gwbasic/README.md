@@ -14,6 +14,22 @@ The interpreter sources follow TK Chia's `tkchia/devel` at [1432e385](https://co
 
 Run `make gwbasic` at the repository root. On the full DOS floppy, type `GWBASIC` for the editor or `GWBASIC DEMO.BAS` to run a file. Type `SYSTEM` to return to DOS. On the host, run `emu2 gwbasic/gwbasic.exe`. Run `make -C gwbasic check` for the emu2 regressions.
 
+## Startup and display
+
+`GWBASIC /NOB /NOR DEMO.BAS` loads the program and stops at the editor's `Ok` prompt. Type `LIST` to inspect it or `RUN` to execute it. The switches follow the CP/M-86 MBASIC 5.50 command-line extensions. They accept mixed case and may appear before or after the filename.
+
+| Switch | Effect |
+|---|---|
+| `/NOB[ANNER]` | Suppresses the heading, free-memory count and function-key labels. |
+| `/NOR[UN]` | Loads the named program and waits for an editor command. |
+| `/M:n` | Limits the data segment. Accepts decimal or hexadecimal, e.g. `/M:&HC000`. |
+| `/C:n` | Sets the serial buffer size. |
+| `/F:n`, `/S:n` | Accepts the MBASIC file-count and record-size options. This build allocates files and records dynamically. |
+
+Redirected startup preserves the existing display. For example, `GWBASIC DEMO.BAS >RESULT.TXT` sends ordinary `PRINT` output to the DOS handle. An explicit `SCREEN` or `CLS` in the program still operates on the display.
+
+On a color EGA or VGA adapter, `SCREEN 7` selects 320 × 200 graphics with 16 colors on page zero. The regression exercises `COLOR`, `PSET`, `POINT`, `LINE`, and `PAINT`. Graphics array `GET` and `PUT`, additional pages and higher-resolution EGA modes are still unsupported.
+
 ## Original Microsoft release notes
 
 This repo contains the original source-code for Microsoft's GW-BASIC interpreter, as of 1983.

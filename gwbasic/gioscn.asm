@@ -235,7 +235,30 @@ RET22:	RET
 ;SCNSOT level 2
 ; Output [AX], destroys AX
 ;
+DSEG SEGMENT PUBLIC 'DATASG'
+        EXTRN FileOut:BYTE
+DSEG ENDS
 SCNOL2:
+        or si,si                ; Explicit SCRN: files still target the display.
+        jnz DisplayChar
+        cmp FileOut,0
+        je DisplayChar
+        push dx
+        push ax
+        mov dl,al
+        mov ah,2
+        int 21h
+        pop ax
+        pop dx
+        cmp al,10D
+        je StreamDone
+        inc byte ptr CSRX
+        cmp al,13D
+        jne StreamDone
+        mov byte ptr CSRX,1
+StreamDone:
+        ret
+DisplayChar:
 	OR	SI,SI
 	JZ	SCNSO8		;BRIF is not file I/O
 	CMP	AL,LOW OFFSET ASCCR

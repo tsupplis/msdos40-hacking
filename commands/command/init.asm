@@ -1120,14 +1120,6 @@ envsetok:
 	MOV	AH, SETBLOCK
 	INT	int_command
 
-	IF MSVER
-	CMP	[SINGLECOM],0
-	JNZ	NOPHEAD 			; Don't print header if SINGLECOM
-	MOV	DX,HEADER_ptr			;AC000; get message number
-	call	print_message
-NOPHEAD:
-	ENDIF
-
 	CMP	[BATCH],0			;eg did we set up a batch segment?
 	JNZ	dodate				;eg yes - go initialize it
 	JMP	NODTTM				; Don't do AUTOEXEC or date time
@@ -1188,7 +1180,7 @@ NOAUTSET:
 	MOV	BX,AX
 	MOV	AH,CLOSE
 	INT	int_command
-	JMP	NODTTM				; Show the header before AUTOEXEC
+	JMP	NODTTM				; AUTOEXEC is ready
 
 NOABAT:
 	push	ax
@@ -1251,16 +1243,7 @@ DODTTM:
 	MOV	WORD PTR[INITADD+2],AX
 	CALL	DWORD PTR [INITADD]
 
-NODTTM:
-
-	IF IBMVER
-	CMP	[SINGLECOM],0
-	JNZ	DRV0				; Don't print header if SINGLECOM
-	MOV	DX,HEADER_ptr			;AC000; get message number
-	call	print_message
-	ENDIF
-
-DRV0:						; Reset APPEND state
+NODTTM:						; Reset APPEND state
 	push	ds				;AN042; save data segment
 	push	cs				;AN042; Get local segment into DS
 	pop	ds				;AN042;

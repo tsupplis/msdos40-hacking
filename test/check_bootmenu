@@ -97,6 +97,11 @@ for name, menu, key, expected in cases:
                 for marker in ("ORDPROBE.SYS", "WINPROBE.SYS", "ABSENT.SYS"):
                     assert (marker in screen) == (marker == expected), (name, screen)
                 assert ("Esc to skip configuration." in screen) == bool(key or name in ("timeout", "one second")), name
+                if name in ("digit", "shellhigh"):
+                    banner = "Microsoft MS-DOS Version 4.01N"
+                    next_output = "Select a system configuration:" if key else "XMS: PCE XMS driver"
+                    assert screen.count(banner) == 1, (name, screen)
+                    assert screen.index(banner) < screen.index(next_output) < screen.index(expected), (name, screen)
                 if name == "one second":
                     rows = "\n".join(screen[i:i+80].rstrip() for i in range(0, len(screen), 80))
                     assert ("Select a system configuration:\n\n1. Ordinary\n2. Windows\n\n"

@@ -867,6 +867,10 @@ GPUTG:	MOV	BYTE PTR PUTFLG,AL	;IFE PC8A&RSTLES-1STORE WHETHER PUTTING OR NOT
 	PUSH	AX		;SAVE THIS FLAG A SEC
 	PUSH	BX		;Save text pointer
 	CALL	PIXSIZ		;Test for graphics mode
+        cmp al,4                ; EGA planar array format is not implemented.
+        jne CheckGraphics
+        jmp FCERR
+CheckGraphics:
 	OR	AL,AL
 	JNZ	SHORT ??L008
 	JMP	FCERR		;Not a graphics mode

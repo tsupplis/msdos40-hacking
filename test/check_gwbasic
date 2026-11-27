@@ -3,6 +3,7 @@
 import argparse
 import os
 from pathlib import Path
+import pty
 import re
 import shutil
 import subprocess
@@ -48,19 +49,39 @@ with tempfile.TemporaryDirectory() as tmp:
         subprocess.run(["mcopy", "-o", "-i", image, bas, "::SMOKE.BAS"], check=True)
         graphics = root / "test/gwvideo.bas"
         subprocess.run(["mcopy", "-t", "-o", "-i", image, graphics, "::GWVIDEO.BAS"], check=True)
+        # Seed an off-cursor text cell. A BIOS mode reset or CLS erases it.
+        seed = folder / "seed.asm"
+        seed.write_text("bits 16\norg 100h\nmov ax,0b800h\nmov es,ax\n"
+                        "mov byte [es:1600],81\nret\n")
+        subprocess.run(["nasm", "-f", "bin", seed, "-o", folder / "seed.com"], check=True)
+        probe = folder / "probe.bas"
+        probe.write_bytes(b'10 DEF SEG=&HB800:PRINT PEEK(1600):SYSTEM\r\n\x1a')
+        input_probe = folder / "input.bas"
+        input_probe.write_bytes(b'10 DEF SEG=&HB800:OPEN "INPUT.TXT" FOR OUTPUT AS #1\r\n'
+                                b'20 PRINT #1,PEEK(1600):CLOSE:SYSTEM\r\n\x1a')
+        for file in (folder / "seed.com", probe, input_probe):
+            subprocess.run(["mcopy", "-o", "-i", image, file, "::"], check=True)
         batch = folder / "check.bat"
-        batch.write_text("b:\na:gwbasic a:smoke.bas\na:gwbasic a:gwvideo.bas\n")
+        batch.write_text("b:\na:gwbasic a:smoke.bas\na:gwbasic a:gwvideo.bas\n"
+                         "ctty con\na:seed\na:gwbasic /nob a:probe.bas >stream.txt\n"
+                         "a:seed\na:gwbasic a:input.bas <a:cr.txt\nctty com1\n")
         work = folder / "guest"
         subprocess.run([root / "test/run_tests", batch], cwd=root, check=True,
                        env=dict(os.environ, IMG=str(image), PCE_TEST_WORK=str(work)))
+        stream = subprocess.check_output(["mtype", "-i", work / "b.img", "::STREAM.TXT"])
+        if stream != b" 81 \r\n":
+            raise SystemExit(f"Redirected screen marker or output changed: {stream!r}")
+        input_result = subprocess.check_output(["mtype", "-i", work / "b.img", "::INPUT.TXT"])
+        check_text(input_result, b" 81 \r\n")
+        print("PASS independent stdin and stdout redirection preserve video memory")
         video = subprocess.check_output(["mtype", "-i", work / "b.img", "::VIDEO.TXT"])
         values, eof, _ = video.partition(b"\x1a")
         if not eof or [row.split() for row in values.splitlines()] != [
             [b"1", b"2", b"0"], [b"1", b"1", b"0"], [b"2", b"1", b"0"],
-            [b"1", b"1", b"0"], [b"3"],
+            [b"1", b"1", b"0"], [b"14", b"0"], [b"13", b"13", b"0"], [b"11"], [b"12", b"12", b"9", b"0"], [b"3"],
         ]:
-            raise SystemExit(f"Unexpected CGA pixel results {video!r}")
-        print("PASS SCREEN 1 and 2 corner pixels, filled rectangles and return to text")
+            raise SystemExit(f"Unexpected graphics pixel results {video!r}")
+        print("PASS SCREEN 1, 2 and 7 corner pixels, filled rectangles, COLOR, PAINT and return to text")
         result = subprocess.check_output(["mtype", "-i", work / "b.img", "::RESULT.TXT"])
     else:
         shutil.copyfile(binary, folder / "gwbasic.exe")
@@ -69,17 +90,29 @@ with tempfile.TemporaryDirectory() as tmp:
         subprocess.run([emu, "gwbasic.exe", "smoke.bas"], cwd=folder, env=env,
                        check=True, timeout=10)
         result = (folder / "result.txt").read_bytes()
+        (folder / "numeric.bas").write_bytes(b'10 PRINT "OK":SYSTEM\r\n\x1a')
+        for memory in ("/M:49152", "/M:&HC000"):
+            command = [emu, "gwbasic.exe", "/F:4", memory, "numeric.bas", "/S:128", "/C:128"]
+            output = subprocess.check_output(command, cwd=folder, env=env, timeout=10)
+            if output != b"OK\r\n":
+                raise SystemExit(f"Numeric switches produced {output!r}")
     check_text(result, expected)
     print("PASS program file, arithmetic, INSTR, FOR/NEXT, SOUND, COM error and SYSTEM")
 
     if not args.pce:
         # Script keystrokes through the BIOS. A file argument bypasses the editor.
-        (folder / "keys.txt").write_text("print 2+2\nsystem\n")
-        subprocess.run([emu, "-s", "keys.txt", "-i", "150", "-d", "10", "gwbasic.exe"],
-                       cwd=folder, check=True, timeout=10,
-                       env=dict(env, EMU2_DEBUG="video", EMU2_DEBUG_NAME="editor"))
-        screen = (folder / "editor-video.0.log").read_bytes()
-        rows = screen.rsplit(b"check_screen, redrawing", 1)[-1]
+        def editor(arguments, keys, name):
+            (folder / "keys.txt").write_text(keys)
+            master, slave = pty.openpty()
+            with os.fdopen(master, "rb"), os.fdopen(slave, "r+b", buffering=0) as terminal:
+                subprocess.run([emu, "-s", "keys.txt", "-i", "150", "-d", "10",
+                                "gwbasic.exe", *arguments], stdin=terminal, stdout=terminal,
+                               cwd=folder, check=True, timeout=10,
+                               env=dict(env, EMU2_DEBUG="video", EMU2_DEBUG_NAME=name))
+            screen = (folder / f"{name}-video.0.log").read_bytes()
+            return screen.rsplit(b"check_screen, redrawing", 1)[-1]
+
+        rows = editor([], "print 2+2\nsystem\n", "editor")
         for pattern in (rb"^00: Microsoft GWBASIC Version 4\.01N +\r?$",
                         rb"^01: Copyright 1977-1982 \(C\) by Microsoft +\r?$",
                         rb"^03: Under MIT license +\r?$",
@@ -89,3 +122,13 @@ with tempfile.TemporaryDirectory() as tmp:
             if not re.search(pattern, rows, re.MULTILINE):
                 raise SystemExit(f"Missing editor screen row matching {pattern!r}")
         print("PASS interactive Ok prompt, typed expression, displayed result and SYSTEM")
+
+        (folder / "demo.bas").write_bytes(b'10 PRINT "RAN PROGRAM"\r\n20 SYSTEM\r\n\x1a')
+        for i, arguments in enumerate((["/nOb", "/Nor", "demo.bas"],
+                                       ["demo.bas", "/NoRun", "/NoBanner"])):
+            rows = editor(arguments, "list\nrun\n", f"quiet{i}")
+            if (b"Microsoft GWBASIC" in rows or b"Bytes free" in rows
+                    or b"1LIST" in rows.upper()
+                    or not re.search(rb'(?s)Ok.*list.*10 PRINT "RAN PROGRAM".*Ok.*run.*RAN PROGRAM', rows)):
+                raise SystemExit(f"Unexpected quiet editor output {rows!r}")
+        print("PASS quiet startup and load without running, full and abbreviated switches")

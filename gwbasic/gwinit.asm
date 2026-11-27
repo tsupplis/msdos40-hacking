@@ -181,6 +181,9 @@ DSEG	ENDS
 ;
 DSEG	SEGMENT PUBLIC 'DATASG'
 	EXTRN	CPMMEM:WORD
+	EXTRN	FREFLG:WORD
+	PUBLIC NORFLG
+NORFLG DB 0
 DSEG	ENDS
 	MOV	BX,CPMMEM	;Load bytes free within segment
 ;For DYNCOM, CPMMEM holds the last segment addr of the system(i.e. CPMMEM=2)
@@ -196,6 +199,8 @@ DSEG	ENDS
 	EXTRN	CPMWRM:NEAR
 	TBUFF	EQU	CPMWRM+128D	;WHERE CP/M COMMAND BUFFER IS LOCATED
 
+	MOV	BYTE PTR FREFLG,0
+	MOV	NORFLG,0
 	MOV	BX,OFFSET TBUFF	;POINT TO FIRST CHAR OF COMMAND BUFFER
 	MOV	AL,BYTE PTR [BX]	;WHICH CONTAINS # OF CHARS IN COMMAND
 	OR	AL,AL		;IS THERE A COMMAND?
@@ -244,6 +249,8 @@ SCANS1:
 	JZ	SHORT WASC
 	CMP	AL,LOW "F"	;FILES OPTION
 	JZ	SHORT WASF
+	CMP	AL,LOW "N"
+	JE	WASN
 	CMP	AL,LOW "M"	;MEMORY OPTION
 	JZ	SHORT ??L002
 	JMP	SNERR		;Branch if couldn't recognize option
@@ -254,10 +261,25 @@ SCANS1:
 	MOV	BYTE PTR MSWFLG,AL	;Set /M: option flag
 FOK:	DEC	BX		;RESCAN LAST CHAR
 	CALL	CHRGTR		;BY CALLING CHRGET
-	JZ	SHORT DONCMD	;END OF COMMAND
+	JNZ	MoreArgs
+	JMP	DONCMD
+MoreArgs:	; More command-line arguments
+	CMP	AL,LOW OFFSET SWTCHR	;another option?
+	JNE	CMDFIL		;no: the file name follows the options
 	CALL	SYNCHR
 	DB	OFFSET SWTCHR	;SLASH SHOULD FOLLOW
 	JMP	SHORT SCANS1	;SCAN NEXT SWITCH
+;5.50: the file name may also come after options (mbasic /nob prog).
+; Only one file name: TEMP8 still points to the 0 terminator if none yet.
+CMDFIL:	MOV	SI,TEMP8
+	CMP	BYTE PTR [SI],LOW 0
+	JE	CMDFL1
+	JMP	SNERR		;second file name
+CMDFL1:	DEC	BX		;the byte before the name was consumed
+	MOV	BYTE PTR [BX],LOW 34	;STORE DOUBLE QUOTE
+	MOV	TEMP8,BX	;SAVE POINTER TO START OF FILE NAME
+	INC	BX
+	JMP	ISSLH		;scan the name up to the next option
 
 WASC:	MOV	AL,LOW 377O
 	MOV	BYTE PTR CSWFLG,AL	;Set /C: option flag
@@ -268,6 +290,39 @@ WASS:				;GIO has dynamic record size
 WASF:				;GIO has dynamic number of files
 	CALL	GETVAL		;Get value
 	JMP	SHORT FOK	;Any value OK (and ignored)
+
+;/NOB[ANNER] sets FREFLG, /NOR[UN] sets NORFLG.  Any prefix of the word down
+;to three letters is accepted.
+WASN:	INC	BX
+	CALL	MAKUPL
+	CMP	AL,LOW "O"
+	JNE	NOERR
+	INC	BX
+	CALL	MAKUPL
+	MOV	SI,OFFSET NOBTXT
+	MOV	DI,OFFSET FREFLG
+	CMP	AL,LOW "B"
+	JE	NOMAT
+	MOV	SI,OFFSET NORTXT
+	MOV	DI,OFFSET NORFLG
+	CMP	AL,LOW "R"
+	JNE	NOERR
+NOMAT:	INC	SI		;third letter matched
+NOLP:	INC	BX
+	CALL	MAKUPL
+	CMP	AL,LOW "A"
+	JB	NOEND
+	CMP	AL,LOW "Z"
+	JA	NOEND
+	CMP	AL,BYTE PTR CS:[SI]
+	JNE	NOERR		;not the option's spelling (or too long)
+	INC	SI
+	JMP	SHORT NOLP
+NOEND:	MOV	BYTE PTR [DI],LOW 377O
+	JMP	FOK
+NOERR:	JMP	SNERR
+NOBTXT:	DB	"BANNER",0
+NORTXT:	DB	"RUN",0
 
 GETVAL:	CALL	CHRGTR		;skip M,F or S
 	CALL	SYNCHR
@@ -386,17 +441,15 @@ SMLSTK:	MOV	AL,DL		;SUBTRACT STACK SIZE FROM TOP MEM
 	MOV	BX,TXTTAB
 	XCHG	BX,DX
 	CALL	REASON
-DSEG	SEGMENT PUBLIC 'DATASG'
-	EXTRN	FREFLG:WORD	;Print free bytes flag
-DSEG	ENDS
-	XOR	AL,AL
-	MOV	BYTE PTR FREFLG,AL	;Clear to print free bytes message
+
 	EXTRN	GETHED:NEAR	;OEM heading retrieval routine
 DSEG	SEGMENT PUBLIC 'DATASG'
 	EXTRN	KEYSW:WORD	;Function key on flag
 DSEG	ENDS
 	MOV	AL,LOW 255D	;if heading is printed, display Fn keys also
 	MOV	BYTE PTR KEYSW,AL
+	CMP	BYTE PTR FREFLG,0
+	JNE	QuietStart
 	CALL	GETHED		;Get OEM specific portion of the heading
 	JNZ	SHORT PRNTIT	;Always print the heading option
 	PUSH	BX		;Print heading if no program option
@@ -406,6 +459,7 @@ DSEG	ENDS
 	OR	AL,AL
 	JZ	SHORT PRNTIT	;No program - go print heading
 	MOV	BYTE PTR FREFLG,AL	;Set to inhibit free bytes message
+QuietStart:
 	XOR	AL,AL		;Turn keys off if there is a program
 	MOV	BYTE PTR KEYSW,AL	; otherwise allow OEM default
 	JMP	SHORT PRNTND	;Skip heading
