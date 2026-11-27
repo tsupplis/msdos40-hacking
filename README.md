@@ -117,6 +117,7 @@ The survey compares the commands shipped here with the command syntax and option
 | `debug` | No known gaps | Type `?` at the debugger prompt for a one-screen command reference, including the EMS commands in the shipped build. |  |
 | `del` (`erase`) | No known gaps | `/Q` skips the bulk-delete confirmation. An explicit `/P` still prompts for each file. |  |
 | `dir` | No known gaps | `/B` prints bare names, one per line. `/L` displays ASCII letters in filenames in lowercase. `/A[:]` filters by D, R, H, S, or A. `/O[:]` orders by N (name), E (extension), S (size), D (date), or G (directories first). `/2Y` restores two-digit year display. Prefix a letter with `-` to exclude an attribute or reverse a key. `/P` pages console output. `DIRCMD` presets switches, and `/-` disables a preset switch on the command line. `/W` displays dotted filenames and brackets directory names. `/S` lists matching entries in subdirectories. With `/B`, it prints full paths. |  |
+| `edit` | Project command | Kilo-based full-screen text editor, built with Microsoft C 5.1. [Usage and limits](commands/edit/README.md). |  |
 | `diskcopy` | No known gaps | `/V` asks the disk driver to verify each destination track after writing it. |  |
 | `emm386` | Missing command |  | The EMM386.EXE command interface for querying and changing expanded-memory operation. The full floppy ships EMM386.SYS. |
 | `fastopen` | No known gaps | Cache paths on up to 24 fixed-disk volumes (`C:` through `Z:`) across eight BIOS hard disks. |  |

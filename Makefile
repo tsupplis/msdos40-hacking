@@ -42,6 +42,9 @@ dist: boot kernel commands gwbasic
 check: all
 	$(MAKE) -C gwbasic check
 	$(MAKE) -C media check
+ifneq ($(wildcard gwbasic/gwbasic.ref),)
+	./test/check_gwaudit --check 373
+endif
 
 tools-check:
 	$(MAKE) -C sdk tools-check

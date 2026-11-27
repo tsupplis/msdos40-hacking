@@ -1,0 +1,14 @@
+#ifndef SCREEN_H
+#define SCREEN_H
+enum editor_key {
+    ARROW_LEFT = 256, ARROW_RIGHT, ARROW_UP, ARROW_DOWN,
+    DEL_KEY, HOME_KEY, END_KEY, PAGE_UP, PAGE_DOWN, FIND_FOLDED
+};
+#define SELECT_KEY 512
+void caseTable(unsigned char *table);
+int screenOpen(int *rows, int *cols);
+void screenLine(int row, const char *text, int length, int attr, int first, int last);
+void screenCursor(int row, int col);
+void screenClose(void);
+int editorReadKey(void);
+#endif
