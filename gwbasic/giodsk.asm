@@ -34,11 +34,10 @@ CPM86=0
 	EXTRN	DERTMF:NEAR,SaveDosError:NEAR
 	EXTRN	DERFAE:NEAR,DERFNF:NEAR,DERIOE:NEAR,DERDFL:NEAR,DERFOV:NEAR
 	EXTRN	CONIA:NEAR,MAKINT:NEAR,MOVE1:NEAR,$NORMD:NEAR
-	EXTRN	DEVBOT:NEAR
+	EXTRN	DEVBOT:NEAR,DEVBIN:NEAR
 DSEG	SEGMENT PUBLIC 'DATASG'		
 	ASSUME DS:DSEG
 	EXTRN	DFACLO:WORD,FAC:WORD,VALTYP:WORD
-	EXTRN	RECRD:WORD,LBUFF:WORD,PBUFF:WORD
 	EXTRN	FILNAM:WORD,FILNA2:WORD
 DSEG	ENDS
 
@@ -62,7 +61,7 @@ DSKDSP:
 	DW	(DSKGWD)	;get device width
 	DW	(DSKSCW)	;set device comma width
 	DW	(DSKGCW)	;get device comma width
-	DW	(DFSTLD)	;block input from file opened on this device
+	DW	(DEVBIN)	;block input from file opened on this device
 	DW	(DEVBOT)	;block output to file opened on this device
 
 	SUBTTL  Misc. Disk Routines
@@ -228,20 +227,15 @@ DSKOP2:	PUSH	CX		;save user requested Random-Record-Size
 	MOV	CX,OFFSET FNAML+1	;Moving drive,name,ext
 	CLD			;Set Post-Increment mode
  REP	MOVSB			; to FDB's FCB
-	MOV	BYTE PTR 0[DI],CL	;Make sure ext field is zero
-	ADD	DI,OFFSET FCB_NR-FCB_EX	;Advance to NR field
-	MOV	AX,CX		;[AX]=0
-	CLD			;Set Post-Increment mode
-	STOSW
-	STOSW
-	STOSB			;zero random record fields
-	POP	SI		;SI points to new FDB
-	POP	AX		;[AX]=random record size
-	MOV	WORD PTR FD_SIZ[SI],AX	;save in FDB
-        CALL    SETBUF          ; Also supplies the FindFirst transfer area.
+        pop si
+        mov word ptr FCB_RN[si],0
+        mov word ptr FCB_RN+2[si],0
+        call ResolveDrive       ; Remember the drive even if the default changes.
+        pop ax
+        mov FD_SIZ[si],ax
         call ClassifyFile
         cmp byte ptr FD_CHAR[si],0
-        je CheckShareOpen
+        je OpenDisk
         mov ax,3d02h            ; Random device file: bidirectional.
         mov cl,byte ptr FILMOD
         cmp cl,MD_RND
@@ -254,53 +248,16 @@ OpenDevice:
         mov dx,offset FILNA2
         int 21h
         jnc DeviceOpened
-        jmp ER_IOE
+        jmp OpenFailure
 DeviceOpened:
         mov F_HANDLE[si],ax
         xor ax,ax
         mov word ptr FCB_FS[si],ax
         mov word ptr FCB_FS+2[si],ax
         jmp short OPNSET
-CheckShareOpen:
-        mov ax,1000h            ; SHARE installation check.
-        int 2fh
-        cmp al,0ffh
-        jne DiskOpen
-        call SharedOpen
-        jmp OPNSET
-DiskOpen:
-	MOV	AL,BYTE PTR FILMOD	;[AL]=file mode
-	CMP	AL,LOW OFFSET MD_APP
-	JNZ	NTOAPP		;Brif not open append
-	CALL	CHKFOP		;check for file already open
-NTOAPP:
-	LEA	DX,DWORD PTR F_FCB[SI]	;[DX] = FCB for DOS calls
-	CMP	AL,LOW OFFSET MD_SQO
-	JNZ	OPNFIL		;Brif not sequential output
-	CALL	CHKFOP		;must be unique
-	CALLOS	C_DELE		;Delete file if exists
-MAKFIL:
-	CALLOS	C_MAKE		;Create file
-	INC	AL		;Too many files?
-	JNZ	OPNSET		;No, continue
-	JMP	ER_TMF		;"Too many files"
-OPNFIL:
-	CALLOS	C_OPEN		;Try OPEN
-	INC	AL
-	JNZ	OPNSET		;Brif found
-	MOV	AL,BYTE PTR FILMOD	;Mode
-	CMP	AL,LOW OFFSET MD_APP
-	JNZ	NTAPNF		;Brif not append
-	MOV	AL,LOW OFFSET MD_SQO	; else change to seq output
-	JMP	SHORT MAKFIL
-NTAPNF:
-	CMP	AL,LOW OFFSET MD_RND	;If not Random
-	JNZ	ER_FNF		; then File not found error
-	JMP	SHORT MAKFIL	;and create new
-ER_FNF:	CALL	SaveDosError
-	JMP	DERFNF		;"File not found"
+OpenDisk:
+        call OpenDiskFile
 OPNSET:
-	MOV	WORD PTR FCB_RC[SI],128	;Record len = 128
 	XOR	CX,CX
 	MOV	WORD PTR F_CLOC[SI],CX	;Clear curloc
 	MOV	WORD PTR F_CLOC+2[SI],CX	;Clear numloc
@@ -316,13 +273,8 @@ OPNFIN:	MOV	WORD PTR FREFDB,0	;file is completely open.
 				;FINPRT won't release FDB.
 	RET	
 RNDFIN:
-	mov dl,FD_CHAR[si]
-	LEA	DI,DWORD PTR FD_PHY[SI]	;zero FD.PHY, FD.LOG, FD.OPS, sector buffer
-	MOV	CX,OFFSET (FD_DAT-FD_PHY)	;number of bytes to be cleared
-	XOR	AX,AX		;zeros
-	CLD			;Set Post-Increment mode
- REP	STOSB			;zero data buffer and variable cells
-        mov FD_CHAR[si],dl
+        mov word ptr FD_LOG[si],0
+        mov word ptr FD_OPS[si],0
 	JMP	SHORT OPNFIN
 
 ; Append - Seek to eof, read a sector, find byte eof,
@@ -492,12 +444,13 @@ ControlInvalid:
 ControlDone:
         ret
 
-; Use the DOS directory attribute rather than the reserved FCB bytes,
-; whose layout differs when SHARE or a network redirector owns the file.
+; FindFirst returns the device attribute in the caller's disk transfer area.
 ClassifyFile:
         push bx
         push dx
         push si
+        lea dx,DATOFS[si]
+        CALLOS C_BUFF
         mov di,offset FILNA2
         call DiskName
         mov dx,offset FILNA2
@@ -711,56 +664,68 @@ DiskNameEnd:
         stosb
         ret
 
-; SHARE byte-range locks belong to an open DOS handle. Use that same
-; handle for all reads and writes until CLOSE releases it.
-SharedOpen:
-        mov di,offset FILNA2
-        call DiskName
+; ClassifyFile has built the ASCIIZ name. Keep one DOS handle until CLOSE.
+OpenDiskFile:
         mov dx,offset FILNA2
         mov al,FILMOD
         cmp al,MD_SQO
-        je SharedOutput
+        je OpenOutput
         cmp al,MD_APP
-        jne SharedExisting
+        jne OpenExisting
         call CHKFOP
-SharedExisting:
+OpenExisting:
         mov ax,3d02h
         cmp byte ptr FILMOD,MD_SQI
-        jne SharedAccess
+        jne OpenAccess
         mov al,0
-SharedAccess:
+OpenAccess:
         int 21h
-        jnc SharedSize
+        jnc OpenSize
         cmp ax,2                ; Create only when the file does not exist.
-        jne SharedFailure
+        jne OpenFailure
         cmp byte ptr FILMOD,MD_SQI
-        je SharedMissing
+        je OpenMissing
         mov ah,5bh
-        jmp short SharedCreate
-SharedOutput:
+        jmp short OpenCreate
+OpenOutput:
         call CHKFOP
         mov ah,3ch
-SharedCreate:
+OpenCreate:
         xor cx,cx
         int 21h
-        jc SharedFailure
-SharedSize:
+        jc OpenFailure
+OpenSize:
         mov F_HANDLE[si],ax
         mov bx,ax
         mov ax,4202h
         xor cx,cx
         xor dx,dx
         int 21h
-        jc SharedFailure
+        jc OpenFailure
         mov word ptr FCB_FS[si],ax
         mov word ptr FCB_FS+2[si],dx
         ret
-SharedMissing:
+OpenMissing:
         jmp ER_FNF
-SharedFailure:
+OpenFailure:
         call SaveDosError
+        cmp ax,4                ; DOS handle table exhausted.
+        jne OpenPermission
+        jmp DERTMF
+OpenPermission:
+        cmp ax,5
+        je AccessDenied
+        cmp ax,20h              ; Sharing violation.
+        je AccessDenied
+        cmp ax,21h              ; Lock violation.
+        je AccessDenied
+        jmp DERIOE
+AccessDenied:
         mov dl,70
         jmp ERROR
+
+ER_FNF: call SaveDosError
+        jmp DERFNF
 
 BAKURN:
 	SUB	WORD PTR FCB_RN[SI],1	;Random rec no. -1
@@ -785,13 +750,10 @@ DSKCLS:
 	JE	NOFORC		;Brif buffer flushed
 	CALL	$WRITS		;Flush the buffer
 NOFORC:
-        cmp word ptr F_HANDLE[si],-1
-        jne DeviceClosed        ; FFREE owns the DOS handle.
-	CALL	SETBUF		;Set DMA addr
-	LEA	DX,DWORD PTR F_FCB[SI]	;[DX] = FCB
-	CALLOS	C_CLOS		;Close the file
-DeviceClosed:
-	RET	
+        mov ah,3eh              ; Report DOS close errors to the caller.
+        call DeviceIO
+        mov word ptr F_HANDLE[si],-1
+        ret
 
 	SUBTTL Disk Sequential Input
 
@@ -944,10 +906,8 @@ SOUT3:
 
 	PGFLAG=1		;On = PUT, Off = GET
 	RELFLG=2		;On = Relative, Off = Sequential
-	DIRFLG=4		;On = Write, Off = Read
 
 ER_BRN:	JMP	DERBRN		;bad record number error
-ER_FC:	JMP	FCERR		;function call error
 
 ;DSKRND - perform random I/O.
 ; Entry  - [AL] = function to be performed:
@@ -972,8 +932,6 @@ RAND2:
 	DEC	DX		;[DX] = current logical
 	MOV	WORD PTR FD_OPS[SI],0	;Clear output posn
 	MOV	BX,WORD PTR FD_SIZ[SI]	;[BX] = logical record length
-        cmp word ptr F_HANDLE[si],-1
-        je RandomDisk
         cmp byte ptr FD_CHAR[si],0
         jne RandomTransfer
         push ax
@@ -1026,134 +984,6 @@ DeviceWriteErrorFar:
         jmp DERIOE
 DeviceRecordDone:
         ret
-RandomDisk:
-	PUSH	BX
-	CMP	BX,OFFSET DATPSC	;Logical = Physical?
-	JE	RAND3		;Brif so
-	XCHG	AX,BX		;Save flags
-	MUL	DX		;Logical * physical (byte off)
-	XCHG	AX,BX		;[DX,BX] = result
-	ADD	BX,BX		;Offset *2 (for /128)
-	ADC	DX,DX		;consider overflow
-	OR	DH,DH
-	jz RandomOffsetOK
-        jmp FCERR
-RandomOffsetOK:
-	MOV	DH,DL
-	MOV	DL,BH		;[DX] = physical record no.
-	SHR	BL,1
-	XOR	BH,BH		;[BX] = offset into physical rec
-	JMP	SHORT RAND4
-RAND3:
-	XOR	BX,BX		;[BX] (offset = 0)
-
-; [DX] = physical record number
-; [BX] = offset into physical record
-RAND4:
-	MOV	WORD PTR RECRD,DX	;Save record no.
-	LEA	CX,DWORD PTR FD_DAT[SI]	;[CX] = Field buffer addr
-	MOV	WORD PTR LBUFF,CX	;Save Logical buffer addr
-	POP	DX		;Get record length
-
-; [DX] = bytes left to transfer (initially record length)
-; [BX] = offset into current record
-NXTOPD:
-	LEA	CX,DWORD PTR DATOFS[SI]	;[CX] = Physical buffer addr
-	ADD	CX,BX		;       + offset
-	MOV	WORD PTR PBUFF,CX	;Save physical offset
-	MOV	CX,OFFSET DATPSC
-	SUB	CX,BX		;[CX] = bytes left in buffer
-	CMP	CX,DX		;want smaller of bufl, recl
-	JB	DATMOF		;[CX] = left in buffer
-	MOV	CX,DX		;[CX] = left in record
-DATMOF:
-	TEST	AL,LOW OFFSET PGFLAG
-	JZ	FIVDRD		;Brif read (GET)
-	CMP	CX,OFFSET DATPSC
-	JAE	NOFVRD		;Brif writing entire sector
-	CALL	GETSUB		; else read current sector
-NOFVRD:
-	PUSH	SI
-	PUSH	CX
-	MOV	SI,WORD PTR LBUFF
-	MOV	DI,WORD PTR PBUFF
-	SHR	CX,1
-	CLD			;Set Post-Increment mode
- REP	MOVSW
-	JNB	EVENLP
-	MOVSB
-EVENLP:
-	POP	CX
-	POP	SI
-	CALL	PUTSUB		;Write thru to current sector
-	JMP	SHORT NXFVBF
-
-FIVDRD:
-	CALL	GETSUB		;Read current record
-	PUSH	SI
-	PUSH	CX
-	MOV	SI,WORD PTR PBUFF
-	MOV	DI,WORD PTR LBUFF
-	SHR	CX,1
-	CLD			;Set Post-Increment mode
- REP	MOVSW
-	JNB	EVENPL
-	MOVSB
-EVENPL:
-	POP	CX
-	POP	SI
-NXFVBF:
-	INC	WORD PTR RECRD	;current record +1
-	ADD	WORD PTR LBUFF,CX	;logical offset +length
-	SUB	DX,CX		;offset - bytes transfered
-	XOR	BX,BX		;zero buffer offset
-	OR	DX,DX		;More to transfer?
-	JNZ	NXTOPD		; then continue
-	RET	
-
-; Sector I/O routines for Random
-
-PUTSUB:
-	OR	AL,LOW OFFSET DIRFLG	;Set write flag
-	JMP	SHORT PGSUB1
-GETSUB:
-	AND	AL,LOW OFFSET 255-DIRFLG	;Clear write flag (read)
-PGSUB1:
-	PUSH	AX
-	PUSH	BX
-	PUSH	CX
-	PUSH	DX
-	MOV	BX,WORD PTR RECRD	;Get record no.
-	INC	BX
-	CMP	BX,WORD PTR FD_PHY[SI]	;current record in buffer?
-	JNE	NTREDS		;Brif not
-	TEST	AL,LOW OFFSET DIRFLG	;Was it read?
-	JZ	PGRET		; then got it
-NTREDS:
-	DEC	BX
-	MOV	WORD PTR F_CLOC[SI],BX	;Set CURLOC to physical rec.
-	push bx
-        mov bx,PBUFF
-        sub bx,si
-        sub bx,offset DATOFS
-        add bx,cx               ; Prefix through the last modified byte.
-        mov F_ORCT[si],bl
-        pop bx
-	MOV	BYTE PTR F_BREM[SI],LOW OFFSET DATPSC
-	MOV	WORD PTR FCB_RN[SI],BX	;Set record number
-	MOV	WORD PTR FCB_RN+2[SI],0
-	TEST	AL,LOW OFFSET DIRFLG
-	JZ	GET1		;Brif read
-	CALL	$WRITS		; else Write it
-	JMP	SHORT PGRET
-GET1:
-	CALL	$READS		;Read it
-PGRET:	POP	DX
-	POP	CX
-	POP	BX
-	POP	AX
-	RET	
-
 	SUBTTL Primitive Disk sector I/O routines
 
 ;$READS - Read sector from file
@@ -1164,14 +994,11 @@ PGRET:	POP	DX
 $READS:
 	PUSH	CX
 	PUSH	DI
-	INC	WORD PTR F_CLOC[SI]	;Logical record +1
 	MOV	CX,OFFSET DATPSC/2
 	XOR	AX,AX
 	LEA	DI,DWORD PTR DATOFS[SI]
 	CLD			;Set Post-Increment mode
  REP	STOSW			;zero physical buffer
-        cmp word ptr F_HANDLE[si],-1
-        je ReadDiskSector
         push bx
         push dx
         cmp byte ptr FD_CHAR[si],0
@@ -1184,22 +1011,7 @@ HandleRead:
         call DeviceIO
         pop dx
         pop bx
-        jmp short READ1
-ReadDiskSector:
-	CALL	SETBUF		;Set DMA
-	MOV	AH,LOW OFFSET C_RNDR
-	CALL    ACCFIL          ; Read random
-        cmp al,3
-        jne ReadWhole
-        mov al,byte ptr FCB_FS[si]
-        and al,DATPSC-1
-        jmp short READ1
-ReadWhole:
-	OR	AL,AL
-	MOV	AL,LOW 0	;Len = 0 for EOF
-	JNZ	READ1
-	MOV	AL,LOW OFFSET DATPSC	; else len = sector size
-READ1:
+        call AdvanceSector
 	MOV	BYTE PTR F_ORCT[SI],AL	;Clear offset into buffer
 	MOV	BYTE PTR F_BREM[SI],AL	;Set number of bytes left
 	OR	AL,AL		;zero if EOF
@@ -1212,8 +1024,6 @@ READ1:
 ; Exit  - All registers preserved
 ;
 $WRITS: PUSH AX
-        cmp word ptr F_HANDLE[si],-1
-        je WriteFCBSector
         push bx
         push cx
         push dx
@@ -1229,85 +1039,24 @@ $WRITS: PUSH AX
         pop cx
         pop bx
         mov byte ptr F_ORCT[si],0
-        jmp WRITE1
+        call AdvanceSector
+        pop ax
+        ret
 HandleDiskFull:
         jmp DERDFL
-WriteFCBSector:
-        call SETBUF
-        cmp byte ptr F_ORCT[si],DATPSC
-        jb WritePartial
-        mov ah,C_RNDW
-        call ACCFIL
-        jmp short WriteStatus
-WritePartial:
-        ; Express the sector address in bytes for DOS random block write.
-        push bx
-        push cx
-        push dx
-        mov ax,word ptr FCB_RN[si]
-        mov dx,word ptr FCB_RN+2[si]
-        push dx
-        push ax
-        mov cl,7
-ByteOffset:
-        shl ax,1
-        rcl dx,1
-        dec cl
-        jnz ByteOffset
-        mov word ptr FCB_RN[si],ax
-        mov word ptr FCB_RN+2[si],dx
-        mov word ptr FCB_RC[si],1
-        xor cx,cx
-        mov cl,F_ORCT[si]
-        mov bx,cx
-        lea dx,F_FCB[si]
-        mov ah,28h
-        int 21h
-        cmp cx,bx
-        jne ShortWrite
-        or al,al
-        jz PartialDone
-ShortWrite:
-        mov al,2                ; Disk full.
-PartialDone:
-        pop bx
-        pop dx
-        add bx,1
-        adc dx,0
-        mov word ptr FCB_RN[si],bx
-        mov word ptr FCB_RN+2[si],dx
-        mov word ptr FCB_RC[si],DATPSC
-        pop dx
-        pop cx
-        pop bx
-WriteStatus:
-        mov byte ptr F_ORCT[si],0
-	CMP	AL,LOW 255D
-	JZ	ER_TMF		;Brif "Too many Files"
-	DEC	AL
-	JZ	ER_IOE		;Brif error extending file
-	DEC	AL
-	JNZ	WRITE1
-	MOV	BYTE PTR F_MODE[SI],LOW OFFSET MD_SQI	;So CLOSE won't give same error
-				;when it tries to output CTL-Z EOF
-	CALL	SaveDosError
-	JMP	DERDFL		;"Disk Full"
-WRITE1:
-	INC	WORD PTR F_CLOC[SI]	;Logical record +1
-	POP	AX
-	RET	
 
-ER_TMF:	CALL	SaveDosError
-	JMP	DERTMF		;"Too many Files"
-ER_IOE:	CALL	SaveDosError
-	JMP	DERIOE		;"Device I/O error"
+; Commit the file position only after DOS completed the transfer. A failed
+; buffered write must still address the same sector when BASIC retries it.
+AdvanceSector:
+        add word ptr FCB_RN[si],1
+        adc word ptr FCB_RN+2[si],0
+        inc word ptr F_CLOC[si]
+        ret
 
 ; Seek to the next 128-byte sector (also used to reposition for APPEND).
 SectorSeek:
         mov ax,word ptr FCB_RN[si]
         mov dx,word ptr FCB_RN+2[si]
-        add word ptr FCB_RN[si],1
-        adc word ptr FCB_RN+2[si],0
         call SectorBytes
         mov cx,dx
         mov dx,ax
@@ -1324,56 +1073,26 @@ SeekShift:
         jnz SeekShift
         ret
 
-;Set OS I/O buffer address to DATOFS(.SI)
-;
-SETBUF:
-	PUSH	DX
-	LEA	DX,DWORD PTR DATOFS[SI]	;[DX] = Data buffer addr
-	CALLOS	C_BUFF
-	POP	DX
-	RET	
-
-ACCFIL:
-	PUSH	DX
-	LEA	DX,DWORD PTR F_FCB[SI]	;[DX] = FCB
-	CALLOS			;Do OS I/O Op
-	INC	WORD PTR FCB_RN[SI]	;Record no. +1
-	JNZ	ACCFL1
-	INC	WORD PTR FCB_RN+2[SI]	;High order +1
-ACCFL1:
-	CMP	AH,LOW OFFSET C_RNDW	;Was it Random Write?
-	JNE	ACCRET		;Brif not
-	OR	AL,AL		; else map into 1.4 errors
-	JZ	ACCRET		;Brif no errors
-	CMP	AL,LOW 5
-	JE	ER_TMF		;5 - Too many files
-	CMP	AL,LOW 3
-	MOV	AL,LOW 1	;Map 5 to 1
-	JE	ACCRET
-	INC	AL		; else Disk full
-	JMP	SHORT ACCRET
-ACCRET:
-	POP	DX
-	RET	
-
 	SUBTTL CHKFOP - Check for file already OPEN
 
 DSEG	SEGMENT PUBLIC 'DATASG'
 	EXTRN	FILTAB:WORD,STKLOW:WORD
 DSEG	ENDS
 
-; Entry: SI points to FDB in question
-; Exit:  Control returns to DERFAO if file is open
-; Uses:  CX,DI
-;
+; OPEN, KILL and NAME compare the saved drive and the 8.3 filename.
+ResolveDrive:
+        cmp byte ptr FCB_DV[si],0
+        jne DriveReady
+        CALLOS C_GDRV
+        inc al
+        mov FCB_DV[si],al
+DriveReady:
+        ret
+
+; SI points to the FDB to check. Uses CX and DI.
 CHKFOP:
-	PUSH	AX
-	CMP	BYTE PTR FCB_DV[SI],LOW 0	;Default Drive?
-	JNE	NTCRDV
-	CALLOS	C_GDRV
-	INC	AL		;Convert A: to 1.. etc.
-	MOV	BYTE PTR FCB_DV[SI],AL	;Store real drive no.
-NTCRDV:
+        push ax
+        call ResolveDrive
 	MOV	DI,WORD PTR FILTAB	;Start with first FDB in chain
 CHKNFL:
 	CMP	DI,WORD PTR STKLOW
@@ -1414,52 +1133,6 @@ MAKUPC:
 	JNB	NOTLC		;branch if not a..z
 	AND	AL,LOW 337O	;map a..z to A..Z
 NOTLC:
-	RET	
-
-	SUBTTL  DFSTLD - Fast Binary Program Load (from DISK)
-
-	PUBLIC	DFSTLD
-	EXTRN	OUTLOD:NEAR
-DSEG	SEGMENT PUBLIC 'DATASG'
-	EXTRN	FRETOP:WORD,PTRFIL:WORD
-DSEG	ENDS
-
-;DFSTLD - read block of memory from Disk
-; Entry - [BX] = offset of destination
-;         [CX] = maximum number of bytes to read
-;         [DX] = data segment of destinanation
-;         PTRFIL points to FDB of file to be loaded
-; Exit  - BX points 1 byte beyond last byte read
-;         Carry set reached end-of-file before CX bytes were read
-;
-DFSTLD:
-        mov si,PTRFIL
-        cmp word ptr F_HANDLE[si],-1
-        je LoadDisk
-        extrn DEVBIN:near
-        jmp DEVBIN
-LoadDisk:
-	PUSH	BX		;save start adr
-	PUSH	CX		;save max byte count
-	PUSH	DS		;save BASIC's Data Segment adr
-	PUSH	BX		;save start adr
-	PUSH	DX		;save block read Data Segment adr
-	MOV	SI,WORD PTR PTRFIL	;SI points to current FDB
-	MOV	AL,BYTE PTR F_ORCT[SI]
-	SUB	AL,BYTE PTR F_BREM[SI]	;[AL]=# bytes read so far
-	MOV	BYTE PTR FCB_RN[SI],AL	;set next rec #
-	MOV	WORD PTR FCB_RC[SI],1	;Set File logical record size = 1 byte
-	POP	DS		;[DS]=segment adr of block read
-	POP	DX		;[DX]=start adr
-	CALLOS	C_BUFF		;Set DMA to TXTTAB
-	POP	DS		;restore BASIC's data segment adr
-	LEA	DX,DWORD PTR F_FCB[SI]	;FCB
-	POP	CX		;[CX]=max number of bytes to read
-	CALLOS	C_RBR		;Load the Program!
-	POP	BX		;BX points to start of load
-	ADD	BX,CX		;BX points 1 byte beyond last byte read
-	CMP	AL,LOW 1
-	CMC			;set carry if [AL] exceeds 1 (EOF)
 	RET	
 
 	SUBTTL  PROSAV - Protected SAVE

@@ -1427,16 +1427,7 @@ EXPTMP	LABEL WORD
 				;testing FAC for field overflow
 				;of E formated output
 PUBLIC	TEMPB
-TEMPB	LABEL WORD		;Used by FIELD
-PUBLIC	RECRD
-RECRD	LABEL WORD
-	DB	2 DUP(?)	;Record #
-PUBLIC	LBUFF
-LBUFF	LABEL WORD
-	DB	2 DUP(?)	;Logical buffer address
-PUBLIC	PBUFF
-PBUFF	LABEL WORD
-	DB	2 DUP(?)	;Physical buffer address
+TEMPB	DW	?		;Used by FIELD
 PUBLIC	PGTFLG
 PGTFLG	LABEL WORD
 	DB	1 DUP(?)	;PUT/GET flag (Non zero=PUT)

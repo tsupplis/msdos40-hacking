@@ -40,7 +40,7 @@ Use `GWBASIC /NOB <COMMANDS.TXT` to execute commands from a DOS text file. `INPU
 
 An explicit `SCREEN` or `CLS` in the program still operates on the display.
 
-The EGA graphics modes are `SCREEN 7` (320 × 200), `SCREEN 8` (640 × 200), `SCREEN 9` (640 × 350 color), and `SCREEN 10` (640 × 350 monochrome). Active and visible pages can be selected independently within the adapter's reported memory. Graphics array `GET` and `PUT` use scan lines stored as byte-aligned bit planes. The PCE EGA regression exercises all four modes. The PCE VGA BIOS supports the three color modes and rejects monochrome BIOS mode 0Fh. BASIC reports error 5 on that configuration.
+The EGA graphics modes are `SCREEN 7` (320 × 200), `SCREEN 8` (640 × 200), `SCREEN 9` (640 × 350 color), and `SCREEN 10` (640 × 350 monochrome). Active and visible pages can be selected independently within the adapter's reported memory. Graphics array `GET` and `PUT` use scan lines stored as byte-aligned bit planes. On PCE, both 3.23 and 4.01N select `SCREEN 9` on a color EGA and `SCREEN 10` on a monochrome EGA. With 64 KB, each uses four attributes and one page. With 256 KB, each has two pages and the color mode has sixteen attributes. On the tested VGA, `SCREEN 9` succeeds and `SCREEN 10` returns error 5.
 
 ## Original Microsoft release notes
 

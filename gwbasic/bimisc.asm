@@ -456,16 +456,17 @@ PUBLIC	INITRP
 INITRP:
 DSEG	SEGMENT PUBLIC 'DATASG'
 	EXTRN	TRPTBL:WORD
-	extrn TimerPeriod:dword,TimerLeft:dword,TimerPending:byte,PlayPending:byte,PlayLevel:byte
+	extrn PlayPending:byte,PlayLevel:byte
 DSEG	ENDS
+        extrn SetTimerTicks:near
         xor ax,ax
         pushf
         cli
-        mov word ptr TimerPeriod,ax
-        mov word ptr TimerPeriod+2,ax
-        mov word ptr TimerLeft,ax
-        mov word ptr TimerLeft+2,ax
-        mov TimerPending,al
+        push dx
+        mov bx,ax
+        mov dx,ax
+        call SetTimerTicks
+        pop dx
         mov PlayPending,al
         mov PlayLevel,al
         popf

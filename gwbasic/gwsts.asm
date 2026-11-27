@@ -2530,7 +2530,7 @@ EnvValidate:
 EnvScan:
         push es
         push dx
-        mov ah,51h
+        mov ah,62h              ; DOS 3+ Get PSP Address.
         int 21h
         mov es,bx
         mov ax,es:[2ch]
@@ -2664,13 +2664,8 @@ DSEG	ENDS
 
 ; The IRQ handlers latch crossings. BASIC delivers requests between statements.
 DSEG SEGMENT PUBLIC 'DATASG'
-        public PlayLevel,PlayPending,TimerPending,TimerPeriod,TimerLeft
-PlayLevel db 0
-PlayPending db 0
-TimerPending db 0
-TimerPeriod dd 0
-TimerLeft dd 0
-        extrn WaitingNotes:byte
+        extrn PlayLevel:byte,PlayPending:byte,WaitingNotes:byte
+        extrn TimerPending:byte
 DSEG ends
 
         public PlayCount
@@ -2703,14 +2698,8 @@ ValidInterval:
         extrn $QINT:near
         call $QINT
         xor bh,bh
-        pushf
-        cli
-        mov word ptr TimerPeriod,dx
-        mov word ptr TimerPeriod+2,bx
-        mov word ptr TimerLeft,dx
-        mov word ptr TimerLeft+2,bx
-        mov TimerPending,0
-        popf
+        extrn SetTimerTicks:near
+        call SetTimerTicks
         pop bx
         mov al,[bx]
         ret

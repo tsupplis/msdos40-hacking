@@ -1550,6 +1550,7 @@ EgaPixelDone:
         pop bx
         pop es
         ret
+EgaPlaneMask db 0,3,0ch,0fh
 EgaBiosPixel:
         push bx
         push cx
@@ -1564,7 +1565,24 @@ EgaBiosPixel:
         mov dx,ax
         pop ax
         mov bh,ACTPAG
+        ; In four-attribute EGA modes the two color bits drive pairs
+        ; of planes. BIOS pixel services take the physical plane mask.
+        cmp ah,0dh
+        je EgaBiosRead
+        push bx
+        mov bx,offset CSEG:EgaPlaneMask
+        xlat cs:[bx]
+        pop bx
         int 10h
+        jmp short EgaBiosDone
+EgaBiosRead:
+        int 10h
+        mov bl,al
+        and bl,1
+        shr al,1
+        and al,2
+        or al,bl
+EgaBiosDone:
         pop dx
         pop cx
         pop bx
@@ -2595,7 +2613,7 @@ ChangeMode:
 ;
 ; EGA BIOS reports installed memory as 0..3 (64K increments).
 EgaBiosModes db 0dh,0eh,10h,0fh
-EgaPages db 2,4,6,8D, 1,2,3,4, 1,1,1,2, 0,1,1,2
+EgaPages db 2,4,6,8D, 1,2,3,4, 1,1,1,2, 1,1,1,2
 EgaMode:
         push cx
         sub al,7
@@ -2607,8 +2625,14 @@ EgaMode:
         pop cx
         cmp bl,3
         ja EgaError
+        ; BIOS BH is 0 for color, 1 for monochrome. Only SCREEN 10
+        ; uses the monochrome monitor.
         cmp di,3
-        je EgaMonitorOK
+        jne EgaColorMode
+        cmp bh,1
+        jne EgaError
+        jmp short EgaMonitorOK
+EgaColorMode:
         or bh,bh
         jnz EgaError
 EgaMonitorOK:
@@ -2912,7 +2936,15 @@ PUBLIC	SETATR
 SETATR: cmp CRTMOD,0dh
         jb LegacyAttr
         call EgaCheckAttr
-        jc ATRERR
+        jnc EgaSetAttrStore
+        cmp CRTMOD,0fh
+        jb ATRERR
+        ; 640x350 drawing attributes saturate at the highest color.
+        mov al,3
+        cmp PIXBTS,2
+        je EgaSetAttrStore
+        mov al,15D
+EgaSetAttrStore:
         mov ATRPAT,al
         clc
         ret

@@ -1198,7 +1198,6 @@ OUTBLK:	MOV	SI,WORD PTR PTRFIL
 ;         Carry set if reached end of data before CX bytes read
 ;         SI, CX, AX used.
 ;
-	EXTRN	DFSTLD:NEAR
 INPBLK:	MOV	SI,WORD PTR PTRFIL
 	MOV	AH,LOW OFFSET G_BIN	;block input function
 	CALL	PTRDSP		;[AL]=next byte from file PTRFIL
@@ -1838,6 +1837,8 @@ PBAX:	POP	BX
 ;  nbytes := size of freed file-data-block.
 ;  xfrstr(fdbptr, nbytes); {move string space and lower-FDB's up nbytes}
 ;
+; A partially opened file or a failed close may still own a DOS handle.
+; Preserve the original BASIC error during best-effort cleanup.
 FFREE:  pushf
         cmp word ptr F_HANDLE[si],-1
         je FreeNoHandle

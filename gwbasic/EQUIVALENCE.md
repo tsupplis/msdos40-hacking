@@ -4,11 +4,11 @@ Target: the project’s 3.23 DOS binary and 4.01N under identical inputs. The al
 
 Sources: [Microsoft GW-BASIC User’s Reference and Guide, July 1987](https://bitsavers.computerhistory.org/pdf/microsoft/msdos_3.3/MS-DOS_GW-BASIC_198707.pdf), [1989 guide and command-line reference](https://bitsavers.trailing-edge.com/pdf/microsoft/gw-basic/Microsoft_GW-BASIC_Users_Guide_and_Reference_1989.pdf). Supplementary syntax must be verified against the project’s executable.
 
-399 work items: 368 matched, 22 different, 6 inconclusive, 3 intentional.
+399 work items: 370 matched, 20 different, 6 inconclusive, 3 intentional.
 
 ## Evidence
 
-Matched records an observed matching case. It does not qualify the entire form or its error paths. Untested means a direct behavioral comparison has not been recorded here. The default guest is MS-DOS 4.01N. Display work uses PCE EGA/VGA or QEMU VGA. Event tests require the corresponding event source, file locking requires a SHARE-enabled configuration for successful operations, and printer and serial tests require a captured output device.
+Matched applies to the input, configuration and observations listed in the row. A matching error or successful statement return establishes only that outcome. The default guest is MS-DOS 4.01N. Display work uses PCE EGA/VGA or QEMU VGA. Event tests require the corresponding event source, file locking requires a SHARE-enabled configuration for successful operations, and printer and serial tests require a captured output device.
 
 - Q — [paired DOS observations](../test/gwaudit.jsonl) from [check_gwaudit](../test/check_gwaudit) and [probe inputs](../test/gwcases.txt). Q entries record historical QEMU runs. Case 216 was rechecked on both PCE adapters. Results retain the reference and build outputs. Statement acceptance alone leaves device delivery, audio, timing and underlying limits unqualified.
 - PCE — paired observations recorded on headless PCE with the same runner and JSONL format. Palette registers return the programmed values on VGA. PCE EGA returns FFh on that port, so the EGA cases verify statement execution only.
@@ -21,13 +21,13 @@ Matched records an observed matching case. It does not qualify the entire form o
 
 ## Running the paired regression
 
-With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 97 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Set `IMG` to pin all comparisons to a private DOS boot image. Each interpreter runs the BASIC fixtures in succession and writes its observations on the scratch floppy. Root checks also run `test/check_gwaudit --editor --check`: eight interactive comparisons share a second PCE boot. They record VGA text cells and the BIOS cursor at the live Ok prompt. Case 301 also records all ten macro expansions through INKEY$.
+With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 98 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Set `IMG` to pin all comparisons to a private DOS boot image. Each interpreter runs the BASIC fixtures in succession and writes its observations on the scratch floppy. Root checks also run `test/check_gwaudit --editor --check`: eight interactive comparisons share a second PCE boot. They record VGA text cells and the BIOS cursor at the live Ok prompt. Case 301 also records all ten macro expansions through INKEY$.
 
-Root checks also run two locking fixtures together with DOS SHARE installed (`test/check_gwaudit --share --check`). Cases 374–377 exercise whole-file and range operations with SHARE absent.
+Root checks also run two locking fixtures together with DOS SHARE installed (`test/check_gwaudit --share --check`). Cases 374–377 exercise whole-file and range operations with SHARE absent. Ordinary disk I/O uses DOS handles in both configurations. The separate 4.01N regression `test/check_gwbasic --pce` checks handle exhaustion (BASIC error 67, DOS error 4), protection against deleting an open file, and byte-exact recovery after a disk-full write and RESUME.
 
-PCE is the default for the paired audit, including timer and PLAY handler delivery and single cases such as `test/check_gwaudit --check 216`. Set `PCE_VIDEO=ega` or `PCE_VIDEO=vga` to select the adapter. The remaining historical probe runner requires explicit `--qemu`; it covers additional observations such as BIOS keyboard input and cursor position.
+PCE is the default for the paired audit, including timer and PLAY handler delivery and single cases such as `test/check_gwaudit --check 216`. For program probes, `PCE_VIDEO=ega` or `PCE_VIDEO=vga` selects the adapter. Interactive editor probes use VGA. The remaining historical probe runner requires explicit `--qemu`; it covers additional observations such as BIOS keyboard input and cursor position.
 
-For the selected IDs, the gate checks each case marked **Matched** against both the live 3.23 run and its recorded output. Incomplete observations fail in every category. The 249 paired records cover 224 matched, 19 different and 6 inconclusive cases. A known difference that now matches is reported for review. After verifying a fix, update that case’s JSONL record, matrix status and counts together. The remaining inventory rows use the other evidence listed above.
+For the selected IDs, the gate checks each case marked **Matched** against both the live 3.23 run and its recorded output. Incomplete observations fail in every category. The three default PCE batches rerun 108 of the 249 recorded case IDs. The other 141 retain earlier observations. Across all 249 records the matrix lists 225 matched, 18 different and 6 inconclusive cases. The 20 Different rows count classified probes. Additional differences described within rows include the mode change after case 216 and extended-error state after case 46. A known difference that now matches is reported for review. After verifying a fix, update that case’s JSONL record, matrix status and counts together. Root checks also run `test/check_gwega` on both binaries with four EGA profiles (64K/256K, color/monochrome) and VGA. This requires a PCE build with configurable EGA memory. The remaining inventory rows use the other evidence listed above.
 
 Case 46 exercises both a write-protected floppy and a DOS character driver that rejects writes. Under RESUME NEXT both interpreters report out of paper at PRINT and again at explicit CLOSE, with matching ERL, ERR, ERDEV, ERDEV$ and EXTERR(0). When the active handler issues an unqualified CLOSE, both invoke it again with ERL = 65535 and error 27. The paired regression checks both forms.
 
@@ -47,7 +47,6 @@ Each row below groups failed observations for investigation. The count measures 
 | Disk files and sharing | 2 | 53, 110 |
 | Command streams, prompts and diagnostics | 6 | 70, 81, 102, 120, 151, 277 |
 | Keyboard, editor and function keys | 2 | 358, 393 |
-| Video modes, pages and EGA memory | 2 | 215, 342 |
 | Serial I/O | 4 | 233, 395, 396, 397 |
 | Startup switches | 3 | 280, 281, 286 |
 
@@ -94,7 +93,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 037 | `DIM` | DOS | Matched | L |
 | 038 | `EDIT` | DOS | Matched | Q, case 38 |
 | 039 | `END` | DOS | Matched | Q, case 39 |
-| 040 | `ENVIRON assignment` | DOS | Different | assignment returned different errors |
+| 040 | `ENVIRON assignment` | DOS | Different | Manual PCE comparison in the standard test guest. Assigning GWPROBE=VALUE raised error 7 in 3.23 and 73 in 4.01N. The variable remained unset in both. |
 | 041 | `ENVIRON$(name)` | DOS | Matched | L |
 | 042 | `ENVIRON$(index)` | DOS | Matched | L |
 | 043 | `EOF` | DOS | Matched | L |
@@ -107,7 +106,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 050 | `EXP` | DOS | Matched | L |
 | 051 | `EXTERR` | DOS | Matched | PCE, case 51. DOS code, class, action and locus after failed OPEN and CHDIR, invalid selector and RESUME. The cross-program case following a nested device error is described above. |
 | 052 | `FIELD` | DOS | Matched | L |
-| 053 | `FILES` | DOS | Different | Q, case 53; output differs |
+| 053 | `FILES` | DOS | Different | Q, case 53. Both list SAMPLE.TXT. Only 3.23 also prints the directory and free-byte count. |
 | 054 | `FIX` | DOS | Matched | L |
 | 055 | `FOR … NEXT` | DOS | Matched | L |
 | 056 | `NEXT multi-variable` | DOS | Matched | L |
@@ -124,7 +123,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 067 | `IF THEN line` | DOS | Matched | A |
 | 068 | `IF GOTO` | DOS | Matched | Q, case 68 |
 | 069 | `IF THEN ELSE` | DOS | Matched | Q, case 69 |
-| 070 | `INPUT` | DOS | Different | Q, case 70; output differs |
+| 070 | `INPUT` | DOS | Different | Q, case 70. Both read A and 17. Only 3.23 echoes the supplied input in the captured prompt. |
 | 071 | `INPUT#` | DOS | Matched | L |
 | 072 | `INPUT$(console)` | DOS | Matched | Q, case 72 |
 | 073 | `INPUT$(file)` | DOS | Matched | Q, case 73 |
@@ -135,7 +134,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 078 | `LEN` | DOS | Matched | L |
 | 079 | `LET explicit` | DOS | Matched | A |
 | 080 | `LET implicit` | DOS | Matched | L |
-| 081 | `LINE INPUT` | DOS | Different | Q, case 81; output differs |
+| 081 | `LINE INPUT` | DOS | Different | Q, case 81. Both read the same line. Only 3.23 echoes it to captured output. |
 | 082 | `LINE INPUT#` | DOS | Matched | L |
 | 083 | `LIST` | DOS | Matched | Q, case 83 |
 | 084 | `LIST to file` | DOS | Matched | Q, case 84 |
@@ -156,7 +155,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 099 | `NEW` | DOS | Matched | P |
 | 100 | `OCT$` | DOS | Matched | A |
 | 101 | `ON ERROR GOTO` | DOS | Matched | L |
-| 102 | `ON ERROR GOTO 0` | DOS | Different | Q, case 102; output differs |
+| 102 | `ON ERROR GOTO 0` | DOS | Different | Q, case 102. Both report Illegal function call. The 4.01N transcript also contains the line number and Ok prompt. |
 | 103 | `ON … GOSUB` | DOS | Matched | A |
 | 104 | `ON … GOTO` | DOS | Matched | A |
 | 105 | `OPEN INPUT` | DOS | Matched | Q, case 105 |
@@ -164,7 +163,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 107 | `OPEN APPEND` | DOS | Matched | P |
 | 108 | `OPEN RANDOM` | DOS | Matched | Q, case 108 |
 | 109 | `OPEN legacy mode string` | DOS | Matched | L |
-| 110 | `OPEN ACCESS and sharing` | DOS | Different | Q, case 110; 3.23 ALPHA / DONE, 4.01N ERROR 2  100 |
+| 110 | `OPEN ACCESS and sharing` | DOS | Different | PCE, case 110. The explicit ACCESS READ SHARED clause succeeds in 3.23 and raises syntax error 2 in 4.01N. Ordinary handle-based OPEN is covered separately. |
 | 111 | `OPTION BASE 0` | DOS | Matched | Q, case 111 |
 | 112 | `OPTION BASE 1` | DOS | Matched | L |
 | 113 | `PRINT` | DOS | Matched | Q, case 113 |
@@ -174,7 +173,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 117 | `PUT record` | DOS | Matched | L |
 | 118 | `PUT next record` | DOS | Matched | Q, case 118 |
 | 119 | `RANDOMIZE seed` | DOS | Matched | Q, case 119 |
-| 120 | `RANDOMIZE prompt` | DOS | Different | Q, case 120; output differs |
+| 120 | `RANDOMIZE prompt` | DOS | Different | Q, case 120. The same seed yields the same RND value. The prompt and input echo differ. |
 | 121 | `READ` | DOS | Matched | L |
 | 122 | `REM` | DOS | Matched | Q, case 122 |
 | 123 | `apostrophe comment` | DOS | Matched | Q, case 123 |
@@ -199,7 +198,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 142 | `SAVE ASCII` | DOS | Matched | P |
 | 143 | `SAVE protected` | DOS | Matched | F |
 | 144 | `SGN` | DOS | Matched | A |
-| 145 | `SHELL command` | DOS | Different | echo did not create file |
+| 145 | `SHELL command` | DOS | Different | Manual PCE comparison. SHELL with an ECHO command created the requested file in 3.23. In 4.01N it raised syntax error 2 and the file was absent. |
 | 146 | `SHELL interactive` | DOS | Different | Q, case 146; 3.23 BACK / DONE, 4.01N ERROR 2  100 |
 | 147 | `SIN` | DOS | Matched | L |
 | 148 | `SPACE$` | DOS | Matched | A |
@@ -266,8 +265,8 @@ Each row below groups failed observations for investigation. The count measures 
 | 211 | `SCREEN 2` | Display | Matched | Q, case 211 |
 | 212 | `SCREEN 7` | Display | Matched | X |
 | 213 | `SCREEN 8` | Display | Matched | X |
-| 214 | `SCREEN 9` | Display | Matched | X |
-| 215 | `SCREEN 10` | Display | Different | Q, case 215; 3.23 ERROR 5  100, 4.01N 3  / DONE |
+| 214 | `SCREEN 9` | Display | Matched | [Paired PCE display regression](../test/check_gwega). Available on 64K/256K color EGA and VGA. Both return error 5 on monochrome EGA. |
+| 215 | `SCREEN 10` | Display | Matched | PCE, case 215 and paired display regression. Available on 64K/256K monochrome EGA (0x0a). Both return error 5 on color EGA (0x09) and VGA. |
 | 216 | `SCREEN active and visible pages` | Display | Matched | PCE EGA and VGA, case 216; both read 0 on page 0 and 3 on page 1. After this page-1 sequence, a subsequent SCREEN 1 with omitted pages raises error 5 in 3.23 and succeeds in 4.01N. Case 217 explicitly selects page zero. |
 | 217 | `VIEW graphics` | Display | Matched | PCE, case 217, reversed viewport corners, fill, border and bounded CGA flood fill |
 | 218 | `VIEW SCREEN` | Display | Matched | PCE, case 218, absolute screen coordinates and clipping |
@@ -334,10 +333,10 @@ Each row below groups failed observations for investigation. The count measures 
 | 279 | `stdout append` | DOS startup | Matched | Q, case 279 |
 | 280 | `/D` | DOS startup | Different | Q, case 280; 3.23 RUNNING / DONE, 4.01N see transcript |
 | 281 | `/I` | DOS startup | Different | Q, case 281; 3.23 RUNNING / DONE, 4.01N see transcript |
-| 282 | `/C:n` | DOS startup | Matched | Q, case 282 |
-| 283 | `/F:n` | DOS startup | Matched | Q, case 283 |
-| 284 | `/S:n` | DOS startup | Matched | Q, case 284 |
-| 285 | `/M:n` | DOS startup | Matched | Q, case 285 |
+| 282 | `/C:n` | DOS startup | Matched | Q, case 282. Both accepted /C:256 and ran the program. Serial buffer capacity was not measured. |
+| 283 | `/F:n` | DOS startup | Matched | Q, case 283. Both accepted /F:6 and ran the program. This probe never reaches the file-number limit. |
+| 284 | `/S:n` | DOS startup | Matched | Q, case 284. Both accepted /S:256 and ran the program. This probe never opens a random file. |
+| 285 | `/M:n` | DOS startup | Matched | Q, case 285. Both accepted /M:49152 and ran the program. This probe does not measure available memory. |
 | 286 | `/M:n,maximum block` | DOS startup | Different | Q, case 286; 3.23 RUNNING / DONE, 4.01N see transcript |
 | 287 | `Startup banner` | DOS startup | Intentional | 4.01N startup extension |
 | 288 | `/NOBANNER` | DOS startup | Intentional | 4.01N startup extension |
@@ -394,9 +393,9 @@ Each row below groups failed observations for investigation. The count measures 
 | 339 | `EGA graphics-array interchange SCREEN 8` | Display files | Matched | X |
 | 340 | `EGA graphics-array interchange SCREEN 9` | Display files | Matched | X |
 | 341 | `EGA graphics-array interchange SCREEN 10` | Display files | Matched | PCE monochrome EGA switches 0x0A and 0x0B. Each interpreter saved a 13×3 four-attribute sprite and read all 39 pixels from the other interpreter’s saved array. |
-| 342 | `64 KB physical EGA addressing` | Display files | Different | DOSBox-X experimental 64 KB EGA model, SCREEN 9. Reference recovered all 1,050 sampled pixels; 4.01N failed the readback in [gw64k.bas](../test/gw64k.bas) line 30. Physical hardware remains untested. |
-| 343 | `Runtime error numbers, messages and recovery` | DOS | Matched | Q, case 343 |
-| 344 | `DOS device errors and extended errors` | DOS | Matched | Q, case 344 |
+| 342 | `64 KB EGA addressing` | Display files | Matched | [Paired PCE fixture](../test/gw64k.bas). SCREEN 9 on color and SCREEN 10 on monochrome each recover 1,050 sampled pixels and the bottom-right corner, match plane bytes, and reject page 1. Physical hardware remains untested. |
+| 343 | `Runtime error numbers, messages and recovery` | DOS | Matched | Q, case 343. ERROR 52 was trapped at line 100 in both. The probe records ERR and ERL only. |
+| 344 | `DOS device errors and extended errors` | DOS | Matched | Q, case 344. Opening a missing file raised BASIC error 53 at line 100 in both. See case 51 for the EXTERR fields. |
 | 345 | `DRAW movement U/D/L/R/E/F/G/H` | Display | Matched | Q, case 345 |
 | 346 | `DRAW M absolute/relative` | Display | Matched | Q, case 346 |
 | 347 | `DRAW B and N prefixes` | Display | Matched | Q, case 347 |
@@ -444,7 +443,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 390 | `Clear screen and home cursor` | Screen editor | Matched | PCE, case 390. Ctrl-Home clears the screen and homes the cursor before typing Q. |
 | 391 | `Insert logical line break` | Screen editor | Matched | Q, case 391 |
 | 392 | `Pause and resume` | Screen editor | Inconclusive | Ctrl-S entered at the Ok prompt produced the same cells. This does not demonstrate suspension of a running program. |
-| 393 | `Printer echo and print screen` | Screen editor | Different | Q, case 393; screen or cursor differs |
+| 393 | `Printer echo and print screen` | Screen editor | Different | Q, case 393. After Ctrl-Print and ABC, the screen and cursor differed. Both printer captures were empty. Printer delivery remains unverified. |
 | 394 | `Bell` | Screen editor | Inconclusive | Q, case 394; speaker output uncaptured |
 | 395 | `COM port, baud, parity, data and stop bits` | RS-232 | Different | Q, case 395; 3.23 DONE, 4.01N ERROR 57  100 |
 | 396 | `COM RS, CS, DS and CD options` | RS-232 | Different | Q, case 396; 3.23 DONE, 4.01N ERROR 57  100 |
@@ -468,4 +467,4 @@ The original comparison covered 187 spellings from the 3.23 dictionaries, the in
 | `SHELL` | `fe 9a` |
 | `UNLOCK` | `fe a8` |
 
-Execution of SHELL, LOCK and UNLOCK remains open in the matrix above.
+See the statement rows above for execution coverage.

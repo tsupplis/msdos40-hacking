@@ -54,7 +54,7 @@ ENDM
 	_OFFST=0		;initialize count
 	ROFFST	F_NUL1,1	;not used by basic interpreter
 	ROFFST	F_NUM,1		;file number 0..255
-	ROFFST	F_HANDLE,2	;DOS handle for a device or shared disk file, -1 for FCB I/O
+	ROFFST	F_HANDLE,2	;DOS handle for a disk file or named device, -1 if unowned
 	ROFFST	F_NEXT,2	;thread for linked list, [MEMSIZ]=end
 	ROFFST	F_MODE,1	;file mode:
 	MD_SQI=1D		;sequential input
@@ -85,7 +85,7 @@ ENDM
 
 	ROFFST	DATOFS,DATPSC	;Operating System interface buffer
 	ROFFST	FD_SIZ,2	;variable record length for random files
-	ROFFST	FD_PHY,2	;current physical record number
+	ROFFST	FD_PHY,2	;reserved in the BASIC file block layout
 	ROFFST	FD_LOG,2	;current logical record number
 	ROFFST	FD_CHAR,1	;DOS character device (disk backend)
 	ROFFST	FD_OPS,2	;current output position for sequential I/O

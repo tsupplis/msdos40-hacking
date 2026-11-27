@@ -21,7 +21,7 @@ though only in binary form.  These are indicated.
 	.SALL
 
 DSEG SEGMENT PUBLIC 'DATASG'
-extrn TimerLeft:dword,TimerPeriod:dword,TimerPending:byte,TRPTBL:byte
+extrn TRPTBL:byte
 DSEG ENDS
 	EXTRN	FCERR:NEAR
 
@@ -108,6 +108,19 @@ RDTRG1:	MOV	AH,84H
 	XOR	DX,DX
 	INT	15H
 	RET
+
+; BX:DX = period in BIOS ticks. Publish both counters together to ISRTIC.
+        public SetTimerTicks
+SetTimerTicks:
+        pushf
+        cli
+        mov word ptr TimerPeriod,dx
+        mov word ptr TimerPeriod+2,bx
+        mov word ptr TimerLeft,dx
+        mov word ptr TimerLeft+2,bx
+        mov TimerPending,0
+        popf
+        ret
 
 ; Internal function: INT 1CH (system timer tick) service routine
 ;
@@ -466,7 +479,12 @@ PEN98VM	DW	0			; Last known valid character column
 					; & row --- PEN(9) value minus 1,
 					; PEN(8) value minus 1
 
-		PUBLIC	EVENT
+        public TimerPending
+TimerPeriod dd 0
+TimerLeft dd 0
+TimerPending db 0
+
+	PUBLIC	EVENT
 EVENT	DB	0			; Whether an event has occurred
 					; since the last time we polled for
 					; an event; _only_ the lowest bit
