@@ -71,12 +71,22 @@ void fs_reset(file_stamp *stamp)
 
 void fs_count(file_stamp *stamp, const char *data, unsigned count)
 {
-    static const unsigned long nibble[16] = {
-        0,0x1db71064UL,0x3b6e20c8UL,0x26d930acUL,
-        0x76dc4190UL,0x6b6b51f4UL,0x4db26158UL,0x5005713cUL,
-        0xedb88320UL,0xf00f9344UL,0xd6d6a3e8UL,0xcb61b38cUL,
-        0x9b64c2b0UL,0x86d3d2d4UL,0xa00ae278UL,0xbdbdf21cUL
-    };
+    static const unsigned long nibble[16] = {0,
+                                             0x1db71064UL,
+                                             0x3b6e20c8UL,
+                                             0x26d930acUL,
+                                             0x76dc4190UL,
+                                             0x6b6b51f4UL,
+                                             0x4db26158UL,
+                                             0x5005713cUL,
+                                             0xedb88320UL,
+                                             0xf00f9344UL,
+                                             0xd6d6a3e8UL,
+                                             0xcb61b38cUL,
+                                             0x9b64c2b0UL,
+                                             0x86d3d2d4UL,
+                                             0xa00ae278UL,
+                                             0xbdbdf21cUL};
     unsigned long crc = stamp->crc;
     stamp->size += count;
     while (count--) {
@@ -90,17 +100,18 @@ void fs_count(file_stamp *stamp, const char *data, unsigned count)
 /* Distinguish a missing leaf from an invalid drive, path or access error. */
 static int inspect(char *name, int *exists)
 {
-    unsigned attr, error = _dos_getfileattr(name,&attr);
+    unsigned attr, error = _dos_getfileattr(name, &attr);
     *exists = error == 0;
-    if (error) return error == 2 ? SAVE_OK : SAVE_ERROR;
-    return attr & (_A_RDONLY | _A_HIDDEN | _A_SYSTEM | _A_SUBDIR) ?
-           SAVE_PROTECTED : SAVE_OK;
+    if (error)
+        return error == 2 ? SAVE_OK : SAVE_ERROR;
+    return attr & (_A_RDONLY | _A_HIDDEN | _A_SYSTEM | _A_SUBDIR) ? SAVE_PROTECTED
+                                                                  : SAVE_OK;
 }
 
 int fs_writable(char *name)
 {
     int exists;
-    return inspect(name,&exists);
+    return inspect(name, &exists);
 }
 
 static int fingerprint(char *name, file_stamp *stamp)
@@ -108,45 +119,55 @@ static int fingerprint(char *name, file_stamp *stamp)
     char buf[1024];
     unsigned n;
     int ok;
-    FILE *fp = fopen(name,"rb");
-    if (!fp) return 0;
+    FILE *fp = fopen(name, "rb");
+    if (!fp)
+        return 0;
     fs_reset(stamp);
-    while ((n = fread(buf,1,sizeof(buf),fp)) != 0) fs_count(stamp,buf,n);
+    while ((n = fread(buf, 1, sizeof(buf), fp)) != 0)
+        fs_count(stamp, buf, n);
     ok = !ferror(fp);
-    if (fclose(fp)) ok = 0;
+    if (fclose(fp))
+        ok = 0;
     return ok;
 }
 
 /* Verify the version actually moved aside before publishing the edited
  * copy. DOS rename refuses an occupied destination. A failed rollback
  * leaves both recovery files in the original directory. */
-int fs_commit(const char *temporary, char *destination,
-              const file_stamp *expected, save_result *result)
+int fs_commit(const char *temporary, char *destination, const file_stamp *expected,
+              save_result *result)
 {
     char backup[FS_NAME];
     FILE *reserved;
-    int exists, status = inspect(destination,&exists);
+    int exists, status = inspect(destination, &exists);
     result->backup[0] = 0;
     result->observed.size = -1;
     result->observed.crc = 0;
-    if (status != SAVE_OK) return status;
+    if (status != SAVE_OK)
+        return status;
     if (exists) {
-        reserved = fs_create(backup,sizeof(backup),destination);
-        if (!reserved) return SAVE_ERROR;
+        reserved = fs_create(backup, sizeof(backup), destination);
+        if (!reserved)
+            return SAVE_ERROR;
         status = fclose(reserved);
-        if (unlink(backup) || status) return SAVE_ERROR;
-        if (rename(destination,backup)) return SAVE_ERROR;
-        if (!fingerprint(backup,&result->observed)) status = SAVE_ERROR;
+        if (unlink(backup) || status)
+            return SAVE_ERROR;
+        if (rename(destination, backup))
+            return SAVE_ERROR;
+        if (!fingerprint(backup, &result->observed))
+            status = SAVE_ERROR;
     }
-    if (status == SAVE_OK &&
-        (result->observed.size != expected->size ||
-         (exists && result->observed.crc != expected->crc))) status = SAVE_CHANGED;
-    if (status == SAVE_OK && rename(temporary,destination)) status = SAVE_ERROR;
+    if (status == SAVE_OK && (result->observed.size != expected->size ||
+                              (exists && result->observed.crc != expected->crc)))
+        status = SAVE_CHANGED;
+    if (status == SAVE_OK && rename(temporary, destination))
+        status = SAVE_ERROR;
     if (exists) {
         if (status == SAVE_OK) {
-            if (unlink(backup)) strcpy(result->backup,backup);
-        } else if (rename(backup,destination)) {
-            strcpy(result->backup,backup);
+            if (unlink(backup))
+                strcpy(result->backup, backup);
+        } else if (rename(backup, destination)) {
+            strcpy(result->backup, backup);
             status = SAVE_ERROR;
         }
     }

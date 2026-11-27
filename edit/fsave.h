@@ -10,14 +10,16 @@ typedef struct {
 
 enum save_status { SAVE_OK, SAVE_CHANGED, SAVE_PROTECTED, SAVE_ERROR };
 typedef struct {
-    char backup[FS_NAME];      /* Original retained when rollback/cleanup fails */
-    file_stamp observed;      /* Version requiring explicit overwrite */
+    char backup[FS_NAME]; /* Original retained when rollback/cleanup fails */
+    file_stamp observed;  /* Version requiring explicit overwrite */
 } save_result;
 
 void fs_reset(file_stamp *stamp);
 void fs_count(file_stamp *stamp, const char *data, unsigned count);
 int fs_writable(char *name);
 FILE *fs_create(char *name, size_t namesize, const char *destination);
-int fs_commit(const char *temporary, char *destination,
-              const file_stamp *expected, save_result *result);
+/* Caller supplies a closed, complete temporary file in the same directory.
+ * SAVE_CHANGED reports the observed version for a subsequent confirmation. */
+int fs_commit(const char *temporary, char *destination, const file_stamp *expected,
+              save_result *result);
 #endif

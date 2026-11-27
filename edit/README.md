@@ -14,7 +14,7 @@ Typing, Enter or paste replaces the selection. Esc clears it. Ctrl-F searches li
 and Ctrl-Shift-F folds case using the current DOS uppercase table.
 Ctrl-R replaces all literal matches throughout the file. Ctrl-Shift-R uses
 the same DOS case folding. Enter the search text, then the replacement.
-An empty replacement deletes matches. Esc cancels either prompt. One Ctrl-Z
+Both prompts currently accept up to 64 bytes. An empty replacement deletes matches. Esc cancels either prompt. One Ctrl-Z
 undoes the entire operation. Ctrl-S writes the changes to disk.
 
 The editor preserves existing CRLF and LF breaks, a missing final newline,
