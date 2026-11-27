@@ -466,6 +466,10 @@ ENDM
 	R	SOFTKY,1	;used by key trapping in GWSTS
 	R	F_SUPR,1	; Flag - non-zero =  super shift expansion
 
+; User-defined event keys: low byte = modifiers, high byte = BIOS scan code.
+public UserKeys
+UserKeys dw (NMKEYT-FirstUserKey+1) dup (0)
+
 ; ON PLAY threshold and pending crossing, shared with the sound interrupt.
 public PlayLevel,PlayPending
 PlayLevel db 0

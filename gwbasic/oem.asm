@@ -2227,12 +2227,25 @@ SCCMAP:	DB	"Q",	"W",	"E",	"R"		; 10H Alt-Q etc.
 ;	AX, DX		Next key from keyboard if one exists
 ;
 PUBLIC	KEYINP
+; POLKEY also receives CH = BIOS scan code and CL = shift state. The
+; ordinary ASCII/extended mapping below still supplies AX and DX.
 KEYINP:	MOV	AH,01H
 	INT	16H
 	JNZ	KEYIN2
 	RET				; No key (ZF=1). Let the editor poll again.
 KEYIN2:	XOR	AH,AH
 	INT	16H
+        mov ch,ah
+        push ax
+        mov ah,2
+        int 16h
+        mov cl,al
+        and cl,7fh              ; Insert toggles editing, outside the key definition.
+        test cl,3
+        jz KeyModifiers
+        or cl,3
+KeyModifiers:
+        pop ax
 	TEST	AL,AL
 	JZ	KEYSCC
 	MOV	AH,0			; Normal key with an ASCII code ---

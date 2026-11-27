@@ -1415,7 +1415,9 @@ KEYS:
 	JZ	KEYFCE
 	SUB	AL,LOW OFFSET STKEYF	;Get zero relative key number
 	CMP	AL,LOW OFFSET NMKEYF
-	JNB	KEYFCE		;Must be STKEYF - NMKEYF+STKEYF, else error.
+        jb DefineMacroKey
+        jmp DefineEventKey
+DefineMacroKey:
 	MOV	DX,16D
 	MUL	DL		; (16 * Key number).
 	MOV	DX,AX
@@ -1474,6 +1476,41 @@ KEYOX:				;AH=scroll limit diff., AL=new KEYSW
 KEYOX1:
 	CALL	KEYDSP		;On, Display on 25th line.
 KEYXX:	RET	
+
+; KEY n,string above the macro keys requires a two-byte definition.
+; Only slots 15..20 can replace a scan-code binding.
+DSEG segment public 'DATASG'
+        extrn UserKeys:word
+DSEG ends
+DefineEventKey:
+        push ax                 ; Zero-based key number.
+        call SYNCHR
+        db ','
+        call FRMEVL
+        push bx
+        call FRESTR
+        cmp byte ptr [bx],2
+        je EventKeyLengthOK
+        jmp FCERR
+EventKeyLengthOK:
+        mov si,[bx+1]
+        mov dx,[si]
+        pop bx
+        pop ax
+        sub al,FirstUserKey-1
+        cmp al,NMKEYT-FirstUserKey
+        ja EventKeyDone
+        xor ah,ah
+        shl ax,1
+        mov si,ax
+        test dl,3               ; 3.23 treats either shift as the same modifier.
+        jz StoreEventKey
+        or dl,3
+StoreEventKey:
+        mov UserKeys[si],dx
+EventKeyDone:
+        ret
+
 
 ;List Function Keys
 ;

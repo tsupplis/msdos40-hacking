@@ -174,7 +174,7 @@ DSEG	ENDS
 
 ; THE FOLLOWING SWITCHES ARE RECOGNIZED:
 ;
-;       /M:<TOPMEM>
+;       /M:[TOPMEM][,paragraphs above BASIC code]
 ;       /F:<FILES>
 ;       /S:<MAX RECORD SIZE>
 ;       /C:<COM INPUT QUEUE SIZE>
@@ -183,6 +183,7 @@ DSEG	SEGMENT PUBLIC 'DATASG'
 	EXTRN	CPMMEM:WORD
 	EXTRN	FREFLG:WORD
 	EXTRN	NORFLG:BYTE
+        extrn BlockParas:word,BlockGiven:byte
 DSEG	ENDS
 	MOV	BX,CPMMEM	;Load bytes free within segment
 ;For DYNCOM, CPMMEM holds the last segment addr of the system(i.e. CPMMEM=2)
@@ -254,10 +255,7 @@ SCANS1:
 	JZ	SHORT ??L002
 	JMP	SNERR		;Branch if couldn't recognize option
 ??L002:
-	CALL	GETVAL		;[DX]=requested MEMSIZ
-	MOV	MSWSIZ,DX	;Record memory request
-	MOV	AL,LOW 377O
-	MOV	BYTE PTR MSWFLG,AL	;Set /M: option flag
+        jmp MemoryOption
 FOK:	DEC	BX		;RESCAN LAST CHAR
 	CALL	CHRGTR		;BY CALLING CHRGET
 	JNZ	MoreArgs
@@ -322,6 +320,35 @@ NOEND:	MOV	BYTE PTR [DI],LOW 377O
 NOERR:	JMP	SNERR
 NOBTXT:	DB	"BANNER",0
 NORTXT:	DB	"RUN",0
+
+; /M:[bytes][,paragraphs]. Empty operands select the normal default.
+MemoryOption:
+        call CHRGTR
+        call SYNCHR
+        db ':'
+        cmp al,','
+        je MemoryBlock
+        or al,al
+        jz MemoryDone
+        call CNSGET
+        mov MSWSIZ,dx
+        or dx,dx
+        jz MemoryDelimiter
+        mov byte ptr MSWFLG,0ffh
+MemoryDelimiter:
+        cmp al,','
+        jne MemoryDone
+MemoryBlock:
+        call CHRGTR
+        or al,al
+        jz MemoryDone
+        cmp al,'/'
+        je MemoryDone
+        call CNSGET
+        mov BlockParas,dx
+        mov BlockGiven,1
+MemoryDone:
+        jmp FOK
 
 GETVAL:	CALL	CHRGTR		;skip M,F or S
 	CALL	SYNCHR
@@ -500,7 +527,14 @@ DSEG	ENDS
 	EXTRN	SYSTME:NEAR,CERMSG:NEAR
 	PUBLIC	CMDERR
 
-CMDERR:	MOV	BX,OFFSET HEDING	;Get heading ("BASIC VERSION...")
+CMDERR: cmp dl,7
+        jne CommandSyntax
+        mov bx,offset MemoryMessage
+        call STROUT
+        jmp SYSTME
+MemoryMessage db 'Out of memory',0
+CommandSyntax:
+        MOV	BX,OFFSET HEDING	;Get heading ("BASIC VERSION...")
 	CALL	STROUT		;Print it
 	MOV	BX,OFFSET CERMSG	;Get command error message
 	CALL	STROUT		;Print it

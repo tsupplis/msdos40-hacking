@@ -117,7 +117,7 @@ DSEG	ENDS
 
 	EXTRN	BLTU:NEAR,CLEARC:NEAR,GTMPRT:NEAR,ISLET:NEAR,ISLET2:NEAR
 	EXTRN	PTRGET:NEAR
-	EXTRN	QINLIN:NEAR,SCRTCH:NEAR,STKINI:NEAR,RUNC:NEAR,RESFIN:NEAR
+	EXTRN	INLIN:NEAR,SCRTCH:NEAR,STKINI:NEAR,RUNC:NEAR,RESFIN:NEAR
 	EXTRN	PTRGT2:NEAR,STPEND:NEAR
 
 	EXTRN	SYNCHR:NEAR
@@ -554,13 +554,22 @@ ERRFIN:
 
 ERRFN1:
 	CALL	STROUT		;PRINT MESSAGE
-	POP	BX		;RESTORE LINE NUMBER
+        POP     BX              ; Restore line number.
+        cmp bx,65534            ; Initialization and direct-mode diagnostics.
+        jae ErrorLine
+        cmp FileIn,0
+        je ErrorLine
+        cmp FileOut,2           ; Preserve the stderr diagnostic on write failure.
+        je ErrorLine
+        xor al,al
+        jmp SYSTEM              ; Redirected STOP or untrapped program error.
+ErrorLine:
 	MOV	DX,65534	;IS INIT EXECUTING?
 	CMP	BX,DX
 	JNZ	SHORT ??L002
 	CALL	CRDO		;DO CRLF
 ??L002:
-	EXTRN	SYSTME:NEAR
+	EXTRN	SYSTEM:NEAR,SYSTME:NEAR
 	JNZ	SHORT ??L003
 	JMP	SYSTME		;SYSTEM error exit
 ??L003:
@@ -571,7 +580,7 @@ ERRFN1:
 	CALL	INPRT		;PRINT LINE NUMBER IN [H,L]
 ??L004:
 DSEG SEGMENT PUBLIC 'DATASG'
-        EXTRN FileOut:BYTE
+        EXTRN FileOut:BYTE,FileIn:BYTE
 DSEG ENDS
         cmp FileOut,0
         jne READY
@@ -3402,7 +3411,7 @@ INPRG:	PUSH	BX
 INPRAG:
 	MOV	BX,OFFSET RANMES	;ASK FOR SOME RANDOM INPUT
 	CALL	STROUT
-	CALL	QINLIN
+	CALL	INLIN
 	POP	DX		;get back text pointer
 	JAE	SHORT ??L096
 	JMP	STPEND		;go away if control c

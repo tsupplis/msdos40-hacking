@@ -56,10 +56,11 @@ ENDM
 
 ; OPEN Statement
 ; Syntax:
-;  OPEN filespec FOR mode AS fnum [LEN=random-record-length]
+;  OPEN filespec [FOR mode] [ACCESS access] [SHARED | LOCK access] AS fnum [LEN=n]
 ;  OPEN mode,fnum,filespec[,random-record-length]
 ;
-OPEN:	CALL	FRMEVL		;read the file mode or filename
+OPEN:   mov FileAccess,0ffh
+	CALL	FRMEVL		;read the file mode or filename
 	MOV	AL,BYTE PTR 0[BX]	;get terminator
 	CMP	AL,LOW 54O	;followed by comma? (then
 				; non-spcdsk open...)
@@ -160,6 +161,7 @@ OPENOUT:
 
 GOTMD1:	CALL	CHRGTR
 GOTMOD:	MOV	BYTE PTR FILMOD,DH	;set file mode
+        call OpenClauses
 	CALL	SYNCHR
 	DB	OFFSET "A"
 	CALL	SYNCHR
@@ -839,7 +841,8 @@ NAMBAX:	RET
 ;
 	PUBLIC	NULOPM
 NULOPM:	MOV	BYTE PTR FILMOD,AL	;FILMOD=file mode
-NULOPN:	XOR	AL,AL		;[AL]=file number
+NULOPN: mov FileAccess,0ffh     ; Internal LOAD/SAVE uses compatibility mode.
+	XOR	AL,AL		;[AL]=file number
 	XOR	CX,CX		;random record length = 0
 				;fall into OPNFIL
 
@@ -2551,5 +2554,102 @@ GETVEC:	PUSH	AX
 	POP	BX
 	POP	AX
 	RET	
+; The tokenized spelling of ACCESS and SHARED is ASCII. READ, WRITE and
+; LOCK are BASIC tokens. FileAccess is FFh for a plain OPEN.
+DSEG segment public 'DATASG'
+        public FileAccess
+FileAccess db 0ffh
+DSEG ends
+        extrn $READ:abs,$WRITE:abs,$LOCK:abs
+OpenClauses:
+        mov dl,0                ; Default DOS access for INPUT.
+        cmp dh,MD_SQI
+        je OpenCheckAccess
+        inc dl                  ; OUTPUT is write-only.
+        cmp dh,MD_SQO
+        je OpenCheckAccess
+        inc dl                  ; APPEND and RANDOM need read/write.
+OpenCheckAccess:
+        cmp al,'A'
+        jne OpenShareOnly
+        cmp byte ptr [bx+1],'C'
+        jne OpenClauseEnd       ; AS follows, no clauses.
+        mov si,offset AccessWord
+        call OpenWord
+        call ReadWriteMode
+        cmp dh,MD_RND
+        je OpenExplicit
+        cmp dh,MD_APP
+        jne OpenCheckMode
+        or al,al
+        jz OpenSyntax
+        jmp short OpenExplicit
+OpenCheckMode:
+        cmp dl,al
+        jne OpenSyntax
+OpenExplicit:
+        mov dl,al
+        mov FileAccess,dl
+        mov al,[bx]
+OpenShareOnly:
+        cmp al,'S'
+        jne OpenLock
+        mov si,offset SharedWord
+        call OpenWord
+        or dl,40h               ; DOS deny-none sharing.
+        jmp short OpenSetMode
+OpenLock:
+        cmp al,0feh
+        jne OpenClauseEnd
+        call CHRGTR
+        cmp al,low offset $LOCK
+        jne OpenSyntax
+        call CHRGTR
+        call ReadWriteMode
+        mov ah,30h              ; LOCK READ denies reads.
+        or al,al
+        jz OpenDeny
+        mov ah,20h              ; LOCK WRITE denies writes.
+        dec al
+        jz OpenDeny
+        mov ah,10h              ; LOCK READ WRITE denies both.
+OpenDeny:
+        or dl,ah
+OpenSetMode:
+        mov FileAccess,dl
+OpenClauseEnd:
+        mov al,[bx]
+        ret
+OpenSyntax:
+        jmp SNERR
+ReadWriteMode:
+        cmp al,low offset $READ
+        jne OpenWriteOnly
+        call CHRGTR
+        cmp al,low offset $WRITE
+        je OpenReadWrite
+        xor al,al
+        ret
+OpenReadWrite:
+        call CHRGTR
+        mov al,2
+        ret
+OpenWriteOnly:
+        cmp al,low offset $WRITE
+        jne OpenSyntax
+        call CHRGTR
+        mov al,1
+        ret
+OpenWord:
+        cmp al,cs:[si]
+        jne OpenSyntax
+        inc si
+        call CHRGTR
+        cmp byte ptr cs:[si],0
+        jne OpenWord
+        ret
+AccessWord db 'ACCESS',0
+SharedWord db 'SHARED',0
+
 CSEG	ENDS
 	END

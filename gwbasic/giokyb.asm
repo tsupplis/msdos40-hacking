@@ -375,7 +375,14 @@ DSEG	ENDS
 	TEST	BYTE PTR MSDCCF,LOW 255D
 	JNZ	ITSCTC		;Branch if Ctl-C interrupt detected
 	CALL	KEYINP		;[AX]=next key from keyboard if one exists
-	JE	POLKXI		;branch if no key present
+        je POLKXI               ; No key present.
+        pushf                   ; Preserve the OEM single/extended classification.
+        call UserKeyTrap
+        jz OrdinaryKey
+        popf
+        jmp short GETKLP
+OrdinaryKey:
+        popf
 	JAE	NOTTWO		;branch if not 2-byte key sequence
 	CMP	AH,LOW 255D	;Test for control function range
 	JNZ	NTCTLFN		;Not a control function
@@ -386,7 +393,7 @@ NTCTLFN:
 	JNE	NOTFUN		;branch if not function key
 	PUSH	AX		;save key-code
 	SUB	AL,LOW 32D	;[AL]=0 for 1st function key
-	CMP	AL,LOW OFFSET NMKEYT	;see if its a trapable function key
+	CMP	AL,LOW OFFSET FirstUserKey-1	;see if its a trapable function key
 	JAE	NOFUN1		;branch if not
 	CALL	KEYTRP		;Trap key if event is ON
 	POP	AX		;restore key code
@@ -447,6 +454,32 @@ POLKXX:	POP	AX
 	POP	DI
 RET8:	RET	
 
+; Compare the physical key before the editor expands or translates it.
+; An inactive definition leaves the keystroke available to INKEY$.
+DSEG segment public 'DATASG'
+        extrn UserKeys:word
+DSEG ends
+UserKeyTrap:
+        or ch,ch
+        jz UserKeyReturn
+        push ax
+        mov bx,0
+        mov al,FirstUserKey-1
+UserKeyNext:
+        cmp cx,UserKeys[bx]
+        jne UserKeyAdvance
+        call KEYTRP
+        jnz UserKeyExit
+UserKeyAdvance:
+        add bx,2
+        inc al
+        cmp al,NMKEYT
+        jb UserKeyNext
+UserKeyExit:
+        pop ax
+UserKeyReturn:
+        ret
+
 ;TRPCHK - Check for key trapping
 ;Entry - AX = key code
 ;Exit  - PSW.Z set indicates key was not trapped
@@ -487,7 +520,9 @@ CHKKYB:	PUSH	SI
 CNTCCN:
 	CMP	AX,OFFSET CTLPAS	;check for PAUSE
 	JNZ	NOTCTS		;branch if not
-GOTCTS:	CALL	KEYINP
+GOTCTS: push cx
+        call KEYINP
+        pop cx
 	JZ	GOTCTS		;wait for resume key (anything but CTL S)
 	CMP	AX,OFFSET CTLPAS	;check for PAUSE
 	JE	GOTCTS		;branch if got another CTL-S

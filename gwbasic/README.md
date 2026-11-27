@@ -30,7 +30,7 @@ The [numbered 3.23 equivalence inventory](EQUIVALENCE.md) records observed match
 |---|---|
 | `/NOB[ANNER]` | Suppresses the heading, free-memory count and function-key labels. |
 | `/NOR[UN]` | Loads the named program and waits for an editor command. |
-| `/M:n` | Limits the data segment. Accepts decimal or hexadecimal, e.g. `/M:&HC000`. |
+| `/M:[bytes][,paragraphs]` | Limits the BASIC workspace in bytes and optionally the DOS allocation above the BASIC code in 16-byte paragraphs. For example, `/M:&HC000,4096` gives BASIC 49152 bytes in a 64 KiB data area. |
 | `/C:n` | Sets the serial buffer size. |
 | `/F:n`, `/S:n` | Accepts the MBASIC file-count and record-size options. This build allocates files and records dynamically. |
 

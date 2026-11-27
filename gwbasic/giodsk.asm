@@ -181,6 +181,7 @@ DSKGCW:	RET
 
 	EXTRN	INIFDB:NEAR
 DSEG	SEGMENT PUBLIC 'DATASG'
+        extrn FileAccess:byte
 	EXTRN	FILMOD:WORD,FREFDB:WORD
 DSEG	ENDS
 
@@ -667,33 +668,62 @@ DiskNameEnd:
 ; ClassifyFile has built the ASCIIZ name. Keep one DOS handle until CLOSE.
 OpenDiskFile:
         mov dx,offset FILNA2
-        mov al,FILMOD
-        cmp al,MD_SQO
-        je OpenOutput
-        cmp al,MD_APP
+        cmp byte ptr FILMOD,MD_APP
+        je OpenCheckName
+        cmp byte ptr FILMOD,MD_SQO
         jne OpenExisting
+OpenCheckName:
         call CHKFOP
-OpenExisting:
-        mov ax,3d02h
-        cmp byte ptr FILMOD,MD_SQI
-        jne OpenAccess
-        mov al,0
-OpenAccess:
-        int 21h
-        jnc OpenSize
-        cmp ax,2                ; Create only when the file does not exist.
-        jne OpenFailure
-        cmp byte ptr FILMOD,MD_SQI
-        je OpenMissing
-        mov ah,5bh
-        jmp short OpenCreate
-OpenOutput:
-        call CHKFOP
-        mov ah,3ch
-OpenCreate:
+        cmp byte ptr FILMOD,MD_SQO
+        jne OpenExisting
+        cmp FileAccess,0ffh
+        jne OpenExisting
+        mov ah,3ch              ; Plain OPEN FOR OUTPUT in compatibility mode.
         xor cx,cx
         int 21h
         jc OpenFailure
+        jmp short OpenSize
+OpenExisting:
+        mov al,FileAccess
+        cmp al,0ffh
+        jne OpenByMode
+        mov al,2
+        cmp byte ptr FILMOD,MD_SQI
+        jne OpenByMode
+        xor al,al
+OpenByMode:
+        mov ah,3dh
+        int 21h
+        jnc OpenGranted
+        cmp ax,2
+        jne OpenFailure
+        cmp byte ptr FILMOD,MD_SQI
+        je OpenMissing
+        mov ah,5bh              ; Fail if another process created the file.
+        xor cx,cx
+        int 21h
+        jc OpenFailure
+        cmp FileAccess,0ffh
+        je OpenSize
+        mov bx,ax               ; DOS 3.x create-new has no sharing operand.
+        mov ah,3eh
+        int 21h
+        jc OpenFailure
+        mov dx,offset FILNA2
+        mov al,FileAccess
+        mov ah,3dh
+        int 21h
+        jc OpenFailure
+OpenGranted:
+        cmp byte ptr FILMOD,MD_SQO
+        jne OpenSize
+        mov bx,ax
+        mov F_HANDLE[si],ax
+        xor cx,cx               ; Truncate only after obtaining write access.
+        mov ah,40h
+        int 21h
+        jc OpenFailure
+        mov ax,bx
 OpenSize:
         mov F_HANDLE[si],ax
         mov bx,ax
@@ -1270,81 +1300,207 @@ DSEG	ENDS
 ;Assumptions:
 ; FILNAM and FILNA2 are 33 byte buffers (for temp FCBs)
 
-;FILES [ filename ]
-; FILES command [List the Directory]
-; If filename is omitted, all files on the logged
-; disk are listed.
-; If supplied, all files matching filename or wildcards
-; are listed.
-;
+; FILES [filespec]. DOS returns the 8.3 name and attributes in the DTA.
+DSEG segment public 'DATASG'
+FilesDTA db 64 dup (?)          ; Also holds AH=47h's path before the search.
+FilesDrive db ?
+DSEG ends
+        extrn PTRWID:near,CRDONZ:near,STROUT:near
 FILES:
-	JE	NOARG		;Brif no filename argument given
-	CALL	NAMFIL		;[SI] points to 1st byte of filename
-				;[CX] = number of bytes in filename
-	CMP	CL,LOW 2
-	JNE	GOTNAM		;branch if not "<drive>:"
-	MOV	AX,WORD PTR 0[SI]	;[AX]=filename
-	CMP	AH,LOW ":"
-	JNE	GOTNAM		;branch if not "<drive>:"
-	MOV	SI,OFFSET FILNA2+2	;[SI] points to buffer for building filename
-	MOV	WORD PTR FILNA2,AX	;Store <drive>: in filename buffer
-	JMP	SHORT ALFILS	;append "*.*" to name
-NOARG:
-	MOV	SI,OFFSET FILNA2	;[SI] points to buffer for building filename
-	XOR	CX,CX
-ALFILS:
-	MOV	WORD PTR 0[SI],OFFSET (400O*".")+"*"
-	MOV	WORD PTR 2[SI],"*"
-	ADD	CX,3		;[CX] = number of bytes in filename
-	MOV	SI,OFFSET FILNA2	;[SI] points to filename
-GOTNAM:
-	CALL	FILFCB		;FILNAM=un-opened FCB for filename
-	MOV	DX,OFFSET FILNA2	;tells OS to put FCB for matching directory
-	CALLOS	C_BUFF		; entries in FILNA2
-	MOV	DX,DI		;[DX] = search FCB (FILNAM)
-	CALLOS	C_SEAR		;Search 1st
-	INC	AL
-	JNZ	FILNXT		;Brif found
-	JMP	ER_FNF		; else complain
-FILNXT:
-	CALL	POLKEY		;Allow CTL-C, CTL-S between every filename
-	MOV	SI,OFFSET FILNA2+1	;Point at name
-	MOV	CX,OFFSET FNAML	;Characters in name
-MORNAM:
-	CLD			;Set Post-Increment mode
-	LODSB			;Get character
-	CALL	OUTDO		;Output it
-	CMP	CX,4
-	JNE	NOTEXT		;Not at extension break
-	MOV	AL,BYTE PTR 0[SI]	;Get 1st char of extension
-	CMP	AL,LOW " "
-	JE	PRISPA		;Blank extension - print space
-	MOV	AL,LOW "."	;Print .
-PRISPA:
-	CALL	OUTDO		;Print blank or dot
-NOTEXT:
-	LOOP	MORNAM		;Loop until 11 characters
-EXTRN	PTRWID:NEAR
-	CALL	PTRWID		;[AH]=line width
-	MOV	CH,AH		;[CH]=line width
-EXTRN	PTRGPS:NEAR
-	CALL	PTRGPS		;[AL]=current column
-	ADD	AL,LOW 14D	;Position after next file name
-	CMP	AL,CH
-	JAE	NWFILN		;Force CR/LF
-	MOV	AL,LOW " "
-	CALL	OUTDO
-	JMP	SHORT NEXTFL
-NWFILN:
-	CALL	CRDO		;Type CR/LF
-NEXTFL:
-	MOV	DX,OFFSET FILNAM	;[DX] points to search template
-	XOR	AL,AL
-	CALLOS	C_SEAR+1	;Search next
-	CMP	AL,LOW 255D
-	JNE	FILNXT		;branch if still more
-EXTRN	CRDONZ:NEAR
-	JMP	CRDONZ		;carriage return if not in column 0
+        mov di,offset DirPath
+        je FilesWildcard
+        call NAMFIL
+        mov di,offset DirPath
+        cld
+        rep movsb
+        cmp byte ptr [di-1],':'
+        je FilesWildcard
+        cmp byte ptr [di-1],'\'
+        jne FilesPathEnd
+FilesWildcard:
+        mov ax,'.*'
+        stosw
+        mov al,'*'
+        stosb
+FilesPathEnd:
+        mov byte ptr [di],0
+        push bx                 ; BASIC text pointer
+        mov ah,19h
+        int 21h
+        cmp byte ptr DirPath+1,':'
+        jne FilesDriveSet
+        mov al,DirPath
+        and al,0dfh
+        sub al,'A'
+FilesDriveSet:
+        inc al
+        mov FilesDrive,al
+        mov dl,al
+        mov si,offset FilesDTA
+        mov ah,47h
+        int 21h
+        jc FilesBadPath
+        mov al,FilesDrive
+        add al,'A'-1
+        call OUTDO
+        mov al,':'
+        call OUTDO
+        mov al,'\'
+        call OUTDO
+FilesPathChar:
+        lodsb
+        or al,al
+        jz FilesFirst
+        call OUTDO
+        jmp short FilesPathChar
+FilesBadPath:
+        jmp ER_FNF
+FilesFirst:
+        call CRDO
+        mov dx,offset DirPath
+        mov cx,10h              ; Include subdirectories.
+        mov ah,4eh
+        call FilesFind
+        jc FilesBadPath
+        xor di,di               ; Columns used by completed entries on this line.
+FilesEntry:
+        call POLKEY
+        call PTRWID
+        mov al,ah
+        xor ah,ah
+        add di,18
+        cmp di,ax
+        jbe FilesName
+        cmp di,18
+        je FilesName
+        call CRDO
+        mov di,18
+FilesName:
+        mov si,offset FilesDTA+30
+        mov cx,8
+FilesStem:
+        lodsb
+        or al,al
+        jz FilesPadStem
+        cmp al,'.'
+        je FilesPadStem
+        call OUTDO
+        loop FilesStem
+        lodsb
+FilesPadStem:
+        mov dl,al
+        mov al,' '
+        jcxz FilesExtension
+FilesPad:
+        call OUTDO
+        loop FilesPad
+FilesExtension:
+        mov cx,4
+        cmp dl,'.'
+        jne FilesPadExt
+        mov al,dl
+FilesExtChar:
+        call OUTDO
+        dec cx
+        lodsb
+        or al,al
+        jnz FilesExtChar
+FilesPadExt:
+        mov al,' '
+        jcxz FilesAttr
+FilesFill:
+        call OUTDO
+        loop FilesFill
+FilesAttr:
+        mov bx,offset FilesPlain
+        test FilesDTA+21,10h
+        jz FilesSuffix
+        mov bx,offset FilesDir
+FilesSuffix:
+        call STROUT
+        mov ah,4fh
+        call FilesFind
+        jnc FilesEntry
+        cmp ax,18               ; No more files.
+        je FilesComplete
+        jmp ER_FNF
+FilesComplete:
+        call CRDONZ
+        mov dl,FilesDrive
+        mov ah,36h
+        int 21h
+        cmp ax,0ffffh
+        je FilesBadDrive
+        mul cx                  ; AX = bytes/cluster on DOS FAT volumes.
+        mul bx                  ; DX:AX = bytes available.
+        push ax
+        mov al,' '
+        call OUTDO
+        pop ax
+        mov bx,10
+        call FilesDecimal
+        mov bx,offset FilesFree
+        call STROUT
+        call CRDO
+        call CRDO
+        pop bx
+        ret
+FilesBadDrive:
+        jmp ER_FNF
+FilesPlain db '      ',0
+FilesDir   db '<DIR> ',0
+FilesFree  db ' Bytes free',0
+
+; Convert unsigned DX:AX without losing precision on large volumes.
+FilesDecimal:
+        mov si,ax
+        mov ax,dx
+        xor dx,dx
+        div bx
+        xchg ax,si
+        div bx
+        push dx
+        mov dx,si
+        or si,ax
+        jz FilesDigit
+        call FilesDecimal
+FilesDigit:
+        pop ax
+        add al,'0'
+        jmp OUTDO
+
+; Install the search DTA only for the DOS call. BASIC output and break
+; handling run with the caller's DTA even if they unwind the BASIC stack.
+FilesFind:
+        push ds
+        push es
+        push di
+        push si
+        mov di,ax
+        mov si,dx
+        mov ah,2fh
+        int 21h
+        push es
+        push bx
+        mov dx,offset FilesDTA
+        mov ah,1ah
+        int 21h
+        mov ax,di
+        mov dx,si
+        int 21h
+        pop dx
+        pop ds
+        pushf
+        push ax
+        mov ah,1ah
+        int 21h
+        pop ax
+        popf
+        pop si
+        pop di
+        pop es
+        pop ds
+        ret
 
 ;KILL filename
 ; Entry - [BX] = text pointer
@@ -1432,7 +1588,7 @@ NA_FAE:	CALL	SaveDosError
         PUBLIC MKDIR,RMDIR,CHDIR
         EXTRN ERRACC:ABS,ERRPNF:ABS,ERROR:NEAR
 DSEG SEGMENT PUBLIC 'DATASG'
-DirPath DB 256 DUP (?)
+DirPath DB 259 DUP (?)          ; 255-byte BASIC string, optional *.*, NUL.
 DSEG ENDS
 MKDIR:  mov ah,39h
         jmp short DirectoryCall

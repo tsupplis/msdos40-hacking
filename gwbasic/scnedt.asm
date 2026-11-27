@@ -159,6 +159,24 @@ INLIN0:
 ReadStreamLine:
         extrn StreamLine:near
         call StreamLine
+        cmp byte ptr F_EDPG,0   ; Direct commands have their own prompt loop.
+        jne StreamInputDone
+        cmp FileIn,0            ; DOS console reads already echo typed input.
+        je StreamInputDone
+        cmp FileOut,1           ; Echo program input to redirected stdout.
+        jne StreamInputDone
+        mov si,offset BUF
+StreamEcho:
+        cmp si,di               ; DI points at the terminator written by StreamLine.
+        je StreamEchoEnd
+        lodsb
+        call OUTDO
+        jmp short StreamEcho
+StreamEchoEnd:
+        cmp byte ptr SEMFLG,0   ; INPUT; and LINE INPUT; suppress the newline.
+        jne StreamInputDone
+        call CRDO
+StreamInputDone:
         jmp INCRTF
 ScreenInput:
         or al,al                ; Restore the input mode flags for SCNMRK below.

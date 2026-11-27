@@ -17,7 +17,8 @@
 	JISKTN=0		;&K, &J constants (KANJI)
 	SUPRSH=1		;1=super shift key feature
 	NMKEYF=10		;number of function keys
-	NMKEYT=14		;number of function key traps
+	FirstUserKey=15D	; KEY(11)..KEY(14) are the cursor keys
+	NMKEYT=20D		; last trappable key number
 	FKEYON=1		;yes=display function keys
 	SCROLT=1		;Line 25 allocated for status only
 	PLAYSW=1		;for PLAY statement

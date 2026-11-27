@@ -136,7 +136,8 @@ with tempfile.TemporaryDirectory() as tmp:
         check_shared(lambda name: subprocess.check_output(["mtype", "-i", work / "b.img", "::" + name]))
         print("PASS shared MBASIC language, file and program-management cases under DOS")
         lines = subprocess.check_output(["mtype", "-i", work / "b.img", "::LINES.OUT"])
-        if lines.splitlines() != [b"Ok", b"READ-XYZ", b"Ok", b"LAST", b"Ok"]:
+        # LINE INPUT echoes its line. INPUT$(3) consumes XYZ without echo.
+        if lines.splitlines() != [b"Ok", b"READ-", b"READ-XYZ", b"Ok", b"LAST", b"Ok"]:
             raise SystemExit(f"Unexpected command stream output {lines!r}")
         disk_error = subprocess.check_output(["mtype", "-i", work / "b.img", "::FULL.TXT"])
         check_text(disk_error, b" 61 \r\n")

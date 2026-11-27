@@ -51,6 +51,9 @@ WORDS:	DB	" Bytes free"	;WORDS
 	PUBLIC	INITSA
 DSEG SEGMENT PUBLIC 'DATASG'
 	PUBLIC	NORFLG
+        public BlockParas,BlockGiven
+BlockParas dw 0                 ; Requested paragraphs starting at the final DS.
+BlockGiven db 0
 NORFLG	DB	0		; Set by the /NORUN startup switch
 DSEG ENDS
 INITSA:
@@ -205,7 +208,24 @@ MAXRQ1:	MOV	BX,AX
 	MOV	BX,OFFSET WORDS	;TYPE THE HEADING
 	CALL	STROUT		;"BYTES FREE"
 	CALL	CRDO		;PRINT CARRIAGE RETURN
-MAPINX:	RET	
+MAPINX: cmp BlockGiven,0
+        je MapReady
+        ; SS and DS are now in their final positions. Release only the
+        ; paragraphs above the requested data area to DOS.
+        push es
+        mov ah,62h
+        int 21h
+        mov es,bx
+        mov ax,ds
+        sub ax,bx
+        add ax,BlockParas
+        mov bx,ax
+        mov ah,4ah
+        int 21h
+        pop es
+        jc GOMERR
+MapReady:
+        ret	
 
 GOMERR:	JMP	OMERR
 	PAGE	
@@ -259,6 +279,12 @@ MAPCLC:
 	MOV	BX,WORD PTR CPMMEM
 	SUB	BX,DX		;Avail paragraphs
 	JB	GOMERR
+        cmp BlockGiven,0
+        je DataLimit
+        cmp bx,BlockParas
+        jb GOMERR
+        mov bx,BlockParas
+DataLimit:
 	MOV	DX,OFFSET 65535D/16D	;Max usable paragraphs
 	CMP	BX,DX
 	JB	MAXREQ		;More than enough

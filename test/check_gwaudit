@@ -24,7 +24,7 @@ backend = parser.add_mutually_exclusive_group()
 backend.add_argument("--qemu", action="store_true", help="use the historical QEMU audit, including interactive probes")
 backend.add_argument("--share", action="store_true", help="run the PCE file-locking comparisons with SHARE installed")
 backend.add_argument("--editor", action="store_true", help="run the batched PCE keyboard and screen comparisons")
-backend.add_argument("--quick", action="store_true", help="run the cases that share one BASIC session")
+backend.add_argument("--quick", action="store_true", help="run the batched BASIC program and command-line cases")
 parser.add_argument("--check", action="store_true",
                     help="enforce matched inventory cases against the recorded reference")
 args = parser.parse_args()
@@ -239,8 +239,51 @@ def group_results(ids, drive, filename):
     return [{"RESULT.TXT": part.rstrip("\n")} for part in parts[2::2]]
 
 
+# These cases need their own DOS command line, but share the program batch's boot.
+# A sentinel command makes a spurious return to the BASIC prompt observable.
+command_inputs = {40: "", 53: "", 70: "A,17", 81: "one, two", 102: "", 120: "203", 151: "CONT", 286: ""}
+
+
+def prepare_commands(ids, folder, data):
+    if 286 in ids:
+        put(data, folder, "MTINY.BAS", '10 PRINT "OK":SYSTEM\n')
+    for n in ids:
+        lines = ['10 OPEN "REPORT.OUT" FOR OUTPUT AS #1']
+        lines.extend(f"{100+i*10} {line}" for i, line in enumerate(cases[n].split("~")))
+        lines.append('9800 PRINT #1,"DONE":CLOSE:SYSTEM')
+        put(data, folder, f"C{n}.BAS", "\n".join(lines) + "\n")
+        put(data, folder, f"C{n}.IN", command_inputs[n] + '\nPRINT "PROMPT REACHED"\nSYSTEM\n')
+
+
+def command_result(n, tag, work):
+    drive = work / "b.img"
+    report = read(drive, f"{tag}{n}.DAT")
+    capture = subprocess.check_output(["mtype", "-i", drive, f"::{tag}{n}.OUT"])
+    capture = capture.decode("cp437").replace("\r\n", "\n")
+    if report is None:
+        raise RuntimeError(f"{tag}{n}: missing BASIC report")
+    if n == 53:
+        # Disk contents change between builds. Check the actual free count first.
+        listing = subprocess.check_output(["mdir", "-i", work / "boot.img", "::"], env=dict(os.environ, LC_ALL="C"))
+        space = re.search(rb"([\d ]+) bytes free", listing).group(1).replace(b" ", b"").decode()
+        capture = capture.replace(f" {space} Bytes free\n", " <disk free bytes> Bytes free\n")
+    result = {"RESULT.TXT": report, "CAPTURE.OUT": capture}
+    if n == 286:
+        for paras in (300, 3071, 3072):
+            boundary = read(drive, f"{tag}{paras}.OUT")
+            if boundary is None:
+                raise RuntimeError(f"{tag}{paras}: missing /M boundary result")
+            result[str(paras)] = boundary
+    return result
+
+
 def pce_group(ids, folder, image, data):
-    prepare_group(ids, folder, data)
+    requested = ids
+    separate = [n for n in ids if n in command_inputs]
+    ids = [n for n in ids if n not in command_inputs]
+    if ids:
+        prepare_group(ids, folder, data)
+    prepare_commands(separate, folder, data)
     if {46, 231, 232}.intersection(ids):
         driver = folder / "gwdev.sys"
         command("nasm", "-f", "bin", root / "test/gwdev.asm", "-o", driver)
@@ -249,7 +292,7 @@ def pce_group(ids, folder, image, data):
     batch = folder / "audit.bat"
     # The nested critical error in case 46 leaves EXTERR set across RUN in
     # 3.23. Start the following fixture in a fresh interpreter on the same boot.
-    starts = [0]
+    starts = [0] if ids else []
     if 46 in ids and ids.index(46) + 1 < len(ids):
         starts.append(ids.index(46) + 1)
     commands = ["b:", "date 01-03-2001"]
@@ -257,7 +300,18 @@ def pce_group(ids, folder, image, data):
         commands.append(r"A:\SHARE.EXE")
     for version in ("ref", "exe"):
         commands.extend(f"{version} P{i}.BAS" for i in starts)
-        commands.append(f"ren GROUP.OUT {version}.OUT")
+        if ids:
+            commands.append(f"ren GROUP.OUT {version}.OUT")
+        tag = version[0]
+        for n in separate:
+            option = " " + switches[n] if n in switches else ""
+            commands += [f"{version} C{n}.BAS{option} <C{n}.IN >{tag}{n}.OUT",
+                         f"ren REPORT.OUT {tag}{n}.DAT"]
+            if n == 286:
+                commands.append(f"{version} MTINY.BAS /M:,300 <C286.IN >{tag}300.OUT")
+                for paras in (3071, 3072):
+                    commands.append(f"{version} C286.BAS /M:49152,{paras} <C286.IN >{tag}{paras}.OUT")
+                commands.append("del REPORT.OUT")
         if version == "ref":
             commands.append("if exist R.DAT del R.DAT")
     batch.write_text("\n".join(commands) + "\n")
@@ -268,7 +322,12 @@ def pce_group(ids, folder, image, data):
     if run.returncode:
         raise RuntimeError((run.stdout + run.stderr).decode("cp437") + "\n" +
                            (work / "pce.log").read_text(errors="replace")[-2000:])
-    return [group_results(ids, work / "b.img", name) for name in ("REF.OUT", "EXE.OUT")]
+    results = []
+    for version in ("ref", "exe"):
+        rows = dict(zip(ids, group_results(ids, work / "b.img", version + ".OUT"))) if ids else {}
+        rows.update((n, command_result(n, version[0], work)) for n in separate)
+        results.append([rows[n] for n in requested])
+    return results
 
 
 def start_probe(monitor, drive):
@@ -372,13 +431,15 @@ def run_batch(ids, version, template, data):
 
 
 def main():
-    available = grouped
+    available = grouped | command_inputs.keys()
     if args.share:
-        available = share_cases
+        available = share_cases | {110}  # Repeat OPEN ACCESS READ SHARED with the resident installed.
     elif args.editor:
         available = gweditpce.cases
     elif args.qemu:
-        available = cases.keys() - gweditpce.cases - share_cases - {45, 46, 231, 232}
+        available = cases.keys() - gweditpce.cases - share_cases - command_inputs.keys() - {45, 46, 231, 232}
+        if command_inputs.keys() & set(args.ids):
+            parser.error("these command-line probes run on PCE, omit --qemu")
         if {45, 46, 231, 232}.intersection(args.ids):
             parser.error("these DOS device probes require the PCE test configuration")
         if gweditpce.cases.intersection(args.ids):
@@ -386,12 +447,12 @@ def main():
     ids = args.ids or sorted(available)
     if set(ids).intersection(share_cases) and not args.share:
         parser.error("these file-locking probes require --share")
-    if args.share and set(ids) - share_cases:
+    if args.share and set(ids) - available:
         parser.error("select the SHARE locking probes separately")
     live_editor = args.editor or (not args.qemu and set(ids) <= gweditpce.cases)
     if live_editor and set(ids) - gweditpce.cases:
         parser.error("select PCE editor cases separately from BASIC program probes")
-    if not (args.share or args.qemu or live_editor) and set(ids) - grouped:
+    if not (args.share or args.qemu or live_editor) and set(ids) - grouped - command_inputs.keys():
         parser.error("requested case has no PCE probe yet (historical runner: --qemu)")
     if args.jobs < 1:
         parser.error("--jobs must be positive")

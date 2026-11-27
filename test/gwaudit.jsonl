@@ -16,34 +16,35 @@
 {"exe": {"RESULT.TXT": "DONE"}, "id": 35, "ref": {"RESULT.TXT": "DONE"}}
 {"exe": {"cursor": [0, 4], "screen": "READY\nOk\n10 rem OLD\nedit 10\n10 REM OLD"}, "id": 38, "ref": {"cursor": [0, 4], "screen": "READY\nOk\n10 rem OLD\nedit 10\n10 REM OLD"}}
 {"exe": {"RESULT.TXT": "BEFORE"}, "id": 39, "ref": {"RESULT.TXT": "BEFORE"}}
+{"exe": {"CAPTURE.OUT": "", "RESULT.TXT": "ERROR 73  110 \nOVERFLOW       0 \nERROR 73  130 \nREPLACE        0 \nERROR 73  150 \nCASE           0            -1 \nERROR 73  170 \nKEPT           0 \nERROR 73  190 \nDELETED       -1 \nERROR 73  210 \nDONE"}, "id": 40, "ref": {"CAPTURE.OUT": "", "RESULT.TXT": "ERROR 7  110 \nOVERFLOW       0 \nREPLACE       -1 \nCASE          -1            -1 \nERROR 7  170 \nKEPT          -1 \nDELETED       -1 \nERROR 5  210 \nDONE"}}
 {"exe": {"RESULT.TXT": " 0 \n 70            512           19            11            7             2 \n 0             0 \nDONE"}, "id": 45, "ref": {"RESULT.TXT": " 0 \n 70            512           19            11            7             2 \n 0             0 \nDONE"}}
 {"exe": {"RESULT.TXT": " 0 \n 70           [A:]\n 0 \n 160           27           -16375        [ERRTEST ]     28 \n 170           27           -16375        [ERRTEST ]     28 \n 210           27 \n 65535         27 \nDONE"}, "id": 46, "ref": {"RESULT.TXT": " 0 \n 70           [A:]\n 0 \n 160           27           -16375        [ERRTEST ]     28 \n 170           27           -16375        [ERRTEST ]     28 \n 210           27 \n 65535         27 \nDONE"}}
 {"exe": {"RESULT.TXT": " 0 \n 53            110           2             8             3             2 \n 76            120           3             8             3             2 \n 5             130           0             0             0             0 \nDONE"}, "id": 51, "ref": {"RESULT.TXT": " 0 \n 53            110           2             8             3             2 \n 76            120           3             8             3             2 \n 5             130           0             0             0             0 \nDONE"}}
-{"exe": {"CAPTURE.OUT": "SAMPLE  .TXT ", "RESULT.TXT": "DONE"}, "id": 53, "ref": {"CAPTURE.OUT": "B:\\\nSAMPLE  .TXT      \n 1318912 Bytes free", "RESULT.TXT": "DONE"}}
+{"exe": {"CAPTURE.OUT": "A:\\\nCONFIG  .SYS      \n <disk free bytes> Bytes free\n\n", "RESULT.TXT": "DONE"}, "id": 53, "ref": {"CAPTURE.OUT": "A:\\\nCONFIG  .SYS      \n <disk free bytes> Bytes free\n\n", "RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "-1 \nDONE"}, "id": 57, "ref": {"RESULT.TXT": "-1 \nDONE"}}
 {"exe": {"RESULT.TXT": "-1            AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nDONE"}, "id": 58, "ref": {"RESULT.TXT": "-1            AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nDONE"}}
 {"exe": {"RESULT.TXT": " 9 \nDONE"}, "id": 61, "ref": {"RESULT.TXT": " 9 \nDONE"}}
 {"exe": {"RESULT.TXT": "RETURNED\nDONE"}, "id": 63, "ref": {"RESULT.TXT": "RETURNED\nDONE"}}
 {"exe": {"RESULT.TXT": "BRANCH\nDONE"}, "id": 68, "ref": {"RESULT.TXT": "BRANCH\nDONE"}}
 {"exe": {"RESULT.TXT": " 2 \nDONE"}, "id": 69, "ref": {"RESULT.TXT": " 2 \nDONE"}}
-{"exe": {"CAPTURE.OUT": "? ", "RESULT.TXT": "A              17 \nDONE"}, "id": 70, "ref": {"CAPTURE.OUT": "? A,17", "RESULT.TXT": "A              17 \nDONE"}}
+{"exe": {"CAPTURE.OUT": "? A,17\n", "RESULT.TXT": "A              17 \nDONE"}, "id": 70, "ref": {"CAPTURE.OUT": "? A,17\n", "RESULT.TXT": "A              17 \nDONE"}}
 {"exe": {"CAPTURE.OUT": "", "RESULT.TXT": "ABC\nDONE"}, "id": 72, "ref": {"CAPTURE.OUT": "", "RESULT.TXT": "ABC\nDONE"}}
 {"exe": {"RESULT.TXT": "ALP\nDONE"}, "id": 73, "ref": {"RESULT.TXT": "ALP\nDONE"}}
-{"exe": {"CAPTURE.OUT": "", "RESULT.TXT": "one, two\nDONE"}, "id": 81, "ref": {"CAPTURE.OUT": "one, two", "RESULT.TXT": "one, two\nDONE"}}
+{"exe": {"CAPTURE.OUT": "one, two\n", "RESULT.TXT": "one, two\nDONE"}, "id": 81, "ref": {"CAPTURE.OUT": "one, two\n", "RESULT.TXT": "one, two\nDONE"}}
 {"exe": {"cursor": [0, 8], "screen": "READY\nOk\n10 rem A\n20 rem B\nlist\n10 REM A\n20 REM B\nOk"}, "id": 83, "ref": {"cursor": [0, 8], "screen": "READY\nOk\n10 rem A\n20 rem B\nlist\n10 REM A\n20 REM B\nOk"}}
 {"exe": {"LIST.OUT": "100 LIST 100-110,\"LIST.OUT\"\n110 REM listed", "RESULT.TXT": ""}, "id": 84, "ref": {"LIST.OUT": "100 LIST 100-110,\"LIST.OUT\"\n110 REM listed", "RESULT.TXT": ""}}
 {"exe": {"RESULT.TXT": "", "VALUE.OUT": "TARGET 0 "}, "id": 86, "ref": {"RESULT.TXT": "", "VALUE.OUT": "TARGET 0 "}}
 {"exe": {"RESULT.TXT": "ALPHA\nDONE"}, "id": 98, "ref": {"RESULT.TXT": "ALPHA\nDONE"}}
-{"exe": {"CAPTURE.OUT": "Illegal function call in 100\nOk", "RESULT.TXT": ""}, "id": 102, "ref": {"CAPTURE.OUT": "Illegal function call", "RESULT.TXT": ""}}
+{"exe": {"CAPTURE.OUT": "Illegal function call", "RESULT.TXT": ""}, "id": 102, "ref": {"CAPTURE.OUT": "Illegal function call", "RESULT.TXT": ""}}
 {"exe": {"RESULT.TXT": "ALPHA\nDONE"}, "id": 105, "ref": {"RESULT.TXT": "ALPHA\nDONE"}}
 {"exe": {"RESULT.TXT": "ONE  \nDONE"}, "id": 108, "ref": {"RESULT.TXT": "ONE  \nDONE"}}
-{"exe": {"RESULT.TXT": "ERROR 2  100 "}, "id": 110, "ref": {"RESULT.TXT": "ALPHA\nDONE"}}
+{"exe": {"RESULT.TXT": "ALPHA\nDONE"}, "id": 110, "ref": {"RESULT.TXT": "ALPHA\nDONE"}}
 {"exe": {"RESULT.TXT": " 3 \nDONE"}, "id": 111, "ref": {"RESULT.TXT": " 3 \nDONE"}}
 {"exe": {"CAPTURE.OUT": "ONE 12 TWO", "RESULT.TXT": "DONE"}, "id": 113, "ref": {"CAPTURE.OUT": "ONE 12 TWO", "RESULT.TXT": "DONE"}}
 {"exe": {"CAPTURE.OUT": " 2.50", "RESULT.TXT": "DONE"}, "id": 114, "ref": {"CAPTURE.OUT": " 2.50", "RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "FIRST\nNEXT \nDONE"}, "id": 118, "ref": {"RESULT.TXT": "FIRST\nNEXT \nDONE"}}
 {"exe": {"RESULT.TXT": " .5000666      .8867444 \nDONE"}, "id": 119, "ref": {"RESULT.TXT": " .5000666      .8867444 \nDONE"}}
-{"exe": {"CAPTURE.OUT": "Random number seed (-32768 to 32767)? ", "RESULT.TXT": " .5000666 \nDONE"}, "id": 120, "ref": {"CAPTURE.OUT": "Random number seed (-32768 to 32767)203", "RESULT.TXT": " .5000666 \nDONE"}}
+{"exe": {"CAPTURE.OUT": "Random number seed (-32768 to 32767)203\n", "RESULT.TXT": " .5000666 \nDONE"}, "id": 120, "ref": {"CAPTURE.OUT": "Random number seed (-32768 to 32767)203\n", "RESULT.TXT": " .5000666 \nDONE"}}
 {"exe": {"RESULT.TXT": "OK\nDONE"}, "id": 122, "ref": {"RESULT.TXT": "OK\nDONE"}}
 {"exe": {"RESULT.TXT": "OK\nDONE"}, "id": 123, "ref": {"RESULT.TXT": "OK\nDONE"}}
 {"exe": {"RESULT.TXT": "RESET\nDONE"}, "id": 125, "ref": {"RESULT.TXT": "RESET\nDONE"}}
@@ -56,7 +57,7 @@
 {"exe": {"RESULT.TXT": "", "VALUE.OUT": "TARGET 0 "}, "id": 140, "ref": {"RESULT.TXT": "", "VALUE.OUT": "TARGET 0 "}}
 {"exe": {"RESULT.TXT": "ERROR 2  100 "}, "id": 146, "ref": {"RESULT.TXT": "BACK\nDONE"}}
 {"exe": {"CAPTURE.OUT": "A    B", "RESULT.TXT": "DONE"}, "id": 149, "ref": {"CAPTURE.OUT": "A    B", "RESULT.TXT": "DONE"}}
-{"exe": {"RESULT.TXT": "CONTINUED\nDONE"}, "id": 151, "ref": {"RESULT.TXT": ""}}
+{"exe": {"CAPTURE.OUT": "Break", "RESULT.TXT": ""}, "id": 151, "ref": {"CAPTURE.OUT": "Break", "RESULT.TXT": ""}}
 {"exe": {"CAPTURE.OUT": "A      B", "RESULT.TXT": "DONE"}, "id": 157, "ref": {"CAPTURE.OUT": "A      B", "RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "22:13:16\nDONE"}, "id": 160, "ref": {"RESULT.TXT": "22:13:17\nDONE"}}
 {"exe": {"CAPTURE.OUT": "", "RESULT.TXT": "TRACE OFF\nDONE"}, "id": 162, "ref": {"CAPTURE.OUT": "", "RESULT.TXT": "TRACE OFF\nDONE"}}
@@ -170,7 +171,7 @@
 {"exe": {"CAPTURE.OUT": "RUNNING 4 ", "RESULT.TXT": "RUNNING\nDONE"}, "id": 283, "ref": {"CAPTURE.OUT": "RUNNING 4 ", "RESULT.TXT": "RUNNING\nDONE"}}
 {"exe": {"CAPTURE.OUT": "RUNNING 4 ", "RESULT.TXT": "RUNNING\nDONE"}, "id": 284, "ref": {"CAPTURE.OUT": "RUNNING 4 ", "RESULT.TXT": "RUNNING\nDONE"}}
 {"exe": {"CAPTURE.OUT": "RUNNING 4 ", "RESULT.TXT": "RUNNING\nDONE"}, "id": 285, "ref": {"CAPTURE.OUT": "RUNNING 4 ", "RESULT.TXT": "RUNNING\nDONE"}}
-{"exe": {"CAPTURE.OUT": "\nCopyright 1977-1982 (C) by Microsoft         \nCopyright 2020-2022 (C) by D. Spinellis, S. Gros, T.K. Chia\nUnder MIT license\n\nError detected in command line"}, "id": 286, "ref": {"CAPTURE.OUT": "RUNNING 4 ", "RESULT.TXT": "RUNNING\nDONE"}}
+{"exe": {"300": "OK", "3071": "Out of memory", "3072": "RUNNING 4 ", "CAPTURE.OUT": "RUNNING 4 \n", "RESULT.TXT": "RUNNING\nDONE"}, "id": 286, "ref": {"300": "Out of memory", "3071": "Out of memory", "3072": "RUNNING 4 ", "CAPTURE.OUT": "RUNNING 4 \n", "RESULT.TXT": "RUNNING\nDONE"}}
 {"exe": {"cursor": [0, 6], "screen": "READY\nOk\n10 print 7\nrun\n 7\nOk"}, "id": 290, "ref": {"cursor": [0, 6], "screen": "READY\nOk\n10 print 7\nrun\n 7\nOk"}}
 {"exe": {"cursor": [0, 7], "screen": "READY\nOk\n10 print 1\n10 print 2\nrun\n 2\nOk"}, "id": 291, "ref": {"cursor": [0, 7], "screen": "READY\nOk\n10 print 1\n10 print 2\nrun\n 2\nOk"}}
 {"exe": {"cursor": [0, 8], "screen": "READY\nOk\n10 print 1\n20 print 2\n10\nrun\n 2\nOk"}, "id": 292, "ref": {"cursor": [0, 8], "screen": "READY\nOk\n10 print 1\n20 print 2\n10\nrun\n 2\nOk"}}
@@ -207,7 +208,7 @@
 {"exe": {"RESULT.TXT": " 3 \nDONE"}, "id": 355, "ref": {"RESULT.TXT": " 3 \nDONE"}}
 {"exe": {"RESULT.TXT": " 1  0  1  0  1  0  1  0 \n 0  0  1  0  0  0  0  0 \nERROR 5  140 "}, "id": 356, "ref": {"RESULT.TXT": " 1  0  1  0  1  0  1  0 \n 0  0  1  0  0  0  0  0 \nERROR 5  140 "}}
 {"exe": {"RESULT.TXT": " 19 \nDONE"}, "id": 357, "ref": {"RESULT.TXT": " 19 \nDONE"}}
-{"exe": {"cursor": [0, 6], "screen": "ERROR 5\nREADY\nINPUT a\nINPUT a\nHITS 0\nOk"}, "id": 358, "ref": {"cursor": [0, 4], "screen": "READY\nINPUT a\nHITS 1\nOk"}}
+{"exe": {"cursor": [0, 4], "screen": "READY\nINPUT a\nHITS 1\nOk"}, "id": 358, "ref": {"cursor": [0, 4], "screen": "READY\nINPUT a\nHITS 1\nOk"}}
 {"exe": {"RESULT.TXT": " 2 \nDONE"}, "id": 360, "ref": {"RESULT.TXT": " 2 \nDONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 361, "ref": {"RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 362, "ref": {"RESULT.TXT": "DONE"}}
