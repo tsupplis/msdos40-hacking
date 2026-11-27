@@ -430,7 +430,13 @@ static int copySelection(selection s, int cut)
 /* Store only the removed text and the range that replaced it. A clipboard
  * operation is one edit regardless of how many rows it spans. */
 #define UNDO_DEPTH 5
+typedef struct row_change {
+    int index, size;
+    char *chars;
+    struct row_change *next;
+} row_change;
 typedef struct {
+    row_change *changes;
     block removed;
     selection range;
     int cx, cy, ax, ay, marked, dirty;
@@ -438,6 +444,46 @@ typedef struct {
 static undo_entry history[UNDO_DEPTH];
 static int history_count;
 static erow empty_row = {"",0,0};
+
+static void freeChanges(row_change *p)
+{
+    while (p) {
+        row_change *next = p->next;
+        free(p->chars);
+        free(p);
+        p = next;
+    }
+}
+
+/* The same swap commits prepared text and later restores the original. */
+static void swapChanges(row_change *p)
+{
+    for (; p; p = p->next) {
+        erow *row = E.row+p->index;
+        char *chars = row->chars;
+        int size = row->size;
+        row->chars = p->chars; row->size = p->size;
+        p->chars = chars; p->size = size;
+    }
+}
+
+static void beginEdit(undo_entry *u)
+{
+    memset(u,0,sizeof(*u));
+    u->cx = E.cx; u->cy = E.cy; u->marked = E.marked;
+    u->ax = E.ax; u->ay = E.ay; u->dirty = E.dirty;
+}
+
+static void rememberEdit(const undo_entry *u)
+{
+    if (history_count == UNDO_DEPTH) {
+        freeChanges(history[0].changes);
+        freeBlock(&history[0].removed);
+        --history_count;
+        memmove(history,history+1,history_count*sizeof(*u));
+    }
+    history[history_count++] = *u;
+}
 
 static int undoEdit(void)
 {
@@ -451,7 +497,10 @@ static int undoEdit(void)
     u = history+history_count-1;
     rows = u->removed.count ? u->removed.rows : &empty_row;
     count = u->removed.count ? u->removed.count : 1;
-    if (!replaceBlock(u->range,rows,count)) return 0;
+    if (u->changes) {
+        swapChanges(u->changes);
+        freeChanges(u->changes);
+    } else if (!replaceBlock(u->range,rows,count)) return 0;
     E.cx = u->cx; E.cy = u->cy;
     E.ax = u->ax; E.ay = u->ay; E.marked = u->marked;
     E.dirty = u->dirty;
@@ -474,9 +523,7 @@ static int applyEdit(int key, selection s)
         strcpy(E.message,"Clipboard is empty.");
         return 1;
     }
-    u.cx = E.cx; u.cy = E.cy; u.marked = E.marked;
-    u.ax = E.ax; u.ay = E.ay; u.dirty = E.dirty;
-    u.removed.count = 0; u.removed.rows = NULL;
+    beginEdit(&u);
     if (!has_selection && (key == 8 || key == DEL_KEY)) {
         editorMoveCursor(key == 8 ? ARROW_LEFT : ARROW_RIGHT);
         if (key == 8) { s.x = E.cx; s.y = E.cy; }
@@ -509,11 +556,7 @@ static int applyEdit(int key, selection s)
     u.range = s;
     u.range.endx = E.cx;
     u.range.endy = E.cy;
-    if (history_count == UNDO_DEPTH) {
-        freeBlock(&history[0].removed);
-        memmove(history,history+1,(--history_count)*sizeof(u));
-    }
-    history[history_count++] = u;
+    rememberEdit(&u);
     return 1;
 }
 
@@ -599,6 +642,8 @@ static void editorHelp(void)
         "In Find: arrows cycle matching lines.",
         "Enter accepts. Esc restores position.",
         "",
+        "Ctrl-R          Replace all",
+        "Ctrl-Shift-R    Replace ignoring case",
         "Ctrl-Z          Undo (five edits)",
         "Ctrl-S          Save file",
         "Ctrl-Q          Quit (twice if unsaved)"
@@ -668,6 +713,95 @@ static void editorFind(int folded)
     E.message[0] = 0;
 }
 
+/* Match non-overlapping occurrences in the original row. The sizing pass
+ * skips byte-identical replacements and checks the 16-bit line limit. */
+static int prepareRow(undo_entry *u, int y, char *from, char *to,
+                      unsigned char *fold, long *total)
+{
+    erow *row = E.row+y;
+    int n = strlen(from), m = strlen(to), changed = 0;
+    long size = row->size;
+    char *src = row->chars, *hit, *dst;
+    row_change *p;
+    while ((hit = fold ? findFolded(src,from,fold) : strstr(src,from)) != NULL) {
+        if (m != n || memcmp(hit,to,n)) ++changed;
+        size += m-n;
+        src = hit+n;
+    }
+    if (!changed) return 1;
+    if (size > MAX_LINE) return 0;
+    p = malloc(sizeof(*p));
+    if (!p) return 0;
+    dst = malloc((unsigned)size+1U);
+    if (!dst) { free(p); return 0; }
+    p->next = u->changes; u->changes = p;
+    p->index = y; p->size = (int)size; p->chars = dst;
+    src = row->chars;
+    while ((hit = fold ? findFolded(src,from,fold) : strstr(src,from)) != NULL) {
+        unsigned prefix = (unsigned)(hit-src);
+        memcpy(dst,src,prefix);
+        dst += prefix;
+        memcpy(dst,to,m);
+        dst += m;
+        src = hit+n;
+    }
+    strcpy(dst,src);
+    *total += changed;
+    return 1;
+}
+
+static int replacePrompt(const char *label, char *text)
+{
+    int key, len = 0, visible = E.width-strlen(label)-1;
+    for (;;) {
+        text[len] = 0;
+        sprintf(E.message,"%s%s",label,text+(len > visible ? len-visible : 0));
+        editorRefreshScreen();
+        key = editorReadKey();
+        if (key == 27 || key == 13) return key == 13;
+        if (key == HELP_KEY) editorHelp();
+        else if (key == 8 && len) --len;
+        else if ((key == 9 || (key >= 32 && key <= 255)) && len < 64)
+            text[len++] = (char)key;
+    }
+}
+
+static int replaceAll(char *from, char *to, unsigned char *fold)
+{
+    undo_entry u;
+    long total = 0;
+    int y;
+    if (!*from) return 1;
+    beginEdit(&u);
+    for (y = 0; y < E.numrows; ++y) {
+        if (!prepareRow(&u,y,from,to,fold,&total)) {
+            freeChanges(u.changes);
+            return 0;
+        }
+    }
+    if (u.changes) {
+        swapChanges(u.changes);
+        rememberEdit(&u);
+        E.marked = 0; E.dirty = 1;
+        if (E.cx > E.row[E.cy].size) E.cx = E.row[E.cy].size;
+    }
+    sprintf(E.message,"%ld replacements.",total);
+    return 1;
+}
+
+static int editorReplace(int folded)
+{
+    char from[65], to[65];
+    unsigned char table[256];
+    if (!replacePrompt(folded ? "Replace all (ignore case): " : "Replace all: ",from)
+        || !*from || !replacePrompt("With: ",to)) {
+        strcpy(E.message,"Replace cancelled.");
+        return 1;
+    }
+    if (folded) caseTable(table);
+    return replaceAll(from,to,folded ? table : NULL);
+}
+
 static void editorLoop(void)
 {
     int c, confirm = 0, ok, i, was_dirty;
@@ -693,6 +827,7 @@ static void editorLoop(void)
         }
         switch (c) {
         case 3: ok = copySelection(s,0); break;
+        case 18: case REPLACE_FOLDED: ok = editorReplace(c == REPLACE_FOLDED); break;
         case 26: ok = undoEdit(); break;
         case 8: case 13: case 22: case 24: case DEL_KEY:
             ok = applyEdit(c,s);

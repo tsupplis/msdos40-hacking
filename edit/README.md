@@ -4,7 +4,7 @@
 Salvatore Sanfilippo's Kilo and its CP/M-86 adaptation. It uses the PC BIOS
 for keyboard input and the active text display. No ANSI.SYS is required.
 Press F1 while editing or searching for keyboard help. Esc or F1 returns
-to the same position and selection. Run `EDIT /?` or `HELP EDIT` for the keys.
+to the same position and selection. Run `EDIT /?` or `HELP EDIT` for command-line usage.
 
 Hold Shift with arrows, Home, End, PgUp or PgDn to select text. Ctrl-C copies,
 Ctrl-X cuts and Ctrl-V pastes. The clipboard lasts until EDIT exits.
@@ -12,6 +12,10 @@ Ctrl-Z undoes the last edit, up to five edits back. Each typed character,
 line break, deletion, cut, paste or selection replacement counts as one edit.
 Typing, Enter or paste replaces the selection. Esc clears it. Ctrl-F searches literally
 and Ctrl-Shift-F folds case using the current DOS uppercase table.
+Ctrl-R replaces all literal matches throughout the file. Ctrl-Shift-R uses
+the same DOS case folding. Enter the search text, then the replacement.
+An empty replacement deletes matches. Esc cancels either prompt. One Ctrl-Z
+undoes the entire operation. Ctrl-S writes the changes to disk.
 
 The editor preserves existing CRLF and LF breaks, a missing final newline,
 DOS code-page bytes, and an optional final Ctrl-Z. Enter inserts CRLF.
@@ -54,4 +58,4 @@ of a 144,025-byte file under DOS 4.01N in a 640 KiB PCE machine.
 
 ## Planned editing features
 
-Untitled startup, Open, Save As and find-and-replace.
+Untitled startup, Open and Save As.

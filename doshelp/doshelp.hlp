@@ -320,18 +320,9 @@ EDIT         Create or change a text file in the full-screen editor.
 
  EDIT filename
 
-   F1              Show editor keys. Esc or F1 returns to editing or search.
-   Ctrl-S          Save. New line breaks use DOS CRLF.
-   Ctrl-F          Find text. Arrows cycle matching lines, Esc cancels.
-   Ctrl-Shift-F    Find text ignoring case, using the DOS uppercase table.
-   Shift+movement  Select with arrows, Home, End, PgUp or PgDn. Esc clears.
-   Ctrl-C, Ctrl-X  Copy or cut the selection into the EDIT clipboard.
-   Ctrl-V          Paste at the cursor or replace selected text.
-   Ctrl-Q          Quit. Press twice to discard unsaved changes.
-   Home, End       Go to the beginning or end of the current line.
-   PgUp, PgDn      Move one screen. Del deletes forward, Backspace backward.
+   filename        Text file to open or create.
 
- Requires a PC text display. Tabs and DOS code-page characters are supported.
+ Requires a PC text display.
 EDLIN        Edit a text file.
 
  EDLIN filename [/B]

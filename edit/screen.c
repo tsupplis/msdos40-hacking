@@ -74,6 +74,7 @@ int editorReadKey(void)
     int shifted = flags & 3;
     int ascii = key & 255, navigation;
 
+    if (shifted && ascii == 18) return REPLACE_FOLDED;
     if (shifted && ascii == 6) return FIND_FOLDED;
     /* On an XT, Shift with a keypad arrow can deliver its numeric ASCII. */
     if (ascii >= '0' && ascii <= '9' && (key >> 8) >= 71 && (key >> 8) <= 81)
