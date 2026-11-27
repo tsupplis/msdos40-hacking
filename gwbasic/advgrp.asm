@@ -857,6 +857,7 @@ EXTRN	FCOMP:NEAR
 	EXTRN	$AND:NEAR,$OR:NEAR,$PRESET:NEAR,$PSET:NEAR,$XOR:NEAR
 	EXTRN	YDELT:NEAR,XCHGX:NEAR,XCHGY:NEAR
 DSEG	SEGMENT PUBLIC 'DATASG'
+	extrn CRTMOD:byte,EgaArrayEnd:word
 	EXTRN	PUTFLG:WORD,MINDEL:WORD,MAXDEL:WORD
 DSEG	ENDS
 
@@ -867,11 +868,7 @@ GPUTG:	MOV	BYTE PTR PUTFLG,AL	;IFE PC8A&RSTLES-1STORE WHETHER PUTTING OR NOT
 	PUSH	AX		;SAVE THIS FLAG A SEC
 	PUSH	BX		;Save text pointer
 	CALL	PIXSIZ		;Test for graphics mode
-        extrn CRTMOD:byte
-        cmp CRTMOD,0dh          ; EGA planar array format is not implemented.
-        jb CheckGraphics
-        jmp FCERR
-CheckGraphics:
+        extrn EgaSprite:near
 	OR	AL,AL
 	JNZ	SHORT ??L008
 	JMP	FCERR		;Not a graphics mode
@@ -909,7 +906,16 @@ CheckGraphics:
 	CALL	MAPXYC
 	POP	BX		;GET BACK TXTPTR
 	CALL	GTARRY		;SCAN ARRAY NAME
-	PUSH	BX		;SAVE TXTPTR UNTIL DONE
+	PUSH BX                 ; Save text pointer until done.
+        cmp CRTMOD,0dh
+        jb PackedGet
+        mov EgaArrayEnd,cx
+        mov bx,dx
+        mov al,0ffh
+        call EgaSprite
+        pop bx
+        ret
+PackedGet:
 	PUSH	DX		;SAVE BEG. OF ARRAY DATA PTR
 	PUSH	CX		;SAVE END OF ARRAY DATA PTR
 	PUSH	DX		;SAVE BEG. PTR AGAIN FOR COMPAR
@@ -962,6 +968,7 @@ PUT1:	PUSH	BX		;SAVE TXTPTR
 	CALL	MAPXYC		;MAP THE POINT
 	POP	BX
 	CALL	GTARRY		;SCAN ARRAY NAME & GET PTR TO IT
+	mov EgaArrayEnd,cx
 	PUSH	DX		;SAVE PTR TO DELTAS IN ARRAY
 	DEC	BX		;NOW SCAN POSSIBLE PUT OPTION
 	CALL	CHRGTR
@@ -989,7 +996,12 @@ PUT2:
 	POP	SI		;XTHL
 	XCHG	SI,BX
 	PUSH	SI		;POP ARRAY PTR, PUSH TXTPTR
-	PUSH	AX		;SAVE PUT ACTION MODE
+	cmp CRTMOD,0dh
+        jb PackedPut
+        call EgaSprite
+        pop bx
+        ret
+PackedPut: PUSH AX             ; Save PUT action mode
 	MOV	DX,[BX]		;[DE]=NO. OF BITS IN X
 	INC	BX
 	INC	BX

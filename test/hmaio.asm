@@ -115,6 +115,7 @@ RunIO:  CALL    CheckMultiplex
         Check   JNC
         CMP     CX,2
         Check   JE
+        CALL    CheckInvalidFileTime
         ; Committing a dirty file must keep the shared SFT usable.
         MOV     AH,45h                  ; duplicate the open handle
         INT     21h
@@ -338,6 +339,61 @@ PrintResult:
         INT     21h
         MOV     AX,4C00h
         INT     21h
+; Observe the documented INT 2Ah enter notification on this scratch boot.
+; Enable only the entry hook and consume its notifications locally.
+CheckInvalidFileTime:
+        PUSH    BX                      ; open file handle
+        MOV     AX,352Ah
+        INT     21h
+        MOV     WORD PTR OldInt2A,BX
+        MOV     WORD PTR OldInt2A+2,ES
+        MOV     DX,OFFSET ObserveEnter
+        MOV     AX,252Ah
+        INT     21h
+        MOV     AX,3521h
+        INT     21h                     ; ES = resident DOS segment
+        POP     BX
+        MOV     AL,50h                  ; PUSH AX enables the CRIT hook
+        XCHG    AL,ES:[EnterSft]
+        PUSH    AX
+        MOV     AX,5702h                ; positive control: valid EA size query
+        XOR     CX,CX
+        INT     21h
+        MOV     CL,EnterCount
+        MOV     AX,5705h                ; unsupported, must never enter
+        INT     21h
+        POP     DX
+        MOV     ES:[EnterSft],DL
+        PUSHF
+        PUSH    AX
+        PUSH    DS
+        LDS     DX,OldInt2A
+        MOV     AX,252Ah
+        INT     21h
+        POP     DS
+        POP     AX
+        POPF
+        Check   JC
+        CMP     AX,1
+        Check   JE
+        OR      CL,CL
+        Check   JNZ
+        CMP     CL,EnterCount
+        Check   JE
+        RET
+ObserveEnter:
+        PUSHF
+        CMP     AX,8001h                ; disk and SFT share this hook
+        JNE     ChainInt2A
+        INC     CS:EnterCount
+        POPF
+        IRET
+ChainInt2A:
+        POPF
+        JMP     DWORD PTR CS:OldInt2A
+OldInt2A DD     ?
+EnterCount DB   0
+
 SwapVector MACRO slot, vector
         MOV     AX,WORD PTR vector
         XCHG    AX,ES:[ShareTable+4*slot]

@@ -373,7 +373,20 @@ check_handles:
     int 21h
     jc fail
     push bx
+    mov bx,0ffffh               ; a bad source must leave handle 25 usable
+    mov ah,46h
+    int 21h
+    jnc fail
+    cmp ax,6
+    jne fail
     mov bx,25
+    mov ax,5700h
+    int 21h
+    jc fail
+    mov cx,bx                   ; duplicating an open handle onto itself
+    mov ah,46h
+    int 21h
+    jc fail
     mov cx,6241h
     mov dx,285dh
     mov ax,5701h                ; timestamp through the duplicate

@@ -950,8 +950,16 @@ SXYERR:	JMP	FCERR
 PUBLIC	GTASPC
 GTASPC:	MOV	BX,00D5H
 	MOV	DX,0133H
+	cmp CRTMOD,0fh
+        jb Aspect200
+        mov bx,187D             ; 4:3 display, 640 by 350 pixels
+        mov dx,351D
+        ret
+Aspect200: cmp CRTMOD,0eh
+        je AspectWide
 	TEST	PIXBTS,1
 	JZ	ASPFIN
+AspectWide:
 	SHR	BX,1
 	INC	BX
 	ADD	DX,DX
@@ -1130,9 +1138,8 @@ EgaRightEdge:
 EgaRightStart:
         mov si,PIXOFS
         mov CSAVEA,si
-        mov al,ATRMSK
-        mov CSAVEM,al
-        call READC
+        mov ah,ATRMSK
+        mov CSAVEM,ah
 EgaRight:
         call EgaPaintPixel
         cmp di,EgaRightX
@@ -1311,6 +1318,153 @@ PIXSIZ:	MOV	AL,PIXBTS
 ; REGISTERS AFFECTED
 ;	AX, BX, (?) CX, (?) DX
 ;
+; EGA sprite header: pixel width and row count, then byte-aligned
+; bit planes for each row, least significant color plane first.
+public EgaSprite
+EgaSprite:
+        mov EgaAction,al
+        mov si,bx
+        add bx,4
+        jc SpriteError
+        cmp bx,EgaArrayEnd
+        ja SpriteError
+        cmp al,0ffh
+        je SpriteSize
+        mov ax,[si]
+        mov MAXDEL,ax
+        mov ax,[si+2]
+        mov MINDEL,ax
+SpriteSize:
+        mov ax,MAXDEL
+        dec ax
+        cmp ax,EgaWidth
+        jae SpriteError
+        mov ax,MINDEL
+        dec ax
+        cmp ax,EgaHeight
+        jae SpriteError
+        ; Both the last pixel and the full data must fit.
+        mov ax,PIXOFS
+        xor dx,dx
+        mov dl,ATRMSK
+        div EgaWidth
+        add dx,MAXDEL
+        cmp dx,EgaWidth
+        ja SpriteError
+        add ax,MINDEL
+        cmp ax,EgaHeight
+        ja SpriteError
+        mov ax,MAXDEL
+        add ax,7
+        mov cl,3
+        shr ax,cl
+        mov EgaPlaneBytes,ax
+        xor ch,ch
+        mov cl,PIXBTS
+        mul cx
+        mov EgaRowBytes,ax
+        mul MINDEL
+        or dx,dx
+        jnz SpriteError
+        add ax,bx
+        jc SpriteError
+        cmp ax,EgaArrayEnd
+        jbe SpriteReady
+SpriteError: jmp FCERR
+SpriteReady:
+        cmp byte ptr EgaAction,0ffh
+        jne SpriteData
+        mov ax,MAXDEL
+        mov [si],ax
+        mov ax,MINDEL
+        mov [si+2],ax
+SpriteData:
+        mov si,bx
+        mov bp,MINDEL
+SpriteRow:
+        push PIXOFS
+        mov al,ATRMSK
+        push ax
+        cmp byte ptr EgaAction,0ffh
+        jne SpritePixels
+        mov cx,EgaRowBytes
+        mov di,si
+SpriteZero: mov byte ptr [di],0
+        inc di
+        loop SpriteZero
+SpritePixels:
+        mov bx,MAXDEL
+        mov dh,80h
+SpritePixel:
+        mov di,si
+        mov cl,PIXBTS
+        mov dl,1
+        call READC
+        cmp byte ptr EgaAction,0ffh
+        jne SpritePut
+SpriteGetPlane:
+        test al,dl
+        jz SpriteNextPlane
+        or [di],dh
+SpriteNextPlane:
+        add di,EgaPlaneBytes
+        shl dl,1
+        dec cl
+        jnz SpriteGetPlane
+        jmp short SpriteAdvance
+SpritePut:
+        mov ah,al
+        xor al,al
+SpritePutPlane:
+        test [di],dh
+        jz SpritePlaneClear
+        or al,dl
+SpritePlaneClear:
+        add di,EgaPlaneBytes
+        shl dl,1
+        dec cl
+        jnz SpritePutPlane
+        cmp byte ptr EgaAction,0
+        jne SpriteAnd
+        or al,ah
+        jmp short SpriteWrite
+SpriteAnd: cmp byte ptr EgaAction,1
+        jne SpritePreset
+        and al,ah
+        jmp short SpriteWrite
+SpritePreset: cmp byte ptr EgaAction,2
+        jne SpriteXor
+        dec dl
+        xor al,dl
+        jmp short SpriteWrite
+SpriteXor: cmp byte ptr EgaAction,4
+        jne SpriteWrite
+        xor al,ah
+SpriteWrite: mov ah,0ch
+        call EgaPixel
+SpriteAdvance:
+        call RIGHTC
+        ror dh,1
+        jnc SpriteSameByte
+        inc si
+SpriteSameByte:
+        dec bx
+        jnz SpritePixel
+        ; Recover the start of the row and advance by all planes.
+        mov ax,MAXDEL
+        mov cl,3
+        shr ax,cl
+        sub si,ax
+        add si,EgaRowBytes
+        pop ax
+        mov ATRMSK,al
+        pop PIXOFS
+        call DOWNC
+        dec bp
+        jz SpriteDone
+        jmp SpriteRow
+SpriteDone: ret
+
 PUBLIC	PGINIT
 PGINIT: MOV	PGTARY,BX
 	MOV	MAXDEL,CX
@@ -2107,9 +2261,14 @@ EgaSet: cmp dl,dh
         mov ah,[si+8D]
 EgaSwitch: cmp ah,dh
         jae EgaError
+        mov bl,CRTMOD
         call SCNRST
         cmp CRTMOD,al
-        jne EgaError
+        je EgaAccepted
+        mov al,bl
+        call SCNRST
+        jmp short EgaError
+EgaAccepted:
         mov al,ah
         jmp SCRVIP
 EgaError: stc
@@ -2326,7 +2485,9 @@ ATRERR:	STC
 ;
 PUBLIC	SETCLR
 SETCLR: cmp CRTMOD,0dh
-        jb LegacyColor
+        jae PlanarColor
+        jmp LegacyColor
+PlanarColor:
         cmp byte ptr [bx],2
         ja EgaErrorColor
         mov al,FORCLR
@@ -2341,14 +2502,32 @@ EgaBackground:
         cmp byte ptr [bx+3],0
         je EgaForeground
         mov ah,[bx+4]
-        cmp ah,15D
+        cmp CRTMOD,0fh
+        jne EgaColorDisplay
+        cmp ah,8D
+        ja EgaErrorColor
+        mov bx,offset CSEG:EgaMonoPalette
+        jmp short EgaMapColor
+EgaColorDisplay:
+        cmp CRTMOD,10h
+        jne EgaColor16
+        cmp PIXBTS,2
+        je EgaColor16
+        cmp ah,63D
         ja EgaErrorColor
         push ax
-        mov al,ah
+        mov bh,ah
+        jmp short EgaSetPalette
+EgaColor16:
+        cmp ah,15D
+        ja EgaErrorColor
         mov bx,offset CSEG:EgaPalette
+EgaMapColor:
+        push ax
+        mov al,ah
         xlat cs:[bx]
         mov bh,al
-        xor bl,bl                ; Set palette register zero (background).
+EgaSetPalette: xor bl,bl         ; Set palette register zero (background).
         mov ax,1000h
         int 10h
         pop ax
@@ -2359,6 +2538,7 @@ EgaForeground:
         ret
 EgaErrorColor: stc
         ret
+EgaMonoPalette db 0,8h,18h,1,9h,19h,3,0bh,1bh
 EgaPalette db 0,1,2,3,4,5,14h,7,38h,39h,3ah,3bh,3ch,3dh,3eh,3fh
 LegacyColor:	PUSHF
 	CLD
@@ -2510,6 +2690,12 @@ PIXBTS	DB	?		; From BASICA.COM DSEG:0055H
 				; Number of bits per pixel; assumed to be 0
 				; (not graphics mode), 1, or 2
 
+extrn MINDEL:word
+public EgaArrayEnd
+EgaArrayEnd dw ?
+EgaPlaneBytes dw ?
+EgaRowBytes dw ?
+EgaAction db ?
 EgaWidth dw ?
 EgaHeight dw ?
 EgaLastLo dw ?

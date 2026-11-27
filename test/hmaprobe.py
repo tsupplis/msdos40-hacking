@@ -21,6 +21,7 @@ def install_probe(root, folder, image):
         f"DevicePtr EQU {dos['DEVPT']}\nNullHeader EQU {dos['NULDEV']}\n"
         f"CurrentSFT EQU {dos['THISSFT']}\n"
         f"ShareTable EQU {dos['JShare']}\n"
+        f"EnterSft EQU {dos['EcritSFT']}\n"
         f"CallbackSeg EQU {dos['DosCallbackPtr'] + 2}\n"
         f"GateSeg EQU {dos['FCB_GATE'] + 2}\nBodyOff EQU {bios['GateBody'] - bios['GateStart']}\n"
     )
