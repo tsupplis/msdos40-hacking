@@ -39,6 +39,7 @@ Based on hharte’s [4.01 reconstruction](https://github.com/lotharsm/MS-DOS/tre
 | `commands/` | `command.com`, external commands and `select` |
 | `common/`, `mapper/`, `messages/` | Shared objects, libraries and messages |
 | `asminc/`, `include/`, `sdk/` | Headers and vintage build tools |
+| [`gwbasic/`](gwbasic/readme.md) | Microsoft GW-BASIC with the MIT-licensed PC reconstruction by Diomidis Spinellis, Stjepan Gros and TK Chia |
 | `media/` | Floppy image rules and startup files |
 
 ## System fixes
