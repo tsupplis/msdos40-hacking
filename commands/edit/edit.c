@@ -412,6 +412,46 @@ static void editorRefreshScreen(void)
     screenCursor(E.cy-E.top,(int)(cursor-E.left));
 }
 
+/* All lines fit the 40-column display. The caller redraws its own view. */
+static void editorHelp(void)
+{
+    static const char *lines[] = {
+        "EDIT Help",
+        "",
+        "Arrows          Move cursor",
+        "Home / End      Start / end of line",
+        "PgUp / PgDn     Move one screen",
+        "Enter           Split line",
+        "Backspace / Del Delete left / at cursor",
+        "",
+        "Shift+movement  Extend selection",
+        "Esc             Clear selection",
+        "Ctrl-C / Ctrl-X Copy / cut selection",
+        "Ctrl-V          Paste at cursor or",
+        "                replace selection",
+        "",
+        "Ctrl-F          Find exact text",
+        "Ctrl-Shift-F    Find ignoring case",
+        "In Find: arrows cycle matching lines.",
+        "Enter accepts. Esc restores position.",
+        "",
+        "Ctrl-S          Save file",
+        "Ctrl-Q          Quit (twice if unsaved)"
+    };
+    int row, key;
+    const char *line;
+    for (row = 0; row < E.height+1; ++row) {
+        line = (unsigned)row < sizeof(lines)/sizeof(lines[0]) ? lines[row] : (const char *)"";
+        screenLine(row,line,strlen(line),row == 0 ? 0x70 : 7,0,0);
+    }
+    line = "Esc or F1 to return";
+    screenLine(row,line,strlen(line),0x70,0,0);
+    screenCursor(row,0);
+    do {
+        key = editorReadKey();
+    } while (key != 27 && key != HELP_KEY);
+}
+
 /* Incremental literal search. Arrow keys cycle matching rows in either
  * direction; Escape restores the entry position. */
 static char *findFolded(char *text, const char *query, const unsigned char *fold)
@@ -438,6 +478,7 @@ static void editorFind(int folded)
         sprintf(E.message,folded ? "Find (ignore case): %s" : "Find: %s",query);
         editorRefreshScreen();
         c = editorReadKey();
+        if (c == HELP_KEY) { editorHelp(); continue; }
         if (c == 27 || c == 13) break;
         step = 1;
         if (c == ARROW_UP || c == ARROW_LEFT) { step = -1; row--; }
@@ -468,7 +509,7 @@ static void editorLoop(void)
     selection s;
     char ch;
     erow insert[2];
-    strcpy(E.message,"Ctrl-S Save   Ctrl-F Find   Ctrl-Q Quit");
+    strcpy(E.message,"F1 Help  Ctrl-S Save  Ctrl-F Find  Ctrl-Q Quit");
     for (;;) {
         editorRefreshScreen();
         c = editorReadKey();
@@ -501,6 +542,7 @@ static void editorLoop(void)
             else strcpy(E.message,"Clipboard is empty.");
             break;
         case 27: E.marked = 0; break;
+        case HELP_KEY: editorHelp(); break;
         case 19: editorSave(); break;
         case 6: case FIND_FOLDED: E.marked = 0; editorFind(c == FIND_FOLDED); break;
         case 13: E.marked = 0; ok = editorInsertNewline(); if (ok) E.dirty = 1; break;

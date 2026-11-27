@@ -3,7 +3,8 @@
 `EDIT filename` opens or creates a single text file. The port derives from
 Salvatore Sanfilippo's Kilo and its CP/M-86 adaptation. It uses the PC BIOS
 for keyboard input and the active text display. No ANSI.SYS is required.
-Run `EDIT /?` or `HELP EDIT` for the keys.
+Press F1 while editing or searching for keyboard help. Esc or F1 returns
+to the same position and selection. Run `EDIT /?` or `HELP EDIT` for the keys.
 
 Hold Shift with arrows, Home, End, PgUp or PgDn to select text. Ctrl-C copies,
 Ctrl-X cuts and Ctrl-V pastes. The clipboard lasts until EDIT exits. Typing,
@@ -32,7 +33,7 @@ determine the usable document size.
 | Measurement | Largest complete load | First refused |
 |---|---:|---:|
 | emu2, file-test build, 78 bytes plus CRLF per line | 501,680 bytes | 501,760 bytes |
-| emu2, file-test build, 1,022 bytes plus CRLF per line | 596,992 bytes | 598,016 bytes |
+| emu2, file-test build, 1,022 bytes plus CRLF per line | 595,968 bytes | 596,992 bytes |
 
 The production executable also passed an interactive edit, find and save
 of a 144,025-byte file under DOS 4.01N in a 640 KiB PCE machine.

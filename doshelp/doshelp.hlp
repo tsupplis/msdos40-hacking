@@ -320,6 +320,7 @@ EDIT         Create or change a text file in the full-screen editor.
 
  EDIT filename
 
+   F1              Show editor keys. Esc or F1 returns to editing or search.
    Ctrl-S          Save. New line breaks use DOS CRLF.
    Ctrl-F          Find text. Arrows cycle matching lines, Esc cancels.
    Ctrl-Shift-F    Find text ignoring case, using the DOS uppercase table.

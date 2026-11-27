@@ -80,6 +80,7 @@ int editorReadKey(void)
         shifted = !(flags & 0x20);  /* numeric keypad with Num Lock off */
     if (ascii && !(shifted && ascii >= '0' && ascii <= '9')) return ascii;
     switch (key >> 8) {
+    case 59: return HELP_KEY;  /* F1 */
     case 75: navigation = ARROW_LEFT; break;
     case 77: navigation = ARROW_RIGHT; break;
     case 72: navigation = ARROW_UP; break;
