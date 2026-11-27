@@ -338,6 +338,21 @@ STKLOP:	IN	AL,DX
 	TEST	AL,11110000B
 	LOOPNZ	STKLOP
 	STI
+        ; A disconnected axis stays high for the entire timing loop.
+        ; Clear each timed-out count independently for a one-stick adapter.
+        cmp bx,7fffh
+        jne StickAY
+        xor bx,bx
+StickAY: cmp si,7fffh
+        jne StickBX
+        xor si,si
+StickBX: cmp di,7fffh
+        jne StickBY
+        xor di,di
+StickBY: cmp bp,7fffh
+        jne StickSave
+        xor bp,bp
+StickSave:
 	MOV	STIKYA,SI
 	MOV	STIKXB,DI
 	MOV	STIKYB,BP
@@ -386,7 +401,7 @@ RDSTK1:	PUSH	CX
 ;
 PUBLIC	RDSTIK
 RDSTIK:	CMP	AL,4
-	JA	STKBAD
+	JAE	STKBAD
 	PUSH	AX
 	CBW
 	DEC	AX

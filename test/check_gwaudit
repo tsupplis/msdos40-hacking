@@ -22,6 +22,7 @@ parser.add_argument("ids", nargs="*", type=int, help="inventory rows (default: a
 parser.add_argument("--jobs", default=1, type=int, help="concurrent DOS guests (maximum two)")
 backend = parser.add_mutually_exclusive_group()
 backend.add_argument("--qemu", action="store_true", help="use the historical QEMU audit, including interactive probes")
+backend.add_argument("--share", action="store_true", help="run the PCE file-locking comparisons with SHARE installed")
 backend.add_argument("--editor", action="store_true", help="run the batched PCE keyboard and screen comparisons")
 backend.add_argument("--quick", action="store_true", help="run the cases that share one BASIC session")
 parser.add_argument("--check", action="store_true",
@@ -34,7 +35,7 @@ for line in (root / "test/gwcases.txt").read_text().splitlines():
         cases[int(key)] = body
 
 # File reports survive screen changes and keep banner differences out of pixel tests.
-streams = {53, 70, 72, 81, 102, 113, 114, 120, 149, 157, 162, 163, 170, 182, 185, 331, 359, 369, 372}
+streams = {53, 70, 72, 81, 102, 113, 114, 120, 149, 157, 162, 163, 170, 331, 369, 372}
 direct = {
     4: 'AUTO 100,5\nPRINT 1\n',
     20: '10 STOP\n20 OPEN "VALUE.OUT" FOR OUTPUT AS #2:PRINT #2,42:CLOSE:SYSTEM\nRUN\nCONT',
@@ -80,6 +81,7 @@ editor = {
     302: '10 goto 10|ret|run|ret|ctrl-pause',
     303: 'ABC DEF|ctrl-b|X',
     304: 'abcdef'*14+'|backspace|Z',
+    358: "a|a|z",
     389: 'ABCDE|left|left|ctrl-end',
     390: 'ABCDE|ctrl-home|Q',
     391: 'ABC|ctrl-ret|XYZ',
@@ -187,11 +189,12 @@ def read(image, name):
 
 # These probes report through #1 and return to the harness. They need no
 # interactive input, separate command line, or persistent device/file change.
+share_cases = {249, 250}
 grouped = {
     5, 8, 27, 30, 31, 32, 33, 35, 45, 46, 51, 57, 58, 61, 63, 68, 69, 73, 105, 110,
     111, 119, 122, 123, 128, 133, 134, 135, 164, 166, 167, 168,
-    192, 193, 194, 196, 198, 216, 217, 218, 219, 220, 221, 223, 224, 225, 226, 227, 228, 230, 231, 232, 234, 241, 242, 243, 247, 251, 255,
-    259, 263, 264, 265, 266, 267, 271, 272, 273, 274, 305, 307, 308, 328, 329, 343, 344, 351, 354, 362, 373, 379, 381,
+    191, 192, 193, 194, 196, 198, 216, 217, 218, 219, 220, 221, 223, 224, 225, 226, 227, 228, 230, 231, 232, 234, 241, 242, 243, 247, 251, 255,
+    259, 263, 264, 265, 266, 267, 271, 272, 273, 274, 305, 307, 308, 328, 329, 343, 344, 348, 351, 354, 356, 362, 373, 374, 375, 376, 377, 379, 381,
     385, 386, 387, 388, 399, 400, 401, 402,
 }
 
@@ -206,7 +209,7 @@ def prepare_group(ids, folder, drive):
         lines.extend(f"{100+j*10} {line}" for j, line in enumerate(cases[n].split("~")))
         lines.extend(['9800 PRINT #1,"DONE":GOTO 10010',
                       '10000 PRINT #1,"ERROR";ERR;ERL:RESUME 10010'])
-        next_case = f'RUN "P{i+1}.BAS"' if i+1 < len(ids) else "SYSTEM"
+        next_case = f'RUN "P{i+1}.BAS"' if i+1 < len(ids) and n != 46 else "SYSTEM"
         lines.append("10010 CLOSE:" + next_case)
         program = folder / f"P{i}.BAS"
         program.write_bytes(("\r\n".join(lines) + "\r\n").encode("ascii"))
@@ -238,13 +241,30 @@ def group_results(ids, drive, filename):
 
 def pce_group(ids, folder, image, data):
     prepare_group(ids, folder, data)
+    if {46, 231, 232}.intersection(ids):
+        driver = folder / "gwdev.sys"
+        command("nasm", "-f", "bin", root / "test/gwdev.asm", "-o", driver)
+        install(data, driver, "GWDEV.SYS")
+        (folder / "audit.cfg").write_text("DEVICE=B:\\GWDEV.SYS\n")
     batch = folder / "audit.bat"
-    batch.write_text("b:\ndate 01-03-2001\nref P0.BAS\nren GROUP.OUT REF.OUT\n"
-                     "if exist R.DAT del R.DAT\nexe P0.BAS\nren GROUP.OUT EXE.OUT\n")
+    # The nested critical error in case 46 leaves EXTERR set across RUN in
+    # 3.23. Start the following fixture in a fresh interpreter on the same boot.
+    starts = [0]
+    if 46 in ids and ids.index(46) + 1 < len(ids):
+        starts.append(ids.index(46) + 1)
+    commands = ["b:", "date 01-03-2001"]
+    if args.share:
+        commands.append(r"A:\SHARE.EXE")
+    for version in ("ref", "exe"):
+        commands.extend(f"{version} P{i}.BAS" for i in starts)
+        commands.append(f"ren GROUP.OUT {version}.OUT")
+        if version == "ref":
+            commands.append("if exist R.DAT del R.DAT")
+    batch.write_text("\n".join(commands) + "\n")
     work = folder / "pce"
     run = subprocess.run([root / "test/run_tests", batch], cwd=root, capture_output=True,
                          env=dict(os.environ, IMG=str(image), PCE_TEST_WORK=str(work),
-                                  PCE_TEST_FLOPPY_B=str(data), PCE_TEST_BOOT_READONLY="1", SECS="25"))
+                                  PCE_TEST_FLOPPY_B=str(data), PCE_TEST_BOOT_READONLY="1"))
     if run.returncode:
         raise RuntimeError((run.stdout + run.stderr).decode("cp437") + "\n" +
                            (work / "pce.log").read_text(errors="replace")[-2000:])
@@ -353,19 +373,25 @@ def run_batch(ids, version, template, data):
 
 def main():
     available = grouped
-    if args.editor:
+    if args.share:
+        available = share_cases
+    elif args.editor:
         available = gweditpce.cases
     elif args.qemu:
-        available = cases.keys() - gweditpce.cases - {45, 46}
-        if {45, 46}.intersection(args.ids):
-            parser.error("the critical-error probes require the write-protected PCE boot floppy")
+        available = cases.keys() - gweditpce.cases - share_cases - {45, 46, 231, 232}
+        if {45, 46, 231, 232}.intersection(args.ids):
+            parser.error("these DOS device probes require the PCE test configuration")
         if gweditpce.cases.intersection(args.ids):
             parser.error("these interactive cases now run on PCE, omit --qemu")
     ids = args.ids or sorted(available)
+    if set(ids).intersection(share_cases) and not args.share:
+        parser.error("these file-locking probes require --share")
+    if args.share and set(ids) - share_cases:
+        parser.error("select the SHARE locking probes separately")
     live_editor = args.editor or (not args.qemu and set(ids) <= gweditpce.cases)
     if live_editor and set(ids) - gweditpce.cases:
         parser.error("select PCE editor cases separately from BASIC program probes")
-    if not (args.qemu or live_editor) and set(ids) - grouped:
+    if not (args.share or args.qemu or live_editor) and set(ids) - grouped:
         parser.error("requested case has no PCE probe yet (historical runner: --qemu)")
     if args.jobs < 1:
         parser.error("--jobs must be positive")
@@ -387,7 +413,7 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
         template, data = folder / "boot.img", folder / "data.img"
-        shutil.copyfile(root / "media/msdos40_full.img", template)
+        shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), template)
         put(template, folder, "CONFIG.SYS", "FILES=30\nBUFFERS=20\n")
         put(template, folder, "AUTOEXEC.BAT", "@echo off\necho AUDIT READY\npause >nul\nb:\\run.bat\n")
         command("mformat", "-C", "-f", "1440", "-i", data, "::")

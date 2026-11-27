@@ -67,6 +67,19 @@ with tempfile.TemporaryDirectory() as tmp:
     if args.pce:
         image = folder / "source.img"
         shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+        # The loader reads the first directory sector at 0000:0500. Native
+        # FORMAT /S leaves the system entries' reserved bytes clear, including
+        # the byte that GW-BASIC 3.23 tests for a nested invocation.
+        with image.open("rb") as disk:
+            boot = disk.read(512)
+            sector_size = int.from_bytes(boot[11:13], "little")
+            reserved = int.from_bytes(boot[14:16], "little")
+            fat_sectors = int.from_bytes(boot[22:24], "little")
+            disk.seek((reserved + boot[16] * fat_sectors) * sector_size)
+            for name in (b"IO      SYS", b"MSDOS   SYS"):
+                entry = disk.read(32)
+                if entry[:11] != name or entry[12:22] != bytes(10):
+                    raise SystemExit(f"Expected FORMAT /S directory entry for {name!r}, got {entry.hex()}")
         on_disk = subprocess.check_output(["mtype", "-i", image, "::GWBASIC.EXE"])
         if on_disk != binary.read_bytes():
             raise SystemExit("Full floppy and built GWBASIC.EXE differ")
@@ -103,21 +116,7 @@ with tempfile.TemporaryDirectory() as tmp:
         for file in (folder / "seed.com", probe, input_probe, commands, full, folder / "fill.com", lang, prog):
             subprocess.run(["mcopy", "-o", "-i", image, file, "::"], check=True)
         batch = folder / "check.bat"
-        # Make the boot sector's directory read leave a nonzero BASIC flag.
-        # Byte 15 is the high byte of the first FAT entry's creation time.
-        with image.open("r+b") as disk:
-            boot = disk.read(512)
-            sector_size = int.from_bytes(boot[11:13], "little")
-            reserved = int.from_bytes(boot[14:16], "little")
-            fat_sectors = int.from_bytes(boot[22:24], "little")
-            disk.seek((reserved + boot[16] * fat_sectors) * sector_size + 15)
-            disk.write(b"\x50")
-        flag = folder / "flag.asm"
-        flag.write_text("bits 16\norg 100h\nxor ax,ax\nmov es,ax\n"
-                        "mov al,[es:050fh]\nmov ah,4ch\nint 21h\n")
-        subprocess.run(["nasm", "-f", "bin", flag, "-o", folder / "flag.com"], check=True)
-        subprocess.run(["mcopy", "-o", "-i", image, folder / "flag.com", "::"], check=True)
-        batch.write_text("b:\na:flag\nif errorlevel 1 echo FAILED BASIC boot flag\na:gwbasic a:smoke.bas\na:gwbasic a:gwvideo.bas\n"
+        batch.write_text("b:\na:gwbasic a:smoke.bas\na:gwbasic a:gwvideo.bas\n"
                          "a:gwbasic a:gwlang.bas\na:gwbasic /nob <a:gwprog.txt >nul\n"
                          "ctty con\na:seed\na:gwbasic /nob a:probe.bas >stream.txt\n"
                          "a:seed check\nif errorlevel 1 goto screenfail\n"

@@ -30,6 +30,7 @@ SYSI_UMB_HEAD	    DW	    0		; First upper memory arena segment
 SYSI_UMB_BRIDGE     DW	    0		; Conventional-to-UMB gap segment
 SYSI_UMB_TOTAL      DW      0           ; Total paragraphs granted to DOS
 SYSI_CODE_RESIDENCY     DB      0           ; DOS code residency reported by INT 21h/58FEh
+SYSI_FASTFREE           DB      0           ; enable fixed FAT16 free-space scan
 SysInitVars ENDS
 
 ;This is added for more information exchage between DOS, BIOS.

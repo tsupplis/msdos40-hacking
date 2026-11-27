@@ -202,7 +202,7 @@ AUTOEXEC.BAT can use `%DOSCFG%` to identify the configuration DOS loaded. For ex
 | `shell=` | No known syntax gaps |  |  |
 | `shellhigh=` | Project extra | Try upper memory for the shell and the permanent COMMAND.COM environment. Each falls back independently. |  |
 | `stacks=` | No known syntax gaps | Place interrupt handlers and stacks together in one UMB when they fit. |  |
-| `switches=` | Gaps identified |  | DOS 5.0 IO.SYS recognizes `/T` (BIOS midnight rollover handling) and `/W` (Windows WINA20.386 loading). The project recognizes `/K`. |
+| `switches=` | Gaps identified | Add `SWITCHES=/FASTFREE` to `CONFIG.SYS` to speed up free-space queries such as `DIR` on local fixed FAT16 drives. DOS counts one FAT sector at a time when it needs a fresh count. Off by default. | `/T` (BIOS midnight rollover handling) and `/W` (Windows WINA20.386 loading). |
 
 The directive inventory comes from the keyword tables in both versions of IO.SYS. Parser coverage does not establish hardware or driver compatibility. [MS-DOS 5.0 distribution](https://www.pcjs.org/software/pcx86/sys/dos/microsoft/5.00/), [Microsoft CONFIG.SYS defaults](https://jeffpar.github.io/kbarchive/kb/077/Q77052/), [Microsoft floppy geometry reference](https://minuszerodegrees.net/ms_kb_articles/Q75131%20revision%202.pdf).
 
@@ -292,7 +292,10 @@ MIT unless a subdirectory specifies otherwise. [license.md](LICENSE.md)
 
 ## Credits
 
-- **emu2** runs the original DOS build tools and command tests. Thanks to dmsc for the original emulator and to johnsonjh for the CP/M-86 fork. [emu2](https://github.com/dmsc/emu2) · [emu2-cpm86](https://github.com/johnsonjh/emu2-cpm86)
-- **PCE** by Hampa Hug boots the DOS images for end-to-end regression tests. [PCE project](http://www.hampa.ch/pce/)
-- **EDIT** derives from Kilo, written by Salvatore Sanfilippo (antirez) in 2016. Kilo is distributed under the BSD 2-Clause license. [Kilo source](https://github.com/antirez/kilo) · [License](edit/LICENSE.md)
-- **GW-BASIC** uses Microsoft's 1983 interpreter and the PC reconstruction by Diomidis Spinellis, Stjepan Gros and TK Chia, distributed under the MIT license. [Microsoft source](https://github.com/microsoft/GW-BASIC) · [Spinellis reconstruction](https://github.com/dspinellis/GW-BASIC) · [TK Chia fork](https://codeberg.org/tkchia/GW-BASIC) · [License](gwbasic/LICENSE.md)
+| Project | Credit |
+|---|---|
+| emu2 | emu2 runs the original DOS build tools and command tests. Thanks to dmsc for the original emulator and to johnsonjh for the CP/M-86 fork. [emu2](https://github.com/dmsc/emu2) · [emu2-cpm86](https://github.com/johnsonjh/emu2-cpm86) |
+| PCE | Hampa Hug's emulator boots the DOS images for end-to-end regression tests. [PCE project](http://www.hampa.ch/pce/) |
+| EDIT | EDIT derives from Kilo, written by Salvatore Sanfilippo (antirez) in 2016 and distributed under the BSD 2-Clause license. [Kilo source](https://github.com/antirez/kilo) · [License](edit/LICENSE.md) |
+| GW-BASIC | GW-BASIC uses Microsoft's 1983 interpreter and the PC reconstruction by Diomidis Spinellis, Stjepan Gros and TK Chia, distributed under the MIT license. [Microsoft source](https://github.com/microsoft/GW-BASIC) · [Spinellis reconstruction](https://github.com/dspinellis/GW-BASIC) · [TK Chia fork](https://codeberg.org/tkchia/GW-BASIC) · [License](gwbasic/LICENSE.md) |
+| FREESPT | Chartreuse (ChartreuseK) wrote FREESPT, which inspired the kernel's `/FASTFREE` scan for fixed FAT16 drives. [FREESP and FREESPT](https://github.com/ChartreuseK/FREESP) |

@@ -8,7 +8,7 @@ from pcecfg import write_config
 
 # Cases exercised at the live Ok prompt. The audit supplies the same input
 # sequences to its historical and PCE runners.
-cases = {294, 295, 297, 299, 301, 389, 390}
+cases = {294, 295, 297, 299, 301, 358, 389, 390}
 
 
 def key_names(sequence):
@@ -35,7 +35,17 @@ def editor_results(folder, boot, data, sequences, put, read):
                         '40 PRINT #1,:NEXT:CLOSE:SYSTEM\n')
                 put(data, folder, version + "key.bas", body)
                 batch.append(f"{version} {version}key.bas")
-            put(data, folder, program, f'10 KEY OFF:CLS:PRINT "{version[0].upper()}{case:04d}":END\n')
+            ready = f"{version[0].upper()}{case:04d}"
+            body = f'10 KEY OFF:CLS:PRINT "{ready}":END\n'
+            if case == 358:
+                body = (f'10 KEY OFF:CLS:ON ERROR GOTO 200:KEY 15,CHR$(0)+CHR$(30):ON KEY(15) GOSUB 100\n'
+                        f'20 KEY(15) ON:PRINT "{ready}"\n'
+                        '30 A$=INKEY$:IF A$="" THEN 30\n'
+                        '40 IF A$<>"z" THEN PRINT "INPUT ";A$:GOTO 30\n'
+                        '50 PRINT "HITS";H:END\n'
+                        '100 H=H+1:KEY(15) OFF:RETURN\n'
+                        f'200 PRINT "ERROR";ERR:PRINT "{ready}":RESUME 30\n')
+            put(data, folder, program, body)
             batch.append(f"{version} {program}")
     put(boot, folder, "autoexec.bat", "\n".join(batch + ["echo EDIT-DONE"]) + "\n")
     data.rename(folder / "b.img")
@@ -80,7 +90,7 @@ def editor_results(folder, boot, data, sequences, put, read):
             for version, observations in zip(("ref", "exe"), results):
                 for case, sequence in sequences.items():
                     ready = f"{version[0].upper()}{case:04d}"
-                    expect(ready + "\nOk")
+                    expect(ready if case == 358 else ready + "\nOk")
                     intermediate = []
                     for name in key_names(sequence):
                         key(name)
@@ -88,6 +98,8 @@ def editor_results(folder, boot, data, sequences, put, read):
                             step = snapshot(100000)
                             step["screen"] = step["screen"].replace(ready, "READY", 1)
                             intermediate.append(step)
+                    if case == 358:
+                        expect("HITS")
                     if case == 301:
                         expect("Ok")  # F10 executes SCREEN and returns to direct mode.
                     obs = snapshot(200000)

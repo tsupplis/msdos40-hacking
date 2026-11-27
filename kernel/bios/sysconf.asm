@@ -585,7 +585,7 @@ CPSW_Pos	label	word	;AN002;
 P_CPSW	db	0		;AN002;
 
 ;--------------------------------
-; SWITCHES=/K
+; SWITCHES=[/K] [/FASTFREE]
 
 Swit_Parms	label	byte	;AN019;
 	dw	Swit_Parmsx	;AN019;
@@ -595,20 +595,22 @@ Swit_Parms	label	byte	;AN019;
 
 Swit_Parmsx	label	byte	;AN019;
 	db	0,0		;AN019; No positionals
-	db	1		;AN019; 1 switch for now.
-	dw	Swit_K_Ctrl	;AN019; /K control
+	db	1		;AN019; one switch control
+	dw	Swit_Ctrl	; switch names
 	db	0		;AN019; no keywords
 
-Swit_K_Ctrl	label	word	;AN019;
+Swit_Ctrl	label	word	;AN019;
 	dw	0		;AN019; no matching flag
 	dw	0		;AN019; no function
 	dw	Result_Val	;AN019; return value
 	dw	NoVal		;AN019; no value definition
-	db	1		;AN019; # of switches
+	db	2		; number of switch names
 Swit_K		label	byte	;AN019;
 	db	'/K',0		;AN019;
-;local variables
-P_Swit_K	db     0	;AN019;
+Swit_FastFree   db      '/FASTFREE',0
+Swit_Keyboard   equ     01h
+Swit_FatScan    equ     02h
+Swit_Selected   db      0               ; pending bits for this line
 
 ;******************************************************************************
 
@@ -2535,79 +2537,48 @@ Try0:					;AN003;do nothing with this line.
 ;------------------------------------------------------------------------------
 ; SWITCHES command
 ;------------------------------------------------------------------------------
-;*******************************************************************************
-;									       *
-; Function: Parse the option switches specified.			       *
-; Note - This command is intended for the future use also.  When we need to    *
-; to set system data flag, use this command.				       *
-;									       *
-; Input :								       *
-;	ES:SI -> parameters in command line.				       *
-; Output:								       *
-;	P_Swit_K set if /K option chosen.				       *
-;									       *
-; Subroutines to be called:						       *
-;	Sysinit_Parse							       *
-; Logic:								       *
-; {									       *
-;	Set DI points to Swit_Parms;  /*Parse control definition*/	       *
-;	Set DX,CX to 0; 						       *
-;	While (End of command line)					       *
-;	{ Sysinit_parse;						       *
-;	  if (no error) then						       *
-;	       if (Result_Val.$P_SYNONYM_ptr == Swit_K) then		       *
-;		    P_Swit_K = 1					       *
-;	       endif							       *
-;	  else {Show Error message;Error Exit}				       *
-;	};								       *
-; };									       *
-;									       *
-;*******************************************************************************
-
-	cmp	ah, '1' 		;AN019;Switches= command entered?
-	jne	Tryz			;AN019;
-
-	mov	di, offset Swit_Parms	;AN019;
-	xor	cx, cx			;AN019;
-	mov	dx, cx			;AN019;
-
-;	$SEARCH 			;AN019;
-$$DO107:
-	    call   Sysinit_Parse	;AN019;
-;	$EXITIF    C			;AN019; Parse Error,
-	JNC $$IF107
-	    call   Badparm_p		;AN019;   and Show messages and end the search loop.
-;	$ORELSE 			;AN019;
-	JMP SHORT $$SR107
-$$IF107:
-	    cmp    ax, $P_RC_EOL	;AN019; End of Line?
-;	$LEAVE	   E			;AN019;  then jmp to $Endloop for semantic check.
-	JE $$EN107
-	    cmp    Result_Val.$P_SYNONYM_PTR, offset Swit_K   ;AN019;
-;	    $IF    E					      ;AN019;
-	    JNE $$IF111
-		mov	P_Swit_K, 1			      ;AN019; set the flag
-;	    $ENDIF					      ;AN019;
-$$IF111:
-;	$ENDLOOP			;AN019;
-	JMP SHORT $$DO107
-$$EN107:
-	    cmp    P_Swit_K, 1		;AN019;If /K entered,
-	    push   ds			;AN019;
-	    mov    ax, Code		;AN019;
-	    mov    ds, ax		;AN019;
-	    assume ds:Code		;AN019;
-;	    $IF    E			;AN019;
-	    JNE $$IF114
-	       mov    KEYRD_Func, 0	;AN019;Use the conventional keyboard functions
-	       mov    KEYSTS_Func, 1	;AN019;
-;	    $ENDIF			;AN019;
-$$IF114:
-	    pop    ds			;AN019;
-	    assume ds:SYSINITSEG	;AN019;
-;	$ENDSRCH			;AN019;
-$$SR107:
-	jmp	Coff			;AN019;
+; Apply the options only after the entire line parses successfully.
+        cmp     ah, '1'
+        jne     Tryz
+        mov     di, offset Swit_Parms
+        xor     cx,cx
+        mov     dx,cx
+        mov     Swit_Selected,cl
+Swit_Parse:
+        call    Sysinit_Parse
+        jnc     Swit_Result
+        call    Badparm_p
+        jmp     Coff
+Swit_Result:
+        cmp     ax,$P_RC_EOL
+        je      Swit_Apply
+        cmp     Result_Val.$P_SYNONYM_PTR,offset Swit_K
+        jne     Swit_SetFastFree
+        or      Swit_Selected,Swit_Keyboard
+        jmp     short Swit_Parse
+Swit_SetFastFree:
+        or      Swit_Selected,Swit_FatScan
+        jmp     short Swit_Parse
+Swit_Apply:
+        test    Swit_Selected,Swit_Keyboard
+        jz      Swit_CheckFastFree
+        push    ds
+        mov     ax,Code
+        mov     ds,ax
+        assume  ds:Code
+        mov     KEYRD_Func,0
+        mov     KEYSTS_Func,1
+        pop     ds
+        assume  ds:SYSINITSEG
+Swit_CheckFastFree:
+        test    Swit_Selected,Swit_FatScan
+        jz      Swit_Done
+        push    es
+        les     di,cs:[DOSINFO]
+        mov     es:[di.SYSI_FASTFREE],1
+        pop     es
+Swit_Done:
+        jmp     Coff
 
 ;------------------------------------------------------------------------------
 ; Bogus command

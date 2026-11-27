@@ -1029,10 +1029,26 @@ PaintLeft dw 0
 PaintRight dw 0
 PaintTop dw 0
 PaintBottom dw 0
+        extrn TileLength:word,TileBytes:byte,TileBack:byte
+TileRow dw 0
 PaintColor db 0
 PaintBorder db 0
 DSEG ends
-PNTINI: push ax
+PNTINI: ; Up to 64 scan lines. CGA packs each row in one byte and EGA
+        ; supplies a byte for each plane.
+        push ax
+        mov ax,64D
+        cmp CRTMOD,0dh
+        jb CheckTileHeight
+        mul byte ptr PIXBTS
+CheckTileHeight:
+        cmp ax,TileLength
+        pop ax
+        jae PaintHeightOK
+        stc
+        ret
+PaintHeightOK:
+        push ax
         mov PaintBorder,al
         mov al,ATRPAT
         cmp CRTMOD,0dh
@@ -1045,6 +1061,13 @@ PaintLimits:
         mov PaintColor,al
         mov PaintLeft,0
         mov ax,EgaRightX
+        cmp CRTMOD,0dh
+        jae PaintScreenRight
+        mov ax,319D
+        cmp PIXBTS,1
+        jne PaintScreenRight
+        mov ax,639D
+PaintScreenRight:
         mov PaintRight,ax
         cmp ViewActive,0
         je PaintSetupDone
@@ -1196,7 +1219,35 @@ PositionDone: pop ax
         ret
 
 PaintScanStart:
+        push dx
         call PaintPosition
+        cmp TileLength,0
+        je PaintSpanReady
+        ; One packed CGA byte or one byte per EGA plane describes a row.
+        xor dx,dx
+        cmp CRTMOD,0dh
+        jb TileRowIndex
+        xor bx,bx
+        mov bl,PIXBTS
+        push ax
+        mov ax,TileLength
+        add ax,bx
+        dec ax
+        div bx
+        mov cx,ax
+        pop ax
+        xor dx,dx
+        div cx
+        mov ax,dx
+        mul bx
+        jmp short SaveTileRow
+TileRowIndex:
+        div TileLength
+        mov ax,dx
+SaveTileRow:
+        mov TileRow,ax
+PaintSpanReady:
+        pop dx
         xor bx,bx
         xor cx,cx
         ret
@@ -1210,9 +1261,72 @@ PaintRead:
         pop cx
         pop bx
         ret
+; Install the tile color at column DI. Packed CGA uses the pixel mask
+; within a byte. Planar EGA uses one bit at that column from each plane.
+TileAttribute:
+        push bx
+        push cx
+        push dx
+        mov bx,TileRow
+        mov al,TileBytes[bx]
+        cmp CRTMOD,0dh
+        jae TilePlanes
+        and al,ATRMSK
+        mov cl,ATRMSK
+TileShift:
+        test cl,1
+        jnz TileColor
+        shr cl,1
+        shr al,1
+        jmp short TileShift
+TilePlanes:
+        mov cx,di
+        and cl,7
+        mov ch,80h
+        shr ch,cl
+        xor ax,ax
+        mov dl,1
+        mov cl,PIXBTS
+TilePlane:
+        cmp bx,TileLength
+        jae TileColor
+        test TileBytes[bx],ch
+        jz NextTilePlane
+        or al,dl
+NextTilePlane:
+        inc bx
+        shl dl,1
+        dec cl
+        jnz TilePlane
+TileColor:
+        mov PaintColor,al
+        call SETATR
+        pop dx
+        pop cx
+        pop bx
+        ret
 EgaPaintPixel:
+        cmp TileLength,0
+        je PaintPixelColor
+        push ax
+        call TileAttribute
+        pop ax
+PaintPixelColor:
         cmp al,PaintColor
+        jne PaintChanged
+        cmp TileLength,0
         je EgaPaintDone
+        ; A tile row equal to the background must let the flood continue
+        ; to the next row even though its pixels already have their color.
+        push bx
+        mov bx,TileRow
+        mov al,TileBytes[bx]
+        pop bx
+        cmp al,TileBack
+        jne EgaPaintDone
+        mov cl,1
+        jmp short EgaPaintDone
+PaintChanged:
         mov cl,1
         push bx
         push di
@@ -1222,7 +1336,9 @@ EgaPaintPixel:
 EgaPaintDone:
         inc bx
         ret
-SCANL:  cmp ViewActive,0
+SCANL:  cmp TileLength,0
+        jne BoundedScanL
+        cmp ViewActive,0
         jne BoundedScanL
         cmp CRTMOD,0dh
         jb CgaScanL
@@ -1261,7 +1377,9 @@ SCL2:	CALL	SLRR
 ; Scan rightwards from current pixel to flood area with colour to paint (?)
 ;
 PUBLIC	SCANR
-SCANR:  cmp ViewActive,0
+SCANR:  cmp TileLength,0
+        jne BoundedScanR
+        cmp ViewActive,0
         jne BoundedScanR
         cmp CRTMOD,0dh
         jb CgaScanR

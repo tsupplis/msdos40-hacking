@@ -1537,7 +1537,12 @@ KEYXX:	RET
 
 ;List Function Keys
 ;
+DSEG    SEGMENT PUBLIC 'DATASG'
+        EXTRN   FileOut:BYTE
+DSEG    ENDS
 KEYLST:
+        CMP     FileOut,0       ; Suppress the listing when stdout is redirected.
+        JNE     KEYOXX
 	PUSH	BX
 	MOV	SI,OFFSET STRTAB	;List 10 Special Function
 	MOV	CX,OFFSET NMKEYF+(STKEYF*400O)
@@ -2720,8 +2725,6 @@ EventControl:
         pop ax
         jmp EVSET
 
-PUBLIC	IOCTL
-IOCTL:
 PUBLIC	ENVIRON
 ENVIRON:
 PUBLIC	PMAP

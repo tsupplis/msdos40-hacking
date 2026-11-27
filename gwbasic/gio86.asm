@@ -229,7 +229,16 @@ SNERR1:	JMP	SNERR		;syntax error
 ;  Syntax: CLOSE [[#]n [,[#]n ...]]
 ;
 CLOSE:	JNZ	CLOS1		;branch if statement has parm
-	JMP	CLSALL		;close all files if no parm given
+DSEG SEGMENT PUBLIC 'DATASG'
+        extrn CURLIN:word
+DSEG ends
+        ; An unqualified CLOSE reports cleanup errors in direct mode (ERL
+        ; 65535). On success continue on the original program line.
+        push CURLIN
+        mov CURLIN,-1
+        call CLSALL
+        pop CURLIN
+        ret
 CLOS1:	CMP	AL,LOW "#"
 	JNZ	NOLBS		;branch if no #
 	CALL	CHRGTR		;skip #
@@ -1703,6 +1712,7 @@ INIFDB:	PUSH	CX
 	ADD	CX,OFFSET FDBSIZ	;(CX) = size of block to allocate
 	CALL	FALLOC		;SI points to Allocated block
 	MOV	WORD PTR PTRFIL,SI
+	mov word ptr F_HANDLE[si],-1
 	MOV	BYTE PTR F_NUM[SI],BL	;Set file number
 	MOV	BYTE PTR F_DEV[SI],AL	;Set file device
 	MOV	BYTE PTR F_FLGS[SI],LOW 0
@@ -1755,6 +1765,7 @@ FACFPT:	CALL	CONINT		;[AL] = file number
 ;         else FLAGS.Z is true
 ;         All other registers are preserved
 ;
+        public FDBPTR
 FDBPTR:	MOV	SI,WORD PTR FILTAB	;[SI] points to 1st file-data-block
 GPTRL:	CMP	SI,WORD PTR STKLOW	;compare with nil FDB pointer
 	JZ	GPTRX		;branch if at end of FDB chain
@@ -1827,7 +1838,20 @@ PBAX:	POP	BX
 ;  nbytes := size of freed file-data-block.
 ;  xfrstr(fdbptr, nbytes); {move string space and lower-FDB's up nbytes}
 ;
-FFREE:	PUSH	AX
+FFREE:  pushf
+        cmp word ptr F_HANDLE[si],-1
+        je FreeNoHandle
+        push ax
+        push bx
+        mov bx,-1
+        xchg bx,F_HANDLE[si]
+        mov ah,3eh
+        int 21h
+        pop bx
+        pop ax
+FreeNoHandle:
+        popf
+        PUSH    AX
 	PUSH	BX
 	PUSH	CX
 	PUSH	DX
@@ -2183,6 +2207,9 @@ DSEG	ENDS
 ; and error recovery can make DOS calls before the program evaluates EXTERR.
 DSEG SEGMENT PUBLIC 'DATASG'
 DosErrorFields dw 4 dup (0)     ; Code, class, action, locus
+        public DeviceCall,DeviceError
+DeviceCall db 0
+DeviceError db 0
 DeviceStatus dw 0
 DeviceNameLen db 0
 DeviceName db 8D dup (0)
@@ -2263,12 +2290,48 @@ ErDevName:
 ;DSKERR - Processing for MSDOS interrupt &H24
 ;         Exit is made through ERROR.  No IRET is executed.
 ;
-DSKERR:	STI	
-	MOV	CL,AL		; DOS drive number for a block device
+DSKERR: push ds
+        push bx
+        mov bx,cs:CriticalDS
+        mov ds,bx
+        cmp DeviceCall,0
+        je LegacyCritical
+        test ah,08h             ; DOS permits FAIL for this request.
+        jz LegacyCritical
+        push ax
+        push cx
+        push dx
+        push es
+        push di
+        push si
+        mov cl,al
+        call RecordCritical
+        mov DeviceError,dl
+        call SaveDosError       ; DOS still exposes the original critical error here.
+        pop si
+        pop di
+        pop es
+        pop dx
+        pop cx
+        pop ax
+        pop bx
+        pop ds
+        mov al,3
+        iret
+LegacyCritical:
+        mov DeviceCall,0        ; This path leaves the DOS call through ERROR.
+        pop bx
+        pop ds
+        sti
+        MOV     CL,AL		; DOS drive number for a block device
 	ADD	SP,20D		;Adjust stack
 	POP	DS		;Get BASIC data segment
 	POP	ES		;Get BASIC extra segment
-	; BP:SI points to the DOS device header. Copy the status while it is live.
+	        call RecordCritical
+        call SaveDosError
+        jmp ERROR
+RecordCritical:
+; BP:SI points to the DOS device header. Copy the status while it is live.
         push es
         mov es,bp
         mov ax,es:[si+4]        ; 3.23 packs attribute bits 15..13 and 3..0.
@@ -2298,7 +2361,6 @@ CriticalCopy:
         loop CriticalCopy
 CriticalSaved:
         pop es
-        call SaveDosError
         MOV     DL,LOW OFFSET ERRDWP
 	OR	AL,AL		;Test for "Disk write protect"
 	JZ	DSKERX		;Disk write protect
@@ -2310,7 +2372,7 @@ CriticalSaved:
         cmp al,9D               ; DOS printer out of paper
         je DSKERX
 	MOV	DL,LOW OFFSET ERRDME	;Else "Disk media error
-DSKERX:	JMP	ERROR		;Go report the error and return
+DSKERX: ret
 				;Extra stuff on stack is removed by ERROR
 
 ;MSCTLC - Processing for MSDOS interrupt &H23
@@ -2324,7 +2386,10 @@ MSCTLC:	MOV	BYTE PTR MSDCCF,LOW 377O	;Record control-C event for POLKEY
 ;
 
 
-MSISET:	PUSH	AX
+        public CriticalDS
+CriticalDS dw 0
+MSISET: mov cs:CriticalDS,ds
+	PUSH	AX
 	PUSH	DX
 	PUSH	ES
 	MOV	AX,36D		;MSDOS fatal error interrupt

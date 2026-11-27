@@ -171,6 +171,7 @@ WorldFirst:
         pop WorldPos
         pop WorldPos+2
         add sp,2
+        mov DrawFraction,8080h
         mov GRPACX,cx
         mov GXPOS,cx
         mov GRPACY,dx
@@ -217,6 +218,7 @@ SCXREL:	LAHF
 	RCR	SI,1
 	SAHF
 	RCL	SI,1
+        mov DrawFraction,8080h
 	MOV	GRPACX,BX	;UPDATE GRAPHICS ACCUMLATOR
 	MOV	GXPOS,BX	;STORE SECOND COORDINTE FOR CALLER
 	MOV	CX,BX		;RETURN X IN BC
@@ -269,6 +271,7 @@ PSTNOT:	POP	BX
 ; IT RETURNS -1 IF THE POINT IS OUT OF BOUNDS
 ;
 POINT:
+        push DrawFraction
         push WorldPos
         push WorldPos+2
         push WorldPos+4
@@ -369,6 +372,7 @@ PointRestore:
         pop WorldPos+4
         pop WorldPos+2
         pop WorldPos
+        pop DrawFraction
 	RET	
 ;
 ; ATTRIBUTE SCAN
@@ -720,7 +724,7 @@ HLFDE:	MOV	AL,DH
 DSEG	SEGMENT PUBLIC 'DATASG'
 	public LineMask
 LineMask dw 0ffffh
-	EXTRN	DRWSCL:WORD,DRWANG:WORD
+	EXTRN	DRWSCL:WORD,DRWANG:WORD,DrawFraction:WORD
 DSEG	ENDS
 
 ;GRPRST resets graphics.  It is called at CLEARC and during INIT
@@ -750,6 +754,7 @@ GRPRST:
 ;Exit  - none
 ;
 GRPINI: extrn HomeCoords:near,SyncWorld:near
+        mov DrawFraction,8080h
         cmp ViewActive,0
         je FullHome
         jmp HomeCoords

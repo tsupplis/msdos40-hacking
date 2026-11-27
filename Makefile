@@ -45,6 +45,7 @@ check: all
 ifneq ($(wildcard gwbasic/gwbasic.ref),)
 	./test/check_gwaudit --quick --check
 	./test/check_gwaudit --editor --check
+	./test/check_gwaudit --share --check
 endif
 
 tools-check:

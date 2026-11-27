@@ -14,7 +14,7 @@ ROOT ?= $(CURDIR)/..
 # and MSDOS.SYS to be the first two root directory entries, so it lands in slot 2
 # (root directory = sector 19 on a 1.44M floppy, 32-byte entries).
 LABEL      = MSDOS.401
-LABEL_ROOT = 9792
+ROOT_SECTOR = 19
 LABEL_BOOT = 43
 
 BOOTSEC = $(ROOT)/boot/bootsec.bin
@@ -92,8 +92,14 @@ msdos40_base.img: $(BOOTSEC) $(IO_SYS) $(MSDOS) $(COMMAND) $(CMD_FILES) $(ROOT)/
 	mattrib -i $@ +s +h +r ::IO.SYS
 	mcopy -i $@ $(MSDOS) ::MSDOS.SYS
 	mattrib -i $@ +s +h +r ::MSDOS.SYS
+	# FORMAT /S leaves bytes 12..21 of each system entry zero. mcopy puts
+	# VFAT timestamps there. The loader reads entry 0 at 0000:0500, so its
+	# creation time would also set the BASIC-active byte at 0000:050F.
+	for slot in 0 1; do \
+	  dd if=/dev/zero of=$@ bs=1 seek=$$(($(ROOT_SECTOR)*512 + slot*32 + 12)) count=10 conv=notrunc || exit 1; \
+	done
 	mlabel -i $@ ::LABEL
-	printf '%-11s' '$(LABEL)' | dd of=$@ bs=1 seek=$(LABEL_ROOT) conv=notrunc 2>/dev/null
+	printf '%-11s' '$(LABEL)' | dd of=$@ bs=1 seek=$$(($(ROOT_SECTOR)*512 + 2*32)) conv=notrunc 2>/dev/null
 	printf '%-11s' '$(LABEL)' | dd of=$@ bs=1 seek=$(LABEL_BOOT) conv=notrunc 2>/dev/null
 	mcopy -i $@ $(COMMAND) ::COMMAND.COM
 	for f in $(CMD_FILES); do \

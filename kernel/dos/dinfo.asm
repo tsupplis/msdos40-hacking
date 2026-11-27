@@ -115,18 +115,10 @@ ASSUME	DS:NOTHING
         CallResident LogDiskCount
 ENDIF
 DoScan:
-	XOR	DX,DX
-	DEC	CX
-SCANFREE:
-	invoke ReadClusterEntry
-	JC	Crit_Leave
-	JNZ	NOTFREECLUS
-	INC	DX			; A free one
-NOTFREECLUS:
-	INC	BX			; Next cluster
-	LOOP	SCANFREE
-	DEC	BX			; BX was next cluster.	Convert to
-ReturnVals:
+	invoke CountFreeClusters
+	JC	CRIT_LEAVE
+GotVal:
+	MOV	BX,ES:[BP.dpb_max_cluster]
 	DEC	BX			; count
 	MOV	AL,ES:[BP.dpb_cluster_mask]
 	INC	AL			; Sectors/cluster
@@ -136,12 +128,6 @@ ReturnVals:
 CRIT_LEAVE:
 	CallResident LCritDisk
 	return
-;
-; We have correctly computed everything previously.  Load up registers for
-; return.
-;
-GotVal: MOV	BX,CX			; get cluster count
-	JMP	ReturnVals
 
 EndProc GetDiskInfo
 

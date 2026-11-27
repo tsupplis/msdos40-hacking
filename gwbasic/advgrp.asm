@@ -118,21 +118,95 @@ DSEG	SEGMENT PUBLIC 'DATASG'
 	EXTRN	LFPROG:WORD,RTPROG:WORD
 DSEG	ENDS
 
+        extrn FRESTR:near,CONINT:near,GETFBC:near
+DSEG segment public 'DATASG'
+        public TileLength,TileBytes,TileBack
+TileBack db 0
+TileLength dw 0
+TileBytes db 255 dup (?)
+DSEG ends
+
 PAINT:				;GET (X,Y) OF START
 	CALL	INTQUE		;INIT QUE
 	CALL	SCAN1
 	PUSH	CX		;SAVE COORDS OF START
 	PUSH	DX
-	CALL	ATRSCN		;SET FILL ATTRIBUTE AS CURRENT
-	MOV	AL,BYTE PTR ATRBYT	;DEFAULT BORDER COLOR IS SAME AS FILL
-	MOV	DL,AL		;DEFAULT ATTRIBUTE TO [E] LIKE GETBYT
-	DEC	BX
-	CALL	CHRGTR
-	JZ	SHORT GOTBRD	;NOTHING THERE - USE DEFAULT
-	CALL	SYNCHR
-	DB	OFFSET 44	;MAKE SURE OF COMMA
-	CALL	GETBYT		;GET BORDER COLOR ARGUMENT
-GOTBRD:	MOV	AL,DL		;BORDER ATTRIBUTE TO A
+        mov TileLength,0
+        mov TileBack,0
+        cmp byte ptr [bx],','
+        jne PaintDefault
+        call CHRGTR
+        cmp al,','
+        je PaintDefault
+        call FRMEVL
+        call GETYPR
+        jz PaintString
+        call CONINT
+        jmp short PaintAttribute
+PaintString:
+        push bx
+        call FRESTR
+        xor cx,cx
+        mov cl,[bx]
+        jcxz PaintInvalid
+        mov TileLength,cx
+        mov si,[bx+1]
+        mov di,offset TileBytes
+        cld
+        rep movsb               ; The border expression can move BASIC strings.
+        pop bx
+PaintDefault:
+        stc
+        push bx
+        call GETFBC
+        pop bx
+        mov dl,al
+PaintAttribute:
+        push bx
+        push dx
+        call PIXSIZ
+        or al,al
+        jz PaintInvalid
+        pop dx
+        mov al,dl
+        call SETATR
+        jc PaintInvalid
+        pop bx
+        cmp byte ptr [bx],','
+        jne PaintBorderReady
+        call CHRGTR
+        cmp al,','
+        je PaintBackground
+        call GETBYT
+        cmp byte ptr [bx],','
+        jne PaintBorderReady
+PaintBackground:
+        push dx
+        call CHRGTR
+        call FRMEVL
+        call GETYPR
+        jnz PaintInvalid
+        push bx
+        call FRESTR
+        mov cx,TileLength
+        jcxz PaintBackgroundDone
+        cmp byte ptr [bx],0
+        je PaintInvalid
+        mov si,[bx+1]
+        mov al,[si]
+        mov TileBack,al
+        mov di,offset TileBytes
+        repe scasb
+        je PaintInvalid
+PaintBackgroundDone:
+        pop bx
+        pop dx
+PaintBorderReady:
+        mov al,dl
+        jmp short PaintInit
+PaintInvalid:
+        jmp FCERR
+PaintInit:
 	CALL	PNTINI		;INIT PAINT STUFF & CHECK BORDER ATTRIB
 	JAE	SHORT ??L000
 	JMP	FCERR
@@ -1180,6 +1254,8 @@ DRWTAB:	DB	"U"+128D	;UP
 	ADR	DRWHHH
 	DB	"A"+128D	;ANGLE COMMAND
 	ADR	DANGLE
+        db "T"
+        ADR DrawTurn
 	DB	"B"		;MOVE WITHOUT PLOTTING
 	ADR	DNOPLT
 	DB	"N"		;DON'T CHANGE CURRENT COORDS
@@ -1247,63 +1323,24 @@ DOMOVR:	CALL	DSCLDE		;ADJUST Y OFFSET BY SCALE
 	CALL	DSCLDE		;GO SCALE IT.
 	XCHG	BX,DX		;GET ADJUSTED X INTO [HL]
 	POP	DX		;GET ADJUSTED Y INTO [DE]
-	XOR	AL,AL
-	MOV	BYTE PTR CSCLXY,AL
-	MOV	AL,BYTE PTR DRWANG	;GET ANGLE BYTE
-	RCR	AL,1		;LOW BIT TO CARRY
-	JAE	SHORT ANGEVN	;ANGLE IS EVEN - DON'T SWAP X AND Y
-	PUSH	AX		;SAVE THIS BYTE
-	PUSH	DX		;SAVE DY
-	PUSH	BX		;SAVE DX
-	CALL	GTASPC		;GO GET SCREEN ASPECT RATIO
-;NOTE: TOSHIBA GTASPC routine does this logic(i.e. it sets CSCLXY if aspect
-;                   ratio is greater than one).
-	MOV	AL,BH
-	OR	AL,AL		;IS ASPECT RATIO GREATER THAN ONE?
-	JZ	SHORT ASPLS0	;BRIF GOOD ASPECT RATIO
-	MOV	AL,LOW 1
-	MOV	BYTE PTR CSCLXY,AL
-	XCHG	BX,DX
-ASPLS0:
-	MOV	CL,BL		;GET ASPECT RATIO INTO [C] FOR GOSCAL
-	POP	BX		;GET BACK DX
-	MOV	AL,BYTE PTR CSCLXY
-	OR	AL,AL
-	JZ	SHORT ASPLS1	;branch if aspect ratio less 1.0
-	POP	SI		;XTHL
-	XCHG	SI,BX
-	PUSH	SI		;[HL]=DY, save DX
-ASPLS1:
-	XCHG	BX,DX		;1/ASPECT TO [HL]
-	PUSH	BX		;SAVE 1/ASPECT
-	CALL	GOSCAL		;SCALE DELTA X BY ASPECT RATIO
-	POP	CX		;GET BACK 1/ASPECT RATIO
-	POP	BX		;GET DY
-	PUSH	DX		;SAVE SCALED DX
-	XCHG	BX,DX		;DY TO [DE] FOR GOSCAL
-	MOV	BX,0
-DMULP:	ADD	BX,DX		;MULTIPLY [DE] BY HI BYTE OF 1/ASPECT
-	DEC	CH
-	JNZ	SHORT DMULP
-	PUSH	BX		;SAVE PARTIAL RESULT
-	CALL	GOSCAL		;MULTIPLY [DE] BY LOW BYTE
-	POP	BX		;GET BACK PARTIAL RESULT
-	ADD	BX,DX		;[HL]=Y * 1/ASPECT
-	POP	DX		;GET BACK SCALED Y
-	MOV	AL,BYTE PTR CSCLXY
-	OR	AL,AL
-	JZ	SHORT ASLSS1	;branch if aspect ratio less than 1
-	XCHG	BX,DX
-ASLSS1:
-	NEGDE			;ALWAYS NEGATE NEW DY
-	POP	AX		;GET BACK SHIFTED ANGLE
-ANGEVN:	RCR	AL,1		;TEST SECOND BIT
-	JAE	SHORT ANGPOS	;DON'T NEGATE COORDS IF NOT SET
-	NEGHL	
-	NEGDE			;NEGATE BOTH DELTAS
-ANGPOS:	CALL	GTABSC		;GO CALC TRUE COORDINATES
+        mov ax,DrawFraction
+        cmp byte ptr DRWANG,0
+        je DrawRelative
+        call RotateVector
+DrawRelative:
+        push ax
+        call GTABSC
+        pop ax
+        jmp short DrawPosition
 
-DRWABS:	MOV	AL,BYTE PTR DRWFLG	;SEE WHETHER WE PLOT OR NOT
+DRWABS:
+        mov ax,8080h            ; Absolute coordinates start on integer pixels.
+DrawPosition:
+        test byte ptr DRWFLG,40h
+        jnz KeepFraction
+        mov DrawFraction,ax
+KeepFraction:
+	MOV	AL,BYTE PTR DRWFLG	;SEE WHETHER WE PLOT OR NOT
 	ADD	AL,AL		;CHECK HI BIT
 	JB	SHORT DSTPOS	;JUST SET POSITION.
 	PUSH	AX		;SAVE THIS FLAG
@@ -1353,16 +1390,146 @@ DrawPaint:
         pop dx
         push GRPACX
         push GRPACY
-        jmp GOTBRD
+        mov TileLength,0
+        jmp PaintBorderReady
 DrawPaintError:
         jmp FCERR
 
-DANGLE:	JAE	SHORT NCFCER	;ERROR IF NO ARG
-	MOV	AL,DL		;MAKE SURE LESS THAN 4
-	CMP	AL,LOW 4
-	JAE	SHORT NCFCER	;ERROR IF NOT
-	MOV	BYTE PTR DRWANG,AL
-	RET	
+DSEG segment public 'DATASG'
+        public DrawFraction
+DrawFraction dw 8080h           ; X and Y remainders, biased by half a pixel.
+TurnCos dd ?
+TurnSinX dd ?
+TurnSinY dd ?
+DSEG ends
+        extrn SIN:near,COS:near,$MOVMF:near,$MOVFM:near
+        extrn $FADDS:near,$FMULS:near,$FDIVS:near,$QINT:near
+
+InvalidTurn:
+        jmp FCERR
+DANGLE: jnc InvalidTurn
+        cmp dl,4
+        jae InvalidTurn
+        mov al,90
+        mul dl
+        mov dx,ax
+        jmp short SetTurn
+DrawTurn:
+        call FETCHZ
+        cmp al,'A'
+        jne InvalidTurn
+        call VALSCN
+        or dx,dx
+        jns SetTurn
+        add dx,360
+SetTurn:
+        cmp dx,360
+        ja InvalidTurn
+        mov byte ptr DRWANG,0
+        or dx,dx
+        jz TurnDone
+        cmp dx,360
+        je TurnDone
+        inc byte ptr DRWANG
+        mov bx,dx
+        call DrawFloat
+        mov bx,7b0eh            ; pi/180 in single-precision MBF.
+        mov dx,0fa35h
+        call $FMULS
+        call PUSHF
+        call COS
+        mov bx,offset TurnCos
+        call $MOVMF
+        pop word ptr FAC-1
+        pop word ptr FAC-3
+        call SIN
+        call PUSHF
+        call GTASPC             ; Width/height in 1/256 units.
+        call DrawFloat
+        sub byte ptr FAC,8
+        mov bx,offset TurnSinY
+        call $MOVMF             ; Temporarily hold the aspect ratio.
+        pop bx
+        pop dx
+        push dx
+        push bx
+        call $FDIVS             ; sin(angle) / aspect
+        mov bx,offset TurnSinX
+        call $MOVMF
+        mov bx,offset TurnSinY
+        call $MOVFM
+        pop bx
+        pop dx
+        call $FMULS             ; -sin(angle) * aspect (screen Y grows down).
+        xor byte ptr FAC-1,80h
+        mov bx,offset TurnSinY
+        call $MOVMF
+TurnDone:
+        ret
+
+DrawFloat:
+        call MAKINT
+        jmp FRCSNG
+
+; X' = X*cos + Y*sin/aspect, Y' = Y*cos - X*sin*aspect.
+; Keep the fractional byte for the next relative move. N restores both
+; the integer cursor and its remainder.
+RotateVector:
+        push bx
+        push dx
+        mov di,offset TurnSinX
+        call RotateComponent
+        add al,byte ptr DrawFraction
+        adc cx,0
+        pop bx                  ; Exchange X and Y for the second component.
+        pop dx
+        push ax
+        push cx
+        mov di,offset TurnSinY
+        call RotateComponent
+        add al,byte ptr DrawFraction+1
+        adc cx,0
+        mov dx,cx
+        pop bx
+        mov ah,al
+        pop cx
+        mov al,cl
+        ret
+
+; BX is the displacement along this axis, DX across it, DI the signed
+; sine coefficient. Return the integer part in CX and the fraction in AL.
+RotateComponent:
+        push di
+        push dx
+        call DrawFloat
+        mov dx,word ptr TurnCos
+        mov bx,word ptr TurnCos+2
+        call $FMULS
+        pop cx
+        pop di
+        call PUSHF
+        push di
+        mov bx,cx
+        call DrawFloat
+        pop di
+        mov dx,[di]
+        mov bx,[di+2]
+        call $FMULS
+        pop bx
+        pop dx
+        call $FADDS
+        cmp byte ptr FAC,0
+        je TurnInteger
+        add byte ptr FAC,8
+        mov bx,8000h            ; Round the displacement to 1/256 pixel.
+        xor dx,dx
+        call $FADDS
+TurnInteger:
+        call $QINT
+        mov ch,bl
+        mov cl,dh
+        mov al,dl
+        ret
 
 NCFCER:
 DSCALE:	JNAE	SHORT ??L019
@@ -1401,15 +1568,6 @@ DSCPOS:	HLFDE			;DIVIDE BY FOUR
 	MOV	DH,AL
 	INC	DX		;ADJUST SO TRUNCATING TO LOWER VALUE
 	RET	
-
-GOSCAL:	MOV	AL,DH		;SEE IF NEGATIVE
-	ADD	AL,AL
-	JAE	SHORT GOSC2	;NO, MULTIPLY AS-IS
-	MOV	BX,OFFSET NEGD	;NEGATE BEFORE RETURNING
-	PUSH	BX
-	NEGDE			;MAKE POSITIVE FOR MULTIPLY
-GOSC2:	MOV	AL,CL		;GET SCALE FACTOR
-	JMP	SCALE2		;DO THE SCALE
 
 DCOLR:	JAE	SHORT NCFCER	;FC ERROR IF NO ARG
 	MOV	AL,DL		;GO SET ATTRIBUTE

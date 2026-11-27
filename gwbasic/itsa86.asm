@@ -151,6 +151,8 @@ BLKCPY:
 
 ;Set new data segment
 	MOV	DS,AX		;NEWDS
+        extrn CriticalDS:word
+        mov cs:CriticalDS,ax    ; INT 24h arrives with DOS register segments.
 	EXTRN	SEGINI:NEAR
 	CALL	SEGINI
 	MOV	AX,DS

@@ -594,8 +594,8 @@ STMDSX:
         QQ=QQ+3
         R PCOPY
         R2 DUMMY,SNERR          ; FE A6 is unassigned.
-        R2 LOCK,SNERR
-        R2 UNLOCK,SNERR
+        R2 LOCK,LockStmt
+        R2 UNLOCK,UnlockStmt
 ;*************************************************************************
 ;*** The DEBUG entry should be the last entry in the FE Dispatch table ***
 ;*************************************************************************
@@ -978,7 +978,12 @@ EVALNS:	INC	BX
         pop cx
         extrn ErDevFunc:near
         jmp ErDevFunc
-CheckPmap: cmp al,low offset $PMAP
+CheckPmap: cmp al,low offset $IOCTL
+        jne CheckPmapToken
+        pop cx
+        extrn IoctlFunc:near
+        jmp IoctlFunc
+CheckPmapToken: cmp al,low offset $PMAP
         jne CheckPlay
         pop cx
         extrn PmapFunc:near

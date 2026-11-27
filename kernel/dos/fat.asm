@@ -57,6 +57,7 @@ FastDiv = TRUE
 	i_need	FAILERR,BYTE
 	i_need	ALLOWED,BYTE
 	i_need	VOLCHNG_FLAG,BYTE
+	i_need	FASTFREE_ENABLED,BYTE
 	i_need	HIGH_SECTOR,WORD
 	i_need	BUF_HASH_COUNT,WORD
 	i_need	BUF_HASH_PTR,DWORD
@@ -364,6 +365,114 @@ ENDIF
 
 EndProc MAPCLUSTER
 
+
+; Count data clusters 2..dpb_max_cluster. ES:BP is the DPB, CX is its
+; maximum cluster. Return DX = free clusters, or carry on a read error.
+; Preserve AX (the caller's media byte) and the DPB. Only the caller
+; publishes the count, after every read succeeds.
+Procedure CountFreeClusters,NEAR
+	ASSUME DS:DOSGROUP,ES:NOTHING
+	PUSH	AX
+	XOR	DX,DX
+	CMP	[FASTFREE_ENABLED],0
+	JE	CountByCluster
+	CMP	CX,4096-10		; same FAT16 boundary as MAPCLUSTER
+	JB	CountByCluster
+	CALL	IsFixedMedia
+	JNE	CountByCluster
+
+	XOR	BX,BX			; free cluster count
+	MOV	DX,ES:[BP.dpb_first_FAT]
+	DEC	CX			; valid data-cluster entries remaining
+CountFatSector:
+	SaveReg <BX,CX>
+	MOV	[HIGH_SECTOR],0		; the first FAT precedes dpb_first_sector
+	XOR	AL,AL
+	MOV	SI,1			; FAT buffer, as in MAPCLUSTER
+	invoke ReadBufferType
+	RestoreReg <CX,BX>
+	JC	CountExit
+	MOV	AX,ES:[BP.dpb_sector_size]
+	SHR	AX,1
+	CMP	DX,ES:[BP.dpb_first_FAT]
+	PUSH	ES
+	LES	DI,[CURBUF]
+	LEA	DI,[DI.BufInSiz]
+	JNE	CountSectorSize
+	ADD	DI,4			; entries 0 and 1 are reserved
+	SUB	AX,2
+CountSectorSize:
+	CMP	AX,CX
+	JBE	CountSectorWords
+	MOV	AX,CX			; exclude padding in the final sector
+CountSectorWords:
+	SUB	CX,AX
+	PUSH	CX
+	MOV	CX,AX
+	ADD	BX,CX			; subtract each occupied entry
+	XOR	AX,AX
+	CLD
+CountFatWord:
+	REPE	SCASW
+	JE	CountSectorEnd
+	DEC	BX
+	JCXZ	CountSectorEnd
+	JMP	SHORT CountFatWord
+CountSectorEnd:
+	POP	CX
+	POP	ES
+	INC	DX
+	JCXZ	CountFatDone
+	JMP	SHORT CountFatSector
+CountFatDone:
+	MOV	DX,BX
+	JMP	SHORT CountComplete
+
+CountByCluster:
+	MOV	BX,2
+	DEC	CX
+CountOneCluster:
+	CALL	ReadClusterEntry
+	JC	CountExit
+	JNZ	CountNextCluster
+	INC	DX
+CountNextCluster:
+	INC	BX
+	LOOP	CountOneCluster
+CountComplete:
+	CLC
+CountExit:
+	POP	AX
+	return
+EndProc CountFreeClusters
+
+; ZF set only when the block driver positively identifies a fixed unit.
+; Drivers without the request, or returning an error, use the ordinary scan.
+IsFixedMedia PROC NEAR
+	PUSH	ES
+	LDS	SI,ES:[BP.dpb_driver_addr]
+	ASSUME DS:NOTHING
+	XOR	AX,AX
+	TEST	[SI.SDEVATT],DEVOPCL
+	JZ	FixedMediaStatus
+	MOV	AH,ES:[BP.dpb_UNIT]
+	MOV	AL,REMHL
+	PUSH	SS
+	POP	ES
+	MOV	BX,OFFSET DOSGROUP:DEVCALL
+	MOV	WORD PTR ES:[BX.REQLEN],AX
+	MOV	ES:[BX.REQFUNC],DEVRMD
+	MOV	ES:[BX.REQSTAT],0
+	invoke IssueDeviceRequest
+	MOV	AX,ES:[BX.REQSTAT]
+	AND	AX,STERR+STDON+STBUI
+FixedMediaStatus:
+	POP	ES
+	PUSH	SS
+	POP	DS
+	CMP	AX,STDON+STBUI
+	RET
+IsFixedMedia ENDP
 
 Break	<FATREAD_SFT/FATREAD_CDS -- CHECK DRIVE GET FAT>
 

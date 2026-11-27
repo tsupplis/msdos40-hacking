@@ -800,9 +800,11 @@ SUBST        Map a drive or remove its mapping.
    /D              Remove the mapping.
 SWITCHES=    Configure DOS startup switches.
 
- SWITCHES=/K
+ SWITCHES=[/K] [/FASTFREE]
 
    /K              Use conventional keyboard handling.
+   /FASTFREE       Count free space by FAT sector on fixed FAT16 drives.
+                   The default counts individual clusters.
 SYS          Transfer DOS system files to a disk.
 
  SYS [source] drive:

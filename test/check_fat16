@@ -3,6 +3,7 @@
 from pathlib import Path
 import argparse
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -10,8 +11,12 @@ import tempfile
 
 from hmaprobe import install_probe
 
-layouts = [("high", "dos=high,umb\ndevice=himem.sys"),
-                           ("near", "dos=high"), ("far", "device=ramdrive.sys 80")]
+layouts = [
+    ("high", "dos=high,umb\ndevice=himem.sys\nswitches=/K /FASTFREE", 1),
+    ("near", "dos=high", 0),
+    ("far", "device=ramdrive.sys 80\nswitches=/K", 0),
+    ("umb", "dos=umb\ndevice=himem.sys\nswitches=/fastfree /k", 1),
+]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("layout", nargs="?", choices=[row[0] for row in layouts])
 selected = parser.parse_args().layout
@@ -68,8 +73,26 @@ with tempfile.TemporaryDirectory(dir=work) as name:
         if subprocess.check_output(["mtype", "-i", boot, "::" + binary.name]) != binary.read_bytes():
             raise SystemExit(f"boot image differs from {binary}")
     subprocess.run(["mcopy", "-o", "-i", boot, root / "pce/pcehimem.sys", "::HIMEM.SYS"], check=True)
+    # Compare cold, cached, allocated and released counts with the actual FAT.
+    with raw.open("rb") as f:
+        f.seek(offset)
+        bpb = f.read(512)
+        reserved = int.from_bytes(bpb[14:16], "little")
+        roots = int.from_bytes(bpb[17:19], "little")
+        data_sectors = sectors - 17 - reserved - bpb[16] * (fat_bytes // 512) - (roots * 32 + 511) // 512
+        clusters = data_sectors // bpb[13]
+        f.seek(offset + reserved * 512 + 4)  # entries 0 and 1 are reserved
+        free_clusters = sum(entry == 0 for entry, in struct.iter_unpack("<H", f.read(clusters * 2)))
+    flag = re.search(r"0000:([0-9A-F]+) +FASTFREE_ENABLED\b",
+                     (root / "kernel/dos/msdos.map").read_text())[1]
+    subprocess.run(["nasm", "-f", "bin", "-DFastFree=0x" + flag, "-DEXPECTED=" + str(free_clusters),
+                    root / "test/fatcount.asm", "-o", tmp / "fatcount.com"], check=True)
+    subprocess.run(["mcopy", "-i", boot, tmp / "fatcount.com", "::FATCOUNT.COM"], check=True)
     batch = tmp / "fat.bat"
     install_probe(root, tmp, boot)
+    count_checks = ("fatcount {enabled}\nif errorlevel 1 echo FAILED FAT count retry\n"
+                    "dir c:\\pad.bin\ndir c:\\pad.bin\necho x>c:\\count.tmp\n"
+                    "dir c:\\pad.bin\ndel c:\\count.tmp\ndir c:\\pad.bin\n")
     workload = ("copy /b C:\\SOURCE.BIN C:\\RESULT.BIN\nfc /b C:\\SOURCE.BIN C:\\RESULT.BIN\n")
     # A 1 KiB directory cluster holds 32 slots, including "." and "..".
     workload += "md C:\\GROW\n"
@@ -79,10 +102,10 @@ with tempfile.TemporaryDirectory(dir=work) as name:
                  "md C:\\DEST\nmove C:\\GROW\\F33.TXT C:\\DEST\\MOVED.TXT\n"
                  "ren C:\\GROW\\F3?.TXT F3?.BIN\n"
                  "ren C:\\GROW\\F01.TXT F02.TXT\n")
-    for layout, config in layouts:
+    for layout, config, enabled in layouts:
         if selected and layout != selected:
             continue
-        batch.write_text(f"hmaio {layout[0]}!\n" + workload)
+        batch.write_text(f"hmaio {layout[0]}!\n" + count_checks.format(enabled=enabled) + workload)
         batch.with_suffix(".cfg").write_text(config + "\n")
         disk = tmp / (layout + ".pimg")
         subprocess.run(["pce-img", "convert", "-q", "-g", "306", "4", "17",
@@ -91,6 +114,10 @@ with tempfile.TemporaryDirectory(dir=work) as name:
                       env=dict(os.environ, IMG=str(boot), PCE_TEST_HD=str(disk))).splitlines()
         if output.count(b"LAYOUT PASS") != 1 or b"FC: no differences encountered" not in output or b"ENDTEST" not in output:
             raise RuntimeError(f"{layout}: {output!r}")
+        counts = [int(match[1].replace(b",", b"")) for line in output
+                  if (match := re.fullmatch(rb"\s*([0-9,]+) bytes free\s*", line))]
+        if counts != [n * cluster_size for n in (free_clusters, free_clusters, free_clusters-1, free_clusters)]:
+            raise RuntimeError(f"{layout}: incorrect free space: {counts!r}")
         saved = tmp / (layout + ".img")
         subprocess.run(["pce-img", "convert", "-q", "-O", "img", disk, saved], check=True)
         if subprocess.check_output(["mtype", "-i", f"{saved}@@{offset}", "::RESULT.BIN"]) != payload:

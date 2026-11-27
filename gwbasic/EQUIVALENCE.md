@@ -4,7 +4,7 @@ Target: the project’s 3.23 DOS binary and 4.01N under identical inputs. The al
 
 Sources: [Microsoft GW-BASIC User’s Reference and Guide, July 1987](https://bitsavers.computerhistory.org/pdf/microsoft/msdos_3.3/MS-DOS_GW-BASIC_198707.pdf), [1989 guide and command-line reference](https://bitsavers.trailing-edge.com/pdf/microsoft/gw-basic/Microsoft_GW-BASIC_Users_Guide_and_Reference_1989.pdf). Supplementary syntax must be verified against the project’s executable.
 
-402 work items: 356 matched, 37 different, 6 inconclusive, 3 intentional.
+399 work items: 368 matched, 22 different, 6 inconclusive, 3 intentional.
 
 ## Evidence
 
@@ -21,11 +21,21 @@ Matched records an observed matching case. It does not qualify the entire form o
 
 ## Running the paired regression
 
-With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 90 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Each interpreter runs the BASIC fixtures in succession and writes one report on the scratch floppy. Root checks also run `test/check_gwaudit --editor --check`: seven interactive comparisons share a second PCE boot. They record VGA text cells and the BIOS cursor at the live Ok prompt. Case 301 also records all ten macro expansions through INKEY$.
+With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 97 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Set `IMG` to pin all comparisons to a private DOS boot image. Each interpreter runs the BASIC fixtures in succession and writes its observations on the scratch floppy. Root checks also run `test/check_gwaudit --editor --check`: eight interactive comparisons share a second PCE boot. They record VGA text cells and the BIOS cursor at the live Ok prompt. Case 301 also records all ten macro expansions through INKEY$.
+
+Root checks also run two locking fixtures together with DOS SHARE installed (`test/check_gwaudit --share --check`). Cases 374–377 exercise whole-file and range operations with SHARE absent.
 
 PCE is the default for the paired audit, including timer and PLAY handler delivery and single cases such as `test/check_gwaudit --check 216`. Set `PCE_VIDEO=ega` or `PCE_VIDEO=vga` to select the adapter. The remaining historical probe runner requires explicit `--qemu`; it covers additional observations such as BIOS keyboard input and cursor position.
 
-For the selected IDs, the gate checks each case marked **Matched** against both the live 3.23 run and its recorded output. Incomplete observations fail in every category. The 250 paired records cover 212 matched, 32 different and 6 inconclusive cases. A known difference that now matches is reported for review. After verifying a fix, update that case’s JSONL record, matrix status and counts together. The remaining inventory rows use the other evidence listed above.
+For the selected IDs, the gate checks each case marked **Matched** against both the live 3.23 run and its recorded output. Incomplete observations fail in every category. The 249 paired records cover 224 matched, 19 different and 6 inconclusive cases. A known difference that now matches is reported for review. After verifying a fix, update that case’s JSONL record, matrix status and counts together. The remaining inventory rows use the other evidence listed above.
+
+Case 46 exercises both a write-protected floppy and a DOS character driver that rejects writes. Under RESUME NEXT both interpreters report out of paper at PRINT and again at explicit CLOSE, with matching ERL, ERR, ERDEV, ERDEV$ and EXTERR(0). When the active handler issues an unqualified CLOSE, both invoke it again with ERL = 65535 and error 27. The paired regression checks both forms.
+
+A separate handler using `IF ERL=65535 THEN RESUME 140` produced syntax diagnostics in both versions. The transcripts differed in their line numbers and Ok prompts. That compound error path remains open.
+
+Starting another program with RUN after the nested fault also leaves EXTERR(0) at 28 in 3.23 and 0 in 4.01N. The audit starts a fresh interpreter after case 46 so later fixtures have independent initial conditions.
+
+Additional paired PCE startup probes found that 3.23 prints .8414709848078965 for SIN(1#) under /D and .841471 without it. The historical case 280 uses MKS$, which forces single precision. With /I/F:2/S:64, 3.23 rejects file number 7 with error 52 and random record length 129 with error 5. With /M:49152,3071 it reports out of memory, while /M:49152,3072 starts successfully. 4.01N rejects the three switch forms at startup.
 
 ## Differences by work area
 
@@ -34,15 +44,12 @@ Each row below groups failed observations for investigation. The count measures 
 | Work area | Rows | Inventory IDs |
 |---|---:|---|
 | DOS environment and command execution | 3 | 40, 145, 146 |
-| DOS error information and device control | 2 | 231, 232 |
-| Disk files, sharing and locking | 8 | 53, 110, 249, 250, 374, 375, 376, 377 |
+| Disk files and sharing | 2 | 53, 110 |
 | Command streams, prompts and diagnostics | 6 | 70, 81, 102, 120, 151, 277 |
-| Keyboard, editor and function keys | 5 | 182, 185, 358, 359, 393 |
-| Drawing and tiled fill | 3 | 191, 348, 356 |
+| Keyboard, editor and function keys | 2 | 358, 393 |
 | Video modes, pages and EGA memory | 2 | 215, 342 |
 | Serial I/O | 4 | 233, 395, 396, 397 |
 | Startup switches | 3 | 280, 281, 286 |
-| Joystick input | 1 | 242 |
 
 ## Numbered matrix
 
@@ -93,12 +100,12 @@ Each row below groups failed observations for investigation. The count measures 
 | 043 | `EOF` | DOS | Matched | L |
 | 044 | `ERASE` | DOS | Matched | L |
 | 045 | `ERDEV` | DOS | Matched | PCE, case 45. Write-protected floppy: BASIC error 70 and ERDEV 512, cleared by RESUME. |
-| 046 | `ERDEV$` | DOS | Matched | PCE, case 46. Write-protected floppy: ERDEV$ reports A: and becomes empty on RESUME. |
+| 046 | `ERDEV$` | DOS | Matched | PCE, case 46. ERDEV$ identifies the write-protected drive and failing character device. PRINT and CLOSE fault at the same lines after RESUME NEXT. |
 | 047 | `ERL` | DOS | Matched | L |
 | 048 | `ERR` | DOS | Matched | L |
 | 049 | `ERROR` | DOS | Matched | L |
 | 050 | `EXP` | DOS | Matched | L |
-| 051 | `EXTERR` | DOS | Matched | PCE, case 51. DOS code, class, action and locus after failed OPEN and CHDIR, invalid selector and RESUME. |
+| 051 | `EXTERR` | DOS | Matched | PCE, case 51. DOS code, class, action and locus after failed OPEN and CHDIR, invalid selector and RESUME. The cross-program case following a nested device error is described above. |
 | 052 | `FIELD` | DOS | Matched | L |
 | 053 | `FILES` | DOS | Different | Q, case 53; output differs |
 | 054 | `FIX` | DOS | Matched | L |
@@ -134,8 +141,8 @@ Each row below groups failed observations for investigation. The count measures 
 | 084 | `LIST to file` | DOS | Matched | Q, case 84 |
 | 085 | `LOAD` | DOS | Matched | P |
 | 086 | `LOAD ,R` | DOS | Matched | Q, case 86 |
-| 087 | `LOC` | DOS | Matched | L |
-| 088 | `LOF` | DOS | Matched | L |
+| 087 | `LOC` | DOS | Matched | L. PCE case 231 also checks byte position on NUL before and after 133 bytes. |
+| 088 | `LOF` | DOS | Matched | L. PCE case 231 also checks NUL reports length 1 on open for append and 133 after writing 133 bytes. |
 | 089 | `LOG` | DOS | Matched | L |
 | 090 | `LSET` | DOS | Matched | L |
 | 091 | `MERGE` | DOS | Matched | P |
@@ -229,16 +236,14 @@ Each row below groups failed observations for investigation. The count measures 
 | 179 | `DRAW` | Display | Matched | Q, case 179 |
 | 180 | `GET graphics` | Display | Matched | X |
 | 181 | `INKEY$` | Display | Matched | Q, case 181 |
-| 182 | `KEY definition` | Display | Different | Q, case 182; redirected KEY LIST writes only labels to stdout in 3.23. Macro text appears on screen. 4.01N redirects the whole listing. |
 | 183 | `KEY ON` | Display | Matched | Q, case 183; statement accepted and returned |
 | 184 | `KEY OFF` | Display | Matched | Q, case 184; statement accepted and returned |
-| 185 | `KEY LIST` | Display | Different | Q, case 185; redirected KEY LIST writes only labels to stdout in 3.23. Macro text appears on screen. 4.01N redirects the whole listing. |
 | 186 | `LINE` | Display | Matched | Q, case 186 |
 | 187 | `LINE B` | Display | Matched | Q, case 187 |
 | 188 | `LINE BF` | Display | Matched | Q, case 188 |
 | 189 | `LOCATE` | Display | Matched | Q, case 189 |
 | 190 | `PAINT solid` | Display | Matched | Q, case 190 |
-| 191 | `PAINT tile` | Display | Different | Q, case 191; 3.23 1  / DONE, 4.01N ERROR 13  100 |
+| 191 | `PAINT tile` | Display | Matched | PCE, case 191. CGA alternating tile rows, the 64-row CGA limit and EGA bit-plane colors. |
 | 192 | `PALETTE reset` | Display | Matched | PCE, case 192, reset restores attribute 1 |
 | 193 | `PALETTE attribute,color` | Display | Matched | PCE, case 193, color 15 maps to 1Fh and -1 preserves it |
 | 194 | `PALETTE USING` | Display | Matched | PCE, case 194, integer array starting at index 2 sets attribute 1 |
@@ -278,8 +283,8 @@ Each row below groups failed observations for investigation. The count measures 
 | 228 | `WAIT` | Devices | Matched | Q, case 228 |
 | 229 | `PEEK` | Devices | Matched | Q, case 229 |
 | 230 | `POKE` | Devices | Matched | Q, case 230 |
-| 231 | `IOCTL` | Devices | Different | Q, case 231; 3.23 ERROR 5  100, 4.01N ERROR 73  100 |
-| 232 | `IOCTL$` | Devices | Different | Q, case 232; 3.23 ERROR 5  100, 4.01N ERROR 2  100 |
+| 231 | `IOCTL` | Devices | Matched | PCE, case 231. Sends FFh to the control device and reads it back. A regular file raises error 5. |
+| 232 | `IOCTL$` | Devices | Matched | PCE, case 232. Reads a one-byte control reply containing NUL. A regular file raises error 5. |
 | 233 | `OPEN COM` | Devices | Different | Q, case 233; 3.23 DONE, 4.01N ERROR 57  100 |
 | 234 | `OPEN device` | Devices | Matched | Q, case 234; statement accepted and returned |
 | 235 | `LPOS` | Devices | Matched | Q, case 235 |
@@ -289,15 +294,15 @@ Each row below groups failed observations for investigation. The count measures 
 | 239 | `WIDTH device` | Devices | Matched | Q, case 239 |
 | 240 | `WIDTH file` | Devices | Matched | Q, case 240; statement accepted and returned |
 | 241 | `PEN function` | Devices | Matched | Q, case 241 |
-| 242 | `STICK` | Devices | Different | Q, case 242; 3.23 0  / DONE, 4.01N 32767  / DONE |
+| 242 | `STICK` | Devices | Matched | PCE, case 242. Four disconnected axes return zero. Selector 4 raises error 5. |
 | 243 | `STRIG function` | Devices | Matched | Q, case 243 |
 | 244 | `STRIG ON` | Devices | Matched | Q, case 244; statement accepted and returned |
 | 245 | `STRIG OFF` | Devices | Matched | Q, case 245; statement accepted and returned |
 | 246 | `PLAY music` | Devices | Matched | Q, case 246; statement accepted and returned |
 | 247 | `PLAY(n) queue` | Devices | Matched | PCE, case 247, queued notes counted for both selector values tested |
 | 248 | `SOUND` | Devices | Matched | Q, case 248; statement accepted and returned |
-| 249 | `LOCK` | DOS + SHARE | Different | error 2 versus 70 |
-| 250 | `UNLOCK` | DOS + SHARE | Different | error 2 versus 70 |
+| 249 | `LOCK` | DOS + SHARE | Matched | PCE, case 249. Whole-file and large record locks, owner GET/PUT, disjoint and overlapping locks through another handle. |
+| 250 | `UNLOCK` | DOS + SHARE | Matched | PCE, case 250. CLOSE releases outstanding locks. Unlocking two separately locked records as one range raises error 70. |
 | 251 | `ON COM(n) GOSUB` | Event source | Matched | Q, case 251; statement accepted and returned |
 | 252 | `COM(n) ON` | Event source | Matched | Q, case 252; statement accepted and returned |
 | 253 | `COM(n) OFF` | Event source | Matched | Q, case 253; statement accepted and returned |
@@ -395,7 +400,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 345 | `DRAW movement U/D/L/R/E/F/G/H` | Display | Matched | Q, case 345 |
 | 346 | `DRAW M absolute/relative` | Display | Matched | Q, case 346 |
 | 347 | `DRAW B and N prefixes` | Display | Matched | Q, case 347 |
-| 348 | `DRAW A and TA rotation` | Display | Different | Q, case 348; 3.23 0             0  / DONE, 4.01N ERROR 5  100 |
+| 348 | `DRAW A and TA rotation` | Display | Matched | PCE, case 348. Rotation, accumulated fractional movement, aspect correction and angle limits. A separate degree sweep matched 722 endpoints in SCREEN 7 and SCREEN 2. |
 | 349 | `DRAW C and S` | Display | Matched | Q, case 349 |
 | 350 | `DRAW X substring` | Display | Matched | Q, case 350 |
 | 351 | `DRAW P fill` | Display | Matched | PCE, case 351, fill color, border and exterior pixels checked |
@@ -403,10 +408,9 @@ Each row below groups failed observations for investigation. The count measures 
 | 353 | `CIRCLE arc and aspect` | Display | Matched | Q, case 353 |
 | 354 | `LINE styled segments` | Display | Matched | PCE, case 354, alternating mask checked across five pixels |
 | 355 | `STEP relative coordinates` | Display | Matched | Q, case 355 |
-| 356 | `PAINT background tile` | Display | Different | Q, case 356; 3.23 1  / DONE, 4.01N ERROR 13  100 |
+| 356 | `PAINT background tile` | Display | Matched | PCE, case 356. CGA background byte controls fill across matching rows. A solid tile identical to its background raises error 5. |
 | 357 | `COLOR foreground/background/border` | Display | Matched | Q, case 357 |
-| 358 | `KEY user-defined event key` | Display | Different | Q, case 358; 3.23 DONE, 4.01N ERROR 5  100 |
-| 359 | `KEY macros` | Display | Different | Q, case 359; redirected KEY LIST writes only labels to stdout in 3.23. Macro text appears on screen. 4.01N redirects the whole listing. |
+| 358 | `KEY user-defined event key` | Display | Different | PCE, case 358. Of two A keystrokes, 3.23 traps the first, disables the trap in the handler and reads the second through INKEY$. 4.01N rejects the definition with error 5 and reads both. |
 | 360 | `SCREEN color switch` | Display | Matched | Q, case 360 |
 | 361 | `PLAY note and accidental` | Sound | Matched | Q, case 361; statement accepted and returned |
 | 362 | `PLAY octave and octave shifts` | Sound | Matched | Q, case 362; both accept relative octave shifts. Speaker output uncaptured. |
@@ -421,10 +425,10 @@ Each row below groups failed observations for investigation. The count measures 
 | 371 | `PRINT USING string fields` | DOS | Matched | L (file output) |
 | 372 | `PRINT USING literal escapes` | DOS | Matched | Q, case 372 |
 | 373 | `OPEN LEN` | DOS | Matched | Q, case 373 (8-byte record); L (reopen and read a sparse 20-byte record file) |
-| 374 | `LOCK whole file` | DOS | Different | Q, case 374; 3.23 ERROR 70  100, 4.01N ERROR 2  100 |
-| 375 | `LOCK record range` | DOS | Different | Q, case 375; 3.23 ERROR 70  100, 4.01N ERROR 2  100 |
-| 376 | `UNLOCK whole file` | DOS | Different | Q, case 376; 3.23 ERROR 70  100, 4.01N ERROR 2  100 |
-| 377 | `UNLOCK record range` | DOS | Different | Q, case 377; 3.23 ERROR 70  100, 4.01N ERROR 2  100 |
+| 374 | `LOCK whole file` | DOS | Matched | PCE, case 374. Returns error 70 when SHARE is absent. |
+| 375 | `LOCK record range` | DOS | Matched | PCE, case 375. Returns error 70 when SHARE is absent. |
+| 376 | `UNLOCK whole file` | DOS | Matched | PCE, case 376. Returns error 70 when SHARE is absent. |
+| 377 | `UNLOCK record range` | DOS | Matched | PCE, case 377. Returns error 70 when SHARE is absent. |
 | 378 | `CLEAR string space, memory limit and stack` | DOS | Matched | Q, case 378 |
 | 379 | `DEF FN arguments and result type` | DOS | Matched | Q, case 379 |
 | 380 | `INSTR with start offset` | DOS | Matched | L |
