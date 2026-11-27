@@ -1188,7 +1188,7 @@ NOAUTSET:
 	MOV	BX,AX
 	MOV	AH,CLOSE
 	INT	int_command
-	JMP	DRV0				;AC000; go process autoexec
+	JMP	NODTTM				; Show the header before AUTOEXEC
 
 NOABAT:
 	push	ax
@@ -1225,7 +1225,7 @@ NOABAT:
 	MOV	BX,AX				;AN000;  3/3/KK
 	MOV	AH,CLOSE			;AN000;  3/3/KK
 	INT	int_command			;AN000;  3/3/KK
-	JMP	SHORT DRV0			;AN000;  3/3/KK
+	JMP	SHORT NODTTM			; Likewise for KAUTOEXE
 
 NOKABAT:					;AN000;  3/3/KK
 	call	triage_add			;AN000;  get extended error

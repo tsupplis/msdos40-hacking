@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+"""Exercise GW-BASIC's file and interactive entry points under emu2 or DOS."""
+import argparse
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--pce", action="store_true", help="boot the full DOS floppy")
+args = parser.parse_args()
+
+# Write to the default drive. The DOS batch runs on the scratch B: drive.
+program = """10 OPEN "RESULT.TXT" FOR OUTPUT AS #1
+20 PRINT #1,2+2
+30 PRINT #1,INSTR("HELLO","LL")
+40 FOR I=1 TO 3:S=S+I:NEXT:PRINT #1,S
+50 SOUND 440,1:PRINT #1,"SOUND"
+60 ON ERROR GOTO 100
+70 OPEN "COM1:9600,N,8,1" AS #2
+80 PRINT #1,"UNEXPECTED SERIAL OPEN":CLOSE:SYSTEM
+100 PRINT #1,ERR:CLOSE:SYSTEM
+"""
+expected = b" 4 \r\n 3 \r\n 6 \r\nSOUND\r\n 57 \r\n"
+
+
+def check_text(result, expected):
+    # An FCB write can pad the last 128-byte record after the DOS text EOF.
+    data, eof, _ = result.partition(b"\x1a")
+    if data != expected or not eof:
+        raise SystemExit(f"Expected {expected!r} and DOS EOF, got {result!r}")
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    folder = Path(tmp)
+    bas = folder / "smoke.bas"
+    bas.write_bytes(program.replace("\n", "\r\n").encode("ascii") + b"\x1a")
+    binary = root / "gwbasic/gwbasic.exe"
+    if args.pce:
+        image = folder / "source.img"
+        shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+        on_disk = subprocess.check_output(["mtype", "-i", image, "::GWBASIC.EXE"])
+        if on_disk != binary.read_bytes():
+            raise SystemExit("Full floppy and built GWBASIC.EXE differ")
+        subprocess.run(["mcopy", "-o", "-i", image, bas, "::SMOKE.BAS"], check=True)
+        graphics = root / "test/gwvideo.bas"
+        subprocess.run(["mcopy", "-t", "-o", "-i", image, graphics, "::GWVIDEO.BAS"], check=True)
+        batch = folder / "check.bat"
+        batch.write_text("b:\na:gwbasic a:smoke.bas\na:gwbasic a:gwvideo.bas\n")
+        work = folder / "guest"
+        subprocess.run([root / "test/run_tests", batch], cwd=root, check=True,
+                       env=dict(os.environ, IMG=str(image), PCE_TEST_WORK=str(work)))
+        video = subprocess.check_output(["mtype", "-i", work / "b.img", "::VIDEO.TXT"])
+        values, eof, _ = video.partition(b"\x1a")
+        if not eof or [row.split() for row in values.splitlines()] != [
+            [b"1", b"2", b"0"], [b"1", b"1", b"0"], [b"2", b"1", b"0"],
+            [b"1", b"1", b"0"], [b"3"],
+        ]:
+            raise SystemExit(f"Unexpected CGA pixel results {video!r}")
+        print("PASS SCREEN 1 and 2 corner pixels, filled rectangles and return to text")
+        result = subprocess.check_output(["mtype", "-i", work / "b.img", "::RESULT.TXT"])
+    else:
+        shutil.copyfile(binary, folder / "gwbasic.exe")
+        env = dict(os.environ, EMU2_DRIVE_C=tmp)
+        emu = os.environ.get("EMU2", "emu2")
+        subprocess.run([emu, "gwbasic.exe", "smoke.bas"], cwd=folder, env=env,
+                       check=True, timeout=10)
+        result = (folder / "result.txt").read_bytes()
+    check_text(result, expected)
+    print("PASS program file, arithmetic, INSTR, FOR/NEXT, SOUND, COM error and SYSTEM")
+
+    if not args.pce:
+        # Script keystrokes through the BIOS. A file argument bypasses the editor.
+        (folder / "keys.txt").write_text("print 2+2\nsystem\n")
+        subprocess.run([emu, "-s", "keys.txt", "-i", "150", "-d", "10", "gwbasic.exe"],
+                       cwd=folder, check=True, timeout=10,
+                       env=dict(env, EMU2_DEBUG="video", EMU2_DEBUG_NAME="editor"))
+        screen = (folder / "editor-video.0.log").read_bytes()
+        rows = screen.rsplit(b"check_screen, redrawing", 1)[-1]
+        for pattern in (rb"^00: Microsoft GWBASIC Version 4\.01N +\r?$",
+                        rb"^01: Copyright 1977-1982 \(C\) by Microsoft +\r?$",
+                        rb"^03: Under MIT license +\r?$",
+                        rb"^02: Copyright 2020-2022 \(C\) by D\. Spinellis, S\. Gros, T\.K\. Chia ",
+                        rb"\d+: Ok", rb"\d+: print 2\+2", rb"\d+:  4 +\r?$",
+                        rb"\d+: system"):
+            if not re.search(pattern, rows, re.MULTILINE):
+                raise SystemExit(f"Missing editor screen row matching {pattern!r}")
+        print("PASS interactive Ok prompt, typed expression, displayed result and SYSTEM")

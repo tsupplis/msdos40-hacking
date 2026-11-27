@@ -53,12 +53,13 @@ EXTRA_FILES  = $(ROOT)/commands/graphics/graphics.pro $(SELECT_FILES) \
                $(ROOT)/kernel/himem/himem.sys \
                $(ROOT)/kernel/umbs/umbs.sys
 
-FULL_FILES = $(ROOT)/extra/mbasic.com $(ROOT)/extra/vi.exe
+EXTRA_TOOLS = $(ROOT)/extra/mbasic.com $(ROOT)/extra/vi.exe
+FULL_FILES = $(EXTRA_TOOLS) $(ROOT)/gwbasic/gwbasic.exe
 
 SDK = $(ROOT)/sdk
 DEV_BIN = $(addprefix $(SDK)/bin/,cl.exe c1.exe c2.exe c3.exe cl.err c1.err c23.err \
           masm.exe link.exe lib.exe nmake.exe tools.ini) \
-          $(ROOT)/commands/debug/debug.com $(ROOT)/commands/exe2bin/exe2bin.exe $(FULL_FILES)
+          $(ROOT)/commands/debug/debug.com $(ROOT)/commands/exe2bin/exe2bin.exe $(EXTRA_TOOLS)
 DEV_LIB = $(addprefix $(SDK)/lib/,slibce.lib slibfp.lib em.lib)
 DEV_HEADERS = $(wildcard $(SDK)/include/*.h $(SDK)/include/sys/*.h)
 DEV_EXAMPLES = $(addprefix $(SDK)/examples/,c/Makefile c/hello.c asm/Makefile asm/hello.asm)

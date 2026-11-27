@@ -15,7 +15,7 @@ _The remaining gaps are in the work:_
 - _setver_
 - _more to UMB and HMA_
 - _fully fledged text editor (currently shipped with [vi](https://github.com/tsupplis/cpm86-vi) as a reasonable place holder)_
-- _fully fledged gwbasic (currently shipped with a reconstructed [mbasic](https://github.com/tsupplis/cpm86-msbasic) 5.x as a solid place holder)_
+- _EGA and VGA graphics modes for the rebuilt GW-BASIC interpreter_
 
 We are progressing along the following roles:
 
@@ -24,7 +24,7 @@ We are progressing along the following roles:
 | **Stability** | Apply the documented Microsoft and IBM fixes and regression-test the rebuilt system. Progressive focused review of the whole code base |
 | **Memory** | Surpass DOS 3.3 and approach DOS 5.0, targeting at least 610 Kbytes free. UMB allocation and XMS reporting are available. Strong XMS, EMS, HMA, UMB implementations, Selected kernel services can run in the HMA or UMB and Main DOS to UMB |
 | **Storage** | Support for up to 8 physical disks, Integration of all patches, reliability testing |
-| **Usability** | Stay MS-DOS, smooth the angles. Command-line editing and recall, clearer memory diagnostics, BASIC (`mbasic.com`) and a screen editor (`vi.exe`) on the full floppy. |
+| **Usability** | Stay MS-DOS, smooth the angles. Command-line editing and recall, clearer memory diagnostics, BASIC (`gwbasic.exe` and `mbasic.com`) and a screen editor (`vi.exe`) on the full floppy. |
 | **Compatibility** | Match closely or exceed DOS 5.0 commands and functionality. For example some 6.X DOS command have been reimplemented and Y2K has a stronger enforcement (4 digit dates are mandatory) |
 
 ![MS-DOS 4.01 running in PCE with upper memory enabled](images/mem.png)
@@ -39,7 +39,7 @@ Based on hharte’s [4.01 reconstruction](https://github.com/lotharsm/MS-DOS/tre
 | `commands/` | `command.com`, external commands and `select` |
 | `common/`, `mapper/`, `messages/` | Shared objects, libraries and messages |
 | `asminc/`, `include/`, `sdk/` | Headers and vintage build tools |
-| [`gwbasic/`](gwbasic/readme.md) | Microsoft GW-BASIC with the MIT-licensed PC reconstruction by Diomidis Spinellis, Stjepan Gros and TK Chia |
+| [`gwbasic/`](gwbasic/README.md) | Microsoft GW-BASIC with the MIT-licensed PC reconstruction by Diomidis Spinellis, Stjepan Gros and TK Chia |
 | `media/` | Floppy image rules and startup files |
 
 ## System fixes
