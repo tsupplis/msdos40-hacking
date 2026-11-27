@@ -616,6 +616,7 @@ GRPRST:	PUSH	AX
 ;Exit  - none
 ;
 GRPINI:	CALL	GRPSIZ		;Get screen pixel dimensions
+        jcxz GrpIniDone         ; Text mode preserves the last graphics position
 	PUSH	CX		;B,C has X dimension
 	POP	BX		;Move X dimension to H
 	INC	BX		;Adjust for zero relative
@@ -626,6 +627,7 @@ GRPINI:	CALL	GRPSIZ		;Get screen pixel dimensions
 	INC	BX
 	INS86	321,353		;;SHR BX,1
 	MOV	GRPACY,BX	;Store as previous position
+GrpIniDone:
 	RET	
 
 CSEG	ENDS

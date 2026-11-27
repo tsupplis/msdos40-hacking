@@ -4,13 +4,14 @@ Target: the project’s 3.23 DOS binary and 4.01N under identical inputs. The al
 
 Sources: [Microsoft GW-BASIC User’s Reference and Guide, July 1987](https://bitsavers.computerhistory.org/pdf/microsoft/msdos_3.3/MS-DOS_GW-BASIC_198707.pdf), [1989 guide and command-line reference](https://bitsavers.trailing-edge.com/pdf/microsoft/gw-basic/Microsoft_GW-BASIC_Users_Guide_and_Reference_1989.pdf). Supplementary syntax must be verified against the project’s executable.
 
-402 work items: 320 matched, 73 different, 6 inconclusive, 3 intentional.
+402 work items: 337 matched, 56 different, 6 inconclusive, 3 intentional.
 
 ## Evidence
 
 Matched records an observed matching case. It does not qualify the entire form or its error paths. Untested means a direct behavioral comparison has not been recorded here. The default guest is MS-DOS 4.01N. Display work uses PCE EGA/VGA or QEMU VGA. Event tests require the corresponding event source, file locking requires a SHARE-enabled configuration for successful operations, and printer and serial tests require a captured output device.
 
 - Q — [paired DOS observations](../test/gwaudit.jsonl) from [check_gwaudit](../test/check_gwaudit) and [probe inputs](../test/gwcases.txt). Q entries record historical QEMU runs. Case 216 was rechecked on both PCE adapters. Results retain the reference and build outputs. Statement acceptance alone leaves device delivery, audio, timing and underlying limits unqualified.
+- PCE — paired observations recorded on headless PCE with the same runner and JSONL format. Palette registers return the programmed values on VGA. PCE EGA returns FFh on that port, so the EGA cases verify statement execution only.
 - A — [arithmetic and language probes](../test/gwmatrix.bas), checked against the optional reference.
 - L — [shared language assertions](../test/gwlang.bas), executed by [check_gwbasic](../test/check_gwbasic) on both interpreters.
 - P — [shared program-management session](../test/gwprog.txt), with output and listing assertions in check_gwbasic.
@@ -20,11 +21,11 @@ Matched records an observed matching case. It does not qualify the entire form o
 
 ## Running the paired regression
 
-With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 63 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Each interpreter runs the BASIC fixtures in succession and writes one report on the scratch floppy.
+With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 78 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Each interpreter runs the BASIC fixtures in succession and writes one report on the scratch floppy.
 
-PCE is the default for the paired audit, including single cases such as `test/check_gwaudit --check 216`. Set `PCE_VIDEO=ega` or `PCE_VIDEO=vga` to select the adapter. The historical 239-probe runner requires explicit `--qemu`; it covers additional observations such as BIOS keyboard input and cursor position.
+PCE is the default for the paired audit, including timer and PLAY handler delivery and single cases such as `test/check_gwaudit --check 216`. Set `PCE_VIDEO=ega` or `PCE_VIDEO=vga` to select the adapter. The full probe runner requires explicit `--qemu`; it covers additional observations such as BIOS keyboard input and cursor position.
 
-The gate enforces the 176 recorded cases marked **Matched** against both the live 3.23 run and its recorded output. Incomplete observations fail in every category. The summary counts the 57 known differences and six inconclusive probes separately. A known difference that now matches is reported for review. After verifying a fix, update that case’s JSONL record, matrix status and counts together. The remaining inventory rows use the other evidence listed above.
+For the selected IDs, the gate checks each case marked **Matched** against both the live 3.23 run and its recorded output. Incomplete observations fail in every category. The 243 paired records cover 193 matched, 44 different and 6 inconclusive cases. A known difference that now matches is reported for review. After verifying a fix, update that case’s JSONL record, matrix status and counts together. The remaining inventory rows use the other evidence listed above.
 
 ## Differences by work area
 
@@ -37,14 +38,12 @@ Each row below groups failed observations for investigation. The count measures 
 | Disk files, sharing and locking | 8 | 53, 110, 249, 250, 374, 375, 376, 377 |
 | Command streams, prompts and diagnostics | 6 | 70, 81, 102, 120, 151, 277 |
 | Keyboard, editor and function keys | 12 | 182, 185, 294, 295, 297, 299, 301, 358, 359, 389, 390, 393 |
-| Coordinates, viewports and text windows | 10 | 196, 198, 217, 218, 219, 220, 221, 223, 224, 225 |
-| Palette, drawing and tiled fill | 8 | 191, 192, 193, 194, 348, 351, 354, 356 |
+| Coordinates, viewports and text windows | 9 | 196, 217, 218, 219, 220, 221, 223, 224, 225 |
+| Drawing and tiled fill | 3 | 191, 348, 356 |
 | Video modes, pages and EGA memory | 2 | 215, 342 |
 | Serial I/O | 4 | 233, 395, 396, 397 |
-| Timer events | 4 | 271, 272, 273, 274 |
-| Music queue, events and PLAY syntax | 5 | 247, 263, 264, 265, 266 |
 | Startup switches | 3 | 280, 281, 286 |
-| Joystick, printer and cassette | 3 | 242, 400, 401 |
+| Joystick input | 1 | 242 |
 
 ## Numbered matrix
 
@@ -241,13 +240,13 @@ Each row below groups failed observations for investigation. The count measures 
 | 189 | `LOCATE` | Display | Matched | Q, case 189 |
 | 190 | `PAINT solid` | Display | Matched | Q, case 190 |
 | 191 | `PAINT tile` | Display | Different | Q, case 191; 3.23 1  / DONE, 4.01N ERROR 13  100 |
-| 192 | `PALETTE reset` | Display | Different | Q, case 192; 3.23 DONE, 4.01N ERROR 2  100 |
-| 193 | `PALETTE attribute,color` | Display | Different | syntax error |
-| 194 | `PALETTE USING` | Display | Different | Q, case 194; 3.23 DONE, 4.01N ERROR 2  100 |
+| 192 | `PALETTE reset` | Display | Matched | PCE, case 192, reset restores attribute 1 |
+| 193 | `PALETTE attribute,color` | Display | Matched | PCE, case 193, color 15 maps to 1Fh and -1 preserves it |
+| 194 | `PALETTE USING` | Display | Matched | PCE, case 194, integer array starting at index 2 sets attribute 1 |
 | 195 | `PCOPY` | Display | Matched | Reference page-copy probe and [independent page checks](../test/gwvideo.bas) |
 | 196 | `PMAP` | Display | Different | error 9 for PMAP(23,0) |
 | 197 | `POINT(x,y)` | Display | Matched | X |
-| 198 | `POINT(selector)` | Display | Different | Q, case 198; 3.23 11            12  / DONE, 4.01N ERROR 2  100 |
+| 198 | `POINT(selector)` | Display | Matched | PCE, case 198, selectors 0–3 and pixel readback in SCREEN 7. Both preserve the cursor after SCREEN 0 and a chained RUN |
 | 199 | `POS` | Display | Matched | Q, case 199 |
 | 200 | `PRESET` | Display | Matched | Q, case 200 |
 | 201 | `PSET` | Display | Matched | X |
@@ -296,7 +295,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 244 | `STRIG ON` | Devices | Matched | Q, case 244; statement accepted and returned |
 | 245 | `STRIG OFF` | Devices | Matched | Q, case 245; statement accepted and returned |
 | 246 | `PLAY music` | Devices | Matched | Q, case 246; statement accepted and returned |
-| 247 | `PLAY(n) queue` | Devices | Different | Q, case 247; 3.23 0  / DONE, 4.01N ERROR 2  100 |
+| 247 | `PLAY(n) queue` | Devices | Matched | PCE, case 247, queued notes counted for both selector values tested |
 | 248 | `SOUND` | Devices | Matched | Q, case 248; statement accepted and returned |
 | 249 | `LOCK` | DOS + SHARE | Different | error 2 versus 70 |
 | 250 | `UNLOCK` | DOS + SHARE | Different | error 2 versus 70 |
@@ -312,18 +311,18 @@ Each row below groups failed observations for investigation. The count measures 
 | 260 | `PEN ON` | Event source | Matched | Q, case 260; statement accepted and returned |
 | 261 | `PEN OFF` | Event source | Matched | Q, case 261; statement accepted and returned |
 | 262 | `PEN STOP` | Event source | Matched | Q, case 262; statement accepted and returned |
-| 263 | `ON PLAY(n) GOSUB` | Event source | Different | Q, case 263; 3.23 DONE, 4.01N ERROR 2  100 |
-| 264 | `PLAY ON` | Event source | Different | Q, case 264; 3.23 DONE, 4.01N ERROR 2  100 |
-| 265 | `PLAY OFF` | Event source | Different | Q, case 265; 3.23 DONE, 4.01N ERROR 2  100 |
-| 266 | `PLAY STOP` | Event source | Different | Q, case 266; 3.23 DONE, 4.01N ERROR 2  100 |
+| 263 | `ON PLAY(n) GOSUB` | Event source | Matched | PCE, case 263, background queue crossing invokes handler |
+| 264 | `PLAY ON` | Event source | Matched | PCE, case 264, event control accepted |
+| 265 | `PLAY OFF` | Event source | Matched | PCE, case 265, OFF suppresses handler |
+| 266 | `PLAY STOP` | Event source | Matched | PCE, case 266, STOP defers one handler until ON |
 | 267 | `ON STRIG(n) GOSUB` | Event source | Matched | Q, case 267; statement accepted and returned |
 | 268 | `STRIG(n) ON` | Event source | Matched | Q, case 268; statement accepted and returned |
 | 269 | `STRIG(n) OFF` | Event source | Matched | Q, case 269; statement accepted and returned |
 | 270 | `STRIG(n) STOP` | Event source | Matched | Q, case 270; statement accepted and returned |
-| 271 | `ON TIMER(n) GOSUB` | Event source | Different | error 6 |
-| 272 | `TIMER ON` | Event source | Different | error 73 |
-| 273 | `TIMER OFF` | Event source | Different | error 73 |
-| 274 | `TIMER STOP` | Event source | Different | Q, case 274; 3.23 DONE, 4.01N ERROR 73  100 |
+| 271 | `ON TIMER(n) GOSUB` | Event source | Matched | PCE, case 271, timer expiration invokes handler |
+| 272 | `TIMER ON` | Event source | Matched | PCE, case 272, event control accepted |
+| 273 | `TIMER OFF` | Event source | Matched | PCE, case 273, OFF suppresses handler |
+| 274 | `TIMER STOP` | Event source | Matched | PCE, case 274, STOP defers one handler until ON |
 | 275 | `Program filename` | DOS startup | Matched | Q, case 275 |
 | 276 | `Interactive start` | DOS startup | Matched | Q, case 276 |
 | 277 | `stdin redirection` | DOS startup | Different | Q, case 277; output differs |
@@ -400,10 +399,10 @@ Each row below groups failed observations for investigation. The count measures 
 | 348 | `DRAW A and TA rotation` | Display | Different | Q, case 348; 3.23 0             0  / DONE, 4.01N ERROR 5  100 |
 | 349 | `DRAW C and S` | Display | Matched | Q, case 349 |
 | 350 | `DRAW X substring` | Display | Matched | Q, case 350 |
-| 351 | `DRAW P fill` | Display | Different | Q, case 351; 3.23 2  / DONE, 4.01N ERROR 5  100 |
+| 351 | `DRAW P fill` | Display | Matched | PCE, case 351, fill color, border and exterior pixels checked |
 | 352 | `DRAW variable substitution` | Display | Matched | Q, case 352 |
 | 353 | `CIRCLE arc and aspect` | Display | Matched | Q, case 353 |
-| 354 | `LINE styled segments` | Display | Different | Q, case 354; 3.23 3             0  / DONE, 4.01N ERROR 2  100 |
+| 354 | `LINE styled segments` | Display | Matched | PCE, case 354, alternating mask checked across five pixels |
 | 355 | `STEP relative coordinates` | Display | Matched | Q, case 355 |
 | 356 | `PAINT background tile` | Display | Different | Q, case 356; 3.23 1  / DONE, 4.01N ERROR 13  100 |
 | 357 | `COLOR foreground/background/border` | Display | Matched | Q, case 357 |
@@ -449,13 +448,13 @@ Each row below groups failed observations for investigation. The count measures 
 | 397 | `COM LF and PE options` | RS-232 | Different | Q, case 397; 3.23 DONE, 4.01N ERROR 64  100 |
 | 398 | `Serial receive overflow and timeout` | RS-232 | Inconclusive | Q, case 398; serial open differs before overflow or timeout |
 | 399 | `CALLS` | Reference dictionary | Matched | Q, case 399 |
-| 400 | `LCOPY` | Reference dictionary | Different | Q, case 400; 3.23 DONE, 4.01N ERROR 5  100 |
-| 401 | `MOTOR` | Reference dictionary | Different | Q, case 401; 3.23 DONE, 4.01N ERROR 68  100 |
+| 400 | `LCOPY` | Reference dictionary | Matched | PCE, case 400, optional byte accepted and negative argument gives error 5 |
+| 401 | `MOTOR` | Reference dictionary | Matched | PCE, case 401, toggle and explicit byte accepted and 256 gives error 5. Physical motor untested |
 | 402 | `GO TO spelling` | Reference dictionary | Matched | Q, case 402 |
 
 ## Tokenizer cross-check
 
-Both alphabetic keyword dictionaries in the 3.23 executable were decoded (173 spellings including aliases and grammatical tokens). Both executables loaded the same ASCII lines and saved tokenized programs under emu2. Of 187 distinct spellings from those dictionaries, the inventory and the Q/QF tables in [ibmres.asm](ibmres.asm), 10 emitted different byte sequences. Equal bytes can also represent ordinary variable names. Runtime status requires a separate probe. These byte sequences exclude the record header and terminator.
+Both alphabetic keyword dictionaries in the 3.23 executable were decoded (173 spellings including aliases and grammatical tokens). Both executables loaded the same ASCII lines and saved tokenized programs under emu2. Of 187 distinct spellings from those dictionaries, the inventory and the Q/QF tables in [ibmres.asm](ibmres.asm), 9 emitted different byte sequences. Equal bytes can also represent ordinary variable names. Runtime status requires a separate probe. These byte sequences exclude the record header and terminator.
 
 | Spelling | 3.23 hex | 4.01N hex |
 |---|---|---|
@@ -463,7 +462,6 @@ Both alphabetic keyword dictionaries in the 3.23 executable were decoded (173 sp
 | `ERDEV$` | `fe 95 24` | `45 52 44 45 56 24` |
 | `EXTERR` | `fd 8b` | `45 58 54 45 52 52` |
 | `LOCK` | `fe a7` | `4c 4f 43 4b` |
-| `PALETTE` | `fe 9f` | `50 41 4c 45 54 54 45` |
 | `PMAP` | `fe 9e` | `50 4d 41 50` |
 | `SHELL` | `fe 9a` | `53 48 45 4c 4c` |
 | `UNLOCK` | `fe a8` | `55 4e 4c 4f 43 4b` |

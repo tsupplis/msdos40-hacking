@@ -360,7 +360,8 @@ def main():
         inventory = (root / "gwbasic/EQUIVALENCE.md").read_text()
         statuses = {int(n): status for n, status in re.findall(
             r"^\| (\d+) \| [^|]+ \| [^|]+ \| (\w+) \|", inventory, re.M)}
-        baseline = {r["id"]: r["ref"] for r in map(json.loads,
+        adapter = "vga" if args.qemu else os.environ.get("PCE_VIDEO", "vga")
+        baseline = {r["id"]: r.get("adapters", {}).get(adapter, r)["ref"] for r in map(json.loads,
                     (root / "test/gwaudit.jsonl").read_text().splitlines())}
         if baseline.keys() != cases.keys():
             parser.error("probe IDs differ from the recorded baseline")

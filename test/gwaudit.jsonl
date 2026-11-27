@@ -82,9 +82,10 @@
 {"exe": {"RESULT.TXT": " 8             6 \nDONE"}, "id": 189, "ref": {"RESULT.TXT": " 8             6 \nDONE"}}
 {"exe": {"RESULT.TXT": " 2             3 \nDONE"}, "id": 190, "ref": {"RESULT.TXT": " 2             3 \nDONE"}}
 {"exe": {"RESULT.TXT": "ERROR 13  100 "}, "id": 191, "ref": {"RESULT.TXT": " 1 \nDONE"}}
-{"exe": {"RESULT.TXT": "ERROR 2  100 "}, "id": 192, "ref": {"RESULT.TXT": "DONE"}}
-{"exe": {"RESULT.TXT": "ERROR 2  100 "}, "id": 194, "ref": {"RESULT.TXT": "DONE"}}
-{"exe": {"RESULT.TXT": "ERROR 2  100 "}, "id": 198, "ref": {"RESULT.TXT": " 11            12 \nDONE"}}
+{"adapters": {"ega": {"exe": {"RESULT.TXT": " 255 \nDONE"}, "ref": {"RESULT.TXT": " 255 \nDONE"}}}, "exe": {"RESULT.TXT": " 1 \nDONE"}, "id": 192, "ref": {"RESULT.TXT": " 1 \nDONE"}}
+{"adapters": {"ega": {"exe": {"RESULT.TXT": " 255 \n 255 \nDONE"}, "ref": {"RESULT.TXT": " 255 \n 255 \nDONE"}}}, "exe": {"RESULT.TXT": " 31 \n 31 \nDONE"}, "id": 193, "ref": {"RESULT.TXT": " 31 \n 31 \nDONE"}}
+{"adapters": {"ega": {"exe": {"RESULT.TXT": " 255 \nDONE"}, "ref": {"RESULT.TXT": " 255 \nDONE"}}}, "exe": {"RESULT.TXT": " 6 \nDONE"}, "id": 194, "ref": {"RESULT.TXT": " 6 \nDONE"}}
+{"exe": {"RESULT.TXT": " 11            12            11            12            3 \n 11            12 \nDONE"}, "id": 198, "ref": {"RESULT.TXT": " 11            12            11            12            3 \n 11            12 \nDONE"}}
 {"exe": {"RESULT.TXT": " 6 \nDONE"}, "id": 199, "ref": {"RESULT.TXT": " 6 \nDONE"}}
 {"exe": {"RESULT.TXT": " 0 \nDONE"}, "id": 200, "ref": {"RESULT.TXT": " 0 \nDONE"}}
 {"exe": {"RESULT.TXT": " 12 \nDONE"}, "id": 203, "ref": {"RESULT.TXT": " 12 \nDONE"}}
@@ -125,7 +126,7 @@
 {"exe": {"RESULT.TXT": "DONE"}, "id": 244, "ref": {"RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 245, "ref": {"RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 246, "ref": {"RESULT.TXT": "DONE"}}
-{"exe": {"RESULT.TXT": "ERROR 2  100 "}, "id": 247, "ref": {"RESULT.TXT": " 0 \nDONE"}}
+{"exe": {"RESULT.TXT": " 3             3 \nDONE"}, "id": 247, "ref": {"RESULT.TXT": " 3             3 \nDONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 248, "ref": {"RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 251, "ref": {"RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 252, "ref": {"RESULT.TXT": "DONE"}}
@@ -139,15 +140,18 @@
 {"exe": {"RESULT.TXT": "DONE"}, "id": 260, "ref": {"RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 261, "ref": {"RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 262, "ref": {"RESULT.TXT": "DONE"}}
-{"exe": {"RESULT.TXT": "ERROR 2  100 "}, "id": 263, "ref": {"RESULT.TXT": "DONE"}}
-{"exe": {"RESULT.TXT": "ERROR 2  100 "}, "id": 264, "ref": {"RESULT.TXT": "DONE"}}
-{"exe": {"RESULT.TXT": "ERROR 2  100 "}, "id": 265, "ref": {"RESULT.TXT": "DONE"}}
-{"exe": {"RESULT.TXT": "ERROR 2  100 "}, "id": 266, "ref": {"RESULT.TXT": "DONE"}}
+{"exe": {"RESULT.TXT": " 1 \nDONE"}, "id": 263, "ref": {"RESULT.TXT": " 1 \nDONE"}}
+{"exe": {"RESULT.TXT": "DONE"}, "id": 264, "ref": {"RESULT.TXT": "DONE"}}
+{"exe": {"RESULT.TXT": " 0 \nDONE"}, "id": 265, "ref": {"RESULT.TXT": " 0 \nDONE"}}
+{"exe": {"RESULT.TXT": " 0 \n 1 \nDONE"}, "id": 266, "ref": {"RESULT.TXT": " 0 \n 1 \nDONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 267, "ref": {"RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 268, "ref": {"RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 269, "ref": {"RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "DONE"}, "id": 270, "ref": {"RESULT.TXT": "DONE"}}
-{"exe": {"RESULT.TXT": "ERROR 73  100 "}, "id": 274, "ref": {"RESULT.TXT": "DONE"}}
+{"exe": {"RESULT.TXT": " 1 \nDONE"}, "id": 271, "ref": {"RESULT.TXT": " 1 \nDONE"}}
+{"exe": {"RESULT.TXT": "DONE"}, "id": 272, "ref": {"RESULT.TXT": "DONE"}}
+{"exe": {"RESULT.TXT": " 0 \nDONE"}, "id": 273, "ref": {"RESULT.TXT": " 0 \nDONE"}}
+{"exe": {"RESULT.TXT": " 0 \n 1 \nDONE"}, "id": 274, "ref": {"RESULT.TXT": " 0 \n 1 \nDONE"}}
 {"exe": {"CAPTURE.OUT": "RUNNING 4 ", "RESULT.TXT": "RUNNING\nDONE"}, "id": 275, "ref": {"CAPTURE.OUT": "RUNNING 4 ", "RESULT.TXT": "RUNNING\nDONE"}}
 {"exe": {"cursor": [0, 5], "screen": "READY\nOk\nprint 7\n 7\nOk"}, "id": 276, "ref": {"cursor": [0, 5], "screen": "READY\nOk\nprint 7\n 7\nOk"}}
 {"exe": {"CAPTURE.OUT": "Microsoft GWBASIC Version 4.01N\nCopyright 1977-1982 (C) by Microsoft         \nCopyright 2020-2022 (C) by D. Spinellis, S. Gros, T.K. Chia\nUnder MIT license\n62282 Bytes free\nOk\nSTDIN\nOk"}, "id": 277, "ref": {"CAPTURE.OUT": "Ok\u00a0\nPRINT \"STDIN\"\nSTDIN\nOk\u00a0\nSYSTEM"}}
@@ -189,10 +193,10 @@
 {"exe": {"RESULT.TXT": "ERROR 5  100 "}, "id": 348, "ref": {"RESULT.TXT": " 0             0 \nDONE"}}
 {"exe": {"RESULT.TXT": " 3 \nDONE"}, "id": 349, "ref": {"RESULT.TXT": " 3 \nDONE"}}
 {"exe": {"RESULT.TXT": " 3 \nDONE"}, "id": 350, "ref": {"RESULT.TXT": " 3 \nDONE"}}
-{"exe": {"RESULT.TXT": "ERROR 5  100 "}, "id": 351, "ref": {"RESULT.TXT": " 2 \nDONE"}}
+{"exe": {"RESULT.TXT": " 2             3             0 \nDONE"}, "id": 351, "ref": {"RESULT.TXT": " 2             3             0 \nDONE"}}
 {"exe": {"RESULT.TXT": " 3 \nDONE"}, "id": 352, "ref": {"RESULT.TXT": " 3 \nDONE"}}
 {"exe": {"RESULT.TXT": " 3 \nDONE"}, "id": 353, "ref": {"RESULT.TXT": " 3 \nDONE"}}
-{"exe": {"RESULT.TXT": "ERROR 2  100 "}, "id": 354, "ref": {"RESULT.TXT": " 3             0 \nDONE"}}
+{"exe": {"RESULT.TXT": " 3  0  3  0  3 END\nDONE"}, "id": 354, "ref": {"RESULT.TXT": " 3  0  3  0  3 END\nDONE"}}
 {"exe": {"RESULT.TXT": " 3 \nDONE"}, "id": 355, "ref": {"RESULT.TXT": " 3 \nDONE"}}
 {"exe": {"RESULT.TXT": "ERROR 13  100 "}, "id": 356, "ref": {"RESULT.TXT": " 1 \nDONE"}}
 {"exe": {"RESULT.TXT": " 19 \nDONE"}, "id": 357, "ref": {"RESULT.TXT": " 19 \nDONE"}}
@@ -234,6 +238,6 @@
 {"exe": {"RESULT.TXT": "ERROR 64  100 "}, "id": 397, "ref": {"RESULT.TXT": "DONE"}}
 {"exe": {"RESULT.TXT": "ERROR 57  100 "}, "id": 398, "ref": {"RESULT.TXT": "WRITE\nDONE"}}
 {"exe": {"RESULT.TXT": "RETURN\nDONE"}, "id": 399, "ref": {"RESULT.TXT": "RETURN\nDONE"}}
-{"exe": {"RESULT.TXT": "ERROR 5  100 "}, "id": 400, "ref": {"RESULT.TXT": "DONE"}}
-{"exe": {"RESULT.TXT": "ERROR 68  100 "}, "id": 401, "ref": {"RESULT.TXT": "DONE"}}
+{"exe": {"RESULT.TXT": "VALID\nERROR 5  110 "}, "id": 400, "ref": {"RESULT.TXT": "VALID\nERROR 5  110 "}}
+{"exe": {"RESULT.TXT": "VALID\nERROR 5  110 "}, "id": 401, "ref": {"RESULT.TXT": "VALID\nERROR 5  110 "}}
 {"exe": {"RESULT.TXT": "GOTO\nDONE"}, "id": 402, "ref": {"RESULT.TXT": "GOTO\nDONE"}}
