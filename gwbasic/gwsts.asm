@@ -2528,7 +2528,62 @@ EnvDone: pop es
 
 PUBLIC	PALETE
 PALETE:
-	JMP	SNERR
+        extrn USINTK:abs,PTRGET:near
+        extrn PaletteSize:near,PaletteReset:near,PaletteWrite:near,ArrayBounds:near
+        jnz PaletteArgs
+        jmp PaletteReset
+PaletteArgs:
+        cmp al,low offset USINTK
+        je PaletteArray
+        call GETBYT
+        push dx
+        call SYNCHR
+        db ','
+        call GETIN2
+        call EOSCHK
+        pop ax
+        call PaletteSize        ; CL = number of attributes for this mode.
+        cmp al,cl
+        jae BadPalette
+        jmp PaletteWrite
+
+PaletteArray:
+        call CHRGTR
+        push bx                 ; Save the name for the bounds lookup after subscripting.
+        call PTRGET
+        cmp byte ptr VALTYP,2
+        je PaletteInteger
+        extrn TMERR:near
+        jmp TMERR
+PaletteInteger:
+        call EOSCHK
+        pop si
+        push bx
+        push dx                 ; Address of the requested array element.
+        mov bx,si
+        call ArrayBounds        ; DX = array data, CX = first byte beyond it.
+        pop si
+        cmp si,dx
+        jb BadPalette
+        sub cx,si
+        jc BadPalette
+        shr cx,1
+        mov di,cx
+        call PaletteSize
+        cmp di,cx
+        jb BadPalette
+        xor di,di
+PaletteNext:
+        mov dx,[si]
+        mov ax,di
+        call PaletteWrite
+        add si,2
+        inc di
+        loop PaletteNext
+        pop bx
+        ret
+BadPalette:
+        jmp FCERR
 
 
 DSEG	SEGMENT PUBLIC 'DATASG'

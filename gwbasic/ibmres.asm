@@ -702,6 +702,7 @@ NTABX:
 OTABX:
 	DB	0
 PTABX:
+        Q PALETTE
         Q PCOPY
 	Q	PUT
 	Q	PAINT

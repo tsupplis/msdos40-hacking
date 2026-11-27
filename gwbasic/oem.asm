@@ -829,6 +829,18 @@ STACOM:
 TRMCOM:	MOV	AH,6
 	RET
 
+; DL is the requested motor state. PCs without cassette hardware may
+; report an unsupported BIOS call; GW-BASIC 3.23 ignores that status.
+        public CassetteMotor
+CassetteMotor:
+        push bx
+        mov ah,1
+        sub ah,dl
+        xor al,al
+        int 15h
+        pop bx
+        ret
+
 ; Get OEM specific portion of splash header
 ;
 ; INPUT
@@ -1774,7 +1786,7 @@ DOWNC2:	ADD	AH,20H
 ;			CF=1 Failure
 ;
 PUBLIC	LCPY
-LCPY:	STC
+LCPY:	CLC
 	RET
 
 ; Say how to lay out the function key display
@@ -2681,6 +2693,114 @@ EgaForeground:
 EgaErrorColor: stc
         ret
 EgaMonoPalette db 0,8h,18h,1,9h,19h,3,0bh,1bh
+; PaletteSize preserves AX, BX, DX, SI and DI. A CGA/MDA has no
+; programmable EGA attribute registers.
+        public PaletteSize,PaletteWrite,PaletteReset
+PaletteSize:
+        push ax
+        push bx
+        push dx
+        mov ax,1200h
+        mov bl,10h
+        int 10h
+        cmp bl,3
+        pop dx
+        pop bx
+        pop ax
+        ja PaletteInvalid
+        mov cx,16D
+        cmp CRTMOD,4
+        jb PaletteSizeDone
+        cmp CRTMOD,6
+        je PaletteTwo
+        cmp CRTMOD,5
+        jbe PaletteFour
+        cmp PIXBTS,2
+        jne PaletteSizeDone
+PaletteFour:
+        mov cl,4
+        ret
+PaletteTwo:
+        mov cl,2
+PaletteSizeDone:
+        ret
+PaletteInvalid:
+        jmp FCERR
+
+; AL = attribute, DX = BASIC color number (-1 keeps the existing color).
+PaletteWrite:
+        cmp dx,-1
+        je PaletteReturn
+        push bx
+        mov bl,al
+        mov bh,dl
+        cmp CRTMOD,0fh
+        je PaletteMono
+        cmp CRTMOD,4
+        jb Palette64
+        cmp CRTMOD,10h
+        jne Palette16
+        cmp PIXBTS,2
+        jne Palette64
+Palette16:
+        cmp dx,15D
+        ja PaletteInvalid
+        test dl,8D
+        jz PaletteBIOS
+        or bh,10h
+        jmp short PaletteBIOS
+Palette64:
+        cmp dx,63D
+        ja PaletteInvalid
+        jmp short PaletteBIOS
+PaletteMono:
+        cmp dx,8D
+        ja PaletteInvalid
+        push bx
+        mov bx,offset CSEG:EgaMonoPalette
+        mov al,dl
+        xlat cs:[bx]
+        pop bx
+        mov bh,al
+PaletteBIOS:
+        mov ax,1000h
+        int 10h
+        pop bx
+PaletteReturn:
+        ret
+
+PaletteReset:
+        call PaletteSize
+        push bx
+        push si
+        mov si,offset CSEG:EgaPalette
+        cmp CRTMOD,4
+        jb PaletteDefaults
+        mov si,offset CSEG:Cga4Palette
+        cmp CRTMOD,5
+        jbe PaletteDefaults
+        mov si,offset CSEG:Cga2Palette
+        cmp CRTMOD,6
+        je PaletteDefaults
+        mov si,offset CSEG:EgaLowPalette
+        cmp CRTMOD,0eh
+        jbe PaletteDefaults
+        mov si,offset CSEG:EgaPalette
+PaletteDefaults:
+        xor bx,bx
+PaletteLoad:
+        mov bh,cs:[si]
+        mov ax,1000h
+        int 10h
+        inc si
+        inc bl
+        loop PaletteLoad
+        pop si
+        pop bx
+        ret
+Cga2Palette db 0,3fh
+Cga4Palette db 0,3bh,3dh,3fh
+EgaLowPalette db 0,1,2,3,4,5,6,7,10h,11h,12h,13h,14h,15h,16h,17h
 EgaPalette db 0,1,2,3,4,5,14h,7,38h,39h,3ah,3bh,3ch,3dh,3eh,3fh
 LegacyColor:	PUSHF
 	CLD

@@ -23,10 +23,24 @@ Written by:     Len Oorthuys
 	.SALL
 
 
-	EXTRN	DERDNA:NEAR
-PUBLIC	MOTOR
-MOTOR:	JMP	DERDNA		;Device unavailable error
-
+DSEG SEGMENT PUBLIC 'DATASG'
+        assume ds:DSEG
+MotorOn db 0
+DSEG ENDS
+        extrn GETBYT:near,CassetteMotor:near
+PUBLIC MOTOR
+MOTOR:  jnz MotorArgument
+        mov dl,MotorOn
+        xor dl,1
+        jmp short SetMotor
+MotorArgument:
+        call GETBYT
+        or dl,dl
+        jz SetMotor
+        mov dl,1
+SetMotor:
+        mov MotorOn,dl
+        jmp CassetteMotor
 
 CSEG	ENDS
 	END

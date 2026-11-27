@@ -189,13 +189,13 @@ SNDTR2:	CLI
 ;	(?)
 ;
 PUBLIC	DONOTE
-DONOTE: xor ah,ah
+DONOTE: push di
+        xor di,di
         jmp short NoteEntry
         public NoteGap
-NoteGap: mov ah,80h             ; Internal articulation gap, no BASIC queue entry.
+NoteGap: push di
+        mov di,8000h             ; Internal articulation gap, no BASIC queue entry.
 NoteEntry:
-        push di
-        mov di,ax
         PUSH AX
 	PUSH	BX
 	PUSH	CX
