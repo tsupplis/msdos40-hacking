@@ -2,11 +2,12 @@
 
 MS-DOS 4.01 rebuilt on Unix with GNU make and the original tools under `emu2`. The goal is a usable replacement for DOS 3.3 and 5.0. This project will carry on iteratively, also reviewing/fixing the original code to be both robust and dependable. It is a permissive opensource, lightweight, nimble cousin of freedos and opendos keeping close to the microsoft/ibm commercial dos versions. The version tag is 4.01N.
 
-_**Status Summary v1.7.0**: We already have:_
+_**Status Summary v1.8.0**: We already have:_
 - _native `HIMEM.SYS` for XMS 2.0 on AT-compatible 286 and later systems. and extended memory management of vdisk, ramdrive and smartdrv moved to XMS_
-- _HMA,UMB support with placement configurability for a large part of DOS and installed drivers and software (Up to 613KB of free application memory)_
+- _HMA,UMB support with placement configurability for a large part of DOS and installed drivers and software (Up to 615KB of free application memory)_
 - _all common commands are in line with DOS 5.0 with a few DOS 6.22 commands added._
 - _support for up to 8 hard drives._
+- _EGA and VGA graphics modes for the rebuilt GW-BASIC interpreter_
 
 _Some deliverate choice are made no to close the following gaps (doskey replaced only by simple command line editing, undelete/unformat, 2.88MB floppy format)._
 
@@ -15,7 +16,6 @@ _The remaining gaps are in the work:_
 - _setver_
 - _more to UMB and HMA_
 - _fully fledged text editor (currently shipped with [vi](https://github.com/tsupplis/cpm86-vi) as a reasonable place holder)_
-- _EGA and VGA graphics modes for the rebuilt GW-BASIC interpreter_
 
 We are progressing along the following roles:
 
@@ -27,7 +27,14 @@ We are progressing along the following roles:
 | **Usability** | Stay MS-DOS, smooth the angles. Command-line editing and recall, clearer memory diagnostics, BASIC (`gwbasic.exe` and `mbasic.com`) and a screen editor (`vi.exe`) on the full floppy. |
 | **Compatibility** | Match closely or exceed DOS 5.0 commands and functionality. For example some 6.X DOS command have been reimplemented and Y2K has a stronger enforcement (4 digit dates are mandatory) |
 
-![MS-DOS 4.01 running in PCE with upper memory enabled](images/mem.png)
+<p align="center">
+<img src="./images/mem.png" alt="MEM reporting conventional, upper and extended memory" width="48%">
+<img src="./images/menu.png" alt="DOS boot menu for selecting a system configuration" width="48%">
+<br><sub>Memory report &nbsp;·&nbsp; Boot configuration menu</sub><br>
+<img src="./images/gwbasic.png" alt="GW-BASIC 4.01N running under DOS" width="48%">
+<img src="./images/help.png" alt="HELP listing DOS commands and drivers" width="48%">
+<br><sub>GW-BASIC &nbsp;·&nbsp; Command and driver help</sub>
+</p>
 
 ## Sources
 
