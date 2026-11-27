@@ -837,10 +837,19 @@ STACOM:
 TRMCOM:	MOV	AH,6
 	RET
 
-; DL is the requested motor state. PCs without cassette hardware may
-; report an unsupported BIOS call; GW-BASIC 3.23 ignores that status.
-        public CassetteMotor
-CassetteMotor:
+; MOTOR without an argument toggles the last requested state. SetMotor
+; takes DL = 0 for off, nonzero for on. As in 3.23, ignore BIOS status
+; on PCs without cassette hardware.
+        public ToggleMotor,SetMotor
+ToggleMotor:
+        mov dl,MotorOn
+        xor dl,1
+SetMotor:
+        or dl,dl
+        jz MotorReady
+        mov dl,1
+MotorReady:
+        mov MotorOn,dl
         push bx
         mov ah,1
         sub ah,dl
@@ -3332,6 +3341,7 @@ PGTACT	DW	?		; From BASICA.COM DSEG:085BH
 				; pixel data
 
 CBFSEG	DW	?		; Segment of COM buffer (i.e. CBFSEG:0)
+MotorOn db 0                    ; Last requested cassette motor state.
 
 	EXTRN	ACTPAG:BYTE,CRTWID:BYTE
 	EXTRN	WDOTOP:BYTE,WDOLFT:BYTE,WDOBOT:BYTE,WDORGT:BYTE
