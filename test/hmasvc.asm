@@ -152,6 +152,19 @@ vector_wrong:
     mov ah,3bh
     int 21h
     jc fail
+    ; Renaming a directory exercises RENAME's shared PATH length check.
+    push ds
+    pop es
+    mov dx,directory
+    mov di,renamed_dir
+    mov ah,56h
+    int 21h
+    jc fail
+    mov dx,renamed_dir
+    mov di,directory
+    mov ah,56h
+    int 21h
+    jc fail
     mov dx,10h                  ; create a missing file
     call xopen
     jc fail
@@ -371,6 +384,7 @@ overlay_name db 'A:\SVCOVL.EXE',0
 overlay_block dw 0,0
 directory db 'B:\SVCDIR',0
 broot db 'B:\',0
+renamed_dir db 'B:\SVCDIR2',0
 current_path times 64 db 0ffh
 pathname db 'B:\SVCDIR\..\SVCTEST.TMP',0
 flatname db 'B:\SVCTEST.TMP',0

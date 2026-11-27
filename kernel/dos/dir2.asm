@@ -74,7 +74,6 @@ asmvar	Kanji
         DosCodeEntry GetPath,45
         DosCodeEntry GetPathNoSet,46
         DosCodeEntry DevName,169
-        DosCodeEntry ValidateCDS,170
         DosCodeEntry CheckThisDevice,171
 ; Enter the installed FASTOPEN callback from the resident kernel.
 	procedure PathLookup,NEAR
@@ -1377,7 +1376,6 @@ Dir2Entries LABEL WORD
         DW OFFSET DOSGROUP:GetPath_VECTOR, OFFSET DOSGROUP:ResolvePath
         DW OFFSET DOSGROUP:GetPathNoSet_VECTOR, OFFSET DOSGROUP:ResolvePathWithFlags
         DW OFFSET DOSGROUP:DevName_VECTOR, OFFSET DOSGROUP:FindDeviceName
-        DW OFFSET DOSGROUP:ValidateCDS_VECTOR, OFFSET DOSGROUP:ValidateCurrentDirectory
         DW OFFSET DOSGROUP:CheckThisDevice_VECTOR, OFFSET DOSGROUP:CheckPathDevice
         DW 0
 DOSEND ENDS

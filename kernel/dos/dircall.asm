@@ -75,10 +75,6 @@ BREAK <DOS_MkDir - Make a directory entry>
 ;		error_access_denied
 ;			Already exists, device name
 ; DS preserved, Others destroyed
-        EXTRN FCB_SELECTED:NEAR
-        DosCodeEntry DOS_MKDIR,72
-        DosCodeEntry DOS_CHDIR,73
-        DosCodeEntry DOS_RMDIR,74
 CODE ENDS
 DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
         ASSUME CS:DOSCODE,SS:DOSGROUP
@@ -400,9 +396,7 @@ DOSCODE ENDS
 DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
         PUBLIC DircallEntries
 DircallEntries LABEL WORD
-        DW OFFSET DOSGROUP:DOS_MKDIR_VECTOR, OFFSET DOSGROUP:MakeDirectory
-        DW OFFSET DOSGROUP:DOS_CHDIR_VECTOR, OFFSET DOSGROUP:ChangeDirectory
-        DW OFFSET DOSGROUP:DOS_RMDIR_VECTOR, OFFSET DOSGROUP:RemoveDirectory
+        ; All three directory operations have only DOSCODE callers.
         DW 0
 DOSEND ENDS
     END

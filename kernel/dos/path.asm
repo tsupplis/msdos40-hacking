@@ -38,8 +38,6 @@ INCLUDE DEVSYM.INC
 .cref
 .list
 
-	EXTRN	DOS_MkDir:NEAR,DOS_RmDir:NEAR
-
 	I_Need	ThisCDS,DWORD		; pointer to Current CDS
 	I_Need	WFP_Start,WORD		; pointer to beginning of directory text
 	I_Need	Curr_Dir_End,WORD	; offset to end of directory part
@@ -48,6 +46,16 @@ INCLUDE DEVSYM.INC
 	I_Need	NoSetDir,BYTE		; TRUE => no exact match on splice
 	I_Need	cMeta,BYTE
 	I_Need	DrvErr,BYTE							;AN000;
+
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry $CURRENT_DIR,170
+        DosCodeEntry $RMDIR,74
+        DosCodeEntry $CHDIR,73
+        DosCodeEntry $MKDIR,72
+CODE ENDS
+
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP
 
 BREAK <$CURRENT_DIR - dump the current directory into user space>
 ;
@@ -61,16 +69,16 @@ BREAK <$CURRENT_DIR - dump the current directory into user space>
 ;	    AX = error_invalid_drive
 ;
 
-	procedure $CURRENT_DIR,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:NOTHING
-	EnterCrit   critDisk
+	procedure GetCurrentDirectory,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+	CallResident ECritDisk
 	MOV	AL,DL			; get drive number (0=def, 1=A)
-	Invoke	GetVisDrv		; grab it
+	CallResident GetVisDrv		; grab it
 	JNC	CurrentValidate 	; no error -> go and validate dir
 CurdirErr:
-	LeaveCrit   critDisk
+	CallResident LCritDisk
 	MOV	AL,[DrvErr]		;IFS.					;AN000;
-	transfer SYS_RET_ERR		;IFS. make noise			;AN000;
+	jmp	PathError
 CurrentValidate:
 	SaveReg <DS,SI> 		; save destination
 	LDS	SI,ThisCDS
@@ -83,7 +91,7 @@ CurrentValidate:
 DoCheck:
 	MOV	NoSetDir,0		; interested only in contents
 	MOV	DI,OFFSET DOSGroup:OpenBuf
-	Invoke	ValidateCDS		; output is ES:DI -> CDS
+	Invoke	ValidateCurrentDirectory		; output is ES:DI -> CDS
 	SaveReg <ES,DI> 		; swap source and destination
 	RestoreReg  <SI,DS>
 GetDst:
@@ -123,9 +131,9 @@ FOK:
 
 ;; 10/29/86 E5 char
 	xor	AL,AL			; MZ 19 Jan 84
-	LeaveCrit   critDisk
-	transfer    Sys_Ret_OK		; no more, bye!
-EndProc $Current_Dir
+	CallResident LCritDisk
+	jmp	PathSuccess
+EndProc GetCurrentDirectory
 
 BREAK <$RmDir -- Remove a directory>
 
@@ -144,29 +152,30 @@ BREAK <$RmDir -- Remove a directory>
 ;		User tries to delete a current directory
 ;	AX = error_current_directory
 
-	procedure $RMDIR,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+	procedure RemoveUserDirectory,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 
 	push	dx			; Save ptr to name
 	push	ds
 	mov	si,dx			; Load ptr into si
 	mov	di,offset DOSGroup:OpenBuf	; di = ptr to buf for trans name
 	push	di
-	Invoke	TransPathNoSet		; Translate the name
+	Invoke	TranslatePathNoSet		; Translate the name
 	pop	di			; di = ptr to buf for trans name
 	jnc	rmlset			; If transpath succeeded, continue
 	pop	ds
 	pop	dx			; Restore the	 name
-	error	error_path_not_found	; Otherwise, return an error
+	mov	al,error_path_not_found
+	jmp	PathError
 
 rmlset:
 	CMP	cMeta,-1		;   if (cMeta >= 0)
 	Jnz	rmerr			;	return (-1);
 	Context ES
 	xor	al,al			; al = 0 , ie drive a:
-rmloop: Invoke	GetCDSFromDrv		; Get curdir for drive in al
+rmloop: CallResident GetCDSFromDrv		; Get curdir for drive in al
 	jc	rmcont			; If error, exit loop & cont normally
-	Invoke	StrCmp			; Are the 2 paths the same?
+	CallResident StrCmp			; Are the 2 paths the same?
 	jz	rmerr			; Yes, report error.
 	inc	al			; No, inc al to next drive number
 	jmp	rmloop			; Go check next drive.
@@ -174,14 +183,18 @@ rmloop: Invoke	GetCDSFromDrv		; Get curdir for drive in al
 rmerr:
 	pop	ds
 	pop	dx			; Restore the	 name
-	error	error_current_directory ;  error
+	mov	al,error_current_directory
+	jmp	PathError
 
 rmcont:
 	pop	ds
 	pop	dx			; Restore the	 name
-	MOV	SI,OFFSET DOSGroup:DOS_RmDIR
-	JMP	DoDirCall
-EndProc $RMDIR
+	call	PrepareDirectoryPath
+	jc	RmDirDone
+	invoke	RemoveDirectory
+RmDirDone:
+	jmp	DirectoryResult
+EndProc RemoveUserDirectory
 
 BREAK <$ChDir -- Change current directory on a drive>
 
@@ -211,16 +224,16 @@ BREAK <$ChDir -- Change current directory on a drive>
 ;	STD XENIX Return
 ;	AX = chdir_path_not_found if error
 
-	procedure $CHDIR,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+	procedure SetCurrentDirectory,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 	MOV	DI,OFFSET DOSGroup:OpenBuf  ; spot for translated name
 	MOV	SI,DX			; get source
-	Invoke	TransPath		; go munge the path and get real CDS
+	Invoke	TranslatePath		; go munge the path and get real CDS
 	JNC	ChDirCrack		; no errors, try path
 ChDirErrP:
 	MOV	AL,error_path_not_found
 ChdirErr:
-	transfer    SYS_Ret_Err 	; oops!
+	jmp	PathError
 
 ChDirCrack:
 	Assume	DS:DOSGroup
@@ -236,7 +249,7 @@ ChDirCrack:
  ;
  ; Find out if the directory exists.
  ;
-	Invoke	DOS_ChDir
+	Invoke	ChangeDirectory
 	JC	ChDirErr
 ;
 ; Get back CDS to see if a join as seen.  Set the currency pointer (only if
@@ -249,7 +262,7 @@ ChDirCrack:
 ; The CDS was joined.  Let's go back and grab the logical CDS.
 ;
 	SaveReg <ES,DI,CX>		; save CDS and cluster...
-	Invoke	Get_User_Stack		; get original text
+	CallResident Get_User_Stack		; get original text
 	ASSUME	DS:NOTHING
 	MOV	DI,[SI.User_DX]
 	MOV	DS,[SI.User_DS]
@@ -257,7 +270,7 @@ ChDirCrack:
 	XCHG	SI,DI
 	XOR	AL,AL			; do no splicing
 	SaveReg <DI>
-	Invoke	TransPathNoSet		; Munge path
+	Invoke	TranslatePathNoSet		; Munge path
 	RestoreReg  <SI>
 	Assume	DS:DOSGroup
 ;
@@ -289,10 +302,10 @@ setdirclus:
 	MOV	ES:[DI].curdir_id,CX
 	LES	DI,ThisCDS		; get logical CDS
 SkipRecency:
-	invoke	FStrCpy
+	CallResident FStrCpy
 	XOR	AL,AL
-	transfer    Sys_Ret_OK
-EndProc $CHDIR
+	jmp	PathSuccess
+EndProc SetCurrentDirectory
 
 BREAK <$MkDir - Make a directory entry>
 ; Inputs:
@@ -308,36 +321,43 @@ BREAK <$MkDir - Make a directory entry>
 ;		Device name given
 ;		Disk or directory(root) full
 
-	procedure $MKDIR,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
-	MOV	SI,OFFSET DOSGroup:DOS_MkDir
-DoDirCall:
-	MOV	DI,OFFSET DOSGroup:OpenBuf  ; spot for translated name
-	SaveReg <SI>
-	MOV	SI,DX			; get source
-	Invoke	TransPath		; go munge the path
-	RestoreReg  <SI>
-	JNC	MkDirCrack		; no errors, try path
-MkErrP:
-	MOV	AL,error_Path_Not_Found    ; oops!
-MkErr:
-	transfer    Sys_Ret_Err
-MkDirCrack:
-	CMP	cMeta,-1
-	JNZ	MkErrP
+	procedure MakeUserDirectory,NEAR
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+        call    PrepareDirectoryPath
+        jc      PathError
+        invoke  MakeDirectory
+DirectoryResult:
+        jc      PathError
+PathSuccess:
+        CallResident SYS_RET_OK
+        ret
+PathError:
+        CallResident SYS_RET_ERR
+        ret
+EndProc MakeUserDirectory
 
-	PUSH	SI			;PTM.					;AN000;
-	CALL	Check_PathLen		;PTM.  check path len > 67 ?		;AN000;
-	POP	SI			;PTM.					;AN000;
-	JBE	pathok			;PTM.					;AN000;
-	MOV	AL,error_Access_Denied	;PTM. ops!
-	transfer Sys_Ret_Err		;PTM.
-pathok:
-	CALL	SI			; go get file
-	ASSUME	ES:NOTHING
-	JC	MkErr			; no errors
-	transfer    Sys_Ret_OK
-EndProc $MKDIR
+; DS:DX is the caller's pathname. Translate it for DIRCALL and reject
+; wildcards or an overlong result. Carry set returns the DOS error in AL.
+PrepareDirectoryPath PROC NEAR
+        mov     di,OFFSET DOSGROUP:OpenBuf
+        mov     si,dx
+        invoke  TranslatePath
+        jc      InvalidDirectoryPath
+        cmp     cMeta,-1
+        jne     InvalidDirectoryPath
+        call    Check_PathLen
+        jbe     DirectoryPathOK
+        mov     al,error_Access_Denied
+        stc
+        ret
+InvalidDirectoryPath:
+        mov     al,error_Path_Not_Found
+        stc
+        ret
+DirectoryPathOK:
+        clc
+        ret
+PrepareDirectoryPath ENDP
 
 ; Inputs:
 ;	nothing
@@ -347,17 +367,27 @@ EndProc $MKDIR
 ;	Above flag set if > 67
 
 	procedure Check_PathLen,NEAR
-	ASSUME	CS:DOSGroup,DS:NOTHING,ES:NOTHING,SS:DOSGroup
+	ASSUME	CS:DOSCODE,DS:NOTHING,ES:NOTHING,SS:DOSGroup
 
 	MOV	SI,Wfp_Start
   entry Check_PathLen2
 	Context <DS>
 	SaveReg <CX>
-	invoke	DStrLen
+	CallResident DStrLen
 	CMP	CX,DirStrLen
 	RestoreReg  <CX>
 	ret
 EndProc Check_PathLen
-CODE ENDS
+DOSCODE ENDS
+
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC PathEntries
+PathEntries LABEL WORD
+        DW OFFSET DOSGROUP:$CURRENT_DIR_VECTOR, OFFSET DOSGROUP:GetCurrentDirectory
+        DW OFFSET DOSGROUP:$RMDIR_VECTOR, OFFSET DOSGROUP:RemoveUserDirectory
+        DW OFFSET DOSGROUP:$CHDIR_VECTOR, OFFSET DOSGROUP:SetCurrentDirectory
+        DW OFFSET DOSGROUP:$MKDIR_VECTOR, OFFSET DOSGROUP:MakeUserDirectory
+        DW 0
+DOSEND ENDS
 END
 

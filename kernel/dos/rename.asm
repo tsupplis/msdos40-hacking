@@ -194,7 +194,7 @@ Check_dev:
 	TEST	[SI.dir_attr],attr_directory  ;PTM.				;AN000;
 	JZ	notdir			      ;PTM.				;AN000;
 	MOV	SI,[REN_WFP]		      ;PTM.  if yes, make sure path	;AN000;
-	CallResident Check_Pathlen2		      ;PTM.   length < 67		;AN000;
+	invoke Check_Pathlen2		      ;PTM.   length < 67		;AN000;
 notdir:
 	POP	DS			      ;PTM.				;AN000;
 	JA	GOTERR			      ;PTM.				;AN000;
