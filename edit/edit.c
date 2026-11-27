@@ -42,6 +42,7 @@
 /* Each allocation fits one segment. The compact model puts row text on the
  * far heap. Display columns are long because tabs can expand eightfold. */
 #define MAX_LINE 32766
+#define PROMPT_LIMIT 64
 typedef struct {
     char *chars;
     int size;
@@ -803,11 +804,24 @@ static char *findLiteral(char *text, const char *query, const unsigned char *fol
     return NULL;
 }
 
+/* Consume the rest of an overlong field inside the prompt. A pasted
+ * suffix must never be interpreted as editor commands or document text. */
+static void rejectLongPrompt(void)
+{
+    int key;
+    strcpy(E.message, "64-byte limit. Enter or Esc to cancel.");
+    editorRefreshScreen();
+    do {
+        key = editorReadKey();
+    } while (key != 13 && key != 27);
+    strcpy(E.message, "Input exceeds 64 bytes. Cancelled.");
+}
+
 /* Incremental literal search. Arrow keys cycle matching rows in either
  * direction; Escape restores the entry position. */
 static void editorFind(int folded)
 {
-    char query[65], *match;
+    char query[PROMPT_LIMIT + 1], *match;
     int len = 0, x = E.cx, y = E.cy, row = y, step, i, c;
     long left = E.left;
     int top = E.top;
@@ -823,8 +837,10 @@ static void editorFind(int folded)
             editorHelp();
             continue;
         }
-        if (c == 27 || c == 13)
+        if (c == 27 || c == 13) {
+            strcpy(E.message, c == 13 && len && !E.matchlen ? "Text not found." : "");
             break;
+        }
         step = 1;
         if (c == ARROW_UP || c == ARROW_LEFT) {
             step = -1;
@@ -834,9 +850,13 @@ static void editorFind(int folded)
         else {
             if (c == 8 && len)
                 len--;
-            else if (c >= 32 && c <= 255 && len < 64)
+            else if (c >= 32 && c <= 255) {
+                if (len == PROMPT_LIMIT) {
+                    rejectLongPrompt();
+                    break;
+                }
                 query[len++] = (char)c;
-            else
+            } else
                 continue;
             query[len] = 0;
             row = y;
@@ -856,14 +876,13 @@ static void editorFind(int folded)
             }
         }
     }
-    E.matchlen = 0;
-    if (c == 27) {
+    if (c != 13 || !E.matchlen) {
         E.cx = x;
         E.cy = y;
         E.left = left;
         E.top = top;
     }
-    E.message[0] = 0;
+    E.matchlen = 0;
 }
 
 /* Match non-overlapping occurrences in the original row. The sizing pass
@@ -921,14 +940,23 @@ static int replacePrompt(const char *label, char *text)
         sprintf(E.message, "%s%s", label, text + (len > visible ? len - visible : 0));
         editorRefreshScreen();
         key = editorReadKey();
-        if (key == 27 || key == 13)
-            return key == 13;
+        if (key == 27 || key == 13) {
+            if (key == 13)
+                return 1;
+            strcpy(E.message, "Replace cancelled.");
+            return 0;
+        }
         if (key == HELP_KEY)
             editorHelp();
         else if (key == 8 && len)
             --len;
-        else if ((key == 9 || (key >= 32 && key <= 255)) && len < 64)
+        else if (key == 9 || (key >= 32 && key <= 255)) {
+            if (len == PROMPT_LIMIT) {
+                rejectLongPrompt();
+                return 0;
+            }
             text[len++] = (char)key;
+        }
     }
 }
 
@@ -962,13 +990,16 @@ static int replaceAll(char *from, char *to, unsigned char *fold)
 
 static int editorReplace(int folded)
 {
-    char from[65], to[65];
+    char from[PROMPT_LIMIT + 1], to[PROMPT_LIMIT + 1];
     unsigned char table[256];
-    if (!replacePrompt(folded ? "Replace all (ignore case): " : "Replace all: ", from) ||
-        !*from || !replacePrompt("With: ", to)) {
+    if (!replacePrompt(folded ? "Replace all (ignore case): " : "Replace all: ", from))
+        return 1;
+    if (!*from) {
         strcpy(E.message, "Replace cancelled.");
         return 1;
     }
+    if (!replacePrompt("With: ", to))
+        return 1;
     if (folded)
         caseTable(table);
     return replaceAll(from, to, folded ? table : NULL);

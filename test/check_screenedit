@@ -73,6 +73,36 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
         try:
             expect("Ctrl-S Save", anywhere=True)
             expect("hello   world", anywhere=True)
+            # "needle" moves the preview to line 1802. The final byte misses.
+            key("+Ctrl f -Ctrl")
+            type_text("needle")
+            expect("Ln 1802/", anywhere=True)
+            key("z")
+            key("Return")
+            expect("Text not found.", anywhere=True)
+            expect("Ln 1/1803 Col 1", anywhere=True)
+            expect("hello   world", anywhere=True)
+
+            # Exercise the exact limit, then exceed it in all three fields.
+            key("+Ctrl r -Ctrl")
+            type_text("a" * 64)
+            key("Return")
+            expect("With:", anywhere=True)
+            type_text("a" * 64)
+            key("Return")
+            expect("0 replacements.", anywhere=True)
+            for command, field in (("r", "from"), ("r", "to"), ("f", "find")):
+                key(f"+Ctrl {command} -Ctrl")
+                if field == "to":
+                    type_text("hello")
+                    key("Return")
+                    expect("With:", anywhere=True)
+                type_text("a" * 64 + "b")
+                expect("64-byte limit.", anywhere=True)
+                type_text("xyz")
+                key("ESC" if field == "to" else "Return")
+                expect("Input exceeds 64 bytes. Cancelled.", anywhere=True)
+                expect("Ln 1/1803 Col 1", anywhere=True)
             key("+Ctrl f -Ctrl")
             type_text("laste")
             attrs = expect("Find: laste", anywhere=True)
