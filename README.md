@@ -132,7 +132,7 @@ The survey compares the commands shipped here with the command syntax and option
 | `fdisk` | No known gaps | Manage up to eight BIOS hard disks. `/STATUS` reports disk usage and DOS volumes. `/MBR` restores the master boot code on the first fixed disk. It preserves partition entries when the boot signature is present and installs an empty table when it is absent. |  |
 | `find` | No known gaps | `/I` ignores case when matching and preserves the spelling of displayed lines. |  |
 | `format` | Gaps identified | `/Q` quick format. | *won't implement — Recoverable formatting, `/U`, and `/F` for 2.88 MB media.* |
-| `gwbasic` | Project extra | Run a BASIC program or start the interactive editor. See `HELP GWBASIC` for options. |  |
+| `gwbasic` | Project extra | Run a BASIC program or start the interactive editor. |  |
 | `help [command]` | Project extra | With no argument, HELP pages the topic index on the console. Specify a topic for a one-screen reference. |  |
 | `if` | No known gaps | `IF [NOT] DIREXIST path command` tests for a directory. Wildcards match directories only. |  |
 | `keyb` | No known gaps | `/E` selects enhanced keyboard handling when installing on XT or AT. |  |
