@@ -4,6 +4,7 @@ MS-DOS 4.01 rebuilt on Unix with GNU make and the original tools under `emu2`. T
 
 This version of DOS legitimately focuses on 8088/86, 80286 and early 80386 but it should work well with more modern CPUs. It is still work in progress but is currently tested on:
 - qemu emulator
+- dosbox-x
 - pce and pce-286 emulators
 - IBM 5160
 - NuXT PC
