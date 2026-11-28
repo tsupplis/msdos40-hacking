@@ -166,7 +166,8 @@ def monitor_case(monitor, n):
     result = {"screen": "\n".join(rows).rstrip(), "cursor": list(cursor)}
     return result
 
-cases.update(dict.fromkeys(editor, ""))
+for n in editor:
+    cases.setdefault(n, "")
 
 def command(*argv, **kwargs):
     return subprocess.run(argv, check=True, stdout=subprocess.DEVNULL, **kwargs)
