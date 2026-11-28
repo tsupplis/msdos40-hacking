@@ -1314,6 +1314,7 @@ FilesDrive db ?
 DSEG ends
         extrn PTRWID:near,CRDONZ:near,STROUT:near
 FILES:
+        cld                     ; Direct-mode line editing can leave DF set.
         mov di,offset DirPath
         je FilesWildcard
         call NAMFIL

@@ -8,7 +8,7 @@ from pcecfg import write_config
 
 # Cases exercised at the live Ok prompt. The audit supplies the same input
 # sequences to its historical and PCE runners.
-cases = {294, 295, 297, 299, 301, 358, 389, 390, 393}
+cases = {53, 294, 295, 297, 299, 301, 358, 389, 390, 393}
 
 
 def key_names(sequence):
@@ -46,7 +46,10 @@ def editor_results(folder, boot, data, sequences, put, read):
                         '100 H=H+1:KEY(15) OFF:RETURN\n'
                         f'200 PRINT "ERROR";ERR:PRINT "{ready}":RESUME 30\n')
             put(data, folder, program, body)
-            batch.append(f"{version} {program}")
+            if case == 53:
+                batch.extend(["a:", r"cd \GWFILES", f"b:{version} b:{program}", "cd ..", "b:"])
+            else:
+                batch.append(f"{version} {program}")
     put(boot, folder, "autoexec.bat", "\n".join(batch + ["echo EDIT-DONE"]) + "\n")
     data.rename(folder / "b.img")
     write_config(folder)
@@ -101,6 +104,8 @@ def editor_results(folder, boot, data, sequences, put, read):
                             step = snapshot(100000)
                             step["screen"] = step["screen"].replace(ready, "READY", 1)
                             intermediate.append(step)
+                    if case == 53:
+                        expect("Bytes free\n\nOk")
                     if case == 358:
                         expect("HITS")
                     if case == 301:

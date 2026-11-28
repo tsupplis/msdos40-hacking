@@ -60,6 +60,7 @@ for n in switches:
 # BIOS-keyboard cases are evaluated at the live Ok prompt in VGA text mode.
 # Snapshots include the character cells and BIOS cursor, excluding the key bar.
 editor = {
+    53: "f|i|l|e|s|Return",
     4: "auto 100,5|ret|print 7|ret",
     20: '10 stop|ret|20 print 42|ret|run|ret|cont|ret',
     38: '10 rem OLD|ret|edit 10|ret',
@@ -268,6 +269,12 @@ def prepare_commands(ids, folder, data):
         put(data, folder, f"C{n}.IN", command_inputs[n] + '\nPRINT "PROMPT REACHED"\nSYSTEM\n')
 
 
+def normalize_free_space(output, image):
+    listing = subprocess.check_output(["mdir", "-i", image, "::"], env=dict(os.environ, LC_ALL="C"))
+    space = re.search(rb"([\d ]+) bytes free", listing).group(1).replace(b" ", b"").decode()
+    return output.replace(f" {space} Bytes free\n", " <disk free bytes> Bytes free\n")
+
+
 def command_result(n, tag, work):
     drive = work / "b.img"
     capture = subprocess.check_output(["mtype", "-i", drive, f"::{tag}{n}.OUT"])
@@ -278,10 +285,7 @@ def command_result(n, tag, work):
     if report is None:
         raise RuntimeError(f"{tag}{n}: missing BASIC report")
     if n == 53:
-        # Disk contents change between builds. Check the actual free count first.
-        listing = subprocess.check_output(["mdir", "-i", work / "boot.img", "::"], env=dict(os.environ, LC_ALL="C"))
-        space = re.search(rb"([\d ]+) bytes free", listing).group(1).replace(b" ", b"").decode()
-        capture = capture.replace(f" {space} Bytes free\n", " <disk free bytes> Bytes free\n")
+        capture = normalize_free_space(capture, work / "boot.img")
     result = {"RESULT.TXT": report, "CAPTURE.OUT": capture}
     if n in (145, 146):
         for ext in ("DAT", "OUT"):
@@ -483,7 +487,8 @@ def main():
         parser.error("these file-locking probes require --share")
     if args.share and set(ids) - available:
         parser.error("select the SHARE locking probes separately")
-    live_editor = args.editor or (not args.qemu and set(ids) <= gweditpce.cases)
+    live_editor = args.editor or (not args.qemu and set(ids) <= gweditpce.cases
+                                  and not set(ids) <= command_inputs.keys())
     if live_editor and set(ids) - gweditpce.cases:
         parser.error("select PCE editor cases separately from BASIC program probes")
     if not (args.share or args.qemu or live_editor) and set(ids) - grouped - command_inputs.keys():
@@ -499,6 +504,8 @@ def main():
         adapter = "vga" if args.qemu else os.environ.get("PCE_VIDEO", "vga")
         baseline = {r["id"]: r.get("adapters", {}).get(adapter, r) for r in map(json.loads,
                     (root / "test/gwaudit.jsonl").read_text().splitlines())}
+        if live_editor and 53 in ids:
+            baseline[53] = baseline[53]["console"]
         if baseline.keys() != cases.keys():
             parser.error("probe IDs differ from the recorded baseline")
         for n in ids:
@@ -516,6 +523,10 @@ def main():
         put(data, folder, "TARGET.BAS", '10 GOTO 20\n20 OPEN "VALUE.OUT" FOR OUTPUT AS #2:PRINT #2,"TARGET";X:CLOSE:SYSTEM\n')
         for ext in ("ref", "exe"):
             install(data, root / ("gwbasic/gwbasic." + ext), ext + ".EXE")
+        if 53 in ids:
+            command("mmd", "-i", template, "::GWFILES", "::GWFILES/SUBFOLDR")
+            for name in ("LONGNAME.TXT", "MATCH1.BAS", "MATCH12.BAS", "NOEXT"):
+                install(template, folder / "SAMPLE.TXT", "GWFILES/" + name)
         if live_editor:
             ref_results, exe_results = gweditpce.editor_results(
                 folder, template, data, {n: editor[n] for n in ids}, put, read)
@@ -526,6 +537,9 @@ def main():
                 ref_results, exe_results = pool.map(
                     lambda version: run_batch(ids, version, template, data), ("ref", "exe"))
         for n, ref, exe in zip(ids, ref_results, exe_results):
+            if live_editor and n == 53:
+                for obs in (ref, exe):
+                    obs["screen"] = normalize_free_space(obs["screen"], template)
             result = {"id": n, "ref": ref, "exe": exe}
             if not args.check:
                 print(json.dumps(result, sort_keys=True), flush=True)
