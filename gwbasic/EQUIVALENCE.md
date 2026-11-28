@@ -119,7 +119,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 050 | `EXP` | DOS | Matched | L |
 | 051 | `EXTERR` | DOS | Matched | PCE, case 51. DOS code, class, action and locus after failed OPEN and CHDIR, invalid selector and RESUME. The cross-program case following a nested device error is described above. |
 | 052 | `FIELD` | DOS | Matched | L |
-| 053 | `FILES` | DOS | Matched | PCE, case 53. Bare FILES typed at the Ok prompt in a mixed directory matches the reference screen and cursor. Redirected output matches byte for byte for CONFIG.SYS, *, *.*, *.BAS and MATCH?.BAS at the tested widths (40 and 80 columns). The runner independently checks the free-byte count. |
+| 053 | `FILES` | DOS | Matched | PCE, case 53. Bare `FILES` typed at the `Ok` prompt in a mixed directory matches the reference screen and cursor. Redirected output matches byte for byte for `CONFIG.SYS`, `*`, `*.*`, `*.BAS` and `MATCH?.BAS` at the tested widths (40 and 80 columns). The runner independently checks the free-byte count. |
 | 054 | `FIX` | DOS | Matched | L |
 | 055 | `FOR … NEXT` | DOS | Matched | L |
 | 056 | `NEXT multi-variable` | DOS | Matched | L |

@@ -76,11 +76,11 @@ def editor_results(folder, boot, data, sequences, put, read):
             return {"screen": "\n".join(cells[i:i+80].rstrip() for i in range(0, len(cells), 80)).rstrip(),
                     "cursor": list(cursor.read_bytes())}
 
-        def expect(marker):
+        def expect(marker, *, ending=""):
             deadline = time.monotonic() + 10
             while True:
                 obs = snapshot(200000)
-                if marker in obs["screen"]:
+                if marker in obs["screen"] and obs["screen"].endswith(ending):
                     return
                 if time.monotonic() >= deadline:
                     raise RuntimeError(f"Expected {marker!r}, last capture {obs!r}")
@@ -105,7 +105,7 @@ def editor_results(folder, boot, data, sequences, put, read):
                             step["screen"] = step["screen"].replace(ready, "READY", 1)
                             intermediate.append(step)
                     if case == 53:
-                        expect("Bytes free\n\nOk")
+                        expect("\nfiles\n", ending="\nOk")
                     if case == 358:
                         expect("HITS")
                     if case == 301:
