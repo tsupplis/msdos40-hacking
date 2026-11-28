@@ -42,47 +42,89 @@ Installed = TRUE
 	i_need	SWAP_END,BYTE
 	I_Need	ThisSFT,DWORD
 	I_need	fSharing,BYTE
-	i_need	OpenBuf,128
 	I_Need	ExtErr,WORD
 	I_Need	ExtErr_Action,BYTE
 	I_Need	ExtErrPt,DWORD
 	I_Need	EXTERR_LOCUS,BYTE	; Extended Error Locus
 	i_need	JShare,DWORD
 
-BREAK <ServerCall -- Server DOS call>
+        EXTRN FCB_SELECTED:NEAR
+        DosCodeEntry ServerEntry,226
+        DosCodeEntry RedispatchEntry,227
 
-TABLE	SEGMENT
-Public SRVC001S,SRVC001E
-SRVC001S label byte
+; REDISP can replace the DOS stack. Complete the gateway return first,
+; leaving the original INT 21h dispatcher frame in place.
+procedure $ServerCall,NEAR
+        OR      AL,AL
+        JNZ     ServerEntry
+        CALL    RedispatchEntry
+        transfer REDISP
+EndProc $ServerCall
 
-ServerTab	DW	DOSGroup:Server_Disp
-SERVERLEAVE	DW	DOSGROUP:ServerReturn
-SERVER_DISP	DB	(SERVER_DISP_END-SERVER_DISP-1)/2
-		DW	OFFSET DOSGROUP:SRV_CALL	; 0
-		DW	OFFSET DOSGROUP:COMMIT_ALL	; 1
-		DW	OFFSET DOSGROUP:CLOSE_NAME	; 2
-		DW	OFFSET DOSGROUP:CLOSE_UID	; 3
-		DW	OFFSET DOSGROUP:CLOSE_UID_PID	; 4
-		DW	OFFSET DOSGROUP:GET_LIST	; 5
-		DW	OFFSET DOSGROUP:GET_DOS_DATA	; 6
-		DW	OFFSET DOSGROUP:SPOOL_OPER	; 7
-		DW	OFFSET DOSGROUP:SPOOL_OPER	; 8
-		DW	OFFSET DOSGROUP:SPOOL_OPER	; 9
-		DW	OFFSET DOSGroup:$setExtendedError   ; 10
-SERVER_DISP_END LABEL	BYTE
+; The installed sharer and spooler run from resident CODE. The spooler
+; reads the original subfunction in the word immediately above its INT frame.
+CloseServerName PROC NEAR
+if installed
+        CALL    CS:[JShare + 5 * 4]
+else
+        Call    MFTcloN
+endif
+        RET
+CloseServerName ENDP
 
-SRVC001E label byte
+CloseServerUser PROC NEAR
+if installed
+        CALL    CS:[JShare + 3 * 4]
+else
+        Call    MFTclU
+endif
+        RET
+CloseServerUser ENDP
 
-TABLE	ENDS
+CloseServerProcess PROC NEAR
+if installed
+        CALL    CS:[JShare + 4 * 4]
+else
+        Call    MFTCloseP
+endif
+        RET
+CloseServerProcess ENDP
+
+GetServerOpenFile PROC NEAR
+if installed
+        CALL    CS:[JShare + 9 * 4]
+else
+        Call    MFT_get
+endif
+        RET
+GetServerOpenFile ENDP
+
+ServerSpool PROC NEAR
+        CallInstall NETSpoolOper,multNet,37,AX,BX
+        RET
+ServerSpool ENDP
+CODE ENDS
+
+DOSCODE SEGMENT BYTE PUBLIC 'DOSCODE'
+        ASSUME CS:DOSCODE,SS:DOSGROUP,DS:NOTHING,ES:NOTHING
+
+ReadServerIds PROC NEAR
+        MOV     SI,DX
+        MOV     BX,[SI.DPL_UID]
+        MOV     SS:[USER_ID],BX
+        MOV     BX,[SI.DPL_PID]
+        MOV     SS:[PROC_ID],BX
+        RET
+ReadServerIds ENDP
 
 ; Inputs:
-;	DS:DX -> DPL  (except calls 7,8,9)
+;	DS:DX -> DPL (except spool operations 7-9 and retired call 0Bh)
 ; Function:
-;	AL=0	Server DOS call
+;	AL=0	Handled separately by PrepareServerCall
 ;	AL=1	Commit All files
 ;	AL=2	Close file by name (SHARING LOADED ONLY) DS:DX in DPL -> name
 ;	AL=3	Close all files for DPL_UID
-;	AL=4	Close all files for DPL_UID/PID_PID
+;	AL=4	Close all files for DPL_UID/DPL_PID
 ;	AL=5	Get open file list entry
 ;		    IN: BX File Index
 ;			CX User Index
@@ -98,30 +140,54 @@ TABLE	ENDS
 ;	AL=9	Close all spool files
 ;	AL=10	SetExtendedError
 
-	procedure   $ServerCall,NEAR
-ASSUME	DS:NOTHING,ES:NOTHING
-	CMP	AL,7
-	JB	SET_STUFF
-	CMP	AL,9
-	JBE	NO_SET_ID		; No DPL on calls 7,8,9
-	CMP	AL,0Bh
-	JE	BadServerCall		; Retired DOS 4 swap-table query has no DPL.
-SET_STUFF:
-	MOV	SI,DX			; Point to DPL with DS:SI
-	MOV	BX,[SI.DPL_UID]
-	MOV	[USER_ID],BX		; Set UID
-	MOV	BX,[SI.DPL_PID]
-	MOV	[PROC_ID],BX		; Set process ID
-NO_SET_ID:
-	PUSH	SERVERLEAVE		; push return address
-	PUSH	ServerTab		; push table address
-	PUSH	AX
-	Invoke	TableDispatch
+procedure DispatchServerCall,NEAR
+        CMP     AL,7
+        JB      WithServerDpl
+        CMP     AL,9
+        JA      CheckServerError
+        CallResident ServerSpool
+        JMP     SHORT CheckReturns
+CheckServerError:
+        CMP     AL,0Bh
+        JE      BadServerCall           ; retired subfunction has no DPL
+WithServerDpl:
+        CALL    ReadServerIds
+        CMP     AL,1
+        JE      COMMIT_ALL
+        CMP     AL,2
+        JNE     CheckCloseUser
+        CallResident CloseServerName
+        JMP     SHORT CheckReturns
+CheckCloseUser:
+        CMP     AL,3
+        JNE     CheckCloseProcess
+        CallResident CloseServerUser
+        JMP     SHORT CheckReturns
+CheckCloseProcess:
+        CMP     AL,4
+        JNE     CheckGetList
+        CallResident CloseServerProcess
+CheckReturns:
+        JC      ServerError
+ServerOK:
+        CallResident SYS_RET_OK
+        RET
+CheckGetList:
+        CMP     AL,5
+        JE      GET_LIST
+        CMP     AL,6
+        JNE     CheckExtendedError
+        JMP     GET_DOS_DATA
+CheckExtendedError:
+        CMP     AL,0Ah
+        JNE     BadServerCall
+        JMP     $SetExtendedError
 BadServerCall:
-	MOV	EXTERR_LOCUS,errLoc_Unk ; Extended Error Locus
-	error	error_invalid_function
-ServerReturn:
-	return
+        MOV     SS:[EXTERR_LOCUS],errLoc_Unk
+        MOV     AL,error_invalid_function
+ServerError:
+        CallResident SYS_RET_ERR
+        RET
 
 ; Commit - iterate through the open file list and make sure that the
 ; directory entries are correctly updated.
@@ -130,119 +196,40 @@ COMMIT_ALL:
 ASSUME	DS:NOTHING,ES:NOTHING
 	XOR	BX,BX			;   for (i=0; ThisSFT=getSFT(i); i++)
 	Context DS
-	EnterCrit   critSFT		; Gonna scan SFT cache, lock it down
+	CallResident ECritSFT		; Gonna scan SFT cache, lock it down
 CommitLoop:
-	SaveReg <BX>
-	Invoke	SFFromSFN
+	PUSH	BX			; restore the SFT index on either exit
+	Invoke	LookupSystemFile
 	JC	CommitDone
 	CMP	ES:[DI].sf_Ref_Count,0	;	if (ThisSFT->refcount != 0)
 	JZ	CommitNext
 	CMP	ES:[DI].sf_Ref_Count,sf_busy  ; BUSY SFTs have god knows what
 	JZ	CommitNext		      ;   in them.
-;	TEST	ES:[DI].sf_flags,sf_isnet
-	invoke	Test_IFS_Remote 	;IFS.					;AN000;
+	invoke	IsRemoteSft
 	JNZ	CommitNext		;  Skip Network SFTs so the SERVER
 					;	doesn't deadlock
 	MOV	WORD PTR ThisSFT,DI
 	MOV	WORD PTR ThisSFT+2,ES
-	Invoke	DOS_Commit		;	    DOSCommit ();
+	Invoke	CommitSFT		;	    DOSCommit ();
 CommitNext:
-	RestoreReg  <BX>
+	POP	BX
 	INC	BX
 	JMP	CommitLoop
 CommitDone:
-	LeaveCrit   critSFT
-	RestoreReg  <BX>
-	transfer    Sys_Ret_OK
-
-CLOSE_NAME:
-ASSUME	DS:NOTHING,ES:NOTHING
-
-if installed
-	Call	JShare + 5 * 4
-else
-	Call	MFTcloN
-endif
-CheckReturns:
-	JC	func_err
-	transfer SYS_RET_OK
-func_err:
-	transfer SYS_RET_ERR
-
-CLOSE_UID:
-ASSUME	DS:NOTHING,ES:NOTHING
-
-if installed
-	Call	JShare + 3 * 4
-else
-	Call	MFTclU
-endif
-	JMP	CheckReturns
-
-CLOSE_UID_PID:
-ASSUME	DS:NOTHING,ES:NOTHING
-
-if installed
-	Call	JShare + 4 * 4
-else
-	Call	MFTCloseP
-endif
-	JMP	CheckReturns
+	CallResident LCritSFT
+	POP	BX
+	JMP	ServerOK
 
 GET_LIST:
-ASSUME	DS:NOTHING,ES:NOTHING
-if installed
-	Call	JShare + 9 * 4
-else
-	Call	MFT_get
-endif
-	JC	func_err
-	invoke	get_user_stack
-	MOV	[SI.user_BX],BX
-	MOV	[SI.user_DI],DI
-	MOV	[SI.user_ES],ES
+        CallResident GetServerOpenFile
+        JC      ServerError
+        CallResident get_user_stack
+        MOV     [SI.user_BX],BX
+        MOV     [SI.user_DI],DI
+        MOV     [SI.user_ES],ES
 SetCXOK:
 	MOV	[SI.user_CX],CX
-	transfer    SYS_RET_OK
-
-SRV_CALL:
-ASSUME	DS:NOTHING,ES:NOTHING
-	POP	AX			; get rid of call to $srvcall
-	SaveReg <DS,SI>
-	invoke	GET_USER_STACK
-	RestoreReg  <DI,ES>
-;
-; DS:SI point to stack
-; ES:DI point to DPL
-;
-	invoke	XCHGP
-;
-; DS:SI point to DPL
-; ES:DI point to stack
-;
-; We now copy the registers from DPL to save stack
-;
-	SaveReg <SI>
-	MOV	CX,6
-	REP	MOVSW			; Put in AX,BX,CX,DX,SI,DI
-	INC	DI
-	INC	DI			; Skip user_BP
-	MOVSW				; DS
-	MOVSW				; ES
-	RestoreReg  <SI>		; DS:SI -> DPL
-	MOV	AX,[SI.DPL_AX]
-	MOV	BX,[SI.DPL_BX]
-	MOV	CX,[SI.DPL_CX]
-	MOV	DX,[SI.DPL_DX]
-	MOV	DI,[SI.DPL_DI]
-	MOV	ES,[SI.DPL_ES]
-	PUSH	[SI.DPL_SI]
-	MOV	DS,[SI.DPL_DS]
-	POP	SI
-	MOV	[SaveDS],DS
-	MOV	[SaveBX],BX
-	MOV	fSharing,-1		; set no redirect flag
-	transfer REDISP
+	JMP	ServerOK
 
 GET_DOS_DATA:
 ASSUME	DS:NOTHING,ES:NOTHING
@@ -255,19 +242,11 @@ ASSUME	DS:NOTHING,ES:NOTHING
 	SUB	CX,DI
 	INC	CX
 	AND	CX,0FFFEh		; Report the total rounded up to a word.
-	invoke	GET_USER_STACK
+	CallResident GET_USER_STACK
 	MOV	[SI.user_DS],ES 	     ;	set user regs
 	MOV	[SI.user_SI],DI 	     ;
 	MOV	[SI.user_DX],DX 	     ;
 	JMP	SetCXOK 		     ;				      ;AN000;
-
-SPOOL_OPER:
-ASSUME	DS:NOTHING,ES:NOTHING
-	CallInstall NETSpoolOper,multNet,37,AX,BX
-	JC	func_err2
-	transfer SYS_RET_OK
-func_err2:
-	transfer SYS_RET_ERR
 
 Break	<$SetExtendedError - set extended error for later retrieval>
 
@@ -293,7 +272,51 @@ $SetExtendedError:
 	MOV	AX,[SI].dpL_CX
 	MOV	[EXTERR_LOCUS],AH
 	return
-EndProc $ServerCall
+EndProc DispatchServerCall
 
-CODE	ENDS
+; Rebuild the dispatcher's saved registers, preserving the caller's BP.
+procedure PrepareServerCall,NEAR
+        ASSUME DS:NOTHING,ES:NOTHING
+        CALL    ReadServerIds
+        PUSH    DS
+        PUSH    SI
+        CallResident GET_USER_STACK
+        MOV     DI,SI
+        PUSH    DS
+        POP     ES
+        POP     SI
+        POP     DS
+; We now copy the registers from DPL to save stack
+;
+	SaveReg <SI>
+	MOV	CX,6
+	REP	MOVSW			; Put in AX,BX,CX,DX,SI,DI
+	INC	DI
+	INC	DI			; Skip user_BP
+	MOVSW				; DS
+	MOVSW				; ES
+	RestoreReg  <SI>		; DS:SI -> DPL
+	MOV	AX,[SI.DPL_AX]
+	MOV	BX,[SI.DPL_BX]
+	MOV	CX,[SI.DPL_CX]
+	MOV	DX,[SI.DPL_DX]
+	MOV	DI,[SI.DPL_DI]
+	MOV	ES,[SI.DPL_ES]
+	PUSH	[SI.DPL_SI]
+	MOV	DS,[SI.DPL_DS]
+	POP	SI
+	MOV	[SaveDS],DS
+	MOV	[SaveBX],BX
+	MOV	fSharing,-1		; set no redirect flag
+	RET
+EndProc PrepareServerCall
+
+DOSCODE ENDS
+DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
+        PUBLIC SrvCallEntries
+SrvCallEntries LABEL WORD
+        DW OFFSET DOSGROUP:ServerEntry_VECTOR, OFFSET DOSGROUP:DispatchServerCall
+        DW OFFSET DOSGROUP:RedispatchEntry_VECTOR, OFFSET DOSGROUP:PrepareServerCall
+        DW 0
+DOSEND ENDS
     END

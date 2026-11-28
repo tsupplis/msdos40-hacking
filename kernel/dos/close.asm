@@ -52,7 +52,6 @@ endif
         EXTRN FCB_SELECTED:NEAR
 
         DosCodeEntry DOS_Close,75
-        DosCodeEntry DOS_Commit,76
         DosCodeEntry FREE_SFT,109
 
 ; External hooks can run user code. Invoke them in the resident segment.
@@ -457,7 +456,6 @@ DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
         PUBLIC CloseEntries
 CloseEntries LABEL WORD
         DW OFFSET DOSGROUP:DOS_Close_VECTOR, OFFSET DOSGROUP:CloseSFT
-        DW OFFSET DOSGROUP:DOS_Commit_VECTOR, OFFSET DOSGROUP:CommitSFT
         DW OFFSET DOSGROUP:FREE_SFT_VECTOR, OFFSET DOSGROUP:ReleaseSFT
         DW 0
 DOSEND ENDS

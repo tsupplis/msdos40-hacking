@@ -52,7 +52,6 @@ include ifssym.inc			 ;AN000;
 
         EXTRN FCB_SELECTED:NEAR
         DosCodeEntry $IOCTL,214
-        DosCodeEntry TEST_IFS_REMOTE,215
 
 ; The redirector reads the original IOCTL function just below its interrupt frame.
 IoctlRedirector PROC NEAR
@@ -774,7 +773,6 @@ DOSEND SEGMENT BYTE PUBLIC 'DOSEND'
         PUBLIC IoctlEntries
 IoctlEntries LABEL WORD
         DW OFFSET DOSGROUP:$IOCTL_VECTOR, OFFSET DOSGROUP:DeviceControl
-        DW OFFSET DOSGROUP:TEST_IFS_REMOTE_VECTOR, OFFSET DOSGROUP:IsRemoteSft
         DW 0
 DOSEND ENDS
 END

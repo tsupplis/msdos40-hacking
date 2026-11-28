@@ -68,7 +68,7 @@ with tempfile.TemporaryDirectory(dir=work) as name:
     if subprocess.check_output(["mtype", "-i", volume, "::SOURCE.BIN"]) != payload:
         raise RuntimeError("fragmented source differs from the expected logical bytes")
     boot = tmp / "system.img"
-    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), boot)
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40-1440.img"), boot)
     for binary in (root / "kernel/dos/msdos.sys", root / "kernel/bios/io.sys"):
         if subprocess.check_output(["mtype", "-i", boot, "::" + binary.name]) != binary.read_bytes():
             raise SystemExit(f"boot image differs from {binary}")

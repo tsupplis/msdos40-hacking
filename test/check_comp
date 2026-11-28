@@ -12,12 +12,13 @@ work.mkdir(exist_ok=True)
 with tempfile.TemporaryDirectory(dir=work) as tmp:
     folder = Path(tmp)
     boot = folder / "comp.img"
-    # Two 60 KiB comparison fixtures need the free space on the base image.
-    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_base.img"), boot)
-    def install(path, name):
-        subprocess.run(["mcopy", "-o", "-i", boot, path, "::" + name], check=True)
+    data_disk = folder / "data.img"
+    subprocess.run(["mformat", "-C", "-f", "360", "-i", data_disk, "::"], check=True)
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40-1440.img"), boot)
+    def install(image, path, name):
+        subprocess.run(["mcopy", "-o", "-i", image, path, "::" + name], check=True)
 
-    install(root / "commands/comp/comp.com", "COMP.COM")
+    install(boot, root / "commands/comp/comp.com", "COMP.COM")
     # LF at the 4 KiB small-buffer boundary. The second fixture crosses the
     # 60 KiB large-buffer boundary where the two files exchange buffer roles.
     prefix = b"x" * 4094 + b"\r\n" + b"z" * (61440 - 4096)
@@ -26,27 +27,27 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
                        "SAME": b"Aa\r\nz"}.items():
         path = folder / name
         path.write_bytes(data)
-        install(path, name)
+        install(data_disk, path, name)
 
     cases = [
         ("", ["COMP: Required parameters missing."]),
-        ("A:\\X", ["COMP: Required parameters missing."]),
-        ("A:\\X A:\\SAME", ["Files compare OK"]),
-        ("A:\\X A:\\Z", ["OFFSET 1", "File 1 = 61", "File 2 = 41", "OFFSET 4"]),
-        ("/D A:\\X A:\\Z", ["File 1 = 97", "File 2 = 65"]),
-        ("A:\\X /A A:\\Z /L", ["LINE 1", "File 1 = a", "LINE 2", "File 2 = !"]),
-        ("/C /L A:\\X A:\\Z", ["LINE 2", "File 1 = 7A"]),
-        ("/C /N=1 A:\\X A:\\Y", ["Files compare OK"]),
-        ("/N=2 /C A:\\X A:\\Y", ["OFFSET 4", "Files are different sizes"]),
-        ("/N=1 A:\\LEFT A:\\RIGHT", ["Files compare OK"]),
-        ("/L /D A:\\LEFT A:\\RIGHT", ["LINE 2", "File 1 = 65", "File 2 = 98"]),
-        ("/N=oops A:\\X A:\\Y", ["Parameter format not correct"]),
+        ("B:\\X", ["COMP: Required parameters missing."]),
+        ("B:\\X B:\\SAME", ["Files compare OK"]),
+        ("B:\\X B:\\Z", ["OFFSET 1", "File 1 = 61", "File 2 = 41", "OFFSET 4"]),
+        ("/D B:\\X B:\\Z", ["File 1 = 97", "File 2 = 65"]),
+        ("B:\\X /A B:\\Z /L", ["LINE 1", "File 1 = a", "LINE 2", "File 2 = !"]),
+        ("/C /L B:\\X B:\\Z", ["LINE 2", "File 1 = 7A"]),
+        ("/C /N=1 B:\\X B:\\Y", ["Files compare OK"]),
+        ("/N=2 /C B:\\X B:\\Y", ["OFFSET 4", "Files are different sizes"]),
+        ("/N=1 B:\\LEFT B:\\RIGHT", ["Files compare OK"]),
+        ("/L /D B:\\LEFT B:\\RIGHT", ["LINE 2", "File 1 = 65", "File 2 = 98"]),
+        ("/N=oops B:\\X B:\\Y", ["Parameter format not correct"]),
     ]
     batch = folder / "comp.bat"
-    batch.write_text("b:\n" + "".join(
+    batch.write_text("a:\n" + "".join(
         f"echo CASE{i}\na:\\comp {args}\n" for i, (args, _) in enumerate(cases)))
     output = subprocess.check_output([root / "test/run_tests", batch], text=True,
-                                     env=dict(os.environ, IMG=str(boot)))
+                                     env=dict(os.environ, IMG=str(boot), PCE_TEST_FLOPPY_B=str(data_disk)))
     blocks = output.split("CASE")[1:]
     if len(blocks) != len(cases):
         raise SystemExit(output)

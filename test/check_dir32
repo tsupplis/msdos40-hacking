@@ -114,7 +114,7 @@ with tempfile.TemporaryDirectory(dir=work) as directory_name:
     raw, fat, length, directory, clusters = make_fixture(folder)
     before = raw.read_bytes()
     boot = folder / "boot.img"
-    shutil.copyfile(os.environ.get("IMG", root/"media/msdos40_full.img"), boot)
+    shutil.copyfile(os.environ.get("IMG", root/"media/msdos40-1440.img"), boot)
     for binary in (root/"kernel/dos/msdos.sys", root/"kernel/bios/io.sys"):
         contents = subprocess.check_output(["mtype", "-i", boot, "::"+binary.name])
         require(contents == binary.read_bytes(), f"boot image differs from {binary}")

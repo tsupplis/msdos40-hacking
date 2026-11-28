@@ -48,7 +48,7 @@ print("PASS CHKDSK repaired both 256-sector FATs and preserved every other byte"
 with tempfile.TemporaryDirectory(dir=root / "test/work") as work:
     folder = Path(work)
     boot = folder / "boot.img"
-    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), boot)
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40-1440.img"), boot)
     for name, source, defines in [
         ("orphans", "fatseed", ["-DORPHANS"]),
         ("failroot", "fatfail", ["-DFAIL_SECTOR=19"]),

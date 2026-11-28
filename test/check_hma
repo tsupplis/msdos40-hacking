@@ -21,7 +21,7 @@ work.mkdir(exist_ok=True)
 with tempfile.TemporaryDirectory(dir=work) as temp:
     folder = Path(temp)
     image = folder / "hma.img"
-    source_image = Path(os.environ.get("IMG", root / "media/msdos40_full.img"))
+    source_image = Path(os.environ.get("IMG", root / "media/msdos40-1440.img"))
     shutil.copyfile(source_image, image)
     for binary in (root / "kernel/bios/io.sys", root / "kernel/dos/msdos.sys"):
         embedded = subprocess.check_output(["mtype", "-i", image, "::" + binary.name])

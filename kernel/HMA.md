@@ -1,6 +1,6 @@
 # DOS kernel HMA standard
 
-**Progress — 42 whole modules relocatable in DOSCODE.** PROC, ALLOC, CLOSE, BUF, DINFO, CREATE, ROM, MKNODE, FINFO, DUP, DISK, DISK2, DISK3, EXTATTR, FILE, ISEARCH, CPMIO, CPMIO2, ABORT, SEARCH, RENAME, OPEN, FAT, DIR, DIR2, DIRCALL, FCB, FCBIO, FCBIO2, MACRO2, GETSET, PARSE, TIME, DEV, PATH, HANDLE, IOCTL, MACRO, DELETE, LOCK, SHARE and UTIL.
+**Progress — 43 whole modules relocatable in DOSCODE.** PROC, ALLOC, CLOSE, BUF, DINFO, CREATE, ROM, MKNODE, FINFO, DUP, DISK, DISK2, DISK3, EXTATTR, FILE, ISEARCH, CPMIO, CPMIO2, ABORT, SEARCH, RENAME, OPEN, FAT, DIR, DIR2, DIRCALL, FCB, FCBIO, FCBIO2, MACRO2, GETSET, PARSE, TIME, DEV, PATH, HANDLE, IOCTL, MACRO, DELETE, LOCK, SHARE, UTIL and SRVCALL.
 
 Count the assembly input that produces the object file. Track included sources under their owning module. The inventory lists the affected service sources since v1.2.0. Update the progress line and inventory together after verification.
 
@@ -105,7 +105,7 @@ With `DOS=HIGH,UMB` and PCEHIMEM, moving HANDLE increased the largest executable
 
 ## IOCTL
 
-`IoctlEntries` binds INT 21h/44h to `DeviceControl` and the server’s remote-file check to `IsRemoteSft`. EXEC, CREATE and DEV call the movable routines directly. The driver request packet stays in DOSGROUP. The resident redirector adapter pushes the original IOCTL function immediately before INT 2Fh/112Bh. The drive-sharing query calls INT 2Ah from resident code.
+`IoctlEntries` binds INT 21h/44h to `DeviceControl`. SRVCALL calls `IsRemoteSft` directly, as do other DOSCODE callers. The driver request packet stays in DOSGROUP. The resident redirector adapter pushes the original IOCTL function immediately before INT 2Fh/112Bh. The drive-sharing query calls INT 2Ah from resident code.
 
 INT 2Fh/122Bh uses the existing NLS stack check. Application callers reach IOCTL through INT 21h, which selects the DOS stack. NLSFUNC callers already on that stack retain their saved register frame. With the same `DOS=HIGH,UMB` boot, the largest executable block grew from 622,416 to 623,216 B (+800 B).
 
@@ -135,9 +135,15 @@ With the same `DOS=HIGH,UMB` boot, the largest executable block grew from 624,35
 
 ## UTIL
 
-All five job-handle and system-file-table helpers execute in DOSCODE. Movable callers use near calls. The three resident entries in `UtilEntries` serve process initialization, server commit and INT 2Fh/1216h and 1220h. They pass DOSGROUP in ES so the lookups preserve DS and can run on the caller’s stack. The process handle table and system file table keep their original addresses.
+All five job-handle and system-file-table helpers execute in DOSCODE. Movable callers use near calls. The three resident entries in `UtilEntries` serve process initialization and INT 2Fh/1216h and 1220h. They pass DOSGROUP in ES so the lookups preserve DS and can run on the caller’s stack. The process handle table and system file table keep their original addresses.
 
 With the same `DOS=HIGH,UMB` boot, the largest executable block grew from 624,416 to 624,560 B (+144 B). All six placement tests check process-handle and system-file-table exhaustion independently, plus invalid lookups on the application stack.
+
+## SRVCALL
+
+INT 21h/5Dh enters through `$ServerCall`. For 5D00h, `PrepareServerCall` copies the DPL registers into the caller’s saved frame and returns through its gateway before resident `REDISP` switches stacks. The other subfunctions use `DispatchServerCall`. Commit-all calls UTIL, IOCTL and CLOSE directly. SHARE and spooler callbacks stay resident. The spooler receives the original subfunction on the stack above its INT 2Fh frame.
+
+On matched `DOS=HIGH,UMB` boots, the largest executable block grew from 624,560 to 624,832 B (+272 B). All six placements passed. The probes check redispatch, commit of an open file, SHARE close by process and by user, spooler arguments and carry returns, and extended-error recovery. Full regression passed 57/57.
 
 ## Linked modules and dependencies
 
@@ -149,7 +155,7 @@ The module name is the object filename in the LINK response file. Each row lists
 
 **PROC example.** `proc.asm` directly includes `dosseg.asm`, `dossym.inc`, `devsym.inc` and `exec.asm`. In turn, `exec.asm` includes `ea.inc` and `version.inc`. `dosseg.asm` declares the shared segments and DOSGROUP. `exec.asm` emits code and data into those segments as part of PROC. Both are assembly-time dependencies. At link time, for example, PROC's `DosCallbackPtr` reference resolves to MISC and its near call to `AllocateBlock` resolves to ALLOC.
 
-Estimates use the current MASM object segment lengths and public-symbol offsets in `msdos.map`. “Up to” gives the module’s resident CODE size before allowing for gateways and callbacks. A named subset counts only those routine bodies. The net conventional-memory gain requires a before/after boot with the same configuration. For scale, TIME keeps 65 B resident for five gateways. The current build has 28,578 B in DOSCODE.
+Estimates use the current MASM object segment lengths and public-symbol offsets in `msdos.map`. “Up to” gives the module’s resident CODE size before allowing for gateways and callbacks. A named subset counts only those routine bodies. The net conventional-memory gain requires a before/after boot with the same configuration. For scale, TIME keeps 65 B resident for five gateways. The current build has 28,939 B in DOSCODE.
 
 Of the two modules with an existing resident or partial review, MISC has another 159 B in `$SETDPB` alone, excluding gateways. NIBDOS has 0 B to move under this model.
 
@@ -188,7 +194,7 @@ Of the two modules with an existing resident or partial review, MISC has another
 | LOCK | dosseg.asm, dossym.inc, devsym.inc, lock.inc | CONST2, MISC, MISC2, MSCODE, MSCTRLC, MSDATA, NIBDOS, UTIL | DOSCODE, Whole Module Relocatable. SHARE adapters remain resident. |
 | MACRO | dosseg.asm, dossym.inc, devsym.inc | CONST2, MISC, MSCODE, MSDATA, MSDISP, NIBDOS | DOSCODE, Whole Module Relocatable. Multiplex entry adapters and redirector calls stay resident. |
 | MACRO2 | dosseg.asm, dossym.inc, devsym.inc | CONST2, CRIT, DIR2, FAT, FCB, MACRO, MISC, MISC2, MSCODE, MSDATA, NIBDOS, SEARCH | DOSCODE, Whole Module Relocatable |
-| MISC | dosseg.asm, dossym.inc, devsym.inc, bugtyp.asm | ABORT, ALLOC, BUF, CLOSE, CONST2, CPMIO, CPMIO2, CREATE, CRIT, DELETE, DEV, DINFO, DIR, DIR2, DIRCALL, DISK, DISK2, DISK3, DUP, FAT, FCB, FCBIO, FCBIO2, FILE, FINFO, HANDLE, IOCTL, ISEARCH, LOCK, MACRO, MACRO2, MKNODE, MSCODE, MSDATA, MSDISP, MSTABLE, NIBDOS, OPEN, PATH, PROC, RENAME, ROM, SEARCH, SHARE, UTIL | Partially relocatable. Owns the module entry list, resident dispatch stub, near-placement callback and DOSCODE far-return stub. FCBLOAD handles A20 and far gateway frames. |
+| MISC | dosseg.asm, dossym.inc, devsym.inc, bugtyp.asm | ABORT, ALLOC, BUF, CLOSE, CONST2, CPMIO, CPMIO2, CREATE, CRIT, DELETE, DEV, DINFO, DIR, DIR2, DIRCALL, DISK, DISK2, DISK3, DUP, FAT, FCB, FCBIO, FCBIO2, FILE, FINFO, HANDLE, IOCTL, ISEARCH, LOCK, MACRO, MACRO2, MKNODE, MSCODE, MSDATA, MSDISP, MSTABLE, NIBDOS, OPEN, PATH, PROC, RENAME, ROM, SEARCH, SHARE, SRVCALL, UTIL | Partially relocatable. Owns the module entry list, resident dispatch stub, near-placement callback and DOSCODE far-return stub. FCBLOAD handles A20 and far gateway frames. |
 | MISC2 | dosseg.asm, dossym.inc, fastseek.inc, fastxxxx.inc, bugtyp.asm | CONST2, FCB, FILE, HANDLE, IOCTL, MSDATA, MSTABLE, NIBDOS | 121 B in the string/exchange helpers and network predicates (392 B in CODE). Idle, indirect dispatch and NLS callbacks need separate review. |
 | MKNODE | dosseg.asm, fastopen.inc, dossym.inc, devsym.inc | BUF, CONST2, CRIT, DELETE, DEV, DIR, DIR2, DISK, FAT, MISC, MSDATA, MSTABLE, ROM, SHARE, TIME | DOSCODE, Whole Module Relocatable |
 | MSCODE | mssw.asm, ms_code.asm | BUF, CONST2, CRIT, DELETE, DISK2, MACRO, MISC, MISC2, MSDATA, MSDISP, MSTABLE | 248 B in `GETBP`, the two extended-error lookups and `RW32_CONVERT` (659 B in CODE). Retain interrupt entry, stack switching and return paths. |
@@ -206,9 +212,9 @@ Of the two modules with an existing resident or partial review, MISC has another
 | ROM | dosseg.asm, fastseek.inc, fastxxxx.inc, version.inc, dossym.inc, devsym.inc, ea.inc | BUF, CONST2, DELETE, FAT, MISC, MSDATA, MSTABLE | DOSCODE, Whole Module Relocatable |
 | SEARCH | dosseg.asm, dossym.inc, devsym.inc, fastopen.inc, fastxxxx.inc | CONST2, ISEARCH, MACRO2, MISC, MSCODE, MSDATA | DOSCODE, Whole Module Relocatable |
 | SHARE | dosseg.asm, dossym.inc, devsym.inc | CONST2, MISC, MISC2, MSCTRLC, MSDATA, NIBDOS | DOSCODE, Whole Module Relocatable. The two callbacks to SHARE.EXE remain resident. |
-| SRVCALL | dosseg.asm, dossym.inc, devsym.inc, dpl.asm | CLOSE, CONST2, CRIT, IOCTL, MISC2, MSCODE, MSDATA, MSDISP, NIBDOS, UTIL | Up to 305 B. The server service dispatches through a resident table. SHARE calls and the stack-discarding redispatch path reduce the available saving. |
+| SRVCALL | dosseg.asm, dossym.inc, devsym.inc, dpl.asm | CLOSE, CONST2, CRIT, IOCTL, MISC, MSCODE, MSDATA, MSDISP, NIBDOS, UTIL | DOSCODE, Whole Module Relocatable. The redispatch stack switch and external callbacks stay resident. |
 | TIME | dosseg.asm, dossym.inc, devsym.inc | CONST2, DEV, MSDATA, MSDISP, MSTABLE, NIBDOS | DOSCODE, Whole Module Relocatable. DATE16 packs FAT timestamps on the DOS stack. Clock-driver requests call DEV directly in DOSCODE. |
-| UTIL | dosseg.asm, dossym.inc, devsym.inc, bugtyp.asm | CONST2, MISC, NIBDOS | DOSCODE, Whole Module Relocatable. Three resident gateways preserve the boot, server and multiplex interfaces. |
+| UTIL | dosseg.asm, dossym.inc, devsym.inc, bugtyp.asm | CONST2, MISC, NIBDOS | DOSCODE, Whole Module Relocatable. Three resident gateways preserve the boot and multiplex interfaces. |
 
 
 

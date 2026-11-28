@@ -11,7 +11,7 @@ work = root / "test/work"
 work.mkdir(exist_ok=True)
 with tempfile.TemporaryDirectory(dir=work) as folder:
     image = Path(folder) / "source.img"
-    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40-1440.img"), image)
     subprocess.run(["mcopy", "-o", "-i", image, root / "commands/xcopy/xcopy.exe",
                     "::XCOPY.EXE"], check=True)
     subprocess.run(["mcopy", "-o", "-i", image, root / "commands/command/command.com",

@@ -8,7 +8,7 @@ from pcecfg import write_config
 
 # Cases exercised at the live Ok prompt. The audit supplies the same input
 # sequences to its historical and PCE runners.
-cases = {294, 295, 297, 299, 301, 358, 389, 390}
+cases = {294, 295, 297, 299, 301, 358, 389, 390, 393}
 
 
 def key_names(sequence):
@@ -91,6 +91,9 @@ def editor_results(folder, boot, data, sequences, put, read):
                 for case, sequence in sequences.items():
                     ready = f"{version[0].upper()}{case:04d}"
                     expect(ready if case == 358 else ready + "\nOk")
+                    if case == 393:
+                        port = folder / "par1.out"
+                        port_start = port.stat().st_size
                     intermediate = []
                     for name in key_names(sequence):
                         key(name)
@@ -102,8 +105,15 @@ def editor_results(folder, boot, data, sequences, put, read):
                         expect("HITS")
                     if case == 301:
                         expect("Ok")  # F10 executes SCREEN and returns to direct mode.
+                    if case == 393:
+                        # G is delivered only after the synchronous BIOS screen dump returns.
+                        expect("ABCDEFG")
                     obs = snapshot(200000)
                     obs["screen"] = obs["screen"].replace(ready, "READY", 1)
+                    if case == 393:
+                        printed = port.read_bytes()[port_start:].decode("cp437")
+                        lines = printed.replace(ready, "READY", 1).split("\r\n")
+                        obs["printer"] = [line.rstrip(" ") for line in lines]
                     if intermediate:
                         obs["steps"] = intermediate
                     observations.append(obs)

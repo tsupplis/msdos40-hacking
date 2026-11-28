@@ -10,7 +10,7 @@ root = Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory() as scratch:
     folder = Path(scratch)
     image = folder / "system.img"
-    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40-1440.img"), image)
     probe = folder / "tblplace.com"
     subprocess.run(["nasm", "-f", "bin", root / "test/tblplace.asm", "-o", probe], check=True)
     for source, name in [(probe, "tblplace.com"), (root / "pce/pcehimem.sys", "himem.sys")]:

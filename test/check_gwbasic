@@ -67,7 +67,7 @@ with tempfile.TemporaryDirectory() as tmp:
     prog.write_bytes(dos_text(root / "test/gwprog.txt"))
     if args.pce:
         image = folder / "source.img"
-        shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+        shutil.copyfile(os.environ.get("IMG", root / "media/msdos40-1440.img"), image)
         # The loader reads the first directory sector at 0000:0500. Native
         # FORMAT /S leaves the system entries' reserved bytes clear, including
         # the byte that GW-BASIC 3.23 tests for a nested invocation.

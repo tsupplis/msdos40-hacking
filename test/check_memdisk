@@ -8,7 +8,7 @@ import tempfile
 import time
 
 root = Path(__file__).resolve().parents[1]
-image = Path(os.environ.get("IMG", root / "media/msdos40_full.img"))
+image = Path(os.environ.get("IMG", root / "media/msdos40-1440.img"))
 native = "device=himem.sys"
 ems = "device=emm386.sys 1024 ON"
 umb = "device=umbs.sys D000-D100"

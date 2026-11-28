@@ -92,7 +92,7 @@ def check(folder, count, skip=None, logical=None, extra=(), operation=None):
     if operation == "fastopen":
         # Exercise the same installed cache with conventional and high DOSCODE.
         image = folder / "fastopen.img"
-        shutil.copyfile(env.get("IMG", root / "media/msdos40_full.img"), image)
+        shutil.copyfile(env.get("IMG", root / "media/msdos40-1440.img"), image)
         subprocess.run(["mcopy", "-o", "-i", image, root / "pce/pcehimem.sys", "::HIMEM.SYS"], check=True)
         env["IMG"] = str(image)
     for boot in range(2):

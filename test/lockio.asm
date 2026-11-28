@@ -35,6 +35,42 @@ org 100h
     xor al,al
     call range
     jc fail
+    ; Closing a missing name fails.
+    mov [dpl+12],ds
+    mov dx,dpl
+    mov ax,5d02h
+    int 21h
+    jnc fail
+    cmp ax,3
+    jne fail
+    call check_server_closes
+    ; SHARE must report the locked file and propagate end-of-list errors.
+    mov dx,dpl
+    mov ax,5d05h
+    int 21h
+    jnc fail
+    cmp ax,18
+    jne fail
+    inc word [dpl+2]                ; start at zero after the invalid index
+find_locked:
+    mov dx,dpl
+    mov ax,5d05h
+    int 21h
+    jc fail
+    mov si,filename
+    push cx
+    mov cx,filename_end-filename
+    repe cmpsb
+    pop cx
+    je found_locked
+    inc word [dpl+2]
+    jnz find_locked
+    jmp fail
+found_locked:
+    cmp cx,1
+    jne fail
+    or bx,bx                        ; local machine ID
+    jnz fail
     mov [params+4],cs
     mov [params+8],cs
     mov [params+12],cs
@@ -80,6 +116,54 @@ open_shared:
     jc fail
     mov bx,ax
     ret
+
+; Two remote PIDs open the same file under one UID. The local handle and
+; lock stay live throughout and are checked by the parent and child above.
+check_server_closes:
+    mov [dpl+14],ds
+    mov word [dpl+6],filename
+    mov word [dpl],3dc2h            ; open read/write, deny none
+    call server_dos
+    jc fail
+    mov [first_handle],ax
+    inc word [dpl+20]               ; second PID, same UID
+    call server_dos
+    jc fail
+    mov [second_handle],ax
+    dec word [dpl+20]
+    mov dx,dpl
+    mov ax,5d04h                    ; close only the first PID
+    int 21h
+    jc fail
+    mov word [dpl],5700h            ; query file time as the remote owner
+    mov ax,[first_handle]
+    mov [dpl+2],ax
+    call expect_closed
+    inc word [dpl+20]
+    mov ax,[second_handle]
+    mov [dpl+2],ax
+    call server_dos
+    jc fail
+    dec word [dpl+20]               ; user-wide close must ignore this PID
+    mov dx,dpl
+    mov ax,5d03h
+    int 21h
+    jc fail
+    inc word [dpl+20]
+    call expect_closed
+    mov word [dpl+2],0ffffh         ; invalid index for the enumeration test
+    ret
+expect_closed:
+    call server_dos
+    jnc fail
+    cmp ax,6                        ; invalid handle
+    jne fail
+    ret
+server_dos:
+    mov dx,dpl
+    mov ax,5d00h
+    int 21h
+    ret
 range:
     xor cx,cx
     mov dx,1
@@ -111,9 +195,14 @@ run_child:
 
 saved_sp dw 0
 handle dw 0
+first_handle dw 0
+second_handle dw 0
 params dw 0,tail,0,5ch,0,6ch,0
 program db 'A:\LOCKIO.COM',0
 filename db 'A:\LOCKIO.TMP',0
+filename_end:
+absent db 'A:\ABSENT.TMP',0
+dpl dw 0,0ffffh,0,absent,0,0,0,0,0,1234h,5678h
 passed db 'LOCK PASS',13,10,'$'
 tail db 1,'L',13
      times 125 db 0

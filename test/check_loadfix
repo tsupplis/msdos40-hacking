@@ -13,7 +13,7 @@ work.mkdir(exist_ok=True)
 with tempfile.TemporaryDirectory(dir=work) as scratch:
     folder = Path(scratch)
     image = folder / "source.img"
-    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40-1440.img"), image)
     probe = folder / "lfprobe.com"
     subprocess.run(["nasm", "-f", "bin", root / "test/lfprobe.asm", "-o", probe], check=True)
     for source, name in [(probe, "lfprobe.com"), (root / "pce/pcehimem.sys", "himem.sys"),

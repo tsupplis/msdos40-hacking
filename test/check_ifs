@@ -19,7 +19,7 @@ work.mkdir(exist_ok=True)
 with tempfile.TemporaryDirectory(dir=work) as directory:
     folder = Path(directory)
     image = folder / "system.img"
-    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40-1440.img"), image)
     for path in ("kernel/dos/msdos.sys", "kernel/bios/io.sys", "commands/share/share.exe"):
         binary = root / path
         if subprocess.check_output(["mtype", "-i", image, "::" + binary.name]) != binary.read_bytes():

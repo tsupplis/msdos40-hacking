@@ -22,7 +22,7 @@ cases["long"] = (z + b"\r\n" + a, a + b"\r\n" + z + b"\r\n")
 with tempfile.TemporaryDirectory() as tmp:
     folder = Path(tmp)
     image = folder / "source.img"
-    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40-1440.img"), image)
     lines = []
     for name, (source, expected) in cases.items():
         path = folder / (name + ".in")

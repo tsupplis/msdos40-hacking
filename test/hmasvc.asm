@@ -30,6 +30,7 @@ parent:
     int 21h
     jc fail
     call check_drive_mapping
+    call check_server
     ; GETSET must preserve a caller-owned DTA and return the original vector.
     mov dx,pathname
     mov ah,1ah
@@ -172,6 +173,29 @@ vector_wrong:
     cmp cx,2
     jne fail
     mov bx,ax
+    ; Commit-all must publish the size while this handle is still open.
+    mov dx,flatname
+    mov cx,7
+    mov ah,40h
+    int 21h
+    jc fail
+    cmp ax,7
+    jne fail
+    push bx
+    mov dx,server_query
+    mov ax,5d01h
+    int 21h
+    jc fail
+    mov dx,flatname
+    xor cx,cx
+    mov ah,4eh
+    int 21h
+    jc fail
+    cmp word [80h+1ah],7        ; default DTA, size of the directory entry
+    jne fail
+    cmp word [80h+1ch],0
+    jne fail
+    pop bx
     call check_handles
     call check_handle_limits
     mov ax,bx
@@ -424,7 +448,101 @@ server_drive_query:
     jne fail
     inc word [server_query+12]
     loop server_drive_query
+    ; On success redispatch must return the same DX as a direct drive query.
+    mov bx,1
+    mov ax,4409h
+    int 21h
+    jc fail
+    push dx
+    mov [server_query+2],bx
+    mov [server_query+12],ds
+    mov dx,server_query
+    mov ax,5d00h
+    int 21h
+    pop bx
+    jc fail
+    cmp dx,bx
+    jne fail
     ret
+
+; Recover every field of an extended error set by a server.
+check_server:
+    mov dx,error_dpl
+    mov ax,5d0ah
+    int 21h
+    xor bx,bx
+    mov ah,59h
+    int 21h
+    cmp ax,32
+    jne fail
+    cmp bx,0801h
+    jne fail
+    cmp ch,2
+    jne fail
+    mov ax,es
+    cmp ax,1234h
+    jne fail
+    cmp di,5678h
+    jne fail
+    ; The redirector reads the original spool operation above its INT frame.
+    mov ax,352fh
+    int 21h
+    mov [old_mpx],bx
+    mov [old_mpx+2],es
+    mov dx,spool_handler
+    mov ax,252fh
+    int 21h
+    mov dx,0ffffh               ; these three calls take no DPL
+    mov ax,5d07h
+    int 21h
+    pushf
+    mov ax,5d08h
+    int 21h
+    pushf
+    mov ax,5d09h
+    int 21h
+    pushf
+    push ax
+    push ds
+    lds dx,[old_mpx]
+    mov ax,252fh
+    int 21h
+    pop ds
+    pop ax
+    popf
+    jnc fail
+    cmp ax,5
+    jne fail
+    popf                        ; 5D08h and 5D07h both succeeded
+    jc fail
+    popf
+    jc fail
+    cmp byte [next_spool],0ah
+    jne fail
+    ret
+spool_handler:
+    cmp ax,1125h
+    jne .chain
+    push bp
+    mov bp,sp
+    mov ax,[bp+8]
+    cmp ah,5dh
+    jne .error
+    cmp al,[cs:next_spool]
+    jne .error
+    inc byte [cs:next_spool]
+    cmp al,9
+    je .error
+    and word [bp+6],0fffeh
+    pop bp
+    iret
+.error:
+    mov ax,5
+    or word [bp+6],1
+    pop bp
+    iret
+.chain:
+    jmp far [cs:old_mpx]
 
 check_handles:
     call check_ioctl
@@ -705,6 +823,9 @@ broot db 'B:\',0
 renamed_dir db 'B:\SVCDIR2',0
 current_path times 64 db 0ffh
 server_query dw 4409h,26,0,0,0,0,0,0,0,0,0
+error_dpl dw 32,0801h,0200h,0,0,5678h,0,1234h,0,0,0
+old_mpx dd 0
+next_spool db 7
 ioctl_packet times 256 db 0
 pathname db 'B:\SVCDIR\..\SVCTEST.TMP',0
 flatname db 'B:\SVCTEST.TMP',0

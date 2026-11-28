@@ -12,7 +12,7 @@
 #   REM @seconds N     time allowed before the run is reported as a hang (default 40)
 #
 # Every run uses scratch copies in test/work/ (gitignored); media/ is never modified.
-# The image is media/msdos40_full.img (override with IMG=...).
+# The image is media/msdos40-1440.img (override with IMG=...).
 # A:\CR.TXT holds empty lines, to be used as input (< A:\CR.TXT) for "press any key" prompts.
 # Limits: only DOS-handle output is captured; BIOS or direct-screen output and key input
 # bypass CTTY, so interactive programs (select, fdisk menus) cannot be driven this way.
@@ -77,7 +77,7 @@ elif [ -f "$CASES/$1.bat" ]; then BAT=$CASES/$1.bat
 else echo "no such test case: $1 (try: test/run_tests --list)" >&2; exit 2
 fi
 CFG=${BAT%.bat}.cfg
-IMG=${IMG:-media/msdos40_full.img}
+IMG=${IMG:-media/msdos40-1440.img}
 
 SECS=${SECS:-$(sed -n 's/^REM @seconds \([0-9][0-9]*\).*/\1/p' "$BAT" | head -1)}
 SECS=${SECS:-40}

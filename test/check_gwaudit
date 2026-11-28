@@ -50,10 +50,11 @@ direct = {
     382: '10 REM FIRST\n20 REM SECOND\n30 REM THIRD\nLIST 20-30',
     383: '10 REM FIRST\n20 REM SECOND\nLIST .',
 }
-switches = {275: "", 278: "", 279: "", 280: "/D", 281: "/I", 282: "/C:256",
+switches = {275: "", 278: "", 279: "", 280: "/D", 281: "/I/F:2/S:64", 282: "/C:256",
             283: "/F:6", 284: "/S:256", 285: "/M:49152", 286: "/M:49152,4096"}
 cases.update(dict.fromkeys(direct, ""))
-cases.update(dict.fromkeys(switches, 'PRINT "RUNNING";LEN(MKS$(SIN(1#))):PRINT #1,"RUNNING"'))
+for n in switches:
+    cases.setdefault(n, 'PRINT "RUNNING";LEN(MKS$(SIN(1#))):PRINT #1,"RUNNING"')
 
 
 # BIOS-keyboard cases are evaluated at the live Ok prompt in VGA text mode.
@@ -86,7 +87,7 @@ editor = {
     390: 'ABCDE|ctrl-home|Q',
     391: 'ABC|ctrl-ret|XYZ',
     392: 'ABC|ctrl-s|space|XYZ',
-    393: 'ctrl-print|ABC|ctrl-print',
+    393: 'ctrl-KP_Star|ABC|ctrl-KP_Star|DEF|+Shift KP_Star -Shift|G',
     394: 'ctrl-g',
 }
 
@@ -241,10 +242,19 @@ def group_results(ids, drive, filename):
 
 # These cases need their own DOS command line, but share the program batch's boot.
 # A sentinel command makes a spurious return to the BASIC prompt observable.
-command_inputs = {40: "", 53: "", 70: "A,17", 81: "one, two", 102: "", 120: "203", 151: "CONT", 277: direct[277], 286: ""}
+command_inputs = {40: "", 53: "", 70: "A,17", 81: "one, two", 102: "", 120: "203", 145: "", 146: "EXIT", 151: "CONT", 277: direct[277], 280: "", 281: "", 286: ""}
+
+
+# Low-memory runs use exactly the same small program on each side.
+small_blocks = [(328, ""), (329, ""), (296, "/I/F:2/S:64"), (297, "/I/F:2/S:64"),
+                (298, "/I/F:2/S:64")]
 
 
 def prepare_commands(ids, folder, data):
+    if 145 in ids:
+        child = folder / "gwchild.com"
+        command("nasm", "-f", "bin", root / "test/gwchild.asm", "-o", child)
+        install(data, child, "GWCHILD.COM")
     if 286 in ids:
         put(data, folder, "MTINY.BAS", '10 PRINT "OK":SYSTEM\n')
     for n in ids:
@@ -273,8 +283,14 @@ def command_result(n, tag, work):
         space = re.search(rb"([\d ]+) bytes free", listing).group(1).replace(b" ", b"").decode()
         capture = capture.replace(f" {space} Bytes free\n", " <disk free bytes> Bytes free\n")
     result = {"RESULT.TXT": report, "CAPTURE.OUT": capture}
+    if n in (145, 146):
+        for ext in ("DAT", "OUT"):
+            entry = read(drive, f"{tag}{n}M.{ext}")
+            if entry is None:
+                raise RuntimeError(f"{tag}{n}: missing /M shell result")
+            result["/M " + ext] = entry
     if n == 286:
-        for paras in (300, 3071, 3072):
+        for paras in [300, 3071, 3072] + [size for size, _ in small_blocks]:
             boundary = read(drive, f"{tag}{paras}.OUT")
             if boundary is None:
                 raise RuntimeError(f"{tag}{paras}: missing /M boundary result")
@@ -317,12 +333,17 @@ def pce_group(ids, folder, image, data):
                 continue
             option = " " + switches[n] if n in switches else ""
             commands += [f"{version} C{n}.BAS{option} <C{n}.IN >{tag}{n}.OUT",
-                         f"ren REPORT.OUT {tag}{n}.DAT"]
+                         f"if exist REPORT.OUT ren REPORT.OUT {tag}{n}.DAT"]
+            if n in (145, 146):
+                commands += [f"{version} C{n}.BAS /M:,4096 <C{n}.IN >{tag}{n}M.OUT",
+                             f"ren REPORT.OUT {tag}{n}M.DAT"]
             if n == 286:
                 commands.append(f"{version} MTINY.BAS /M:,300 <C286.IN >{tag}300.OUT")
                 for paras in (3071, 3072):
                     commands.append(f"{version} C286.BAS /M:49152,{paras} <C286.IN >{tag}{paras}.OUT")
                 commands.append("del REPORT.OUT")
+                for paras, opts in small_blocks:
+                    commands.append(f"{version} MTINY.BAS {opts}/M:,{paras} <C286.IN >{tag}{paras}.OUT")
         if version == "ref":
             commands.append("if exist R.DAT del R.DAT")
     if serial:
@@ -487,7 +508,7 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
         template, data = folder / "boot.img", folder / "data.img"
-        shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), template)
+        shutil.copyfile(os.environ.get("IMG", root / "media/msdos40-1440.img"), template)
         put(template, folder, "CONFIG.SYS", "FILES=30\nBUFFERS=20\n")
         put(template, folder, "AUTOEXEC.BAT", "@echo off\necho AUDIT READY\npause >nul\nb:\\run.bat\n")
         command("mformat", "-C", "-f", "1440", "-i", data, "::")

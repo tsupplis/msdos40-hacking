@@ -18,7 +18,7 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
         subprocess.run(args, cwd=folder, check=True, **kwargs)
 
     image = folder / "boot.img"
-    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40-1440.img"), image)
     if subprocess.check_output(["mtype", "-i", image, "::EDIT.EXE"]) != (root / "edit/edit.exe").read_bytes():
         raise AssertionError("stale EDIT on test image")
     sample = (b"hello\tworld\r\n" + (b"a"*78+b"\r\n")*1800 +

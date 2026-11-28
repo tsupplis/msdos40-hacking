@@ -12,7 +12,7 @@ work.mkdir(exist_ok=True)
 with tempfile.TemporaryDirectory(dir=work) as name:
     folder = Path(name)
     image = folder / "format.img"
-    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40-1440.img"), image)
     binaries = [root / "commands/format/format.com"]
     for name in ("fatfail", "fatseed"):
         binary = folder / (name + ".com")

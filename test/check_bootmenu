@@ -35,7 +35,7 @@ for name, menu, key, expected in cases:
     with tempfile.TemporaryDirectory(dir=work) as tmp:
         folder = Path(tmp)
         image = folder / "boot.img"
-        shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+        shutil.copyfile(os.environ.get("IMG", root / "media/msdos40-1440.img"), image)
         def put(filename, content):
             path = folder / filename
             path.write_bytes(content.replace("\n", "\r\n").encode())

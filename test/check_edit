@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory(dir=work) as tmp:
         subprocess.run(args, cwd=folder, check=True, **kwargs)
 
     image = folder / "boot.img"
-    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40-1440.img"), image)
     for binary in (root / "kernel/dos/msdos.sys", root / "kernel/bios/io.sys"):
         if subprocess.check_output(["mtype", "-i", image, "::" + binary.name]) != binary.read_bytes():
             raise SystemExit(f"editor test image differs from {binary}")

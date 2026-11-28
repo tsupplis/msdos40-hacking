@@ -13,7 +13,7 @@ work.mkdir(exist_ok=True)
 with tempfile.TemporaryDirectory(dir=work) as scratch:
     folder = Path(scratch)
     image = folder / "switches.img"
-    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), image)
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40-1440.img"), image)
     def install(source, name):
         subprocess.run(["mcopy", "-o", "-i", image, source, "::" + name], check=True)
     for name, command in [("command.com", "command"), ("diskcopy.com", "diskcopy"),

@@ -16,7 +16,7 @@ work.mkdir(exist_ok=True)
 with tempfile.TemporaryDirectory(dir=work) as temp:
     folder = Path(temp)
     boot = folder / "boot.img"
-    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40_full.img"), boot)
+    shutil.copyfile(os.environ.get("IMG", root / "media/msdos40-1440.img"), boot)
     shutil.copyfile(root / "test/y2krtc.asm", folder / "y2krtc.asm")
     for tool, args in (("masm", "y2krtc.asm,y2krtc.obj;"), ("link", "y2krtc.obj,y2krtc.exe,nul;")):
         subprocess.run(["emu2", root / f"sdk/bin/{tool}.exe", args], cwd=folder,

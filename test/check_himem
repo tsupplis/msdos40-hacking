@@ -9,7 +9,7 @@ from pathlib import Path
 from hmaprobe import install_probe
 
 root = Path(__file__).resolve().parents[1]
-source = Path(os.environ.get("IMG", root / "media/msdos40_full.img"))
+source = Path(os.environ.get("IMG", root / "media/msdos40-1440.img"))
 with tempfile.TemporaryDirectory() as tmp:
     folder = Path(tmp)
     for machine in ("xt", "at"):
