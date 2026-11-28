@@ -2474,6 +2474,102 @@ GETTIM:	DOSIO	GTIM		;Get Time from MS-DOS
 	EXTRN	DERDNA:NEAR
 	JMP	DERDNA		;Device unavailable error
 
+DSEG    segment public 'DATASG'
+ShellName db 'COMSPEC'
+DSEG    ends
+        public ENVIRON,ShellStmt
+        extrn SetEnv:near,ExecShell:near,GETSTK:near,OMERRR:near
+        extrn MSISET:near,MSIRST:near,TermDevices:near,SEGINI:near
+        extrn DERFNF:near,DERIOE:near,ERRPNF:abs
+ENVIRON:
+        call FRMEVL
+        call EOSCHK
+        push bx
+        call FRESTR
+        xor cx,cx
+        mov cl,[bx]
+        mov si,[bx+1]
+        call SetEnv
+        pop bx
+        or al,al
+        jz EnvAssigned
+        cmp al,5
+        je EnvBadArg
+        jmp OMERRR
+EnvBadArg:
+        jmp FCERR
+EnvAssigned:
+        ret
+
+ShellStmt:
+        jz ShellPrompt
+        call FRMEVL
+        call EOSCHK
+        push bx
+        call FRESTR
+        xor cx,cx
+        mov cl,[bx]
+        mov si,[bx+1]
+        cmp cl,123              ; DOS tail holds /C, a space and the command.
+        ja EnvBadArg
+        jmp short ShellLookup
+ShellPrompt:
+        push bx
+        xor cx,cx
+ShellLookup:
+        push es
+        push si
+        push cx
+        mov cl,90               ; Room for EXEC's parameter block, tail and saves.
+        call GETSTK
+        mov si,offset ShellName
+        mov cx,7
+        call FindEnv
+        jc ShellMissing
+        cmp byte ptr es:[di],0
+        je ShellMissing
+        push es
+        push di
+        call TermDevices        ; Give timer, sound and keyboard back to the child.
+        call MSIRST             ; Restore pre-BASIC Ctrl-C and critical-error vectors.
+        pop di
+        pop es
+        pop cx
+        pop si
+        call ExecShell
+        pushf
+        push ax
+        call MSISET
+        call SEGINI
+        pop ax
+        popf
+ShellReturn:
+        pop es
+        pop bx
+        jc ShellError
+        ret
+ShellMissing:
+        pop cx
+        pop si
+        mov ax,3
+        stc
+        jmp short ShellReturn
+ShellError:
+        cmp ax,2
+        je ShellNoFile
+        cmp ax,3
+        je ShellNoPath
+        cmp ax,8
+        je ShellNoMem
+        jmp DERIOE
+ShellNoFile:
+        jmp DERFNF
+ShellNoPath:
+        mov dx,offset ERRPNF
+        jmp ERROR
+ShellNoMem:
+        jmp OMERRR
+
         public EnvFunc
         extrn PARCHK:near,CONINT:near
 ; ENVIRON$(name) returns the value, ENVIRON$(index) the complete entry.
@@ -2506,43 +2602,10 @@ EnvValidate:
         jne EnvValidate
 EnvScan:
         push es
-        push dx
-        mov ah,62h              ; DOS 3+ Get PSP Address.
-        int 21h
-        mov es,bx
-        mov ax,es:[2ch]
-        pop dx
-        xor di,di
-        or ax,ax
-        jz EnvEmpty
-        mov es,ax
-        cld
-EnvEntry:
-        cmp byte ptr es:[di],0
-        je EnvEmpty
-        jcxz EnvIndex
-        push si
-        push cx
-        push di
-        repe cmpsb
-        pop bx
-        pop cx
-        pop si
-        jne EnvSkipName
-        cmp byte ptr es:[di],'='
-        jne EnvSkipName
-        inc di
+        extrn FindEnv:near
+        call FindEnv
+        jc EnvEmpty
         jmp short EnvFound
-EnvSkipName: mov di,bx
-        jmp short EnvNext
-EnvIndex:
-        dec dl
-        jz EnvFound
-EnvNext:
-        inc di
-        cmp byte ptr es:[di-1],0
-        jne EnvNext
-        jmp short EnvEntry
 EnvInvalid: jmp FCERR
 EnvFound:
         mov si,di
@@ -2712,8 +2775,6 @@ EventControl:
         pop ax
         jmp EVSET
 
-PUBLIC	ENVIRON
-ENVIRON:
 PUBLIC	PMAP
 PMAP:
 ADVERR:

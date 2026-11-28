@@ -32,7 +32,11 @@ The [numbered 3.23 equivalence inventory](EQUIVALENCE.md) records observed match
 | `/NOR[UN]` | Loads the named program and waits for an editor command. |
 | `/M:[bytes][,paragraphs]` | Limits the BASIC workspace in bytes and optionally the DOS allocation above the BASIC code in 16-byte paragraphs. For example, `/M:&HC000,4096` gives BASIC 49152 bytes in a 64 KiB data area. |
 | `/C:n` | Sets the receive buffer size per COM port (default 256 bytes). |
-| `/F:n`, `/S:n` | Accepts the MBASIC file-count and record-size options. This build allocates files and records dynamically. |
+| `/D` | Enables double-precision `SQR` for double arguments. `SIN`, `COS`, `TAN`, `ATN`, `LOG`, `EXP` and fractional powers still use single precision. |
+| `/I` | Preallocates one fixed buffer per file number so FIELD variables retain their addresses across CLOSE and reopen. |
+| `/F:n`, `/S:n` | With /I, sets the highest user file number (default 3) and maximum random record size (default 128). Ordinary startup allocates files and records dynamically. |
+
+At ordinary startup, BASIC keeps up to 64 KiB from its final data segment and returns surplus memory to DOS for `SHELL`. The second operand of `/M` overrides this paragraph count. Both `SHELL "command"` and interactive `SHELL` run the command processor named by COMSPEC. Type `EXIT` to return from the interactive shell. `ENVIRON "name=value"` updates the process environment inherited by children. An empty value removes the variable.
 
 Redirected startup preserves the existing display. For example, `GWBASIC DEMO.BAS >RESULT.TXT` sends ordinary `PRINT` output to the DOS handle. A short write raises BASIC error 61 (disk full), and other write failures raise error 57. Unhandled write errors go to standard error.
 

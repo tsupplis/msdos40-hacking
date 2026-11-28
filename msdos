@@ -1,4 +1,4 @@
 #!/bin/sh
-cp `dirname $0`/media/msdos40_full.img `dirname $0`/msdos.img
+cp `dirname $0`/media/msdos40-1440.img `dirname $0`/msdos.img
 `dirname $0`/inject-pce `dirname $0`/msdos.img
 exec pce-ibmpc -c `basename $0`.cfg -g "vga" -r

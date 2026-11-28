@@ -375,7 +375,10 @@ DeviceIODone:
         public IOCTL,IoctlFunc
         extrn FILSCN:near,DERBFN:near,STRINI:near,PUTNEW:near
 DSEG SEGMENT PUBLIC 'DATASG'
-ControlReply db 255 dup (?)
+; An IOCTL$ result is copied to BASIC before returning. Directory statements
+; evaluate their argument before building the ASCIIZ path in the same space.
+ControlReply label byte
+DirPath db 259 dup (?)          ; 255-byte path, optional *.*, NUL.
 DSEG ends
 IOCTL:
         call ControlFile
@@ -1106,7 +1109,7 @@ SeekShift:
 	SUBTTL CHKFOP - Check for file already OPEN
 
 DSEG	SEGMENT PUBLIC 'DATASG'
-	EXTRN	FILTAB:WORD,STKLOW:WORD
+	EXTRN	STKLOW:WORD
 DSEG	ENDS
 
 ; OPEN, KILL and NAME compare the saved drive and the 8.3 filename.
@@ -1123,7 +1126,11 @@ DriveReady:
 CHKFOP:
         push ax
         call ResolveDrive
-	MOV	DI,WORD PTR FILTAB	;Start with first FDB in chain
+	push    si
+        extrn FirstFile:near
+        call FirstFile
+        mov di,si
+        pop si
 CHKNFL:
 	CMP	DI,WORD PTR STKLOW
 	JE	CHKFLX		;branch if at end of FDB chain
@@ -1302,7 +1309,7 @@ DSEG	ENDS
 
 ; FILES [filespec]. DOS returns the 8.3 name and attributes in the DTA.
 DSEG segment public 'DATASG'
-FilesDTA db 64 dup (?)          ; Also holds AH=47h's path before the search.
+        extrn FilesDTA:byte
 FilesDrive db ?
 DSEG ends
         extrn PTRWID:near,CRDONZ:near,STROUT:near
@@ -1587,9 +1594,6 @@ NA_FAE:	CALL	SaveDosError
 ; Directory statements adapted from TK Chia's GWBASICA DOS backend.
         PUBLIC MKDIR,RMDIR,CHDIR
         EXTRN ERRACC:ABS,ERRPNF:ABS,ERROR:NEAR
-DSEG SEGMENT PUBLIC 'DATASG'
-DirPath DB 259 DUP (?)          ; 255-byte BASIC string, optional *.*, NUL.
-DSEG ENDS
 MKDIR:  mov ah,39h
         jmp short DirectoryCall
 RMDIR:  mov ah,3ah

@@ -2,6 +2,13 @@
 
 MS-DOS 4.01 rebuilt on Unix with GNU make and the original tools under `emu2`. The goal is a usable replacement for DOS 3.3 and 5.0. This project will carry on iteratively, also reviewing/fixing the original code to be both robust and dependable. It is a permissive opensource, lightweight, nimble cousin of freedos and opendos keeping close to the microsoft/ibm commercial dos versions. The version tag is 4.01N.
 
+This version of DOS legitimately focuses on 8088/86, 80286 and early 80386 but it should work well with more modern CPUs. It is still work in progress but is currently tested on:
+- qemu emulator
+- pce and pce-286 emulators
+- IBM 5160
+- NuXT PC
+- Orchid 286
+
 _**Status Summary v1.8.0**: We already have:_
 - _native `HIMEM.SYS` for XMS 2.0 on AT-compatible 286 and later systems. and extended memory management of vdisk, ramdrive and smartdrv moved to XMS_
 - _HMA,UMB support with placement configurability for a large part of DOS and installed drivers and software (Up to 615KB of free application memory)_
@@ -15,7 +22,6 @@ _The remaining gaps are in the work:_
 - _completion of emm386 functionalities in line with DOS 5.0_
 - _setver_
 - _more to UMB and HMA_
-- _Save As for EDIT_
 
 We are progressing along the following roles:
 

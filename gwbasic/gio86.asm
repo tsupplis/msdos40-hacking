@@ -41,6 +41,48 @@ DSEG	ENDS
 	EXTRN	DERBFM:NEAR,DERBFN:NEAR,DERFAO:NEAR,DERFNO:NEAR,DERIFN:NEAR
 	EXTRN	DERDNA:NEAR,DERFDR:NEAR
 
+DSEG    segment public 'DATASG'
+        public StaticFiles,FileCount,RecordSize
+StaticFiles db 0
+FileCount dw 3
+RecordSize dw 128D
+FileStride dw 0
+FileBase dw 0
+FileHead dw 0                   ; Active fixed FDBs, or zero for an empty list.
+DSEG    ends
+
+; Reserve one fixed disk-sized slot per file number, including BASIC's
+; internal file 0. Keeping the pool above MAXMEM preserves FIELD addresses
+; across CLOSE/reopen and leaves CLEAR free to resize the BASIC stack.
+        public ReserveFiles
+        extrn OMERRR:near
+ReserveFiles:
+        cmp StaticFiles,0
+        je ReserveDone
+        cmp FileCount,255D
+        jbe CountValid
+        jmp FCERR
+CountValid:
+        mov di,ax
+        mov ax,RecordSize
+        add ax,offset FD_DAT
+        jc ReserveFull
+        mov FileStride,ax
+        mov cx,FileCount
+        inc cx
+        mul cx
+        or dx,dx
+        jnz ReserveFull
+        sub di,ax
+        jbe ReserveFull
+        and di,0fffeh           ; Keep the final stack word-aligned.
+        mov FileBase,di
+        mov ax,di
+ReserveDone:
+        ret
+ReserveFull:
+        jmp OMERRR
+
 DOSIO	MACRO	DFUN
 	MOV	AH,LOW OFFSET DFUN
 	INT	33D		;MS-DOS system call
@@ -890,7 +932,7 @@ ERFAO1:	JMP	DERFAO		;file already opened error
 	PUBLIC	CLSALL
 CLSALL:	PUSH	AX
 	PUSH	SI
-	MOV	SI,WORD PTR FILTAB	;Get address of next file block
+	call    FirstFile
 CLSAL1:	CMP	SI,WORD PTR STKLOW
 	JZ	CLSALX		;Branch if finished
 	PUSH	WORD PTR F_NEXT[SI]	;save pointer to next entry in chain
@@ -1768,7 +1810,7 @@ FACFPT:	CALL	CONINT		;[AL] = file number
 ;         All other registers are preserved
 ;
         public FDBPTR
-FDBPTR:	MOV	SI,WORD PTR FILTAB	;[SI] points to 1st file-data-block
+FDBPTR: call FirstFile
 GPTRL:	CMP	SI,WORD PTR STKLOW	;compare with nil FDB pointer
 	JZ	GPTRX		;branch if at end of FDB chain
 	CMP	AL,BYTE PTR F_NUM[SI]
@@ -1777,6 +1819,15 @@ GPTRL:	CMP	SI,WORD PTR STKLOW	;compare with nil FDB pointer
 	JMP	SHORT GPTRL
 GPTRF:	OR	SI,SI		;set NZ - indicates FDB found
 GPTRX:	RET	
+
+        public FirstFile
+FirstFile:
+        mov si,FileHead
+        or si,si
+        jnz FirstDone
+        mov si,FILTAB           ; STKLOW is also the empty fixed-list sentinel.
+FirstDone:
+        ret
 
 ;FALLOC(nbytes) {allocate file-data-block and link into chain}
 ; Entry - CX=size of FDB
@@ -1791,7 +1842,31 @@ GPTRX:	RET
 ;  FILTAB.F.NEXT := temp; {link new FDB into chain}
 ;  return FILTAB;
 ;
-FALLOC:	PUSH	AX
+FALLOC: cmp StaticFiles,0
+        je DynamicAlloc
+        cmp bx,FileCount
+        ja BadStaticNumber
+        cmp cx,FileStride
+        ja BadStaticRecord
+        push ax
+        push dx
+        mov ax,bx
+        mul FileStride
+        add ax,FileBase
+        call FirstFile
+        mov di,si
+        mov si,ax
+        mov F_NEXT[si],di
+        mov FileHead,si
+        pop dx
+        pop ax
+        ret
+BadStaticNumber:
+        jmp DERBFN
+BadStaticRecord:
+        jmp FCERR
+DynamicAlloc:
+        PUSH    AX
 	PUSH	BX
 	PUSH	CX
 	PUSH	DX
@@ -1854,6 +1929,30 @@ FFREE:  pushf
         pop bx
         pop ax
 FreeNoHandle:
+        cmp StaticFiles,0
+        je DynamicFree
+        push bx
+        push di
+        mov bx,offset FileHead  ; Address of the link pointing to this slot.
+FindLink:
+        mov di,[bx]
+        cmp di,si
+        je UnlinkSlot
+        lea bx,F_NEXT[di]
+        jmp short FindLink
+UnlinkSlot:
+        mov di,F_NEXT[si]
+        mov [bx],di
+        mov di,STKLOW
+        cmp FileHead,di
+        jne Unlinked
+        mov FileHead,0
+Unlinked:
+        pop di
+        pop bx
+        popf
+        ret
+DynamicFree:
         popf
         PUSH    AX
 	PUSH	BX
@@ -2468,6 +2567,7 @@ MSCTLC:	MOV	BYTE PTR MSDCCF,LOW 377O	;Record control-C event for POLKEY
 
         public CriticalDS
 CriticalDS dw 0
+        public MSISET,MSIRST
 MSISET: mov cs:CriticalDS,ds
 	PUSH	AX
 	PUSH	DX

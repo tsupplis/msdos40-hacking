@@ -549,6 +549,20 @@ NSCFIN:	MOV	PIXOFS,DI		; Update PIXOFS and ATRMSK
 	POP	AX
 NSCZRO:	RET
 
+; Mirror console bytes to LPT1 while Ctrl-PrtSc is active. Screen-editor
+; function codes are internal operations and have no printer representation.
+PUBLIC EchoLpt
+EchoLpt:
+        cmp PrinterEcho,0
+        je EchoDone
+        or ah,ah
+        jnz EchoDone
+        push ax
+        call SNDLPT             ; AH=0 selects LPT1.
+        pop ax
+EchoDone:
+        ret
+
 ; Modified from BASICA.COM CSEG:34F7H
 ; Send a byte to a printer
 ;
@@ -2103,6 +2117,7 @@ GWTRMF: cmp QuietVideo,0
         MOV	AH,01H			; Restore the startup cursor shape
 	MOV	CX,CSRINI
 	INT	10H
+        public TermDevices
 TermDevices: CALL SNDTRM			; Clean up the sound module
 	CALL	CBKTRM			; Clean up Ctrl-Break handling
 	JMP	EVTRM			; Clean up event handling
@@ -2210,6 +2225,11 @@ KEYINP:	MOV	AH,01H
 	RET				; No key (ZF=1). Let the editor poll again.
 KEYIN2:	XOR	AH,AH
 	INT	16H
+        cmp ax,7200h            ; BIOS extended key for Ctrl-PrtSc.
+        jne KeyRead
+        not PrinterEcho
+        jmp short KEYINP
+KeyRead:
         mov ch,ah
         push ax
         mov ah,2
@@ -3261,6 +3281,7 @@ FKEY80	DB	6D,10D,1D	; (?!?) Function key display format for 80x25
 
 
 KeepScreen DB 0
+PrinterEcho DB 0
 PUBLIC QuietVideo
 QuietVideo DB 0
 VirtualText DB 0

@@ -4,7 +4,7 @@
 #   make              build everything that has been ported
 #   make <dir>        build one top-level directory (e.g. make kernel)
 #   make clean        clean every directory
-#   make dist         build the floppy images (base, dist, full) in media/
+#   make dist         package 360K, 720K and 1.44M system and developer floppies
 #   make check        build everything, then verify the full image content
 #   make run          build and boot the floppy image in PCE
 #   make tools-check  smoke-test the vintage tools under emu2
@@ -35,7 +35,7 @@ clean: $(CLEAN_SUBDIRS)
 $(CLEAN_SUBDIRS): clean-%:
 	$(MAKE) -C $* clean
 
-# media/ builds all three images; dist is the readable name for that
+# Package fresh distribution images.
 dist: boot kernel commands edit gwbasic
 	$(MAKE) -C media dist
 

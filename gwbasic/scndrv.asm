@@ -351,7 +351,9 @@ TTBIN0:	MOV	BYTE PTR 0[BX],LOW 0	; Clear column number
 ;**                         on entry:   AX= character
 ;**
 
-SCNOUT:	PUSH	DX
+        EXTRN EchoLpt:NEAR
+SCNOUT: call EchoLpt
+	PUSH	DX
 	PUSH	CX
 	PUSH	BX
 	CALL	CTLDSP		; If control char or ESC sequence, do operation

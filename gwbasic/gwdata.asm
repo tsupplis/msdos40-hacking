@@ -1006,6 +1006,8 @@ DSEG	SEGMENT PUBLIC 'DATASG'		;Start the data segment
 ;
 ;GIO86 uninitialized data definitions:
 ;
+PUBLIC  DoubleMath
+DoubleMath db ?                 ; /D at interpreter startup
 PUBLIC	IOJUMP
 IOJUMP	LABEL WORD
 	DB	2 DUP(?)
@@ -1047,6 +1049,10 @@ NAMTMP	LABEL WORD
 	DB	2 DUP(?)	;TEMP STORAGE DURING NAME SAVE AT INDLOP
 PUBLIC	DIRTMP
 	DIRTMP=CPMWRM+128	;USE CPM DEFAULT BUFFER IN LOW MEMORY
+; FILES uses the two adjacent 33-byte temporary FCBs for the DOS
+; current-directory reply (64 bytes) and then for FindFirst/FindNext.
+PUBLIC  FilesDTA
+FilesDTA LABEL BYTE
 PUBLIC	FILNA2
 FILNA2	LABEL WORD
 	DB	16 DUP(?)	;USED BY NAME CODE

@@ -49,6 +49,7 @@ DSEG	SEGMENT PUBLIC 'DATASG'
 	ASSUME DS:DSEG
 	EXTRN	ARYTA2:WORD,NAMBUF:WORD,NAMCNT:WORD,ONELIN:WORD
 	EXTRN	STREND:WORD,TEMP3:WORD,VALTYP:WORD
+        extrn DoubleMath:byte
 	EXTRN	$ARG:WORD,$ARGLO:WORD,$DBUFF:WORD,$DFACL:WORD
 	EXTRN	$DPADR:WORD,$FAC:WORD,$FACLO:WORD,$FACM1:WORD,$FBUFF:WORD
 	EXTRN	$FLGOV:WORD,$FMTAL:WORD,$FMTAX:WORD,$FMTCX:WORD,$RNDX:WORD
@@ -2175,6 +2176,12 @@ FN990:	RET
 
 ;SQUARE ROOT FUNCTION (FAC)=SQR(FAC)
 SQR:
+        cmp DoubleMath,0
+        je SingleSqrt
+        cmp byte ptr $VALTP,8D
+        je DoubleSqrt
+SingleSqrt:
+        call FRCSNG
 $SQR:
 	MOV	DX,WORD PTR $FAC-2
 	OR	DH,DH		;Test sign bit
@@ -2234,6 +2241,40 @@ FPWRND:
 DONE:	RET
 
 NEGNUM: JMP	$FCERR
+
+; Double MBF square root. Normalize X to [0.5,2), iterate on that
+; interval, then restore half the exponent. All five averages round
+; through the existing MBF double divide and add routines.
+DoubleSqrt:
+        mov al,byte ptr $FAC
+        or al,al
+        jz DONE
+        test byte ptr $FAC-1,80h
+        jnz NEGNUM
+        mov ah,al
+        shr ah,1
+        sub ah,64D              ; scale to restore after taking the root
+        push ax
+        and al,1
+        or al,80h
+        mov byte ptr $FAC,al
+        call $VPSHF             ; keep normalized X on the BASIC stack (SS=DS)
+        mov cx,5
+SqrtStep:
+        mov bx,sp
+        push cx
+        call $VPSHF             ; save the current estimate Y
+        call MOVAM              ; ARG = normalized X at BX
+        call $FDIVD             ; FAC = X/Y
+        call $POPA              ; ARG = Y
+        call $FADDD
+        dec byte ptr $FAC       ; Y = (Y + X/Y) / 2
+        pop cx
+        loop SqrtStep
+        add sp,8D
+        pop ax
+        add byte ptr $FAC,ah
+        ret
 
 $FPWR:				;INVOLUTION ($FAC):=(BXDX)^($FAC)
 				;OR         (FAC)=X^Y

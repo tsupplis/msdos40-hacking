@@ -184,7 +184,10 @@ DSEG	SEGMENT PUBLIC 'DATASG'
 	EXTRN	FREFLG:WORD
 	EXTRN	NORFLG:BYTE
         extrn BlockParas:word,BlockGiven:byte
+        extrn StaticFiles:byte,FileCount:word,RecordSize:word
+        extrn DoubleMath:byte
 DSEG	ENDS
+        mov DoubleMath,0
 	MOV	BX,CPMMEM	;Load bytes free within segment
 ;For DYNCOM, CPMMEM holds the last segment addr of the system(i.e. CPMMEM=2)
 	EXTRN	SEGOFF:NEAR
@@ -243,6 +246,18 @@ SCANSW:
 	CALL	CHRGTR		;GET CHAR AFTER SLASH
 SCANS1:
 	CALL	MAKUPL		;CONVERT SWITCH TO UPPER CASE
+        cmp al,"D"
+        jne CheckStaticFiles
+        mov DoubleMath,1
+        jmp short FlagDone
+CheckStaticFiles:
+        cmp al,"I"
+        jne OtherSwitch
+        mov StaticFiles,1
+FlagDone:
+        call CHRGTR
+        jmp short FOK
+OtherSwitch:
 	CMP	AL,LOW "S"	;IS IT /S: ? (SET MAX RECORD SIZE)
 	JZ	SHORT WASS
 	CMP	AL,LOW "C"	;COM buffer size option
@@ -283,10 +298,12 @@ WASC:	MOV	AL,LOW 377O
 	CALL	GETVAL		;Get COM request to D,E
 	MOV	CSWSIZ,DX	;Record for future memory map calc.
 	JMP	SHORT FOK
-WASS:				;GIO has dynamic record size
-WASF:				;GIO has dynamic number of files
-	CALL	GETVAL		;Get value
-	JMP	SHORT FOK	;Any value OK (and ignored)
+WASS:   call GETVAL
+        mov RecordSize,dx
+        jmp FOK
+WASF:   call GETVAL
+        mov FileCount,dx
+        jmp FOK
 
 ;/NOB[ANNER] sets FREFLG, /NOR[UN] sets NORFLG.  Any prefix of the word down
 ;to three letters is accepted.
@@ -360,6 +377,11 @@ DSEG	ENDS
 ERRCMD:
 DONCMD:
 	CALL	MAPCLC		;Calc. (but don't set) the new mem. map
+
+        extrn ReserveFiles:near
+        mov ax,MSWSIZ
+        call ReserveFiles       ; AX = top of workspace below any fixed FDBs.
+        mov MSWSIZ,ax
 
 ;Now copy the command line file name (if there is one) to BUF
 ;Move required since DS: segment header will be overwritten when the

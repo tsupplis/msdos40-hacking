@@ -52,7 +52,7 @@ WORDS:	DB	" Bytes free"	;WORDS
 DSEG SEGMENT PUBLIC 'DATASG'
 	PUBLIC	NORFLG
         public BlockParas,BlockGiven
-BlockParas dw 0                 ; Requested paragraphs starting at the final DS.
+BlockParas dw 4096D             ; Keep one 64 KiB data segment unless /M overrides it.
 BlockGiven db 0
 NORFLG	DB	0		; Set by the /NORUN startup switch
 DSEG ENDS
@@ -208,11 +208,9 @@ MAXRQ1:	MOV	BX,AX
 	MOV	BX,OFFSET WORDS	;TYPE THE HEADING
 	CALL	STROUT		;"BYTES FREE"
 	CALL	CRDO		;PRINT CARRIAGE RETURN
-MAPINX: cmp BlockGiven,0
-        je MapReady
-        ; SS and DS are now in their final positions. Release only the
-        ; paragraphs above the requested data area to DOS.
-        push es
+; The PSP block also covers the code and COM buffers below the final DS.
+; Release the surplus now that relocation and stack setup are complete.
+MAPINX: push es
         mov ah,62h
         int 21h
         mov es,bx
@@ -224,7 +222,6 @@ MAPINX: cmp BlockGiven,0
         int 21h
         pop es
         jc GOMERR
-MapReady:
         ret	
 
 GOMERR:	JMP	OMERR
@@ -279,12 +276,13 @@ MAPCLC:
 	MOV	BX,WORD PTR CPMMEM
 	SUB	BX,DX		;Avail paragraphs
 	JB	GOMERR
-        cmp BlockGiven,0
-        je DataLimit
         cmp bx,BlockParas
-        jb GOMERR
+        jae HaveBlock
+        cmp BlockGiven,0
+        jne GOMERR              ; An explicit paragraph count must fit.
+        mov BlockParas,bx       ; On a small DOS block keep all available paragraphs.
+HaveBlock:
         mov bx,BlockParas
-DataLimit:
 	MOV	DX,OFFSET 65535D/16D	;Max usable paragraphs
 	CMP	BX,DX
 	JB	MAXREQ		;More than enough

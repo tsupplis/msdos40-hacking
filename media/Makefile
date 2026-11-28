@@ -1,10 +1,4 @@
-# MS-DOS 4.00 - floppy images (mtools)
-#
-#   msdos40_base.img  boot sector + IO.SYS MSDOS.SYS COMMAND.COM + external commands
-#   msdos40_dist.img  base + everything else of the old cpy.bat list (drivers, code pages,
-#                     select, graphics.pro)
-#   msdos40_full.img  dist + config.sys / autoexec.bat (from this directory)
-
+.DELETE_ON_ERROR:
 ROOT ?= $(CURDIR)/..
 
 # Volume label "MSDOS.401": DOS keeps the dot in a label, mtools cannot write that
@@ -63,8 +57,22 @@ DEV_LIB = $(addprefix $(SDK)/lib/,slibce.lib slibfp.lib em.lib)
 DEV_HEADERS = $(wildcard $(SDK)/include/*.h $(SDK)/include/sys/*.h)
 DEV_EXAMPLES = $(addprefix $(SDK)/examples/,c/Makefile c/hello.c asm/Makefile asm/hello.asm)
 
-IMAGES = msdos40_base.img msdos40_dist.img msdos40_full.img msdos40_dev.img
+# The four 360 KB file groups also define the two 720 KB volumes.
+byname = $(foreach name,$(1),$(filter %/$(name).com %/$(name).exe,$(CMD_FILES)))
+SYS1 = $(call byname,edit append assign attrib backup chkdsk comp debug diskcomp diskcopy)
+SYS2 = $(call byname,edlin exe2bin fastopen fc fdisk find format graftabl graphics help join keyb label deltree move loadfix mem mode more nlsfunc print recover)
+EXTRA3 = $(SELECT_FILES) $(filter %/graphics.pro %/ansi.sys %/country.sys %/display.sys,$(EXTRA_FILES))
+SYS3 = $(filter-out $(SYS1) $(SYS2),$(CMD_FILES)) $(EXTRA3)
+SYS4 = $(filter-out $(EXTRA3),$(EXTRA_FILES)) $(FULL_FILES)
 
+BIN1 = $(filter %/cl.exe %/c1.exe %/c2.exe,$(DEV_BIN))
+BIN2 = $(filter %/c3.exe %/cl.err %/c1.err %/c23.err %/masm.exe %/link.exe,$(DEV_BIN))
+BIN3 = $(filter-out $(BIN1) $(BIN2),$(DEV_BIN))
+
+SIZES = 1440 720-1 720-2 360-1 360-2 360-3 360-4
+SYSTEM = $(addprefix msdos40-,$(addsuffix .img,$(SIZES)))
+DEVELOPER = $(addprefix msdos40_dev-,$(addsuffix .img,$(SIZES)))
+IMAGES = $(SYSTEM) $(DEVELOPER)
 # Names expected on the finished full image (used by "make check")
 EXPECTED = EDIT.LIC DOSHELP.HLP IO.SYS MSDOS.SYS COMMAND.COM CONFIG.SYS AUTOEXEC.BAT \
            $(shell echo $(notdir $(CMD_FILES) $(EXTRA_FILES) $(FULL_FILES)) | tr 'a-z' 'A-Z')
@@ -84,101 +92,86 @@ endif
 	zip -q - $(IMAGES) > $@.tmp
 	mv $@.tmp $@
 
-# FAT names are upper case: mcopy keeps the host name, so upper-case it explicitly.
-msdos40_base.img: $(BOOTSEC) $(IO_SYS) $(MSDOS) $(COMMAND) $(CMD_FILES) $(ROOT)/edit/LICENSE.md $(ROOT)/doshelp/doshelp.hlp Makefile
-	rm -f $@
-	mformat -f 1440 -C -B $(BOOTSEC) -i $@ ::
-	mcopy -i $@ $(IO_SYS) ::IO.SYS
-	mattrib -i $@ +s +h +r ::IO.SYS
-	mcopy -i $@ $(MSDOS) ::MSDOS.SYS
-	mattrib -i $@ +s +h +r ::MSDOS.SYS
-	# FORMAT /S leaves bytes 12..21 of each system entry zero. mcopy puts
-	# VFAT timestamps there. The loader reads entry 0 at 0000:0500, so its
-	# creation time would also set the BASIC-active byte at 0000:050F.
-	for slot in 0 1; do \
-	  dd if=/dev/zero of=$@ bs=1 seek=$$(($(ROOT_SECTOR)*512 + slot*32 + 12)) count=10 conv=notrunc || exit 1; \
-	done
-	mlabel -i $@ ::LABEL
-	printf '%-11s' '$(LABEL)' | dd of=$@ bs=1 seek=$$(($(ROOT_SECTOR)*512 + 2*32)) conv=notrunc 2>/dev/null
-	printf '%-11s' '$(LABEL)' | dd of=$@ bs=1 seek=$(LABEL_BOOT) conv=notrunc 2>/dev/null
-	mcopy -i $@ $(COMMAND) ::COMMAND.COM
-	for f in $(CMD_FILES); do \
-	  n=`basename $$f | tr 'a-z' 'A-Z'`; \
-	  mcopy -i $@ $$f ::$$n || exit 1; \
-	done
-	mcopy -t -i $@ $(ROOT)/edit/LICENSE.md ::EDIT.LIC
-	mcopy -t -i $@ $(ROOT)/doshelp/doshelp.hlp ::DOSHELP.HLP
-	mdir -i $@ -a ::
+# Bind each target to its own inputs and geometry.
+define volume
+$(1): FILES := $(3)
+$(1): SIZE := $(2)
+$(1): $(3) Makefile
+endef
 
-# cp keeps the hidden/system attributes and the boot sector of the base image.
-# GRAPHICS.PRO and SELECT.PRT are text files that DOS parses line by line: they are
-# stored with CR/LF (the sources here have LF only; the 4.01 tree has CR/LF).
-# awk is used (not unix2dos) so no extra tool is needed on the build host.
-msdos40_dist.img: msdos40_base.img $(EXTRA_FILES)
-	rm -f $@
-	cp msdos40_base.img $@
-	for f in $(EXTRA_FILES); do \
-	  n=`basename $$f | tr 'a-z' 'A-Z'`; \
-	  case $$n in \
-	  GRAPHICS.PRO|SELECT.PRT) \
-	    awk '{ sub(/\r$$/, ""); printf "%s\r\n", $$0 }' $$f > crlf.tmp && \
-	    mcopy -i $@ crlf.tmp ::$$n && rm -f crlf.tmp || exit 1;; \
-	  *) mcopy -i $@ $$f ::$$n || exit 1;; \
-	  esac; \
-	done
-	mdir -i $@ -a ::
+$(eval $(call volume,msdos40-1440.img,1440,$(CMD_FILES) $(EXTRA_FILES) $(FULL_FILES)))
+$(eval $(call volume,msdos40-720-1.img,720,$(SYS1) $(SYS2)))
+$(eval $(call volume,msdos40-720-2.img,720,$(SYS3) $(SYS4)))
+$(foreach n,1 2 3 4,$(eval $(call volume,msdos40-360-$(n).img,360,$(SYS$(n)))))
 
-# The text files are stripped of any CR first, then mcopy -t writes CR/LF, so the
-# result is right whether the sources are checked out with LF or CRLF.
-# -D o overwrites without asking (the dist image may already hold such a file).
-msdos40_full.img: msdos40_dist.img config.sys autoexec.bat $(FULL_FILES)
-	rm -f $@ config.tmp autoexec.tmp
-	cp msdos40_dist.img $@
-	for f in $(FULL_FILES); do \
-	  n=`basename $$f | tr 'a-z' 'A-Z'`; \
-	  mcopy -i $@ $$f ::$$n || exit 1; \
+FIRST = msdos40-1440.img msdos40-720-1.img msdos40-360-1.img
+$(FIRST): BOOT := yes
+$(FIRST): $(BOOTSEC) $(IO_SYS) $(MSDOS) $(COMMAND) config.sys autoexec.bat $(ROOT)/edit/LICENSE.md $(ROOT)/doshelp/doshelp.hlp
+msdos40-720-1.img: ROOT_SECTOR := 7
+msdos40-360-1.img: ROOT_SECTOR := 5
+
+$(SYSTEM):
+	rm -f $@.tmp
+	mformat -f $(SIZE) -C $(if $(BOOT),-B $(BOOTSEC)) -i $@.tmp ::
+	@if test "$(BOOT)" = yes; then set -e; \
+	  mcopy -i $@.tmp $(IO_SYS) ::IO.SYS; mattrib -i $@.tmp +s +h +r ::IO.SYS; \
+	  mcopy -i $@.tmp $(MSDOS) ::MSDOS.SYS; mattrib -i $@.tmp +s +h +r ::MSDOS.SYS; \
+	  for slot in 0 1; do dd if=/dev/zero of=$@.tmp bs=1 seek=$$(($(ROOT_SECTOR)*512 + slot*32 + 12)) count=10 conv=notrunc 2>/dev/null; done; \
+	  mlabel -i $@.tmp ::LABEL; \
+	  printf '%-11s' '$(LABEL)' | dd of=$@.tmp bs=1 seek=$$(($(ROOT_SECTOR)*512 + 64)) conv=notrunc 2>/dev/null; \
+	  printf '%-11s' '$(LABEL)' | dd of=$@.tmp bs=1 seek=$(LABEL_BOOT) conv=notrunc 2>/dev/null; \
+	  mcopy -i $@.tmp $(COMMAND) ::COMMAND.COM; \
+	  mcopy -t -i $@.tmp $(ROOT)/edit/LICENSE.md ::EDIT.LIC; \
+	  mcopy -t -i $@.tmp $(ROOT)/doshelp/doshelp.hlp ::DOSHELP.HLP; \
+	  for f in config.sys autoexec.bat; do tr -d '\r' < $$f > $@.txt; mcopy -t -i $@.tmp $@.txt ::$$(echo $$f | tr a-z A-Z); done; \
+	fi
+	@set -e; for f in $(FILES); do \
+	  n=$$(basename "$$f" | tr a-z A-Z); \
+	  case $$n in GRAPHICS.PRO|SELECT.PRT) awk '{ sub(/\r$$/,""); printf "%s\r\n", $$0 }' "$$f" > $@.txt; f=$@.txt;; esac; \
+	  mcopy -i $@.tmp "$$f" ::$$n; \
 	done
-	tr -d '\r' < config.sys > config.tmp
-	tr -d '\r' < autoexec.bat > autoexec.tmp
-	mcopy -D o -t -i $@ config.tmp ::CONFIG.SYS
-	mcopy -D o -t -i $@ autoexec.tmp ::AUTOEXEC.BAT
-	rm -f config.tmp autoexec.tmp
-	mdir -i $@ -a ::
+	rm -f $@.txt
+	mv $@.tmp $@
 
 # Every expected file must be on the full image, with an upper-case 8.3 name
-check: msdos40_full.img
-	@mdir -b -i msdos40_full.img -a :: | tr 'a-z' 'A-Z' | sed 's/^:*\///' > .listing.tmp; \
+check: msdos40-1440.img
+	@mdir -b -i msdos40-1440.img -a :: | tr 'a-z' 'A-Z' | sed 's/^:*\///' > .listing.tmp; \
 	missing=0; \
 	for n in $(EXPECTED); do \
 	  grep -qx "$$n" .listing.tmp || { echo "missing on image: $$n"; missing=1; }; \
 	done; \
-	lower=`mdir -b -i msdos40_full.img -a :: | grep '[a-z]' | wc -l`; \
+	lower=`mdir -b -i msdos40-1440.img -a :: | grep '[a-z]' | wc -l`; \
 	rm -f .listing.tmp; \
 	[ $$lower -eq 0 ] || { echo "lower-case names on image: $$lower"; missing=1; }; \
-	[ $$missing -eq 0 ] && echo "check: all expected files present on msdos40_full.img"; \
+	[ $$missing -eq 0 ] && echo "check: all expected files present on msdos40-1440.img"; \
 	exit $$missing
 
 clean:
-	rm -f *.img ../disks.zip ../disks.zip.tmp .listing.tmp crlf.tmp
+	rm -f *.img ../disks.zip ../disks.zip.tmp .listing.tmp crlf.tmp *.img.tmp *.img.txt
 
-msdos40_dev.img: Makefile $(ROOT)/edit/LICENSE.md $(SDK)/env.bat $(DEV_BIN) $(DEV_LIB) $(DEV_HEADERS) $(DEV_EXAMPLES)
+DEV4 = $(DEV_LIB) $(DEV_HEADERS) $(DEV_EXAMPLES)
+$(eval $(call volume,msdos40_dev-1440.img,1440,$(DEV_BIN) $(DEV4)))
+$(eval $(call volume,msdos40_dev-720-1.img,720,$(BIN1) $(BIN2)))
+$(eval $(call volume,msdos40_dev-720-2.img,720,$(BIN3) $(DEV4)))
+$(foreach n,1 2 3,$(eval $(call volume,msdos40_dev-360-$(n).img,360,$(BIN$(n)))))
+$(eval $(call volume,msdos40_dev-360-4.img,360,$(DEV4)))
+
+DEV_FIRST = msdos40_dev-1440.img msdos40_dev-720-1.img msdos40_dev-360-1.img
+$(DEV_FIRST): SETUP := yes
+$(DEV_FIRST): $(ROOT)/edit/LICENSE.md $(SDK)/env.bat
+
+$(DEVELOPER):
 	rm -f $@.tmp
-	mformat -C -f 1440 -v MSDOS40DEV -i $@.tmp ::
-	mmd -i $@.tmp ::BIN ::LIB ::INCLUDE ::INCLUDE/SYS ::EXAMPLES ::EXAMPLES/C ::EXAMPLES/ASM
-	mcopy -t -i $@.tmp $(ROOT)/edit/LICENSE.md ::EDIT.LIC
-	mcopy -t -i $@.tmp $(SDK)/env.bat ::ENV.BAT
-	@set -e; for group in BIN LIB INCLUDE; do \
-	  case $$group in BIN) files="$(DEV_BIN)";; LIB) files="$(DEV_LIB)";; \
-	    INCLUDE) files="$(DEV_HEADERS)";; esac; \
-	  for f in $$files; do \
-	    n=`basename "$$f" | tr 'a-z' 'A-Z'`; dir=$$group; \
-	    case $$f in */include/sys/*) dir=INCLUDE/SYS;; esac; \
-	    mcopy -i $@.tmp "$$f" ::$$dir/$$n; \
-	  done; \
-	done
-	@set -e; for f in $(DEV_EXAMPLES); do \
-	  n=`basename "$$f" | tr 'a-z' 'A-Z'`; \
-	  case $$f in */examples/c/*) dir=C;; *) dir=ASM;; esac; \
-	  mcopy -i $@.tmp "$$f" ::EXAMPLES/$$dir/$$n; \
+	mformat -C -f $(SIZE) -v MSDOS40DEV -i $@.tmp ::
+	@if test "$(SETUP)" = yes; then set -e; \
+	  mcopy -t -i $@.tmp $(ROOT)/edit/LICENSE.md ::EDIT.LIC; \
+	  mcopy -t -i $@.tmp $(SDK)/env.bat ::ENV.BAT; \
+	fi
+	@set -e; dirs=" "; for f in $(FILES); do \
+	  case $$f in */examples/c/*) dir=EXAMPLES/C;; */examples/asm/*) dir=EXAMPLES/ASM;; \
+	    */include/sys/*) dir=INCLUDE/SYS;; */include/*) dir=INCLUDE;; */lib/*) dir=LIB;; *) dir=BIN;; esac; \
+	  for path in "$${dir%%/*}" "$$dir"; do case "$$dirs" in *" $$path "*) ;; \
+	    *) mmd -i $@.tmp ::$$path; dirs="$$dirs$$path ";; esac; done; \
+	  n=$$(basename "$$f" | tr a-z A-Z); mcopy -i $@.tmp "$$f" ::$$dir/$$n; \
 	done
 	mv $@.tmp $@
