@@ -1373,17 +1373,6 @@ FilesFirst:
         xor di,di               ; Columns used by completed entries on this line.
 FilesEntry:
         call POLKEY
-        call PTRWID
-        mov al,ah
-        xor ah,ah
-        add di,18
-        cmp di,ax
-        jbe FilesName
-        cmp di,18
-        je FilesName
-        call CRDO
-        mov di,18
-FilesName:
         mov si,offset FilesDTA+30
         mov cx,8
 FilesStem:
@@ -1426,6 +1415,20 @@ FilesAttr:
         mov bx,offset FilesDir
 FilesSuffix:
         call STROUT
+        add di,18               ; Start column of the next entry.
+        lea dx,[di+18]
+        call PTRWID             ; AH = output width.
+        mov al,ah
+        xor ah,ah
+        cmp dx,ax               ; Room for another complete entry?
+        ja FilesEndRow
+        mov al,' '
+        call OUTDO
+        jmp short FilesNext
+FilesEndRow:
+        call CRDO
+        xor di,di
+FilesNext:
         mov ah,4fh
         call FilesFind
         jnc FilesEntry
@@ -1455,8 +1458,8 @@ FilesComplete:
         ret
 FilesBadDrive:
         jmp ER_FNF
-FilesPlain db '      ',0
-FilesDir   db '<DIR> ',0
+FilesPlain db '     ',0
+FilesDir   db '<DIR>',0
 FilesFree  db ' Bytes free',0
 
 ; Convert unsigned DX:AX without losing precision on large volumes.

@@ -21,7 +21,7 @@ Matched applies to the input, configuration and observations listed in the row. 
 
 ## Running the paired regression
 
-With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 115 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Set `IMG` to pin all comparisons to a private DOS boot image. Each interpreter runs the BASIC fixtures in succession and writes its observations on the scratch floppy. Root checks also run `test/check_gwaudit --editor --check`: nine interactive comparisons share a second PCE boot. They record VGA text cells and the BIOS cursor at the live Ok prompt. Case 301 also records all ten macro expansions through INKEY$.
+With `gwbasic/gwbasic.ref` present, root `make check` invokes `test/check_gwaudit --quick --check`. This runs 115 probes on both binaries in one headless PCE boot, using the project's `test/run_tests` runner. Select a headless `pce-ibmpc` via PATH. Set `IMG` to pin all comparisons to a private DOS boot image. Each interpreter runs the BASIC fixtures in succession and writes its observations on the scratch floppy. Root checks also run `test/check_gwaudit --editor --check`: ten interactive comparisons share a second PCE boot. They record VGA text cells and the BIOS cursor at the live Ok prompt. Case 301 also records all ten macro expansions through INKEY$.
 
 Root checks repeat case 110 and run two locking fixtures together with DOS SHARE installed (`test/check_gwaudit --share --check`). Cases 374–377 exercise whole-file and range operations with SHARE absent. Ordinary disk I/O uses DOS handles in both configurations. The separate 4.01N regression `test/check_gwbasic --pce` checks handle exhaustion (BASIC error 67, DOS error 4), protection against deleting an open file, and byte-exact recovery after a disk-full write and RESUME.
 
@@ -119,7 +119,7 @@ Each row below groups failed observations for investigation. The count measures 
 | 050 | `EXP` | DOS | Matched | L |
 | 051 | `EXTERR` | DOS | Matched | PCE, case 51. DOS code, class, action and locus after failed OPEN and CHDIR, invalid selector and RESUME. The cross-program case following a nested device error is described above. |
 | 052 | `FIELD` | DOS | Matched | L |
-| 053 | `FILES` | DOS | Matched | PCE, case 53. Directory header, padded listing and free-byte count for A:CONFIG.SYS. The runner independently checks the count against the boot volume. |
+| 053 | `FILES` | DOS | Matched | PCE, case 53. Bare FILES typed at the Ok prompt in a mixed directory matches the reference screen and cursor. Redirected output matches byte for byte for CONFIG.SYS, *, *.*, *.BAS and MATCH?.BAS at the tested widths (40 and 80 columns). The runner independently checks the free-byte count. |
 | 054 | `FIX` | DOS | Matched | L |
 | 055 | `FOR … NEXT` | DOS | Matched | L |
 | 056 | `NEXT multi-variable` | DOS | Matched | L |
