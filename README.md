@@ -30,7 +30,7 @@ We are progressing along the following roles:
 | **Stability** | Apply the documented Microsoft and IBM fixes and regression-test the rebuilt system. Progressive focused review of the whole code base |
 | **Memory** | Surpass DOS 3.3 and approach DOS 5.0, targeting at least 610 Kbytes free. UMB allocation and XMS reporting are available. Strong XMS, EMS, HMA, UMB implementations, Selected kernel services can run in the HMA or UMB and Main DOS to UMB |
 | **Storage** | Support for up to 8 physical disks, Integration of all patches, reliability testing |
-| **Usability** | Stay MS-DOS, smooth the angles. Command-line editing and recall, clearer memory diagnostics, the EDIT screen editor and GW-BASIC on the full floppy. |
+| **Usability** | Stay MS-DOS, smooth the angles. Command-line editing and recall, clearer memory diagnostics, the EDIT screen editor and GW-BASIC on the full floppy. The distribution comes in 360K, 720K and 1440K floppy formats |
 | **Compatibility** | Match closely or exceed DOS 5.0 commands and functionality. For example some 6.X DOS command have been reimplemented and Y2K has a stronger enforcement (4 digit dates are mandatory) |
 
 <p align="center">
@@ -162,12 +162,12 @@ The batch comparison covers `CALL` with arguments, `ECHO` and leading `@`, `FOR 
 
 | Driver | Functionality |
 |---|---|
-| `ANSI.SYS` | Cursor positioning and position reports use the active video page. `HELP ANSI.SYS` documents cursor control, position reporting and erase sequences. |
-| `HIMEM.SYS` | Native XMS 2.0 on AT-compatible 286 and later systems. Manages A20, the HMA for `DOS=HIGH`, and extended-memory blocks. [MIT license](kernel/himem/LICENSE.md). |
-| `RAMDRIVE.SYS` | `/E` creates the RAM disk in XMS. `/A` selects EMS. |
-| `SMARTDRV.SYS` | Uses XMS for the disk cache by default. `/A` selects EMS. |
-| `UMBS.SYS` | Supplies upper memory from configured ranges of mapped RAM. Load after `HIMEM.SYS` to use XMS and UMBs together. [Public domain, Marco van.Zwetselaar](kernel/umbs/LICENSE.md), Original USE!UMBS sources are in the component source directory in full and have been adapted to MASM |
-| `VDISK.SYS` | `/E` creates the virtual disk in XMS. `/X` uses a DOS-reserved EMS page. |
+| `ansi` | Cursor positioning and position reports use the active video page. `HELP ANSI.SYS` documents cursor control, position reporting and erase sequences. |
+| `himem` | Brand new Native XMS 2.0 on AT-compatible 286 and later systems. Manages A20, the HMA for `DOS=HIGH`, and extended-memory blocks. [MIT license](kernel/himem/LICENSE.md). |
+| `ramdrive` | `/E` creates the RAM disk in XMS. `/A` selects EMS. |
+| `smardrv` | Uses XMS for the disk cache by default. `/A` selects EMS. |
+| `umbs` | Supplies upper memory from configured ranges of mapped RAM. Load after `HIMEM.SYS` to use XMS and UMBs together. [Public domain, Marco van.Zwetselaar](kernel/umbs/LICENSE.md), Original USE!UMBS sources are in the component source directory in full and have been adapted to MASM |
+| `vdisk` | `/E` creates the virtual disk in XMS. `/X` uses a DOS-reserved EMS page. |
 
 ## Configuration enhancements
 
