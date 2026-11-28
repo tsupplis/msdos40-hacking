@@ -59,9 +59,9 @@ for name, menu, key, expected in cases:
             put("WIN30.SYS", "DEVICE=PCEHIMEM.SYS\nDOS=UMB\nDEVICE=WINPROBE.SYS\n"
                 "SHELLHIGH=A:\\BIN\\COMMAND.COM A:\\BIN /P\n")
             comspec = r"A:\BIN\COMMAND.COM"
-            put("CHECK.BAT", "@echo off\necho CHILD=[%DOSCFG%]\n")
+            put("CHECK.BAT", "@echo off\necho CHILD=[%CONFIG%]\n")
             child = "%COMSPEC% /C CHECK.BAT\n"
-        put("AUTOEXEC.BAT", "@echo off\necho CFG=[%DOSCFG%]\necho SHELL=[%COMSPEC%]\n" + child + "echo SHELL-READY\n")
+        put("AUTOEXEC.BAT", "@echo off\necho CFG=[%CONFIG%]\necho SHELL=[%COMSPEC%]\n" + child + "echo SHELL-READY\n")
         if menu is not None:
             put("BOOT.SYS", menu)
         write_config(folder)

@@ -394,7 +394,7 @@ PrintMsg endp
 ; Called only after the complete file has been read. EXEC needs a segment
 ; (offset zero). Reuse the line buffer after the menu file has been closed.
 ; DS=CS. Preserve ES, SI, DI and CX for the configuration parser.
-EnvKey db 'DOSCFG='
+EnvKey db 'CONFIG='
 MakeConfigEnv proc near
         push es
         push si

@@ -1254,10 +1254,10 @@ NODTTM:						; Reset APPEND state
 	JMP	ENDINIT 			;G Finish initializing
 
 ;
-; IO.SYS passes just DOSCFG in the initial EXEC environment. Save this
+; IO.SYS passes just CONFIG in the initial EXEC environment. Save this
 ; seed before parsing the shell path, which can rebuild the default block.
 ; All ordinary inherited environments follow the existing inheritance path.
-BootConfig db 'DOSCFG=',9 dup (0)
+BootConfig db 'CONFIG=',9 dup (0)
 GetBootConfig proc near
         mov es,ax
         xor di,di
